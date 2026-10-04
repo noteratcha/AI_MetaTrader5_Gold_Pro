@@ -63,7 +63,7 @@ SELECT id, mt5_server, symbols_trading FROM bot_config WHERE lower(trim(mt5_serv
 
 def main():
     admin_mode = "--admin" in sys.argv
-    default_email = "admin@goldbot24.com" if admin_mode else ""
+    default_email = ""
     prompt = f"อีเมล{'แอดมิน' if admin_mode else 'ผู้ใช้'}{f' [{default_email}]' if default_email else ''}: "
     email = (input(prompt).strip() or default_email).lower()
     if not re.match(r"^[^\s@']+@[^\s@']+\.[^\s@']+$", email):
