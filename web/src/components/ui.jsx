@@ -135,3 +135,40 @@ export function PageLoading() {
     </div>
   );
 }
+
+/** Modal ทั่วไป (ปิดด้วย Esc / คลิกพื้นหลัง) */
+export function Modal({ title, onClose, children, width = 480, footer }) {
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+      <div className="modal" role="dialog" aria-modal="true" style={{ maxWidth: width }} onKeyDown={(e) => e.key === 'Escape' && onClose?.()}>
+        <div className="card-header">
+          <h3>{title}</h3>
+          <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="ปิด">
+            ✕
+          </button>
+        </div>
+        <div className="card-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** ตัวเปลี่ยนหน้า */
+export function Pager({ page, totalPages, onChange, total, loading }) {
+  if (!totalPages || totalPages <= 1) return total !== undefined ? <div className="pager"><span className="small muted">ทั้งหมด {total} รายการ</span></div> : null;
+  return (
+    <div className="pager">
+      <button className="btn btn-secondary btn-sm" disabled={page <= 1 || loading} onClick={() => onChange(page - 1)}>
+        ‹ ก่อนหน้า
+      </button>
+      <span className="small muted">
+        หน้า <strong className="mono">{page}</strong> / <span className="mono">{totalPages}</span>
+        {total !== undefined && ` · ${total} รายการ`}
+      </span>
+      <button className="btn btn-secondary btn-sm" disabled={page >= totalPages || loading} onClick={() => onChange(page + 1)}>
+        ถัดไป ›
+      </button>
+    </div>
+  );
+}

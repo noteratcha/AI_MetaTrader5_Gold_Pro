@@ -1,8 +1,11 @@
 import crypto from 'crypto';
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
+import { logActivity } from '../../../lib/server/activity';
 import {
   allowMethods,
+  clientIp,
   hashPassword,
+  isReservedEmail,
   isValidEmail,
   normalizeEmail,
   signToken,
@@ -24,6 +27,9 @@ export default async function handler(req, res) {
     }
     if (password.length < 6) {
       return res.status(400).json({ success: false, error: 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร' });
+    }
+    if (isReservedEmail(email)) {
+      return res.status(403).json({ success: false, error: 'อีเมลนี้สงวนไว้สำหรับผู้ดูแลระบบ' });
     }
 
     const supabase = getAdminClient();
@@ -67,6 +73,7 @@ export default async function handler(req, res) {
     }
 
     const user = toUserPayload(created);
+    await logActivity({ userId: created.id, email, event: 'register', detail: `สมัครสมาชิก รับฟรี ${STARTER_HOURS} ชม.`, ip: clientIp(req) });
     return res.status(200).json({
       success: true,
       message: `สมัครสมาชิกสำเร็จ! ได้รับโควต้าเริ่มต้น ${STARTER_HOURS} ชั่วโมง`,

@@ -1,7 +1,7 @@
 import { insertTolerant } from '../../../lib/server/supabaseAdmin';
 import { allowMethods, requireUser } from '../../../lib/server/auth';
 import { generateOrderId } from '../../../lib/server/keys';
-import { findPackage } from '../../../lib/packages';
+import { getPackage } from '../../../lib/server/catalog';
 
 const PROMPTPAY_ID = process.env.PROMPTPAY_ID || '';
 
@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   const auth = await requireUser(req, res);
   if (!auth) return;
 
-  const pkg = findPackage(req.body?.package_id);
+  const pkg = await getPackage(req.body?.package_id);
   if (!pkg) {
     return res.status(400).json({ success: false, error: 'ไม่พบแพ็กเกจที่เลือก' });
   }

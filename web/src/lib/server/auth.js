@@ -12,7 +12,6 @@ const PBKDF2_V2_ITERATIONS = 210000;
 const PBKDF2_V1_ITERATIONS = 10000;
 const DEV_FALLBACK_SECRET = 'goldbot24-dev-only-secret-change-me';
 
-const DEFAULT_ADMIN_EMAILS = ['admin@goldbot24.com', 'admin@aitrade24.com'];
 
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -92,19 +91,33 @@ export function needsRehash(stored) {
 // ---------------------------------------------------------------------------
 // User helpers
 // ---------------------------------------------------------------------------
-function adminEmails() {
-  const fromEnv = (process.env.ADMIN_EMAILS || '')
+// อีเมลที่สงวนไว้สำหรับแอดมิน — ห้ามสมัครสมาชิกทั่วไปด้วยอีเมลเหล่านี้
+export const RESERVED_ADMIN_EMAILS = ['admin@goldbot24.com', 'admin@aitrade24.com'];
+
+function envAdminEmails() {
+  return (process.env.ADMIN_EMAILS || '')
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  return fromEnv.length ? fromEnv : DEFAULT_ADMIN_EMAILS;
 }
 
+export function rowTags(row) {
+  return Array.isArray(row?.symbols_trading) ? row.symbols_trading.filter((t) => typeof t === 'string') : [];
+}
+
+/** แอดมิน = มี tag role:admin ในฐานข้อมูล (หรืออีเมลที่ตั้งใน env ADMIN_EMAILS) — อีเมลอย่างเดียวไม่พอ */
 export function isAdminRow(row) {
   if (!row) return false;
-  const tags = Array.isArray(row.symbols_trading) ? row.symbols_trading : [];
-  if (tags.includes('role:admin')) return true;
-  return adminEmails().includes(String(row.mt5_server || '').toLowerCase());
+  if (rowTags(row).includes('role:admin')) return true;
+  return envAdminEmails().includes(String(row.mt5_server || '').toLowerCase());
+}
+
+export function isDisabledRow(row) {
+  return rowTags(row).includes('status:disabled');
+}
+
+export function isReservedEmail(email) {
+  return RESERVED_ADMIN_EMAILS.includes(normalizeEmail(email)) || envAdminEmails().includes(normalizeEmail(email));
 }
 
 export function toUserPayload(row) {
@@ -114,6 +127,7 @@ export function toUserPayload(row) {
     if (typeof item === 'string' && item.startsWith('name:')) displayName = item.substring(5);
   }
   const isAdmin = isAdminRow(row);
+  const registeredTag = rowTags(row).find((t) => t.startsWith('registered:'));
   return {
     id: String(row.id),
     email: row.mt5_server,
@@ -122,6 +136,8 @@ export function toUserPayload(row) {
     hoursRemaining: Number(row.lot_size) || 0,
     role: isAdmin ? 'admin' : 'user',
     isAdmin,
+    disabled: isDisabledRow(row),
+    registeredAt: registeredTag ? registeredTag.slice('registered:'.length) : null,
   };
 }
 
@@ -169,6 +185,10 @@ export async function requireUser(req, res) {
     res.status(401).json({ success: false, error: 'ไม่พบบัญชีผู้ใช้ กรุณาเข้าสู่ระบบใหม่' });
     return null;
   }
+  if (isDisabledRow(row)) {
+    res.status(401).json({ success: false, error: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ' });
+    return null;
+  }
   return { row, user: toUserPayload(row) };
 }
 
@@ -203,6 +223,11 @@ export async function adjustHours(userId, deltaHours) {
     if (updated && updated.length === 1) return next;
   }
   throw new Error('ระบบไม่ว่าง กรุณาลองใหม่อีกครั้ง');
+}
+
+export function clientIp(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || req.socket?.remoteAddress || '';
 }
 
 export function allowMethods(req, res, methods) {

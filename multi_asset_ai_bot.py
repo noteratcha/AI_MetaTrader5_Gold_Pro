@@ -15,6 +15,7 @@ import colorama
 import supabase_sync
 import sound_manager
 import stats_manager
+import plan_config
 from license_manager import license_mgr
 from datetime import datetime, timedelta
 
@@ -105,6 +106,7 @@ last_loss_plan = {}               # {sym: {direction: (plan_name, timestamp)}} �
 last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กันเข้าไม้ Plan 4/5 ซ้ำบนแท่ง Cross เดิม
 _telemetry_thread = None          # เธรดสตรีม Telemetry (เริ่มครั้งเดียวต่อโปรเซส)
 _self_closed_tickets = set()      # ticket ที่บอทปิดเองผ่าน close_position() — กันนับขาดทุน/Circuit Breaker ซ้ำ
+_plan_disabled_logged = {}        # {(sym, plan): timestamp} แจ้งเตือนแผนที่ถูกปิดไม่เกินทุก 10 นาที
 
 # Bot Running & Pause Controls (สำหรับการเชื่อมต่อกับ GUI Launcher)
 BOT_RUNNING_FLAG = True
@@ -828,6 +830,7 @@ def main():
     # เริ่มต้นเธรดสตรีมข้อมูลขึ้น Supabase แบบ Real-time ทุก 5 วินาที (เริ่มครั้งเดียวต่อโปรเซส)
     global _telemetry_thread
     if _telemetry_thread is None or not _telemetry_thread.is_alive():
+        plan_config.start()  # แผนเทรดที่แอดมินเปิด/ปิด (อัปเดตทุก 5 นาที)
         _telemetry_thread = threading.Thread(target=telemetry_background_worker, daemon=True)
         _telemetry_thread.start()
     print(f"{Colors.CYAN}[STREAM] Real-time telemetry streaming to GoldBot24 Cloud active (5s interval){Colors.RESET}")
@@ -1437,6 +1440,13 @@ def main():
                     # ---- Same Plan + Same Symbol Cooldown (60 นาที — เฉพาะไม้ขาดทุน) ----
                     # ห้ามเข้าทิศเดิมที่สกุลเดิมภายใน 60 นาที เฉพาะเมื่อไม้นั้นเคยขาดทุน
                     def _is_plan_blocked(direction, plan_name):
+                        # แผนที่แอดมินปิดไว้ (เว็บ /admin/plans) — ห้ามเข้าไม้ใหม่
+                        if not plan_config.is_enabled(plan_name):
+                            key = (sym, plan_config.base_plan(plan_name))
+                            if time.time() - _plan_disabled_logged.get(key, 0) > 600:
+                                _plan_disabled_logged[key] = time.time()
+                                print(f"{Colors.YELLOW}[PLAN DISABLED] {sym} {plan_config.base_plan(plan_name)} ถูกปิดโดยผู้ดูแลระบบ — ข้ามสัญญาณ {direction}{Colors.RESET}")
+                            return True
                         sym_plans = last_loss_plan.get(sym, {})
                         if direction in sym_plans:
                             last_plan, last_ts = sym_plans[direction]

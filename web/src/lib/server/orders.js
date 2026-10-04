@@ -1,6 +1,6 @@
 import { getAdminClient, insertTolerant } from './supabaseAdmin';
 import { generateProductKey } from './keys';
-import { findPackage } from '../packages';
+import { logActivity } from './activity';
 
 export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -57,9 +57,9 @@ export async function fulfillOrder(order, paymentRef) {
     return { ok: false, error: 'คำสั่งซื้อนี้กำลังถูกดำเนินการ กรุณารอสักครู่' };
   }
 
-  const pkg = findPackage(order.package_id);
-  const baseHours = pkg ? pkg.hours : Number(order.hours_to_add);
-  const bonusHours = pkg ? pkg.bonus : 0;
+  // ชั่วโมงอ้างอิงจากคำสั่งซื้อ (บันทึกตอนสร้าง QR) — แพ็กเกจอาจถูกแก้ไขภายหลัง
+  const baseHours = Number(order.hours_to_add) || 0;
+  const bonusHours = 0;
   const productKey = generateProductKey();
 
   const { error: keyErr } = await insertTolerant(
@@ -94,5 +94,11 @@ export async function fulfillOrder(order, paymentRef) {
     })
     .eq('order_id', order.order_id);
 
+  await logActivity({
+    userId: order.owner_user_id,
+    email: order.owner_email,
+    event: 'purchase_paid',
+    detail: `ชำระ ฿${Number(order.amount_thb)} (${order.order_id}) → คีย์ ${productKey} +${baseHours} ชม.`,
+  });
   return { ok: true, productKey, alreadyPaid: false };
 }

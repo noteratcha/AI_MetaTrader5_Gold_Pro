@@ -22,7 +22,7 @@ export default function Navbar() {
 
   useEffect(() => setOpen(false), [pathname]);
 
-  const items = isAdmin ? [...NAV_ITEMS, { href: '/admin/analytics', label: 'Admin', icon: Shield }] : NAV_ITEMS;
+  const items = isAdmin ? [...NAV_ITEMS, { href: '/admin', label: 'Admin', icon: Shield }] : NAV_ITEMS;
   const hours = Number(user?.hoursRemaining) || 0;
 
   return (

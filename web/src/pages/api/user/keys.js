@@ -1,6 +1,6 @@
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import { allowMethods, requireUser } from '../../../lib/server/auth';
-import { findPackage } from '../../../lib/packages';
+import { listPackages } from '../../../lib/server/catalog';
 
 // คลัง Product Key ของผู้ใช้ — เฉพาะคีย์จากคำสั่งซื้อของตัวเอง + คีย์โปรโมที่ตัวเองใช้
 export default async function handler(req, res) {
@@ -10,6 +10,8 @@ export default async function handler(req, res) {
 
   const supabase = getAdminClient();
   const email = auth.user.email;
+  const { packages } = await listPackages({ includeInactive: true });
+  const pkgName = (id) => packages.find((p) => Number(p.id) === Number(id))?.name || 'Package';
   const keys = [];
 
   const { data: orders, error: ordersErr } = await supabase
@@ -34,7 +36,7 @@ export default async function handler(req, res) {
       keys.push({
         keyCode: o.generated_key_code,
         source: 'purchase',
-        packageName: findPackage(o.package_id)?.name || 'Package',
+        packageName: pkgName(o.package_id),
         hours: Number(o.hours_to_add) || 0,
         price: Number(o.amount_thb) || 0,
         orderId: o.order_id,

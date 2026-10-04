@@ -28,6 +28,15 @@ const PAY_WINDOW_SEC = 15 * 60;
 export default function StorePage() {
   const { user, openAuthModal } = useAuth();
   const [checkoutPkg, setCheckoutPkg] = useState(null);
+  const [packages, setPackages] = useState(PACKAGES);
+
+  // แพ็กเกจจากฐานข้อมูล (แอดมินแก้ไขได้) — ใช้ค่าเริ่มต้นระหว่างโหลด
+  useEffect(() => {
+    fetch('/api/packages')
+      .then((r) => r.json())
+      .then((d) => d.success && Array.isArray(d.packages) && setPackages(d.packages))
+      .catch(() => {});
+  }, []);
 
   const buy = (pkg) => {
     if (!user) {
@@ -65,7 +74,7 @@ export default function StorePage() {
       </div>
 
       <div className="grid grid-4">
-        {PACKAGES.map((pkg) => {
+        {packages.map((pkg) => {
           const accent = ACCENTS[pkg.accent] || ACCENTS.gold;
           const Icon = accent.icon;
           const total = pkg.hours + pkg.bonus;

@@ -26,6 +26,7 @@ import sound_manager
 import econ_calendar
 from version import APP_VERSION
 import secure_store
+import plan_config
 from collections import deque
 from console_format import ConsoleFormatter, TAG_COLORS
 from stats_manager import stats_mgr, STANDARD_PLANS
@@ -818,6 +819,7 @@ class MainTradingApp(ctk.CTk):
         self._calendar_loading = False
         self._ui_tick = 0
 
+        plan_config.start()  # แผนเทรดที่แอดมินเปิด/ปิด
         self._build_top_header()
         self._build_metric_cards()
 
@@ -1947,7 +1949,10 @@ class MainTradingApp(ctk.CTk):
                         wr = ps.get("win_rate_pct", 0.0)
                         prof = ps.get("total_profit_usd", 0.0)
                         lbl_tr.configure(text=str(tr), text_color=COLOR_TEXT_PRIMARY if tr else COLOR_TEXT_MUTED)
-                        lbl_wr.configure(text=f"{wr:.0f}%" if tr else "—", text_color=COLOR_GOLD_PRIMARY if tr else COLOR_TEXT_MUTED)
+                        if not plan_config.is_enabled(full_pname.split(": ", 1)[-1]):
+                            lbl_wr.configure(text="ปิด", text_color=COLOR_DANGER_RED)  # ปิดโดยผู้ดูแลระบบ
+                        else:
+                            lbl_wr.configure(text=f"{wr:.0f}%" if tr else "—", text_color=COLOR_GOLD_PRIMARY if tr else COLOR_TEXT_MUTED)
                         lbl_pf.configure(
                             text=f"{'+' if prof >= 0 else '-'}${abs(prof):.2f}",
                             text_color=COLOR_SUCCESS_GREEN if prof > 0 else (COLOR_DANGER_RED if prof < 0 else COLOR_TEXT_MUTED),

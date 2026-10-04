@@ -125,6 +125,25 @@ def sync_user_plan_stats(user_id, email, plan_name, total_trades, win_trades, lo
     }
     return _make_request("rpc/bot_upsert_plan_stats", method="POST", payload={"p": payload})
 
+def _current_user():
+    try:
+        from license_manager import license_mgr
+        u = license_mgr.get_current_user()
+        return (u.get("user_id") or None), (u.get("email") or None)
+    except Exception:
+        return None, None
+
+
+def _insert_with_user(table, payload):
+    """แนบ user_id/email ให้ log (ถ้าฐานข้อมูลยังไม่มีคอลัมน์ จะส่งซ้ำแบบไม่แนบ)"""
+    user_id, email = _current_user()
+    if user_id or email:
+        res = _make_request(table, method="POST", payload={**payload, "user_id": user_id and str(user_id), "email": email})
+        if res is not None:
+            return res
+    return _make_request(table, method="POST", payload=payload)
+
+
 def log_risk_event(symbol, event_type, direction, message, loss=0.0):
     """บันทึก Risk Event (Circuit Breaker, Loss Block) ลงตาราง risk_events"""
     payload = {
@@ -135,7 +154,7 @@ def log_risk_event(symbol, event_type, direction, message, loss=0.0):
         "loss_amount": float(loss),
         "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
-    return _make_request("risk_events", method="POST", payload=payload)
+    return _insert_with_user("risk_events", payload)
 
 def log_signal(symbol, signal_type, plan, direction, price, ai_up, ai_down, h4_trend, status, detail=""):
     """บันทึกประวัติการส่งสัญญาณสำคัญลงตาราง signal_logs บน Supabase"""
@@ -155,6 +174,6 @@ def log_signal(symbol, signal_type, plan, direction, price, ai_up, ai_down, h4_t
             "detail": str(detail),
             "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         }
-        return _make_request("signal_logs", method="POST", payload=payload)
+        return _insert_with_user("signal_logs", payload)
     except Exception:
         return None

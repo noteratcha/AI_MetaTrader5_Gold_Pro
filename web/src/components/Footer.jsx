@@ -43,7 +43,7 @@ export default function Footer() {
               <li><Link href="/calendar">ปฏิทินเศรษฐกิจ</Link></li>
               <li><Link href="/store">ซื้อชั่วโมง</Link></li>
               <li><Link href="/my-keys">คีย์ของฉัน</Link></li>
-              {isAdmin && <li><Link href="/admin/analytics">Admin Analytics</Link></li>}
+              {isAdmin && <li><Link href="/admin">Admin</Link></li>}
             </ul>
           </div>
 

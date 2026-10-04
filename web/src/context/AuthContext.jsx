@@ -66,7 +66,9 @@ export function AuthProvider({ children }) {
     if (!tokenRef.current) return;
     try {
       const data = await apiFetch('/api/auth/me');
-      persist(tokenRef.current, data.user);
+      // weakPassword ได้มาตอนล็อกอินเท่านั้น — เก็บไว้จนกว่าจะเปลี่ยนรหัสผ่าน
+      const saved = readSession();
+      persist(tokenRef.current, { ...data.user, weakPassword: saved?.user?.weakPassword || undefined });
     } catch {
       /* ออฟไลน์ — ใช้ข้อมูลเดิมไปก่อน */
     }
@@ -116,6 +118,15 @@ export function AuthProvider({ children }) {
     [apiFetch, persist, user]
   );
 
+  const changePassword = useCallback(
+    async (currentPassword, newPassword) => {
+      const data = await apiFetch('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+      if (user) persist(tokenRef.current, { ...user, weakPassword: undefined });
+      return data;
+    },
+    [apiFetch, persist, user]
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -134,9 +145,10 @@ export function AuthProvider({ children }) {
       logout,
       refreshUser,
       redeemKey,
+      changePassword,
       apiFetch,
     }),
-    [user, isLoading, isAuthModalOpen, authModalTab, login, register, logout, refreshUser, redeemKey, apiFetch]
+    [user, isLoading, isAuthModalOpen, authModalTab, login, register, logout, refreshUser, redeemKey, changePassword, apiFetch]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

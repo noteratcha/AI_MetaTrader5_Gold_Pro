@@ -1,6 +1,7 @@
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import { adjustHours, allowMethods, requireUser } from '../../../lib/server/auth';
 import { isValidKeyFormat, normalizeKey } from '../../../lib/server/keys';
+import { logActivity } from '../../../lib/server/activity';
 
 /**
  * เติมชั่วโมงด้วย Product Key
@@ -69,6 +70,7 @@ export default async function handler(req, res) {
     }
 
     const hoursRemaining = await adjustHours(auth.row.id, hoursToAdd);
+    await logActivity({ userId: auth.row.id, email, event: 'redeem', detail: `เติมคีย์ ${keyCode} +${hoursToAdd} ชม. (คงเหลือ ${hoursRemaining.toFixed(2)})` });
     return res.status(200).json({
       success: true,
       message: `เติมชั่วโมงสำเร็จ! ได้รับ +${hoursToAdd} ชั่วโมง (คงเหลือ ${hoursRemaining.toFixed(2)} ชม.)`,
