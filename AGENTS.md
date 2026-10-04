@@ -45,7 +45,13 @@
 13. **Automated 1-Year Data Retention & File Size Control (`prune_old_csv_records`)**: ควบคุมขนาดไฟล์ประวัติอัตโนมัติ ลบรายการเก่าเกิน 1 ปี (365 วัน)
 14. **Production Auth & Login Gate (Zero Demo Bypass)**: ปิดโหมด Demo ถาวร ต้อง Register/Login ก่อนใช้งานทั้ง Web และ Desktop (สมาชิกใหม่รับฟรี 48 ชม., รหัสผ่าน PBKDF2-HMAC-SHA256)
 15. **Admin RBAC (GoldBot24 Web)**: ปุ่มและหน้า `Admin Analytics` แสดงเฉพาะ User Admin (`role:admin` ใน `symbols_trading` หรืออีเมลที่อยู่ใน env `ADMIN_EMAILS` — อีเมลขึ้นต้น `admin@` เฉย ๆ **ไม่ใช่** Admin) และทุก API ฝั่ง Admin ตรวจสิทธิ์จาก Token ที่ลงลายเซ็นบน Server
-16. **Hours Metering & Auto Payment**: คิดเงิน 1 บาท/ชม. ตัดเวลาทุก 60 วิเฉพาะตอนบอททำงาน, ชำระผ่าน PromptPay QR + ตรวจสลิป SlipOK อัตโนมัติ และเติมเวลาด้วย Product Key 24 หลัก
+16. **Hours Metering & Auto Payment**: คิดเงิน 1 บาท/ชม. ตัดเวลาทุก 60 วิเฉพาะตอนบอททำงาน (หักจริงบน Server ผ่าน `/api/auth/meter`), ชำระผ่าน PromptPay QR + ตรวจสลิป SlipOK อัตโนมัติ และเติมเวลาด้วย Product Key 24 หลัก — *กำลังเชื่อม Beam Payment Gateway ให้ยืนยันการโอนอัตโนมัติไม่ต้องแนบสลิป (ดู `CHECKLIST_BEAM.md`)*
+17. **Live Open Positions Monitor**: แท็บ "ออเดอร์ที่เปิดอยู่" แสดงทุกไม้แบบเรียลไทม์ (ราคาเข้า/ปัจจุบัน, SL พร้อม 🔒 เมื่อล็อกกำไรแล้ว, TP หรือ "รันเทรนด์", เวลาที่ถือ, กำไรรวม swap) และปิดทีละไม้ได้ผ่าน `close_position()` ตัวเดียวกับบอท
+18. **MT5 Trade History (Paired Deals)**: ดึงประวัติจาก MT5 โดยตรง จับคู่ Deal เข้า/ออกด้วย `position_id` แสดงหน้าละ 5 รายการ พร้อมสรุปชนะ/แพ้/กำไรสุทธิ 90 วัน (Desktop) และ `trade_logs` แบ่งหน้า (เว็บ)
+19. **Economic Calendar Awareness**: ปฏิทินเศรษฐกิจรายสัปดาห์ (เวลาไทย) กรอง USD/ผลกระทบ และนับถอยหลังข่าว USD ผลกระทบสูงถัดไป (NFP/CPI/FOMC) ทั้งใน Desktop และหน้า `/calendar` บนเว็บ
+20. **Smart Console (Event-Colored Log)**: `console_format.py` ซ่อนข้อความไม่จำเป็น ย่อบล็อกสแกน 10 บรรทัดเหลือ 1 บรรทัด แยกสีตามเหตุการณ์ (BUY/SELL/TP/SL/Exit/Lock/Error) กรองข้อความซ้ำ 5 นาที และอธิบาย error MT5 เป็นภาษาไทย
+21. **Secure Remembered Login**: จดจำอีเมล/รหัสผ่านล่าสุดเมื่อติ๊ก "จดจำ" โดยเข้ารหัสด้วย Windows DPAPI (`secure_store.py`) และเก็บข้อมูลผู้ใช้ทั้งหมดใน `%APPDATA%\GoldBot24` ให้อยู่รอดเมื่ออัปเดตโปรแกรม
+22. **Self-Updating Release Channel**: ตรวจเวอร์ชันใหม่อัตโนมัติเบื้องหลัง (ทุก 6 ชม.) จาก `/api/release` ← GitHub Releases และแจ้งเป็นป้ายบนแถบหัวโปรแกรม
 
 ---
 
@@ -116,6 +122,16 @@
    - มี **Buffer Guard** $\ge 0.4\text{ ATR}$ จากราคาตลาด และ **Throttle Guard** 60 วินาที
 3. **AI Dynamic Reversal Close**:
    - หากตรวจพบสัญญาณกลับทิศของ AI อย่างรุนแรง ($\ge 60\%$) และราคาย้อนผ่านจุดเปิด บอทจะปิดไม้ออกทันทีเพื่อลดความสูญเสีย
+4. **Closed-Candle Cross Confirmation (Anti-Repaint)**:
+   - Plan 4/5 ตรวจ MA Cross จาก**แท่งที่ปิดแล้ว** (`iloc[-2]` เทียบ `iloc[-3]`) ไม่ใช้แท่งที่ยังวิ่งอยู่
+   - **Cross-Bar Re-entry Guard**: จดเวลาแท่ง Cross ที่เข้าไม้แล้วใน `last_cross_entry_bar[(sym, plan, direction)]` — ห้ามเข้าซ้ำบนแท่ง Cross เดิม (สัญญาณค้างตลอดอายุแท่ง 15 นาที/1 ชม.)
+5. **Timeframe-Matched Safety SL**:
+   - Plan 5 ใช้ **ATR(14) ของ H1 จริง** (แท่งที่ปิดแล้ว) × 0.75 — ถ้าข้อมูลไม่พอจึงใช้ ATR M15 × 2 เป็นค่าสำรอง
+6. **Single-Count Close Accounting**:
+   - ไม้ที่บอทปิดเองผ่าน `close_position()` ถูกจดใน `_self_closed_tickets` เพื่อไม่ให้ส่วนตรวจจับ SL/TP นับขาดทุน/Circuit Breaker/สถิติซ้ำ
+   - ทิศของไม้ที่ปิด = **ฝั่งตรงข้ามของ Deal ปิด** (ปิด BUY คือ Deal SELL) — ใช้กำหนด Same-Plan Loss Block ให้ถูกทิศ
+7. **Unified Close Path**:
+   - ปิดไม้ทุกช่องทาง (AI Reversal, MA Cross Exit, ปุ่มปิดทีละไม้, ปุ่มปิดทุกออเดอร์) ผ่าน `close_position()` เดียว — เลือก filling mode ตามโบรกเกอร์ และบันทึก `trade_logs`/สถิติครบ
 
 ---
 
@@ -127,10 +143,12 @@
 | **Sweet Spot RRR** | `1:1.50` | สร้างความสมดุลระหว่าง Win Rate สูง (45-50%) และกำไรสุทธิ |
 | **Strict Pro-Trend** | บล็อกสวนเทรนด์ 100% | ห้ามเข้าออเดอร์สวนทิศ H4 MA เด็ดขาดเมื่อตลาดมีแนวโน้ม |
 | **Asset Specialization** | คัดแผนเฉพาะทาง | ปิด Breakout บน XAU และปิด Bounce บน BTC เพื่อตัดไม้แพ้ซ้ำซาก |
-| **Circuit Breaker** | ขาดทุนติดกัน 2 ไม้ ➔ พัก 60 นาที | ป้องกัน Drawdown รุนแรงในสภาวะตลาดผิดปกติ |
+| **Circuit Breaker** | ขาดทุนติดกัน 2 ไม้ ➔ พัก 60 นาที | ป้องกัน Drawdown รุนแรงในสภาวะตลาดผิดปกติ (นับไม้ละ 1 ครั้งเท่านั้น — ดูเทคนิคข้อ 6) |
 | **Same-Plan Loss Block** | บล็อกทิศเดิม 60 นาทีเมื่อแพ้ | ป้องกันการเข้าซ้ำสวนแนวโน้มที่กำลังวิ่งแรง (ปลดล็อกเมื่อชนะ) |
 | **Margin per Trade** | $400 ต่อ 1 ไม้ (Free Margin) | คุมขนาดพอร์ตและป้องกัน Overtrading / Margin Call |
 | **Cooldown Rest** | BTC 15 นาที / XAU 10 นาที | พักรอบแท่งเทียนป้องกันอาการ Whipsaw หลังปิดออเดอร์ |
+| **Cross-Bar Guard** | 1 ไม้ ต่อ 1 แท่ง Cross | Plan 4/5 ห้ามเข้าซ้ำบนสัญญาณ Cross เดิมหลัง Cooldown หมด |
+| **News Awareness** | นับถอยหลังข่าว USD ผลกระทบสูง | เตือนช่วงสเปรดกว้าง/ราคาสะบัดแรง 15–30 นาทีรอบข่าว |
 
 ---
 
@@ -152,6 +170,60 @@
 | **Hours Metering** | Desktop หักเวลาในเครื่องแล้วส่งยอดให้ `/api/auth/meter` หักจริงบน Server ทุก 5 นาที — ห้าม PATCH `bot_config.lot_size` ตรงจาก Client |
 | **Register** | สมาชิกใหม่รับฟรี 48 ชม. รหัสผ่านเข้ารหัส PBKDF2-HMAC-SHA256 |
 | **Admin RBAC** | `Admin Analytics` (Navbar/Footer/หน้า `/admin/analytics`) แสดงเฉพาะ Admin เท่านั้น ห้ามเปิดเผยสถิติทุกลูกค้าและเครื่องผลิต Promo Key ต่อลูกค้าทั่วไป |
-| **Payment** | PromptPay QR → SlipOK ตรวจสลิป/Webhook → ผลิต Product Key `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX` อัตโนมัติ |
+| **Payment** | ราคา/ชั่วโมงคิดจาก `web/src/lib/packages.js` ฝั่ง Server เท่านั้น · Order ID สุ่มแบบเดาไม่ได้ · PromptPay QR → SlipOK ตรวจสลิป (`log: true` กันสลิปซ้ำ + `amount` ตรวจยอด) → ผลิต Product Key อัตโนมัติ · Webhook ต้องมี `x-webhook-secret` · ห้ามโหมดจำลองบน Production · **ถัดไป: Beam PromptPay + Webhook (ไม่ต้องแนบสลิป)** |
+| **Database Security** | RLS เปิดทุกตาราง — anon key อ่านตารางผู้ใช้/คีย์/คำสั่งซื้อ/พอร์ตไม่ได้ · Desktop เขียน Telemetry/สถิติผ่าน RPC `bot_upsert_telemetry` / `bot_upsert_plan_stats` (SECURITY DEFINER, เขียนอย่างเดียว) · Migration: `supabase_security_rls.sql` + `supabase_security_rls_patch_01.sql` |
+| **Secrets** | ห้าม commit/ส่งคีย์ลับในแชท — ใส่ผ่าน `npx vercel env add <NAME> production --sensitive` · รหัส MT5 อยู่ในเครื่องเท่านั้น (`%APPDATA%\GoldBot24\credentials.json`) ไม่ซิงค์ขึ้น Cloud |
+| **Desktop Data Dir** | ไฟล์ผู้ใช้ทั้งหมดผ่าน `app_paths.data_path()` → `%APPDATA%\GoldBot24` (ห้ามเก็บข้างไฟล์ .exe เพราะถูกลบทุกครั้งที่ build) |
 | **Desktop GUI Colors** | CustomTkinter รับเฉพาะ Hex `#RRGGBB` — **ห้ามใช้ `rgba()`** (ทำให้ `TclError` โปรแกรมเปิดไม่ขึ้น) |
-| **Release Flow** | GUI: Smoke Test → `python build_dist.py` / Web: `npm run build` → `npx vercel --prod --yes` |
+| **Release Flow** | 1) `python tools/bump_version.py` 2) Smoke Test GUI 3) `python build_dist.py` (ต้องปิดโปรแกรมก่อน ไม่งั้นไฟล์ถูกล็อก) 4) สร้าง GitHub Release `v<เวอร์ชัน>` แนบ ZIP + SHA-256 → หน้า `/download` และการแจ้งอัปเดตในโปรแกรมอัปเดตเอง · Web: `npm run build` → `npx vercel --prod --yes` |
+| **Responsive Desktop** | ออกแบบให้พอดีจอ 1366×768 (เปิดเต็มจออัตโนมัติเมื่อจอเล็ก) · Tk แสดงอีโมจีสีไม่ได้ ให้ใช้ Label สี/ป้ายแทน และหลีกเลี่ยงอีโมจี Unicode ใหม่ (เช่น 🪙) ที่ Windows 10 ไม่มี |
+| **Tk Grid** | `sticky` ใช้ได้เฉพาะ n/s/e/w — ห้าม `sticky="center"` (TclError) |
+
+---
+
+## 8. 🔌 สถาปัตยกรรมและการเชื่อมต่อ (Architecture & Integrations)
+
+```
+┌──────────────── Desktop (Windows) ────────────────┐        ┌────────── GoldBot24 Web (Vercel) ──────────┐
+│ gui_app.py ── bot_controller.py ── multi_asset_ai_bot│        │ Next.js 16 · App Router (หน้าเว็บ)            │
+│      │              │   (MT5 Python API)          │ Bearer │ Pages Router `/api/*` (Service Role)        │
+│ license_manager ────┼───── login/me/meter/redeem ─┼───────▶│ auth · checkout · user · admin · calendar   │
+│ econ_calendar ──────┼───── /api/calendar, /api/release ───▶│ release (← GitHub Releases)                 │
+│ supabase_sync ──────┼── RPC/insert (anon, เขียนอย่างเดียว) ─┐ └───────────────┬────────────────────────────┘
+└──────────┬──────────┘                                    │                 │ Service Role
+           ▼                                               ▼                 ▼
+   MetaTrader 5 (FBS)                                   Supabase Postgres (RLS เปิดทุกตาราง)
+```
+
+### 8.1 Web API (`web/src/pages/api`)
+| Endpoint | สิทธิ์ | หน้าที่ |
+| :--- | :--- | :--- |
+| `POST /api/auth/login`, `/register` | สาธารณะ | คืน Token ลงลายเซ็น (30 วัน) · hash v2 (210k รอบ) · อัปเกรด v1 อัตโนมัติ |
+| `GET /api/auth/me` · `POST /meter` · `POST /redeem` | Bearer | ข้อมูลบัญชี · หักนาทีใช้งาน · เติมคีย์ (จองคีย์แบบ atomic) |
+| `POST /api/checkout/create-qr` · `GET /check-status` · `POST /verify-slip` | Bearer + เจ้าของคำสั่งซื้อ | สร้างคำสั่งซื้อ/QR · ตรวจสถานะ · ตรวจสลิป SlipOK |
+| `POST /api/webhook/payment` | `x-webhook-secret` | แจ้งชำระจากผู้ให้บริการ |
+| `GET /api/user/telemetry` · `/trades` · `/stats` · `/keys` | Bearer | พอร์ตสด · ประวัติ (แบ่งหน้า) · สถิติรายแผน · คีย์ของฉัน |
+| `GET /api/admin/overview` · `POST /promo-key` | Admin | ภาพรวมระบบ · ผลิต Promo Key |
+| `GET /api/calendar` · `/api/release` | สาธารณะ (CDN cache) | ปฏิทินเศรษฐกิจ (30 นาที) · เวอร์ชันล่าสุด (10 นาที) |
+
+### 8.2 Environment Variables (Vercel)
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `ADMIN_EMAILS`, `PROMPTPAY_ID`, `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`, `PAYMENT_WEBHOOK_SECRET` · *(ถัดไป)* `PAYMENT_PROVIDER`, `BEAM_MERCHANT_ID`, `BEAM_API_KEY`, `BEAM_WEBHOOK_HMAC_KEY`, `BEAM_ENV`
+
+### 8.3 ผู้ใช้และข้อมูลใน Supabase
+* ผู้ใช้อยู่ในตาราง `bot_config` (`mt5_server` = อีเมล, `mt5_password` = hash, `lot_size` = ชั่วโมงคงเหลือ, `symbols_trading` = tag เช่น `name:`, `role:admin`) — แถว `id = 1` เป็น config ระบบ
+* `bot_telemetry` 1 แถวต่อ 1 บัญชี (`id` = id ผู้ใช้) · `trade_logs` แยกด้วย `email` · `user_plan_stats` แยกด้วย `user_id` (TEXT)
+
+### 8.4 บริการภายนอก
+| บริการ | ใช้ทำอะไร | หมายเหตุ |
+| :--- | :--- | :--- |
+| **MetaTrader 5 (FBS)** | ข้อมูลราคา/ส่งคำสั่ง/ประวัติ Deal | magic `888999` · comment = ชื่อแผน |
+| **Supabase** | ฐานข้อมูล + RLS + RPC | Desktop ใช้ anon key เขียนอย่างเดียว |
+| **Vercel** | เว็บ + API | `goldbot24.vercel.app` |
+| **GitHub Releases** | แจกไฟล์ติดตั้ง Desktop | `noteratcha/AI_MetaTrader5_Gold_Pro` (public) |
+| **SlipOK** | ตรวจสลิปโอนเงิน | ต้องมีสลิปเสมอ (ไม่มี API ตรวจยอดเข้าเอง) |
+| **Beam** *(รออนุมัติ)* | PromptPay อัตโนมัติผ่าน Webhook | `CHECKLIST_BEAM.md` |
+| **Economic Calendar Feed** | ปฏิทินข่าวรายสัปดาห์ | จำกัดจำนวนครั้ง (429) → ใช้ผ่าน `/api/calendar` ที่ cache ไว้ |
+| **Investing.com Widget** | ปฏิทินแบบฝัง (เว็บ) | มีปุ่มเปิดหน้า Investing.com สำรอง |
+
+### 8.5 ไฟล์สำคัญฝั่ง Desktop
+`version.py` (เลขเวอร์ชันแหล่งเดียว) · `app_paths.py` (โฟลเดอร์ข้อมูลผู้ใช้) · `secure_store.py` (DPAPI) · `console_format.py` (Console สี) · `econ_calendar.py` · `tools/bump_version.py` · `tools/admin_reset_password.py` (สร้าง SQL รีเซ็ตรหัสผ่านลูกค้า)
