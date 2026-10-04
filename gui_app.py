@@ -1,6 +1,6 @@
 """
 AI MetaTrader 5 (FBS) Gold Pro - Desktop GUI Application
-เวอร์ชัน: v2026.1004.2030
+เวอร์ชัน: ดู version.py
 หน้าจอ UI สำหรับเข้าใช้งานระบบ, ตรวจสอบสิทธิ์ชั่วโมง (Hours Metering), เติมชั่วโมงด้วย Product Key,
 และควบคุมการเปิด/ปิดระบบเทรดอัตโนมัติ 100% Pure Gold Specialist (XAUUSD)
 """
@@ -24,6 +24,7 @@ from license_manager import (
 from bot_controller import bot_ctrl
 import sound_manager
 import econ_calendar
+from version import APP_VERSION
 from collections import deque
 from console_format import ConsoleFormatter, TAG_COLORS
 from stats_manager import stats_mgr, STANDARD_PLANS
@@ -387,7 +388,7 @@ class MainTradingApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("AI Gold Commander Pro - GoldBot24 (v2026.1004.2030)")
+        self.title(f"AI Gold Commander Pro - GoldBot24 (v{APP_VERSION})")
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{min(1320, sw - 40)}x{min(840, sh - 90)}")
         self.minsize(min(1040, sw - 40), min(620, sh - 90))
@@ -486,7 +487,7 @@ class MainTradingApp(ctk.CTk):
         version_badge.pack(pady=(0, 16))
         ctk.CTkLabel(
             version_badge,
-            text="v2026.1004.2030 • GoldBot24 Cloud Service (1.00 THB/hr)",
+            text=f"v{APP_VERSION} • GoldBot24 Cloud Service (1.00 THB/hr)",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color=COLOR_GOLD_WARM
         ).pack(padx=10, pady=4)
@@ -884,7 +885,7 @@ class MainTradingApp(ctk.CTk):
         ctk.CTkLabel(brand_text_box, text="AI Gold Commander Pro", font=self._font(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w")
         ctk.CTkLabel(
             brand_text_box,
-            text="v2026.1004.2030 · XAUUSD Gold Specialist · GoldBot24",
+            text=f"v{APP_VERSION} · XAUUSD Gold Specialist · GoldBot24",
             font=self._font(11),
             text_color=COLOR_TEXT_MUTED,
         ).pack(anchor="w")
@@ -1202,7 +1203,7 @@ class MainTradingApp(ctk.CTk):
             self.txt_console.tag_config(tag, foreground=color)
 
         for text, tag in (
-            ("🏆 AI Gold Commander Pro v2026.1004.2030\n", "close"),
+            (f"🏆 AI Gold Commander Pro v{APP_VERSION}\n", "close"),
             ("XAUUSD · RRR 1:1.50 · SL 0.75 ATR · คิดเวลา 1 บาท/ชม. เฉพาะตอนบอททำงาน\n", "muted"),
             ("กด ▶ เริ่มการทำงานบอท ด้านขวาเพื่อเริ่มสแกนตลาด — ที่นี่จะแสดงเฉพาะเหตุการณ์สำคัญ (เปิด/ปิดออเดอร์ ฯลฯ)\n\n", "muted"),
         ):
@@ -1597,7 +1598,7 @@ class MainTradingApp(ctk.CTk):
 
     def _check_app_updates(self, silent_if_latest=False):
         """ตรวจสอบเวอร์ชันใหม่จาก Supabase app_releases"""
-        current_ver = "2026.1004.2030"
+        current_ver = APP_VERSION
         try:
             res = license_mgr.check_app_version(current_ver)
             if res.get("has_update"):

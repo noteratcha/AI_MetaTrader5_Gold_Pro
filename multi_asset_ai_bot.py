@@ -73,7 +73,8 @@ disable_quick_edit()
 
 # เวอร์ชันและข้อมูลระบบ (System Info) - รูปแบบ: ปี.เดือนวันที่.ชั่วโมงนาที (YYYY.MMDD.HHMM)
 BOT_NAME = "AI MetaTrader 5 (FBS) Gold Pro"
-BOT_VERSION = "2026.1004.2030"
+from version import APP_VERSION
+BOT_VERSION = APP_VERSION  # แหล่งเดียว: version.py
 
 # ตั้งค่าสำหรับระบบ AI Trading (เทรดเฉพาะ XAUUSD ทองคำ 100%)
 TRADE_SYMBOLS = ["XAUUSD"] # โฟกัสเฉพาะทองคำ XAUUSD 100%
