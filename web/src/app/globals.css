@@ -1246,3 +1246,16 @@ select.input {
   height: 100%;
   border: 0;
 }
+
+.nav-download.is-active {
+  background: var(--gold-soft);
+}
+@media (max-width: 1100px) {
+  .nav-download-label {
+    display: none;
+  }
+  .nav-download {
+    width: 34px;
+    padding: 0;
+  }
+}

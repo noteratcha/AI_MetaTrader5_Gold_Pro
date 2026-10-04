@@ -358,19 +358,32 @@ def _version_tuple(v: str) -> tuple:
 
 
 def fetch_app_version_info(current_version: str) -> dict:
-    """ตรวจสอบเวอร์ชันล่าสุดจากตาราง app_releases (ข้อมูลสาธารณะ อ่านด้วย anon key)"""
-    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/app_releases?select=version,download_url,changelog,mandatory&order=released_at.desc&limit=1"
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-    req = urllib.request.Request(url, headers=headers, method="GET")
-    with urllib.request.urlopen(req, timeout=6) as resp:
-        rows = json.loads(resp.read().decode("utf-8"))
-    if not rows:
+    """
+    ตรวจสอบเวอร์ชันล่าสุด: GoldBot24 API (/api/release ← GitHub Releases) แล้ว fallback ตาราง app_releases
+    """
+    latest = None
+    try:
+        req = urllib.request.Request(f"{API_BASE_URL.rstrip('/')}/api/release", headers={"User-Agent": "GoldBot24-Desktop"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            latest = (json.loads(resp.read().decode("utf-8")) or {}).get("release")
+    except Exception:
+        latest = None
+
+    if not latest or not latest.get("version"):
+        url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/app_releases?select=version,download_url,changelog,mandatory&order=released_at.desc&limit=1"
+        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            rows = json.loads(resp.read().decode("utf-8"))
+        latest = rows[0] if rows else None
+
+    if not latest:
         return {"has_update": False, "latest_version": current_version}
-    latest = rows[0]
     return {
         "has_update": _version_tuple(latest.get("version")) > _version_tuple(current_version),
         "latest_version": latest.get("version"),
-        "download_url": latest.get("download_url"),
+        # หน้าเว็บดาวน์โหลดมีวิธีติดตั้ง + checksum
+        "download_url": f"{API_BASE_URL.rstrip('/')}/download",
         "changelog": latest.get("changelog"),
         "mandatory": bool(latest.get("mandatory")),
     }

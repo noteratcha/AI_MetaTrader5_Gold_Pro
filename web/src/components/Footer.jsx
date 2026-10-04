@@ -69,13 +69,9 @@ export default function Footer() {
                 </>
               )}
             </p>
-            {release?.download_url ? (
-              <a className="btn btn-outline-gold btn-sm" href={release.download_url} target="_blank" rel="noopener noreferrer">
-                <Download size={15} /> ดาวน์โหลดโปรแกรม
-              </a>
-            ) : (
-              <span className="badge badge-muted">ติดต่อแอดมินเพื่อรับไฟล์ติดตั้ง</span>
-            )}
+            <Link className="btn btn-outline-gold btn-sm" href="/download">
+              <Download size={15} /> ดาวน์โหลดโปรแกรม
+            </Link>
           </div>
         </div>
 

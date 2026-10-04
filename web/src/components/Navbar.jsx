@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, CalendarDays, Key, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
+import { Activity, BarChart3, CalendarDays, Download, Key, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatHHMM } from '../lib/format';
 
@@ -64,6 +64,10 @@ export default function Navbar() {
         </nav>
 
         <div className="nav-actions">
+          <Link href="/download" className={`btn btn-outline-gold btn-sm nav-download ${pathname === '/download' ? 'is-active' : ''}`} title="ดาวน์โหลดโปรแกรมเวอร์ชันล่าสุด">
+            <Download size={15} />
+            <span className="nav-download-label">ดาวน์โหลด</span>
+          </Link>
           {user ? (
             <>
               <Link href="/dashboard" className="nav-user" title="กระเป๋าเวลาของฉัน">
