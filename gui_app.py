@@ -24,6 +24,8 @@ from license_manager import (
 from bot_controller import bot_ctrl
 import sound_manager
 import econ_calendar
+from collections import deque
+from console_format import ConsoleFormatter, TAG_COLORS
 from stats_manager import stats_mgr, STANDARD_PLANS
 
 # ตั้งค่ารูปลักษณ์และธีม CustomTkinter เป็น Dark Mode ระดับพรีเมียม
@@ -1159,43 +1161,82 @@ class MainTradingApp(ctk.CTk):
         self.main_tabs.set(self.TAB_CONSOLE)
 
     def _build_terminal_console(self, parent):
-        """คอนโซลแสดงผลสดการทำงานของบอท"""
+        """คอนโซลแสดงผลสดการทำงานของบอท (จัดสีตามความสำคัญ + ซ่อนข้อความที่ไม่จำเป็น)"""
+        self._console_formatter = ConsoleFormatter()
+        self._console_entries = deque(maxlen=3000)
+        self.show_detail_var = tk.BooleanVar(value=False)
+
         bar = ctk.CTkFrame(parent, fg_color="transparent")
         bar.pack(fill="x", padx=6, pady=(0, 6))
-        ctk.CTkLabel(bar, text="บันทึกการทำงานและสัญญาณเทรดสด", font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
-        self._small_button(bar, "ล้างข้อความ", self._clear_console, width=84).pack(side="right")
+        legend = ctk.CTkFrame(bar, fg_color="transparent")
+        legend.pack(side="left")
+        for text, tag in (("● เปิด BUY", "buy"), ("● เปิด SELL", "sell"), ("● ปิด/TP", "close"), ("● ล็อกกำไร", "lock"), ("● ผิดพลาด", "error")):
+            ctk.CTkLabel(legend, text=text, font=self._font(11), text_color=TAG_COLORS[tag]).pack(side="left", padx=(0, 10))
+
+        self._small_button(bar, "ล้าง", self._clear_console, width=48).pack(side="right")
         self.chk_autoscroll = ctk.CTkCheckBox(
-            bar,
-            text="เลื่อนอัตโนมัติ",
-            font=self._font(12),
-            text_color=COLOR_TEXT_MUTED,
-            fg_color=COLOR_GOLD_WARM,
-            hover_color=COLOR_GOLD_DARK,
-            checkbox_width=18,
-            checkbox_height=18,
+            bar, text="เลื่อนอัตโนมัติ", font=self._font(11), text_color=COLOR_TEXT_MUTED,
+            fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=16, checkbox_height=16,
             command=self._on_toggle_autoscroll,
         )
         self.chk_autoscroll.select()
-        self.chk_autoscroll.pack(side="right", padx=(0, 12))
+        self.chk_autoscroll.pack(side="right", padx=(0, 10))
+        ctk.CTkCheckBox(
+            bar, text="รายละเอียดการสแกน", variable=self.show_detail_var, font=self._font(11), text_color=COLOR_TEXT_MUTED,
+            fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=16, checkbox_height=16,
+            command=self._rerender_console,
+        ).pack(side="right", padx=(0, 10))
 
         self.txt_console = ctk.CTkTextbox(
             parent,
             font=ctk.CTkFont(family="Consolas", size=12),
             fg_color="#0B0D12",
-            text_color="#D8DCE4",
+            text_color=TAG_COLORS["text"],
             corner_radius=8,
             border_width=1,
             border_color=COLOR_CARD_BORDER,
             wrap="word",
         )
         self.txt_console.pack(fill="both", expand=True, padx=6, pady=(0, 6))
-        self.txt_console.insert(
-            "end",
-            "=== 🏆 AI MetaTrader 5 (FBS) Gold Pro v2026.1004.2030 ===\n"
-            "• โฟกัสทองคำ XAUUSD · RRR 1:1.50 · SL 0.75 ATR\n"
-            "• คิดค่าบริการ 1 บาท/ชั่วโมง เฉพาะเวลาที่บอททำงาน\n"
-            "• กด '▶ เริ่มการทำงานบอท' ด้านขวาเพื่อเริ่มวิเคราะห์และเทรดอัตโนมัติ\n\n",
-        )
+        for tag, color in TAG_COLORS.items():
+            self.txt_console.tag_config(tag, foreground=color)
+
+        for text, tag in (
+            ("🏆 AI Gold Commander Pro v2026.1004.2030\n", "close"),
+            ("XAUUSD · RRR 1:1.50 · SL 0.75 ATR · คิดเวลา 1 บาท/ชม. เฉพาะตอนบอททำงาน\n", "muted"),
+            ("กด ▶ เริ่มการทำงานบอท ด้านขวาเพื่อเริ่มสแกนตลาด — ที่นี่จะแสดงเฉพาะเหตุการณ์สำคัญ (เปิด/ปิดออเดอร์ ฯลฯ)\n\n", "muted"),
+        ):
+            self._console_entries.append((text, tag, "key"))
+            self.txt_console.insert("end", text, tag)
+        self.txt_console.configure(state="disabled")
+
+    def _append_console(self, entries):
+        """เพิ่มข้อความที่จัดรูปแบบแล้วลงคอนโซล (เคารพตัวเลือก 'รายละเอียดการสแกน')"""
+        show_detail = self.show_detail_var.get()
+        visible = [(t, tag) for (t, tag, level) in entries if level == "key" or show_detail]
+        self._console_entries.extend(entries)
+        if not visible:
+            return
+        self.txt_console.configure(state="normal")
+        for text, tag in visible:
+            self.txt_console.insert("end", text, tag)
+        # จำกัดความยาวไม่ให้กินหน่วยความจำ
+        line_count = int(self.txt_console.index("end-1c").split(".")[0])
+        if line_count > 2500:
+            self.txt_console.delete("1.0", f"{line_count - 2000}.0")
+        self.txt_console.configure(state="disabled")
+        if self.auto_scroll_logs:
+            self.txt_console.see("end")
+
+    def _rerender_console(self):
+        show_detail = self.show_detail_var.get()
+        self.txt_console.configure(state="normal")
+        self.txt_console.delete("1.0", "end")
+        for text, tag, level in self._console_entries:
+            if level == "key" or show_detail:
+                self.txt_console.insert("end", text, tag)
+        self.txt_console.configure(state="disabled")
+        self.txt_console.see("end")
 
     # ---- ประวัติการเทรด (5 รายการต่อหน้า) ----
     HISTORY_PAGE_SIZE = 5
@@ -1541,7 +1582,10 @@ class MainTradingApp(ctk.CTk):
         self.auto_scroll_logs = self.chk_autoscroll.get()
 
     def _clear_console(self):
+        self._console_entries.clear()
+        self.txt_console.configure(state="normal")
         self.txt_console.delete("1.0", "end")
+        self.txt_console.configure(state="disabled")
 
     def _open_redeem_modal(self):
         """เปิดหน้าต่างเติมชั่วโมง Product Key"""
@@ -1608,10 +1652,7 @@ class MainTradingApp(ctk.CTk):
                     break
 
             if lines and self.dashboard_view and hasattr(self, 'txt_console'):
-                full_chunk = "".join(lines)
-                self.txt_console.insert("end", full_chunk)
-                if self.auto_scroll_logs:
-                    self.txt_console.see("end")
+                self._append_console(self._console_formatter.feed("".join(lines)))
 
             # 2. ถ้าล็อกอินอยู่ ให้อัปเดตสถานะ Telemetry
             if self.is_logged_in and self.dashboard_view:
