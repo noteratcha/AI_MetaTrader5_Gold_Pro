@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 const SESSION_KEY = 'goldbot_session';
+// แอดมินเลือกดูเว็บแบบ 'admin' (มีเมนูจัดการ) หรือ 'user' (เห็นเหมือนลูกค้าทั่วไป)
+const VIEW_MODE_KEY = 'goldbot_view_mode';
 const LEGACY_KEYS = ['goldbot_user', 'remember_mt5_login', 'remember_mt5_password', 'remember_mt5_server', 'supabase_url', 'supabase_anon_key'];
 
 const AuthContext = createContext(null);
@@ -23,6 +25,7 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState('login');
+  const [viewMode, setViewModeState] = useState('admin');
   const tokenRef = useRef(null);
 
   const persist = useCallback((token, nextUser) => {
@@ -37,6 +40,24 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => persist(null, null), [persist]);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(VIEW_MODE_KEY) === 'user') setViewModeState('user');
+    } catch {
+      /* storage ใช้ไม่ได้ — ใช้ค่าเริ่มต้น */
+    }
+  }, []);
+
+  const setViewMode = useCallback((mode) => {
+    const next = mode === 'user' ? 'user' : 'admin';
+    setViewModeState(next);
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   /** fetch ที่แนบ Token อัตโนมัติ และออกจากระบบเมื่อ Token หมดอายุ (401) */
   const apiFetch = useCallback(
@@ -137,6 +158,10 @@ export function AuthProvider({ children }) {
       user,
       isLoading,
       isAdmin: Boolean(user?.isAdmin),
+      // แสดงเมนู/ลิงก์แอดมินเฉพาะตอนเป็นแอดมินและอยู่ในโหมดแอดมิน (สิทธิ์จริงตรวจที่ Server เสมอ)
+      isAdminView: Boolean(user?.isAdmin) && viewMode === 'admin',
+      viewMode,
+      setViewMode,
       isAuthModalOpen,
       authModalTab,
       setAuthModalTab,
@@ -154,7 +179,7 @@ export function AuthProvider({ children }) {
       completeLogin,
       apiFetch,
     }),
-    [user, isLoading, isAuthModalOpen, authModalTab, login, register, logout, refreshUser, redeemKey, changePassword, completeLogin, apiFetch]
+    [user, isLoading, viewMode, setViewMode, isAuthModalOpen, authModalTab, login, register, logout, refreshUser, redeemKey, changePassword, completeLogin, apiFetch]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

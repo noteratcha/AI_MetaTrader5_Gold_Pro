@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { KeyRound, LayoutDashboard, Package, Shield, ShieldAlert, ToggleRight, Users } from 'lucide-react';
+import { Eye, KeyRound, LayoutDashboard, Package, Shield, ShieldAlert, ToggleRight, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Alert, AuthGate, EmptyState, Modal, PageLoading, Spinner } from '../ui';
 
@@ -17,7 +17,7 @@ const TABS = [
 
 /** โครงหน้าแอดมิน: ตรวจสิทธิ์ + เมนูย่อย + แจ้งเตือนรหัสผ่านอ่อน */
 export default function AdminShell({ title, description, actions, children }) {
-  const { user, isLoading, isAdmin } = useAuth();
+  const { user, isLoading, isAdmin, viewMode, setViewMode } = useAuth();
   const pathname = usePathname();
   const [showChangePw, setShowChangePw] = useState(false);
 
@@ -29,6 +29,20 @@ export default function AdminShell({ title, description, actions, children }) {
         <div className="card">
           <EmptyState icon={ShieldAlert} title="ไม่มีสิทธิ์เข้าถึงหน้านี้">
             บัญชี {user.email} ไม่ใช่ผู้ดูแลระบบ
+          </EmptyState>
+        </div>
+      </div>
+    );
+  }
+  if (viewMode === 'user') {
+    return (
+      <div className="container container-narrow page">
+        <div className="card">
+          <EmptyState icon={Eye} title="กำลังอยู่ในโหมดผู้ใช้">
+            <p style={{ marginBottom: 14 }}>สลับเป็นโหมดแอดมินเพื่อเข้าหน้าจัดการระบบ</p>
+            <button className="btn btn-primary" onClick={() => setViewMode('admin')}>
+              <Shield size={16} /> สลับเป็นโหมดแอดมิน
+            </button>
           </EmptyState>
         </div>
       </div>

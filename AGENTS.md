@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0645 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0650 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0645): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0650): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0645`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0650`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -169,7 +169,7 @@
 | **Auth Token** | Token = HMAC-SHA256 (`AUTH_SECRET`) ส่งผ่าน `Authorization: Bearer` — API ห้ามรับ `email` จาก Body/Query เป็นตัวระบุผู้ใช้ และ Browser ห้ามเรียก Supabase ตรง (อ่าน/เขียนผ่าน `/api/*` ด้วย Service Role เท่านั้น) |
 | **Hours Metering** | Desktop หักเวลาในเครื่องแล้วส่งยอดให้ `/api/auth/meter` หักจริงบน Server ทุก 5 นาที — ห้าม PATCH `bot_config.lot_size` ตรงจาก Client |
 | **Register** | ยืนยันอีเมลด้วยรหัส 6 หลักก่อนสร้างบัญชี (ตอบข้อความเดียวกันเสมอ ถ้ามีบัญชีอยู่แล้วส่งอีเมลแจ้งเจ้าของแทน — กันสุ่มหาอีเมล) · สมาชิกใหม่รับฟรี 48 ชม. รหัสผ่านเข้ารหัส PBKDF2-HMAC-SHA256 |
-| **Admin RBAC** | `Admin Analytics` (Navbar/Footer/หน้า `/admin/analytics`) แสดงเฉพาะ Admin เท่านั้น ห้ามเปิดเผยสถิติทุกลูกค้าและเครื่องผลิต Promo Key ต่อลูกค้าทั่วไป |
+| **Admin RBAC** | `Admin Analytics` (Navbar/Footer/หน้า `/admin/analytics`) แสดงเฉพาะ Admin เท่านั้น ห้ามเปิดเผยสถิติทุกลูกค้าและเครื่องผลิต Promo Key ต่อลูกค้าทั่วไป · แอดมินสลับ **โหมดการดู ผู้ใช้ ↔ แอดมิน** ได้ที่ Navbar (`viewMode` ใน `AuthContext`, จำไว้ใน `localStorage`) — โหมดผู้ใช้ซ่อนเมนูแอดมินทั้งหมด (`isAdminView`) แต่สิทธิ์จริงยังตรวจที่ Server เสมอ |
 | **Payment** | ราคา/ชั่วโมงคิดจาก `web/src/lib/packages.js` ฝั่ง Server เท่านั้น · Order ID สุ่มแบบเดาไม่ได้ · PromptPay QR → SlipOK ตรวจสลิป (`log: true` กันสลิปซ้ำ + `amount` ตรวจยอด) → ผลิต Product Key อัตโนมัติ · Webhook ต้องมี `x-webhook-secret` · ห้ามโหมดจำลองบน Production · **ถัดไป: Beam PromptPay + Webhook (ไม่ต้องแนบสลิป)** |
 | **Database Security** | RLS เปิดทุกตาราง — anon key อ่านตารางผู้ใช้/คีย์/คำสั่งซื้อ/พอร์ตไม่ได้ · Desktop เขียน Telemetry/สถิติผ่าน RPC `bot_upsert_telemetry` / `bot_upsert_plan_stats` (SECURITY DEFINER, เขียนอย่างเดียว) · Migration: `supabase_security_rls.sql` + `supabase_security_rls_patch_01.sql` |
 | **Secrets** | ห้าม commit/ส่งคีย์ลับในแชท — ใส่ผ่าน `npx vercel env add <NAME> production --sensitive` · รหัส MT5 อยู่ในเครื่องเท่านั้น (`%APPDATA%\GoldBot24\credentials.json`) ไม่ซิงค์ขึ้น Cloud |

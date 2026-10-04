@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, CalendarDays, Download, Key, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Activity, BarChart3, CalendarDays, Download, Eye, Key, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatHHMM } from '../lib/format';
 
@@ -15,14 +15,39 @@ const NAV_ITEMS = [
   { href: '/my-keys', label: 'คีย์ของฉัน', icon: Key },
 ];
 
+/** สวิตช์โหมดการดูสำหรับแอดมิน: ผู้ใช้ ↔ แอดมิน */
+function ViewModeSwitch({ className = '' }) {
+  const { viewMode, setViewMode } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const choose = (mode) => {
+    if (mode === viewMode) return;
+    setViewMode(mode);
+    if (mode === 'admin' && !pathname?.startsWith('/admin')) router.push('/admin');
+    if (mode === 'user' && pathname?.startsWith('/admin')) router.push('/dashboard');
+  };
+
+  return (
+    <div className={`view-switch ${className}`} role="radiogroup" aria-label="โหมดการดู">
+      <button type="button" role="radio" aria-checked={viewMode === 'user'} className={viewMode === 'user' ? 'is-active' : ''} onClick={() => choose('user')} title="ดูเว็บแบบผู้ใช้ทั่วไป">
+        <Eye size={14} /> ผู้ใช้
+      </button>
+      <button type="button" role="radio" aria-checked={viewMode === 'admin'} className={viewMode === 'admin' ? 'is-active is-admin' : ''} onClick={() => choose('admin')} title="ดูเว็บแบบผู้ดูแลระบบ">
+        <Shield size={14} /> แอดมิน
+      </button>
+    </div>
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, isAdmin, openAuthModal, logout } = useAuth();
+  const { user, isAdmin, isAdminView, openAuthModal, logout } = useAuth();
   const [open, setOpen] = useState(false);
 
   useEffect(() => setOpen(false), [pathname]);
 
-  const items = isAdmin ? [...NAV_ITEMS, { href: '/admin', label: 'Admin', icon: Shield }] : NAV_ITEMS;
+  const items = isAdminView ? [...NAV_ITEMS, { href: '/admin', label: 'Admin', icon: Shield }] : NAV_ITEMS;
   const hours = Number(user?.hoursRemaining) || 0;
 
   return (
@@ -51,6 +76,7 @@ export default function Navbar() {
             );
           })}
           <div className="nav-mobile-auth">
+            {isAdmin && <ViewModeSwitch className="view-switch-block" />}
             {user ? (
               <button className="btn btn-danger btn-block" onClick={logout}>
                 <LogOut size={16} /> ออกจากระบบ
@@ -68,6 +94,7 @@ export default function Navbar() {
             <Download size={15} />
             <span className="nav-download-label">ดาวน์โหลด</span>
           </Link>
+          {isAdmin && <ViewModeSwitch className="nav-desktop-only" />}
           {user ? (
             <>
               <Link href="/dashboard" className="nav-user" title="กระเป๋าเวลาของฉัน">

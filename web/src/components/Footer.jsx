@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { PLAN_LIST } from '../lib/packages';
 
 export default function Footer() {
-  const { isAdmin } = useAuth();
+  const { isAdminView } = useAuth();
   const [release, setRelease] = useState(null);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function Footer() {
               <li><Link href="/calendar">ปฏิทินเศรษฐกิจ</Link></li>
               <li><Link href="/store">ซื้อชั่วโมง</Link></li>
               <li><Link href="/my-keys">คีย์ของฉัน</Link></li>
-              {isAdmin && <li><Link href="/admin">Admin</Link></li>}
+              {isAdminView && <li><Link href="/admin">Admin</Link></li>}
             </ul>
           </div>
 

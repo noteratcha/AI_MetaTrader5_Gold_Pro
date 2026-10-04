@@ -1359,3 +1359,50 @@ select.input {
 .clickable-row {
   cursor: pointer;
 }
+
+/* ----------------------------------------------------------------------------
+   Admin view-mode switch (ผู้ใช้ ↔ แอดมิน)
+   ---------------------------------------------------------------------------- */
+.view-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.view-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.view-switch button:hover {
+  color: var(--text);
+}
+.view-switch button.is-active {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.view-switch button.is-active.is-admin {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.view-switch-block {
+  display: flex;
+  margin-bottom: 8px;
+}
+.view-switch-block button {
+  flex: 1;
+  justify-content: center;
+  height: 36px;
+}
