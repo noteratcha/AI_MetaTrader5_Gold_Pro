@@ -565,8 +565,24 @@ class MainTradingApp(ctk.CTk):
             show="•",
             placeholder_text="รหัสผ่านอย่างน้อย 6 ตัวอักษร"
         )
-        self.entry_pwd.pack(fill="x", pady=(0, 10))
+        self.entry_pwd.pack(fill="x", pady=(0, 6))
         self.entry_pwd.bind("<Return>", lambda e: self._on_auth_submit())
+
+        # แสดง/ซ่อนรหัสผ่าน — ช่วยเช็คว่าพิมพ์ด้วยแป้นภาษาไทยหรือ Caps Lock อยู่หรือไม่
+        self.show_pwd_var = tk.BooleanVar(value=False)
+        self.chk_show_pwd = ctk.CTkCheckBox(
+            self.form_frame,
+            text="แสดงรหัสผ่าน",
+            variable=self.show_pwd_var,
+            command=self._toggle_show_password,
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            text_color=COLOR_TEXT_MUTED,
+            fg_color=COLOR_GOLD_WARM,
+            hover_color=COLOR_GOLD_DARK,
+            checkbox_width=16,
+            checkbox_height=16
+        )
+        self.chk_show_pwd.pack(anchor="w", pady=(0, 10))
 
         # 4) ยืนยันรหัสผ่าน (สำหรับ Register)
         self.lbl_reg_confirm = ctk.CTkLabel(
@@ -644,13 +660,13 @@ class MainTradingApp(ctk.CTk):
         
         lbl_web = ctk.CTkLabel(
             link_frame,
-            text="🌐 เติมชั่วโมงและดูเรดาร์สดผ่านเว็บ: GoldBot24 (goldbot24-4jnnk2of7-noteratchas-projects.vercel.app)",
+            text="🌐 เติมชั่วโมงและดูเรดาร์สดผ่านเว็บ: GoldBot24 (goldbot24.vercel.app)",
             font=ctk.CTkFont(family="Segoe UI", size=11, underline=True),
             text_color=COLOR_CYAN_ACCENT,
             cursor="hand2"
         )
         lbl_web.pack()
-        lbl_web.bind("<Button-1>", lambda e: webbrowser.open("https://goldbot24-4jnnk2of7-noteratchas-projects.vercel.app"))
+        lbl_web.bind("<Button-1>", lambda e: webbrowser.open("https://goldbot24.vercel.app"))
 
     def _on_auth_tab_change(self, selected_value: str):
         """สลับหน้าระหว่างโหมดเข้าสู่ระบบ และ สมัครสมาชิกใหม่"""
@@ -662,8 +678,8 @@ class MainTradingApp(ctk.CTk):
             self.entry_reg_name.pack(before=self.lbl_email, fill="x", pady=(0, 10))
 
             # แสดงช่อง Confirm Password
-            self.lbl_reg_confirm.pack(anchor="w", pady=(0, 4))
-            self.entry_reg_confirm.pack(fill="x", pady=(0, 10))
+            self.lbl_reg_confirm.pack(before=self.chk_show_pwd, anchor="w", pady=(0, 4))
+            self.entry_reg_confirm.pack(before=self.chk_show_pwd, fill="x", pady=(0, 10))
 
             # แสดง Bonus frame และซ่อน Remember Me
             self.bonus_frame.pack(before=self.lbl_login_status, fill="x", pady=(0, 10))
@@ -683,6 +699,21 @@ class MainTradingApp(ctk.CTk):
             self.chk_remember.pack(before=self.lbl_login_status, anchor="w", pady=(0, 12))
 
             self.btn_auth_submit.configure(text="🚀 เข้าสู่ระบบ (Sign In)")
+
+    def _toggle_show_password(self):
+        """สลับการแสดงรหัสผ่านแบบตัวอักษรจริง / จุด"""
+        mask = "" if self.show_pwd_var.get() else "•"
+        self.entry_pwd.configure(show=mask)
+        self.entry_reg_confirm.configure(show=mask)
+
+    @staticmethod
+    def _password_hint(pwd: str) -> str:
+        """คำแนะนำเพิ่มเติมเมื่อรหัสผ่านมีอักษรภาษาไทย/ช่องว่าง (มักเกิดจากลืมสลับแป้นพิมพ์)"""
+        if any(ord(ch) > 127 for ch in pwd):
+            return "\n(รหัสผ่านมีอักษรภาษาไทย — แป้นพิมพ์อาจอยู่ในโหมดภาษาไทย กด ~ หรือ Alt+Shift เพื่อสลับ)"
+        if pwd != pwd.strip():
+            return "\n(รหัสผ่านมีช่องว่างที่ต้นหรือท้าย)"
+        return ""
 
     def _on_auth_submit(self):
         """ดำเนินการเมื่อกดปุ่ม Submit ตามโหมดที่เลือก"""
@@ -711,7 +742,7 @@ class MainTradingApp(ctk.CTk):
             self.after(350, self.show_dashboard_view)
         else:
             sound_manager.play_sl_hit()
-            self.lbl_login_status.configure(text=f"เข้าสู่ระบบไม่สำเร็จ: {msg}", text_color=COLOR_DANGER_RED)
+            self.lbl_login_status.configure(text=f"เข้าสู่ระบบไม่สำเร็จ: {msg}{self._password_hint(pwd)}", text_color=COLOR_DANGER_RED)
 
     def _do_register(self):
         """ดำเนินการสมัครสมาชิกใหม่จริง (รับฟรี 48 ชม.)"""
@@ -1306,7 +1337,7 @@ class MainTradingApp(ctk.CTk):
             if res.get("has_update"):
                 latest_v = res.get("latest_version")
                 notes = res.get("changelog") or "มีการปรับปรุงประสิทธิภาพและความแม่นยำของระบบ AI"
-                url = res.get("download_url") or "http://localhost:3000/store"
+                url = res.get("download_url") or "https://goldbot24.vercel.app/store"
                 msg = (
                     f"🎉 ตรวจพบเวอร์ชันใหม่ล่าสุด: v{latest_v}\n"
                     f"(เวอร์ชันที่ใช้งานอยู่: v{current_ver})\n\n"

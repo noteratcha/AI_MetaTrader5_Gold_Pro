@@ -124,7 +124,7 @@ class LicenseManager:
         เข้าสู่ระบบด้วย Email + Password กับ GoldBot24 Cloud API (ปิดโหมด Demo เด็ดขาด)
         """
         email = email.strip().lower()
-        password = password.strip()
+        # ไม่ตัดช่องว่างของรหัสผ่าน (ต้องตรงกับเว็บ — เว็บส่งรหัสผ่านตามที่พิมพ์)
         if not email or not password:
             return False, "กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน"
 
@@ -167,7 +167,7 @@ class LicenseManager:
         สมัครสมาชิกบัญชีใหม่ผ่าน GoldBot24 Cloud API (รับทันที 48 ชั่วโมงทดลองใช้)
         """
         email = email.strip().lower()
-        password = password.strip()
+        # ไม่ตัดช่องว่างของรหัสผ่าน (ต้องตรงกับเว็บ — เว็บส่งรหัสผ่านตามที่พิมพ์)
         display_name = display_name.strip() or email.split("@")[0]
 
         if not email or "@" not in email:
