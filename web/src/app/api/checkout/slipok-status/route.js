@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+
 const SLIPOK_BRANCH_ID = process.env.SLIPOK_BRANCH_ID || '';
 const SLIPOK_API_KEY = process.env.SLIPOK_API_KEY || '';
 
