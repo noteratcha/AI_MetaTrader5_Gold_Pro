@@ -1,51 +1,20 @@
 export const runtime = 'nodejs';
 
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://isliehicmtpsnuyxedln.supabase.co';
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_a0D8-j-yM-a3SNx2mig7vw_dvwAOBkg';
 
-async function verifyPassword(password, stored) {
+function verifyPassword(password, stored) {
   if (!stored || !stored.startsWith('v1$')) return false;
   try {
     const parts = stored.split('$');
     if (parts.length !== 3) return false;
     const salt = parts[1];
     const expectedHash = parts[2];
-    
-    // Use Web Crypto API (available in Node.js 16+)
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(password),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits']
-    );
-    const derivedBits = await crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        salt: encoder.encode(salt),
-        iterations: 10000,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      256
-    );
-    const actualHash = Array.from(new Uint8Array(derivedBits))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    
-    const expectedBytes = new Uint8Array(expectedHash.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-    const actualBytes = new Uint8Array(actualHash.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-    
-    // Timing safe comparison
-    if (expectedBytes.length !== actualBytes.length) return false;
-    let result = 0;
-    for (let i = 0; i < expectedBytes.length; i++) {
-      result |= expectedBytes[i] ^ actualBytes[i];
-    }
-    return result === 0;
+    const actualHash = crypto.pbkdf2Sync(password, salt, 10000, 32, 'sha256').toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(actualHash), Buffer.from(expectedHash));
   } catch (e) {
     console.error('verifyPassword error:', e);
     return false;
@@ -83,7 +52,7 @@ export async function POST(req) {
 
     const userRecord = users[0];
 
-    const isPasswordValid = await verifyPassword(password, userRecord.mt5_password);
+    const isPasswordValid = verifyPassword(password, userRecord.mt5_password);
     if (!isPasswordValid) {
       return Response.json({ 
         success: false, 
