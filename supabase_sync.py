@@ -3,6 +3,7 @@ import urllib.request
 import urllib.error
 import time
 import os
+import math
 
 # โหลดค่า Supabase URL และ Key: Environment -> web/.env.local (เครื่องนักพัฒนา) -> ค่าเดียวกับ license_manager (เครื่องลูกค้า)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -75,10 +76,9 @@ def update_telemetry(balance, equity, floating_profit, margin_free, open_positio
         "margin_free": float(margin_free),
         "open_positions": open_positions,
         "radar_signals": radar_signals,
-        "last_heartbeat": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
-    extra_headers = {"Prefer": "resolution=merge-duplicates"}
-    return _make_request("bot_telemetry", method="POST", payload=payload, extra_headers=extra_headers)
+    # เขียนผ่านฟังก์ชัน SECURITY DEFINER (anon เขียนได้อย่างเดียว อ่านพอร์ตของคนอื่นไม่ได้) — ดู supabase_security_rls_patch_01.sql
+    return _make_request("rpc/bot_upsert_telemetry", method="POST", payload={"p": payload})
 
 def log_trade(ticket, symbol, action, plan, price, lot, sl=0, tp=0, profit=0, comment="", user_id=None, email=None):
     """บันทึกประวัติการเทรดลงตาราง trade_logs บน Supabase พร้อมระบุ User ID"""
@@ -120,11 +120,10 @@ def sync_user_plan_stats(user_id, email, plan_name, total_trades, win_trades, lo
         "loss_trades": int(loss_trades),
         "win_rate_pct": float(win_rate),
         "total_profit_usd": float(total_profit),
-        "profit_factor": float(profit_factor),
-        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        # profit factor เป็น inf ได้ (ยังไม่เคยแพ้) — JSON ไม่รองรับ inf
+        "profit_factor": min(float(profit_factor), 9999.0) if math.isfinite(float(profit_factor)) else 9999.0,
     }
-    extra_headers = {"Prefer": "resolution=merge-duplicates"}
-    return _make_request("user_plan_stats?on_conflict=user_id,plan_name", method="POST", payload=payload, extra_headers=extra_headers)
+    return _make_request("rpc/bot_upsert_plan_stats", method="POST", payload={"p": payload})
 
 def log_risk_event(symbol, event_type, direction, message, loss=0.0):
     """บันทึก Risk Event (Circuit Breaker, Loss Block) ลงตาราง risk_events"""

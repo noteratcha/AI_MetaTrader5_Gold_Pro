@@ -9,6 +9,124 @@
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
+-- 0) สร้างตารางที่ยังไม่มีในฐานข้อมูลจริง (ตารางที่มีอยู่แล้วจะไม่ถูกแตะ)
+--    ไม่ใส่ Foreign Key ไป users_profile เพราะผู้ใช้จริงอยู่ใน bot_config
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trade_logs (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ticket BIGINT,
+    time TIMESTAMPTZ DEFAULT NOW(),
+    symbol TEXT NOT NULL,
+    action TEXT NOT NULL,
+    plan TEXT,
+    price NUMERIC(14, 5) NOT NULL,
+    lot NUMERIC(6, 2) NOT NULL,
+    sl NUMERIC(14, 5) DEFAULT 0,
+    tp NUMERIC(14, 5) DEFAULT 0,
+    profit NUMERIC(10, 2) DEFAULT 0,
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS bot_telemetry (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    status TEXT DEFAULT 'ONLINE',
+    balance NUMERIC(12, 2) DEFAULT 0.0,
+    equity NUMERIC(12, 2) DEFAULT 0.0,
+    floating_profit NUMERIC(10, 2) DEFAULT 0.0,
+    margin_free NUMERIC(12, 2) DEFAULT 0.0,
+    open_positions JSONB DEFAULT '[]'::jsonb,
+    radar_signals JSONB DEFAULT '[]'::jsonb,
+    last_heartbeat TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS risk_events (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    time TIMESTAMPTZ DEFAULT NOW(),
+    symbol TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    message TEXT,
+    loss_amount NUMERIC(10, 2) DEFAULT 0.0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_risk_events_time ON risk_events (time DESC);
+
+CREATE TABLE IF NOT EXISTS signal_logs (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    time TIMESTAMPTZ DEFAULT NOW(),
+    symbol TEXT NOT NULL,
+    signal_type TEXT NOT NULL,
+    plan TEXT,
+    direction TEXT,
+    price NUMERIC(14, 5) NOT NULL,
+    ai_up NUMERIC(5, 2) DEFAULT 0.0,
+    ai_down NUMERIC(5, 2) DEFAULT 0.0,
+    h4_trend TEXT,
+    status TEXT,
+    detail TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_signal_logs_time ON signal_logs (time DESC);
+
+CREATE TABLE IF NOT EXISTS orders (
+    order_id TEXT PRIMARY KEY,
+    user_id UUID,
+    package_id INTEGER,
+    amount_thb NUMERIC(10, 2) NOT NULL,
+    hours_to_add NUMERIC(10, 2) NOT NULL,
+    status TEXT DEFAULT 'PENDING',
+    payment_method TEXT DEFAULT 'PROMPTPAY',
+    qr_payload TEXT,
+    qr_image_url TEXT,
+    payment_ref TEXT,
+    generated_key_code TEXT,
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS product_keys (
+    key_code TEXT PRIMARY KEY,
+    hours NUMERIC(10, 2) NOT NULL,
+    bonus_hours NUMERIC(10, 2) DEFAULT 0.00,
+    price_thb NUMERIC(10, 2) DEFAULT 0.00,
+    status TEXT DEFAULT 'UNUSED',
+    is_used BOOLEAN DEFAULT FALSE,
+    purchased_by_user_id UUID,
+    order_id TEXT,
+    purchased_at TIMESTAMPTZ DEFAULT NOW(),
+    redeemed_by_user_id UUID,
+    redeemed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS user_plan_stats (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id TEXT,
+    email TEXT NOT NULL,
+    plan_name TEXT NOT NULL,
+    total_trades INTEGER DEFAULT 0,
+    win_trades INTEGER DEFAULT 0,
+    loss_trades INTEGER DEFAULT 0,
+    win_rate_pct NUMERIC(5, 2) DEFAULT 0.0,
+    total_profit_usd NUMERIC(12, 2) DEFAULT 0.0,
+    gross_profit_usd NUMERIC(12, 2) DEFAULT 0.0,
+    gross_loss_usd NUMERIC(12, 2) DEFAULT 0.0,
+    profit_factor NUMERIC(6, 2) DEFAULT 0.0,
+    last_trade_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_user_plan UNIQUE (user_id, plan_name)
+);
+
+CREATE TABLE IF NOT EXISTS app_releases (
+    version TEXT PRIMARY KEY,
+    download_url TEXT NOT NULL,
+    checksum_sha256 TEXT NOT NULL DEFAULT '',
+    mandatory BOOLEAN DEFAULT TRUE,
+    changelog TEXT,
+    released_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ------------------------------------------------------------------------------
 -- 1) คอลัมน์ใหม่สำหรับระบุเจ้าของข้อมูล
 -- ------------------------------------------------------------------------------
 ALTER TABLE orders       ADD COLUMN IF NOT EXISTS owner_user_id TEXT;
@@ -64,13 +182,14 @@ DROP POLICY IF EXISTS "Allow public read trade_logs"    ON trade_logs;
 DROP POLICY IF EXISTS "Allow public read risk_events"   ON risk_events;
 DROP POLICY IF EXISTS "Allow public read signal_logs"   ON signal_logs;
 
--- ลบ policy ใด ๆ ที่เหลือบนตารางเชิงพาณิชย์ (สร้างจาก Dashboard ก่อนหน้า)
+-- ลบ policy ใด ๆ ที่เหลือ (รวมที่สร้างจาก Dashboard ด้วยชื่ออื่น) แล้วสร้างเฉพาะที่จำเป็นใหม่ด้านล่าง
 DO $$
 DECLARE pol RECORD;
 BEGIN
   FOR pol IN
     SELECT policyname, tablename FROM pg_policies
-    WHERE schemaname = 'public' AND tablename IN ('orders', 'product_keys', 'promo_keys', 'user_plan_stats', 'bot_config')
+    WHERE schemaname = 'public' AND tablename IN ('orders', 'product_keys', 'promo_keys', 'user_plan_stats', 'bot_config',
+                                                 'bot_telemetry', 'trade_logs', 'risk_events', 'signal_logs', 'app_releases')
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, pol.tablename);
   END LOOP;
