@@ -1,32 +1,33 @@
-import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-
-export const runtime = 'nodejs';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://isliehicmtpsnuyxedln.supabase.co';
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_a0D8-j-yM-a3SNx2mig7vw_dvwAOBkg';
 
-export async function GET(req) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const email = (searchParams.get('email') || '').trim().toLowerCase();
+export default async function handler(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  }
 
-    if (!email) {
-      return NextResponse.json({ success: false, error: 'Email required' }, { status: 400 });
+  try {
+    const { email } = req.query;
+    const emailClean = (email || '').trim().toLowerCase();
+
+    if (!emailClean) {
+      return res.status(400).json({ success: false, error: 'Email required' });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
     const { data: users, error } = await supabase
       .from('bot_config')
       .select('*')
-      .eq('mt5_server', email);
+      .eq('mt5_server', emailClean);
 
     if (error || !users || users.length === 0) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+      return res.status(404).json({ success: false, error: 'User not found' });
     }
 
     const user = users[0];
-    let displayName = email.split('@')[0];
+    let displayName = emailClean.split('@')[0];
     let role = 'user';
     if (Array.isArray(user.symbols_trading)) {
       for (const item of user.symbols_trading) {
@@ -37,13 +38,13 @@ export async function GET(req) {
       }
     }
 
-    if (email.startsWith('admin@') || email === 'admin@goldbot24.com' || email === 'admin@aitrade24.com' || email === 'admin') {
+    if (emailClean.startsWith('admin@') || emailClean === 'admin@goldbot24.com' || emailClean === 'admin@aitrade24.com' || emailClean === 'admin') {
       role = 'admin';
     }
 
     const isAdmin = role === 'admin';
 
-    return NextResponse.json({
+    return res.status(200).json({
       success: true,
       user: {
         id: String(user.id),
@@ -56,6 +57,6 @@ export async function GET(req) {
       }
     });
   } catch (err) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return res.status(500).json({ success: false, error: err.message });
   }
 }
