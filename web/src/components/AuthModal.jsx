@@ -56,7 +56,7 @@ export default function AuthModal() {
 
         <div style={{ padding: '32px 28px 28px' }}>
           <div className="center" style={{ marginBottom: 22 }}>
-            <span className="logo-mark" style={{ width: 52, height: 52, margin: '0 auto 12px', borderRadius: 14 }}>
+            <span className="logo-mark" style={{ display: 'flex', width: 52, height: 52, margin: '0 auto 12px', borderRadius: 14 }}>
               <img src="/store_logo.png" alt="" />
             </span>
             <h2 id="auth-title" style={{ fontSize: '1.3rem', fontWeight: 700 }}>

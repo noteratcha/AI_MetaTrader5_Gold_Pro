@@ -1884,6 +1884,18 @@ class MainTradingApp(ctk.CTk):
                         border_color="#6B2A30" if low else "#5A4519",
                     )
 
+                # ตลาดปิด = ไม่นับชั่วโมง (แสดงสถานะให้ผู้ใช้เห็น)
+                if bot_ctrl.is_active and not bot_ctrl.is_paused:
+                    if bot_ctrl.market_open:
+                        meter = ("● กำลังนับเวลา", COLOR_SUCCESS_GREEN)
+                        pill = ("  ● กำลังทำงาน  ", COLOR_SUCCESS_GREEN, "#12301F")
+                    else:
+                        meter = ("⏸ ตลาดปิด · ไม่นับเวลา", COLOR_GOLD_PRIMARY)
+                        pill = ("  ⏸ รอตลาดเปิด  ", COLOR_GOLD_PRIMARY, "#2E2410")
+                    if self.lbl_metering_status.cget("text") != meter[0]:
+                        self.lbl_metering_status.configure(text=meter[0], text_color=meter[1])
+                        self.lbl_bot_state.configure(text=pill[0], text_color=pill[1], fg_color=pill[2])
+
                 # ผลการตรวจเวอร์ชันจากเธรดเบื้องหลัง + ตรวจซ้ำทุก 6 ชั่วโมง
                 if getattr(self, "_update_result", None):
                     self._apply_update_result()

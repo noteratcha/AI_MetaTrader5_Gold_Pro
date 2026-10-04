@@ -45,6 +45,10 @@ class BotController:
         self.time_expired_callback = None
         self.status_callback = None
         self.last_meter_time = 0
+        # สถานะตลาด (ดูจากความเคลื่อนไหวของ tick) — ตลาดปิดไม่นับชั่วโมง
+        self.market_open = False
+        self._last_tick_msc = 0
+        self._last_tick_change = 0.0
         self.sound_enabled = True
 
         # ติดตั้งตัวดักจับ stdout
@@ -147,11 +151,43 @@ class BotController:
             if self.status_callback:
                 self.status_callback("STOPPED")
 
+    MARKET_SYMBOL = "XAUUSD"
+    MARKET_IDLE_SECONDS = 120  # ไม่มี tick ใหม่เกิน 2 นาที = ตลาดปิด (เสาร์-อาทิตย์/วันหยุด/ช่วงพักรายวัน)
+
+    def _check_market_open(self) -> bool:
+        """ตลาดเปิด = ราคามี tick ใหม่ภายใน 2 นาที (ทองมี tick หลายครั้งต่อนาทีเมื่อตลาดเปิด)"""
+        try:
+            tick = mt5.symbol_info_tick(self.MARKET_SYMBOL)
+        except Exception:
+            tick = None
+        now = time.time()
+        stamp = int(getattr(tick, "time_msc", 0) or 0) if tick else 0
+        if stamp and stamp != self._last_tick_msc:
+            if self._last_tick_msc:  # เห็นราคาขยับจริง (ไม่ใช่ค่าแรกที่อ่านได้ ซึ่งอาจเป็น tick เก่าตอนตลาดปิด)
+                self._last_tick_change = now
+            self._last_tick_msc = stamp
+        return (now - self._last_tick_change) < self.MARKET_IDLE_SECONDS
+
     def _run_metering_loop(self):
-        """ลูปหักเวลาการใช้งานจริง (Metering Loop): หัก 1 นาที ทุกๆ 60 วินาทีขณะที่บอทเทรดจริง"""
+        """
+        ลูปหักเวลาการใช้งานจริง: หัก 1 นาที ทุก 60 วินาที
+        เฉพาะตอนบอททำงาน (ไม่ Pause) และตลาดเปิดอยู่ — ตลาดปิดไม่นับชั่วโมง
+        """
         while True:
             time.sleep(1)
             if not self.is_active or self.is_paused:
+                self.last_meter_time = 0  # เริ่มนับใหม่เมื่อกลับมาทำงาน (ไม่หักทันทีหลัง Resume)
+                continue
+
+            was_open = self.market_open
+            self.market_open = self._check_market_open()
+            if self.market_open != was_open:
+                if self.market_open:
+                    print("[MARKET OPEN] ตลาดทองคำเปิดแล้ว — เริ่มนับชั่วโมงการใช้งาน")
+                else:
+                    print("[MARKET CLOSED] ตลาดทองคำปิดอยู่ — หยุดนับชั่วโมงการใช้งานชั่วคราว")
+            if not self.market_open:
+                self.last_meter_time = 0
                 continue
 
             current_now = time.time()
