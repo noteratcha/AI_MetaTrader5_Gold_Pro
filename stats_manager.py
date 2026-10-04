@@ -27,18 +27,26 @@ STANDARD_PLANS = [
 def clean_plan_name(raw_plan: str) -> str:
     """จัดกลุ่มชื่อแผนให้ตรงกับมาตรฐาน 5 แผนหลัก"""
     p = str(raw_plan).strip()
-    if "0" in p or "SMC" in p or "Sweep" in p or "Hunt" in p:
+    # จับจากชื่อแผนก่อน (ชื่ออย่าง "BB-H1-Reversion" / "MA-Cross-H1-Trend" มีเลข 1 อยู่ในคำว่า H1
+    # ถ้าเช็คตัวเลขก่อนจะถูกจัดเป็น Plan 1 ผิด)
+    if "SMC" in p or "Sweep" in p or "Hunt" in p:
         return "Plan 0: SMC-LiquidityHunt"
-    elif "1" in p or "Bounce" in p or "Swing" in p:
+    if "Bounce" in p or "Swing" in p:
         return "Plan 1: SR-SwingBounce"
-    elif "3" in p or "BB" in p or "Reversion" in p:
+    if "BB" in p or "Reversion" in p:
         return "Plan 3: BB-H1-Reversion"
-    elif "4" in p or ("MA" in p and "M15" in p) or "Cross-Trend" in p:
-        return "Plan 4: MA-Cross-Trend"
-    elif "5" in p or ("MA" in p and "H1" in p) or "Cross-H1" in p:
+    if "Cross-H1" in p:
         return "Plan 5: MA-Cross-H1-Trend"
-    elif "Breakout" in p:
+    if "Cross-Trend" in p or "MA-Cross" in p:
+        return "Plan 4: MA-Cross-Trend"
+    if "Breakout" in p:
         return "Plan 2: Trend-Breakout"
+    # รูปแบบ "Plan N" (ข้อมูลเก่า)
+    for n, name in (("0", "Plan 0: SMC-LiquidityHunt"), ("1", "Plan 1: SR-SwingBounce"),
+                    ("3", "Plan 3: BB-H1-Reversion"), ("4", "Plan 4: MA-Cross-Trend"),
+                    ("5", "Plan 5: MA-Cross-H1-Trend"), ("2", "Plan 2: Trend-Breakout")):
+        if f"Plan {n}" in p:
+            return name
     return p or "Manual/Other"
 
 

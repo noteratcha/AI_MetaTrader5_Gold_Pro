@@ -161,7 +161,7 @@ class BotController:
             # ครบ 60 วินาที ตัด 1 นาที
             if current_now - self.last_meter_time >= 60.0:
                 self.last_meter_time = current_now
-                has_time, remaining_mins, time_str = license_mgr.deduct_minute()
+                has_time, remaining_mins, time_str = license_mgr.deduct_trading_minute()
                 if not has_time:
                     print(f"\n[LICENSE] เวลาการใช้งานหมดลงแล้ว ({time_str} ชม.)! กำลังหยุดบอทอัตโนมัติ...")
                     self.pause_bot()

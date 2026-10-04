@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1003.0025 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1004.2030 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1003.0025): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1004.2030): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1003.0025`
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1004.2030`
 
 ---
 
@@ -43,7 +43,7 @@
 12. **Selective Auditory Sensory Feedback (Sound Manager)**: ระบบแจ้งเตือนด้วยเสียงเฉพาะตัว เช่น เสียงดีใจ (เปิดไม้), กระดิ่ง (ชน TP), อ๊อด (ชน SL), นกร้อง (เลื่อน SL)
 13. **Automated 1-Year Data Retention & File Size Control (`prune_old_csv_records`)**: ควบคุมขนาดไฟล์ประวัติอัตโนมัติ ลบรายการเก่าเกิน 1 ปี (365 วัน)
 14. **Production Auth & Login Gate (Zero Demo Bypass)**: ปิดโหมด Demo ถาวร ต้อง Register/Login ก่อนใช้งานทั้ง Web และ Desktop (สมาชิกใหม่รับฟรี 48 ชม., รหัสผ่าน PBKDF2-HMAC-SHA256)
-15. **Admin RBAC (GoldBot24 Web)**: ปุ่มและหน้า `Admin Analytics` แสดงเฉพาะ User Admin (`role:admin` หรืออีเมล `admin@...`) พร้อม Admin Access Barrier กันเข้าผ่าน URL ตรง
+15. **Admin RBAC (GoldBot24 Web)**: ปุ่มและหน้า `Admin Analytics` แสดงเฉพาะ User Admin (`role:admin` ใน `symbols_trading` หรืออีเมลที่อยู่ใน env `ADMIN_EMAILS` — อีเมลขึ้นต้น `admin@` เฉย ๆ **ไม่ใช่** Admin) และทุก API ฝั่ง Admin ตรวจสิทธิ์จาก Token ที่ลงลายเซ็นบน Server
 16. **Hours Metering & Auto Payment**: คิดเงิน 1 บาท/ชม. ตัดเวลาทุก 60 วิเฉพาะตอนบอททำงาน, ชำระผ่าน PromptPay QR + ตรวจสลิป SlipOK อัตโนมัติ และเติมเวลาด้วย Product Key 24 หลัก
 
 ---
@@ -147,6 +147,8 @@
 | หัวข้อ | กฎ / มาตรฐาน |
 | :--- | :--- |
 | **Login Gate** | ห้ามมี Demo Bypass — Dashboard และ `start_bot()` / `resume_bot()` ต้องผ่าน `is_authenticated` + `has_active_hours()` |
+| **Auth Token** | Token = HMAC-SHA256 (`AUTH_SECRET`) ส่งผ่าน `Authorization: Bearer` — API ห้ามรับ `email` จาก Body/Query เป็นตัวระบุผู้ใช้ และ Browser ห้ามเรียก Supabase ตรง (อ่าน/เขียนผ่าน `/api/*` ด้วย Service Role เท่านั้น) |
+| **Hours Metering** | Desktop หักเวลาในเครื่องแล้วส่งยอดให้ `/api/auth/meter` หักจริงบน Server ทุก 5 นาที — ห้าม PATCH `bot_config.lot_size` ตรงจาก Client |
 | **Register** | สมาชิกใหม่รับฟรี 48 ชม. รหัสผ่านเข้ารหัส PBKDF2-HMAC-SHA256 |
 | **Admin RBAC** | `Admin Analytics` (Navbar/Footer/หน้า `/admin/analytics`) แสดงเฉพาะ Admin เท่านั้น ห้ามเปิดเผยสถิติทุกลูกค้าและเครื่องผลิต Promo Key ต่อลูกค้าทั่วไป |
 | **Payment** | PromptPay QR → SlipOK ตรวจสลิป/Webhook → ผลิต Product Key `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX` อัตโนมัติ |

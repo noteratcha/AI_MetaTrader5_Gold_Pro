@@ -1,0 +1,58 @@
+import { insertTolerant } from '../../../lib/server/supabaseAdmin';
+import { allowMethods, requireUser } from '../../../lib/server/auth';
+import { generateOrderId } from '../../../lib/server/keys';
+import { findPackage } from '../../../lib/packages';
+
+const PROMPTPAY_ID = process.env.PROMPTPAY_ID || '';
+
+// สร้างคำสั่งซื้อ + PromptPay QR — ราคา/ชั่วโมงอ้างอิงจากแพ็กเกจฝั่ง Server เท่านั้น
+export default async function handler(req, res) {
+  if (!allowMethods(req, res, ['POST'])) return;
+  const auth = await requireUser(req, res);
+  if (!auth) return;
+
+  const pkg = findPackage(req.body?.package_id);
+  if (!pkg) {
+    return res.status(400).json({ success: false, error: 'ไม่พบแพ็กเกจที่เลือก' });
+  }
+  if (!PROMPTPAY_ID) {
+    return res.status(503).json({ success: false, error: 'ร้านค้ายังไม่ได้ตั้งค่าบัญชีพร้อมเพย์ (PROMPTPAY_ID)' });
+  }
+
+  const orderId = generateOrderId();
+  const amount = pkg.price.toFixed(2);
+  const qrImageUrl = `https://promptpay.io/${encodeURIComponent(PROMPTPAY_ID)}/${amount}.png`;
+  const createdAt = new Date().toISOString();
+
+  const { error } = await insertTolerant(
+    'orders',
+    {
+      order_id: orderId,
+      package_id: pkg.id,
+      amount_thb: pkg.price,
+      hours_to_add: pkg.hours + pkg.bonus,
+      status: 'PENDING',
+      payment_method: 'PROMPTPAY',
+      qr_image_url: qrImageUrl,
+      created_at: createdAt,
+      owner_user_id: auth.user.id,
+      owner_email: auth.user.email,
+    },
+    ['owner_user_id', 'owner_email']
+  );
+
+  if (error) {
+    console.error('[checkout/create-qr] insert error:', error.message);
+    return res.status(500).json({ success: false, error: 'สร้างคำสั่งซื้อไม่สำเร็จ กรุณาลองใหม่' });
+  }
+
+  return res.status(200).json({
+    success: true,
+    order_id: orderId,
+    package_id: pkg.id,
+    amount_thb: pkg.price,
+    hours_to_add: pkg.hours + pkg.bonus,
+    qr_image_url: qrImageUrl,
+    created_at: createdAt,
+  });
+}

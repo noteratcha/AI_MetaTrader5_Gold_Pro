@@ -1,0 +1,98 @@
+import { getAdminClient, insertTolerant } from './supabaseAdmin';
+import { generateProductKey } from './keys';
+import { findPackage } from '../packages';
+
+export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export async function getOrder(orderId) {
+  if (!orderId || typeof orderId !== 'string' || orderId.length > 64) return null;
+  const { data } = await getAdminClient().from('orders').select('*').eq('order_id', orderId).maybeSingle();
+  return data || null;
+}
+
+/** คำสั่งซื้อนี้เป็นของผู้ใช้คนนี้หรือไม่ (ฐานข้อมูลก่อน migration ไม่มีคอลัมน์เจ้าของ — ใช้ order_id ที่เดาไม่ได้แทน) */
+export function isOrderOwner(order, user) {
+  if (!order) return false;
+  if (order.owner_user_id === undefined && order.owner_email === undefined) return true;
+  return String(order.owner_user_id) === String(user.id) || String(order.owner_email || '').toLowerCase() === user.email;
+}
+
+export function publicOrder(order) {
+  const isPaid = order.status === 'PAID';
+  return {
+    order_id: order.order_id,
+    status: order.status,
+    is_paid: isPaid,
+    amount_thb: Number(order.amount_thb),
+    hours_to_add: Number(order.hours_to_add),
+    package_id: order.package_id,
+    qr_image_url: order.qr_image_url,
+    created_at: order.created_at,
+    paid_at: order.paid_at,
+    generated_key_code: isPaid ? order.generated_key_code : null,
+  };
+}
+
+/**
+ * ยืนยันการชำระเงินและออก Product Key (ทำครั้งเดียวต่อคำสั่งซื้อ)
+ * ใช้สถานะ PROCESSING เป็นตัวล็อก กันการออกคีย์ซ้ำเมื่อมี request พร้อมกัน (Webhook + ตรวจสลิป)
+ */
+export async function fulfillOrder(order, paymentRef) {
+  const supabase = getAdminClient();
+
+  if (order.status === 'PAID') {
+    return { ok: true, productKey: order.generated_key_code, alreadyPaid: true };
+  }
+
+  const { data: locked } = await supabase
+    .from('orders')
+    .update({ status: 'PROCESSING' })
+    .eq('order_id', order.order_id)
+    .eq('status', 'PENDING')
+    .select('order_id');
+
+  if (!locked || locked.length !== 1) {
+    const latest = await getOrder(order.order_id);
+    if (latest?.status === 'PAID') return { ok: true, productKey: latest.generated_key_code, alreadyPaid: true };
+    return { ok: false, error: 'คำสั่งซื้อนี้กำลังถูกดำเนินการ กรุณารอสักครู่' };
+  }
+
+  const pkg = findPackage(order.package_id);
+  const baseHours = pkg ? pkg.hours : Number(order.hours_to_add);
+  const bonusHours = pkg ? pkg.bonus : 0;
+  const productKey = generateProductKey();
+
+  const { error: keyErr } = await insertTolerant(
+    'product_keys',
+    {
+      key_code: productKey,
+      hours: baseHours,
+      bonus_hours: bonusHours,
+      price_thb: Number(order.amount_thb),
+      status: 'UNUSED',
+      is_used: false,
+      order_id: order.order_id,
+      purchased_at: new Date().toISOString(),
+      owner_email: order.owner_email || null,
+    },
+    ['owner_email']
+  );
+
+  if (keyErr) {
+    console.error('[orders] product key insert failed:', keyErr.message);
+    await supabase.from('orders').update({ status: 'PENDING' }).eq('order_id', order.order_id);
+    return { ok: false, error: 'ออกรหัส Product Key ไม่สำเร็จ กรุณาติดต่อแอดมิน' };
+  }
+
+  await supabase
+    .from('orders')
+    .update({
+      status: 'PAID',
+      payment_ref: String(paymentRef || '').slice(0, 120),
+      generated_key_code: productKey,
+      paid_at: new Date().toISOString(),
+    })
+    .eq('order_id', order.order_id);
+
+  return { ok: true, productKey, alreadyPaid: false };
+}

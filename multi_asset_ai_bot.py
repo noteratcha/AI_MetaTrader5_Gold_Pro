@@ -73,7 +73,7 @@ disable_quick_edit()
 
 # เวอร์ชันและข้อมูลระบบ (System Info) - รูปแบบ: ปี.เดือนวันที่.ชั่วโมงนาที (YYYY.MMDD.HHMM)
 BOT_NAME = "AI MetaTrader 5 (FBS) Gold Pro"
-BOT_VERSION = "2026.1003.0025"
+BOT_VERSION = "2026.1004.2030"
 
 # ตั้งค่าสำหรับระบบ AI Trading (เทรดเฉพาะ XAUUSD ทองคำ 100%)
 TRADE_SYMBOLS = ["XAUUSD"] # โฟกัสเฉพาะทองคำ XAUUSD 100%
@@ -101,6 +101,8 @@ MARGIN_PER_TRADE = 400            # Max Positions: มาจินทุก $400
 consecutive_loss = {}             # {sym: int} นับขาดทุนติดต่อกัน
 last_lock_time = {}               # {ticket: timestamp} ป้องกัน Lock SL ซ้ำใน 60 วินาที
 last_loss_plan = {}               # {sym: {direction: (plan_name, timestamp)}} บันทึกเฉพาะไม้ขาดทุน — block 60 นาที
+last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กันเข้าไม้ Plan 4/5 ซ้ำบนแท่ง Cross เดิม
+_telemetry_thread = None          # เธรดสตรีม Telemetry (เริ่มครั้งเดียวต่อโปรเซส)
 
 # Bot Running & Pause Controls (สำหรับการเชื่อมต่อกับ GUI Launcher)
 BOT_RUNNING_FLAG = True
@@ -156,6 +158,16 @@ def telemetry_background_worker():
                         "h4_diff_pct": round(h4_df, 2)
                     })
 
+                # แยกแถว Telemetry ตามบัญชีผู้ใช้ GoldBot24 (id ใน bot_config) — ลูกค้าแต่ละคนเห็นเฉพาะพอร์ตตัวเอง
+                cur_user = license_mgr.get_current_user()
+                try:
+                    row_id = int(cur_user.get("user_id") or 0)
+                except (TypeError, ValueError):
+                    row_id = 0
+                if row_id <= 1:
+                    time.sleep(5)
+                    continue  # ยังไม่ได้ล็อกอิน — ไม่สตรีมขึ้นแถวรวม
+
                 supabase_sync.update_telemetry(
                     balance=float(acc_info.balance),
                     equity=float(acc_info.equity),
@@ -163,7 +175,8 @@ def telemetry_background_worker():
                     margin_free=float(acc_info.margin_free),
                     open_positions=open_pos_list,
                     radar_signals=current_radar,
-                    status=f"ONLINE v{BOT_VERSION}"
+                    status=f"{'PAUSED' if BOT_PAUSED_FLAG else 'ONLINE'} v{BOT_VERSION}",
+                    row_id=row_id
                 )
         except Exception as telem_err:
             pass
@@ -802,11 +815,15 @@ def main():
     # ตรวจสอบและลบประวัติที่เก่าเกิน 1 ปี (Data Retention Policy: 365 Days)
     prune_old_csv_records(days=365)
         
-    # เริ่มต้นเธรดสตรีมข้อมูลขึ้น Vercel / Supabase แบบ Real-time ทุก 5 วินาที
-    threading.Thread(target=telemetry_background_worker, daemon=True).start()
-    print(f"{Colors.CYAN}[STREAM] Real-time telemetry streaming to aitrade24.vercel.app active (5s interval){Colors.RESET}")
+    # เริ่มต้นเธรดสตรีมข้อมูลขึ้น Supabase แบบ Real-time ทุก 5 วินาที (เริ่มครั้งเดียวต่อโปรเซส)
+    global _telemetry_thread
+    if _telemetry_thread is None or not _telemetry_thread.is_alive():
+        _telemetry_thread = threading.Thread(target=telemetry_background_worker, daemon=True)
+        _telemetry_thread.start()
+    print(f"{Colors.CYAN}[STREAM] Real-time telemetry streaming to GoldBot24 Cloud active (5s interval){Colors.RESET}")
 
-    # ระบบจดจำข้อมูลบัญชีเทรด (User, Password, Server) ในเครื่องและ Cloud
+    # ระบบจดจำข้อมูลบัญชีเทรด (User, Password, Server) — เก็บในเครื่องนี้เท่านั้น
+    # (ไม่ส่งรหัสผ่าน MT5 ขึ้น Cloud: ตาราง bot_config ถูกใช้ร่วมกันหลายผู้ใช้ อ่านได้จาก anon key)
     creds_path = os.path.join(os.path.dirname(__file__), "credentials.json")
     local_creds = {}
     if os.path.exists(creds_path):
@@ -816,13 +833,9 @@ def main():
         except Exception:
             pass
 
-    # ดึงการตั้งค่าล็อกอินจาก Supabase Cloud Dashboard
-    cloud_config = supabase_sync.get_cloud_config() or {}
-    
-    # รวมข้อมูล: ให้ความสำคัญกับ Cloud ก่อน ถ้าไม่มีให้ใช้ Local ที่จำไว้
-    c_login = cloud_config.get('mt5_login') or local_creds.get('mt5_login')
-    c_pass = cloud_config.get('mt5_password') or local_creds.get('mt5_password')
-    c_server = cloud_config.get('mt5_server') or local_creds.get('mt5_server') or 'FBS-Real'
+    c_login = local_creds.get('mt5_login')
+    c_pass = local_creds.get('mt5_password')
+    c_server = local_creds.get('mt5_server') or 'FBS-Real'
 
     if c_login and c_pass and int(c_login) > 0:
         print(f"[ACCOUNT] Checking MT5 login for #{c_login} ({c_server})...")
@@ -837,7 +850,7 @@ def main():
         else:
             print(f"{Colors.YELLOW}[WARNING] Login failed. Using currently active MT5 terminal account.{Colors.RESET}")
     else:
-        # ถ้ายังไม่มีรหัสผ่าน ให้จำพอร์ตที่เปิดค้างอยู่ใน MT5 และส่งขึ้น Cloud อัตโนมัติ
+        # ถ้ายังไม่มีรหัสผ่าน ให้จำพอร์ตที่เปิดค้างอยู่ใน MT5 Terminal ไว้ในเครื่อง
         acc = mt5.account_info()
         if acc:
             print(f"[ACCOUNT] Current active MT5 Account #{acc.login} ({acc.server}) saved.{Colors.RESET}")
@@ -846,10 +859,8 @@ def main():
                     json.dump({"mt5_login": acc.login, "mt5_password": local_creds.get("mt5_password", ""), "mt5_server": acc.server}, f, indent=2)
             except Exception:
                 pass
-            if not cloud_config.get('mt5_login') or cloud_config.get('mt5_login') == 0:
-                supabase_sync.save_cloud_credentials(acc.login, local_creds.get("mt5_password", ""), acc.server)
-        
-        # ตั้งชื่อหน้าต่าง Windows Console Title ชัดเจนพร้อมเลขเวอร์ชัน
+
+    # ตั้งชื่อหน้าต่าง Windows Console Title ชัดเจนพร้อมเลขเวอร์ชัน
     try:
         import ctypes
         ctypes.windll.kernel32.SetConsoleTitleW(f"{BOT_NAME} v{BOT_VERSION} | XAUUSD Gold Specialist (SMC + Bounce + BB-H1 + MA-Cross M15/H1)")
@@ -892,11 +903,6 @@ def main():
         return
         
     print(f"\n{Colors.GREEN}{Colors.BOLD}[AI READY] AI Multi-Asset Bot Ready! Auto-Trading Active for {', '.join(TRADE_SYMBOLS)}...{Colors.RESET}\n")
-    
-    # เริ่มต้นระบบสตรีมข้อมูลขึ้น Supabase Cloud ทุกๆ 5 วินาทีแบบ Real-time
-    telemetry_thread = threading.Thread(target=telemetry_background_worker, daemon=True)
-    telemetry_thread.start()
-    print(f"{Colors.GREEN}[CLOUD SYNC] Supabase Real-time Telemetry Streamer Started (Sync every 5s){Colors.RESET}\n")
     
     while BOT_RUNNING_FLAG:
         if BOT_PAUSED_FLAG:
@@ -962,11 +968,25 @@ def main():
                 df_h1['ma10_h1'] = df_h1['close'].rolling(10).mean()
                 ma5_h1_val = float(df_h1['ma5_h1'].iloc[-1])
                 ma10_h1_val = float(df_h1['ma10_h1'].iloc[-1])
-                prev_ma5_h1_val = float(df_h1['ma5_h1'].iloc[-2]) if len(df_h1) >= 2 else ma5_h1_val
-                prev_ma10_h1_val = float(df_h1['ma10_h1'].iloc[-2]) if len(df_h1) >= 2 else ma10_h1_val
+                # Fix repainting: check cross on closed candles (iloc[-2] and iloc[-3])
+                closed_ma5_h1 = float(df_h1['ma5_h1'].iloc[-2]) if len(df_h1) >= 2 else ma5_h1_val
+                closed_ma10_h1 = float(df_h1['ma10_h1'].iloc[-2]) if len(df_h1) >= 2 else ma10_h1_val
+                prev_closed_ma5_h1 = float(df_h1['ma5_h1'].iloc[-3]) if len(df_h1) >= 3 else closed_ma5_h1
+                prev_closed_ma10_h1 = float(df_h1['ma10_h1'].iloc[-3]) if len(df_h1) >= 3 else closed_ma10_h1
 
-                ma_cross_h1_up = bool((prev_ma5_h1_val <= prev_ma10_h1_val) and (ma5_h1_val > ma10_h1_val))
-                ma_cross_h1_down = bool((prev_ma5_h1_val >= prev_ma10_h1_val) and (ma5_h1_val < ma10_h1_val))
+                ma_cross_h1_up = bool((prev_closed_ma5_h1 <= prev_closed_ma10_h1) and (closed_ma5_h1 > closed_ma10_h1))
+                ma_cross_h1_down = bool((prev_closed_ma5_h1 >= prev_closed_ma10_h1) and (closed_ma5_h1 < closed_ma10_h1))
+                # เวลาแท่ง H1 ที่เกิด Cross (ใช้กันเข้าไม้ซ้ำบนสัญญาณ Cross เดิมตลอดทั้งชั่วโมง)
+                ma_cross_h1_bar_time = df_h1['time'].iloc[-2] if len(df_h1) >= 2 else df_h1['time'].iloc[-1]
+
+                # ATR(14) บน H1 สำหรับ Safety SL ของ Plan 5 (0.75 ATR H1) — ใช้แท่งที่ปิดแล้ว
+                tr_h1 = pd.concat([
+                    df_h1['high'] - df_h1['low'],
+                    (df_h1['high'] - df_h1['close'].shift()).abs(),
+                    (df_h1['low'] - df_h1['close'].shift()).abs()
+                ], axis=1).max(axis=1)
+                atr_h1_series = tr_h1.rolling(14).mean()
+                atr_h1_val = float(atr_h1_series.iloc[-2]) if len(df_h1) >= 2 and pd.notna(atr_h1_series.iloc[-2]) else float('nan')
                 ma_h1_status_str = f"{Colors.GREEN}MA5 > MA10 (+{(ma5_h1_val - ma10_h1_val):.2f}){Colors.RESET}" if ma5_h1_val >= ma10_h1_val else f"{Colors.RED}MA5 < MA10 ({(ma5_h1_val - ma10_h1_val):.2f}){Colors.RESET}"
                 
                 ma10 = df_h1['ma_fast_h1'].iloc[-1]
@@ -1167,11 +1187,16 @@ def main():
                 # Plan 4 (MA-Cross-Trend) Moving Average 5 ตัด 10 บนแท่ง M15 กรองด้วยเทรนด์ใหญ่ H1
                 ma5_val = float(last_bar['ma5'])
                 ma10_val = float(last_bar['ma10'])
-                prev_ma5_val = float(df.iloc[-2]['ma5']) if len(df) >= 2 else ma5_val
-                prev_ma10_val = float(df.iloc[-2]['ma10']) if len(df) >= 2 else ma10_val
+                # Fix repainting: check cross on closed candles (iloc[-2] and iloc[-3])
+                closed_ma5 = float(df.iloc[-2]['ma5']) if len(df) >= 2 else ma5_val
+                closed_ma10 = float(df.iloc[-2]['ma10']) if len(df) >= 2 else ma10_val
+                prev_closed_ma5 = float(df.iloc[-3]['ma5']) if len(df) >= 3 else closed_ma5
+                prev_closed_ma10 = float(df.iloc[-3]['ma10']) if len(df) >= 3 else closed_ma10
 
-                ma_cross_up = bool((prev_ma5_val <= prev_ma10_val) and (ma5_val > ma10_val))
-                ma_cross_down = bool((prev_ma5_val >= prev_ma10_val) and (ma5_val < ma10_val))
+                ma_cross_up = bool((prev_closed_ma5 <= prev_closed_ma10) and (closed_ma5 > closed_ma10))
+                ma_cross_down = bool((prev_closed_ma5 >= prev_closed_ma10) and (closed_ma5 < closed_ma10))
+                # เวลาแท่ง M15 ที่เกิด Cross (ใช้กันเข้าไม้ซ้ำบนสัญญาณ Cross เดิม)
+                ma_cross_bar_time = df.iloc[-2]['time'] if len(df) >= 2 else df.iloc[-1]['time']
 
                 # เงื่อนไข Plan 4: MA 5 ตัดขึ้น ➔ BUY (เมื่อ H1 Uptrend), MA 5 ตัดลง ➔ SELL (เมื่อ H1 Downtrend)
                 ma_cross_buy_confirm = ma_cross_up and is_uptrend_h1
@@ -1398,18 +1423,33 @@ def main():
                                     print(f"{Colors.YELLOW}[PLAN BLOCK] {sym} ไม้ขาดทุน ({last_plan} {direction}) เมื่อ {int(elapsed_p//60)}m - รอ {rem//60:02d}:{rem%60:02d}m ก่อนเข้า {plan_name} {direction} อีกครั้ง{Colors.RESET}")
                                     log_signal_event(sym, 'RISK_BLOCKED', plan_name, direction, close_price, prob[1], prob[0], h4_cloud_status, div_name, 'PLAN_BLOCKED', f'Loss on {last_plan} {direction} - waiting {rem//60:02d}:{rem%60:02d}m')
                                 return True
+                        # Plan 4/5: สัญญาณ Cross ค้างอยู่ตลอดอายุแท่ง (15 นาที / 1 ชม.) — ห้ามเข้าซ้ำบนแท่ง Cross เดิม
+                        cross_bar = _cross_bar_for(plan_name)
+                        if cross_bar is not None and last_cross_entry_bar.get((sym, plan_name, direction)) == cross_bar:
+                            return True
                         return False  # ไม่มี loss block → เข้าได้เลย
 
+                    def _cross_bar_for(plan_name):
+                        if plan_name == "MA-Cross-Trend":
+                            return ma_cross_bar_time
+                        if plan_name == "MA-Cross-H1-Trend":
+                            return ma_cross_h1_bar_time
+                        return None
+
                     def _record_plan(direction, plan_name):
-                        # บันทึกเฉพาะเพื่อ debug — ไม่สร้าง loss block (สร้างเมื่อปิดการขาดทุนเท่านั้น)
-                        pass  # loss block เดิน logic ใน close_position และ SL/TP detection แล้ว
+                        # loss block สร้างตอนปิดไม้ขาดทุนเท่านั้น — ที่นี่จดเฉพาะแท่ง Cross ที่เข้าไม้แล้ว (Plan 4/5)
+                        cross_bar = _cross_bar_for(plan_name)
+                        if cross_bar is not None:
+                            last_cross_entry_bar[(sym, plan_name, direction)] = cross_bar
                     
                     tick = mt5.symbol_info_tick(sym)
                     if tick is None:
                         continue
 
-                    # SL ตายตัว = 0.5 ATR เท่านั้น (ทุกแผน)
+                    # SL = 0.75 ATR (M15) สำหรับ Plan 0/1/3/4 และ 0.75 ATR (H1) สำหรับ Plan 5
                     sl_dist = round(atr_val * SL_ATR_MULT, digits)
+                    # ถ้ายังคำนวณ ATR H1 ไม่ได้ (ข้อมูลไม่พอ) ใช้ ATR M15 x2 เป็นค่าประมาณสำรอง
+                    sl_dist_h1 = round((atr_h1_val if pd.notna(atr_h1_val) and atr_h1_val > 0 else atr_val * 2.0) * SL_ATR_MULT, digits)
 
                     # แผน 0: SMC Liquidity Sweep (SMC-LiquidityHunt)
                     if is_sweep_buy:
@@ -1637,9 +1677,9 @@ def main():
                             log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                         elif not _is_plan_blocked('BUY', p_label):
                             price = tick.ask
-                            sl = round(price - sl_dist, digits)
+                            sl = round(price - sl_dist_h1, digits)
                             tp = 0.0  # Plan 5: ไม่ต้องตั้ง TP (รันตามเทรนด์ H1 ปิดทันทีเมื่อ MA5 ตัดลง MA10 บน H1)
-                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA10 on H1 + H4 BULLISH [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist:.{digits}f} / 0.75ATR, NO TP - Exit on H1 MA Cross Down){Colors.RESET}")
+                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA10 on H1 + H4 BULLISH [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA Cross Down){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
                             _record_plan('BUY', p_label)
@@ -1653,9 +1693,9 @@ def main():
                             log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                         elif not _is_plan_blocked('SELL', p_label):
                             price = tick.bid
-                            sl = round(price + sl_dist, digits)
+                            sl = round(price + sl_dist_h1, digits)
                             tp = 0.0  # Plan 5: ไม่ต้องตั้ง TP (รันตามเทรนด์ H1 ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10 บน H1)
-                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA10 on H1 + H4 BEARISH [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist:.{digits}f} / 0.75ATR, NO TP - Exit on H1 MA Cross Up){Colors.RESET}")
+                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA10 on H1 + H4 BEARISH [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA Cross Up){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
                             _record_plan('SELL', p_label)
@@ -1710,6 +1750,9 @@ def main():
                             continue
 
                         # 2. Early Break-Even Lock & Unlimited Dynamic TP
+                        if pos.tp <= 0.0:
+                            continue
+
                         if pos.type == mt5.ORDER_TYPE_BUY:
                             target_dist = pos.tp - pos.price_open
                             current_gain = tick.bid - pos.price_open
@@ -1731,8 +1774,8 @@ def main():
                                 elif not buffer_ok:
                                     print(f"{Colors.YELLOW}[LOCK BUFFER] {sym} be_sl={be_sl:.{digits}f} ใกล้ตลาดเกินไป (buffer < {BE_LOCK_BUFFER_ATR} ATR) — ข้ามไปก่อน{Colors.RESET}")
 
-                            # Unlimited Dynamic TP: เมื่อราคาใกล้เป้า 75% และ AI ยังมองขึ้นต่อเนื่อง
-                            if target_dist > 0 and current_gain >= (0.75 * target_dist) and prob[1] >= CONFIDENCE:
+                            # Unlimited Dynamic TP: เมื่อราคาใกล้เป้า 80% และ AI ยังมองขึ้นต่อเนื่อง
+                            if target_dist > 0 and current_gain >= (0.80 * target_dist) and prob[1] >= CONFIDENCE:
                                 new_tp = round(pos.tp + (atr_val * 1.0), digits) # ดัน TP ขึ้นอีก 1 ATR
                                 lock_sl = max(pos.price_open + (atr_val * 0.3), tick.bid - (atr_val * 1.0))
                                 new_sl = round(max(pos.sl, lock_sl), digits)
@@ -1765,8 +1808,8 @@ def main():
                                 elif not buffer_ok:
                                     print(f"{Colors.YELLOW}[LOCK BUFFER] {sym} be_sl={be_sl:.{digits}f} ใกล้ตลาดเกินไป (buffer < {BE_LOCK_BUFFER_ATR} ATR) — ข้ามไปก่อน{Colors.RESET}")
 
-                            # Unlimited Dynamic TP: เมื่อราคาลงมาใกล้เป้า 75% และ AI ยังมองลงต่อเนื่อง
-                            if target_dist > 0 and current_gain >= (0.75 * target_dist) and prob[0] >= CONFIDENCE:
+                            # Unlimited Dynamic TP: เมื่อราคาลงมาใกล้เป้า 80% และ AI ยังมองลงต่อเนื่อง
+                            if target_dist > 0 and current_gain >= (0.80 * target_dist) and prob[0] >= CONFIDENCE:
                                 new_tp = round(pos.tp - (atr_val * 1.0), digits) # ดัน TP ลงอีก 1 ATR
                                 lock_sl = min(pos.price_open - (atr_val * 0.3), tick.ask + (atr_val * 1.0))
                                 new_sl = round(min(pos.sl, lock_sl) if pos.sl > 0 else lock_sl, digits)

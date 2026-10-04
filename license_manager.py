@@ -5,8 +5,7 @@ import time
 import re
 import urllib.request
 import urllib.error
-import hashlib
-from datetime import datetime
+
 
 # คีย์การเข้ารหัสและโฟลเดอร์เก็บข้อมูลลิขสิทธิ์
 BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +13,7 @@ CONFIG_FILE = os.path.join(BASE_DIR, "license_store.json")
 ENV_LOCAL_PATH = os.path.join(BASE_DIR, "web", ".env.local")
 
 # API URL ของ GoldBot24 Cloud Production
-API_BASE_URL = os.environ.get("GOLDBOT_API_URL", "https://goldbot24-4jnnk2of7-noteratchas-projects.vercel.app")
+API_BASE_URL = os.environ.get("GOLDBOT_API_URL", "https://goldbot24.vercel.app")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://isliehicmtpsnuyxedln.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_a0D8-j-yM-a3SNx2mig7vw_dvwAOBkg")
 
@@ -120,7 +119,7 @@ class LicenseManager:
         """ตรวจสอบว่าเข้าสู่ระบบแล้ว และยังมีเวลาคงเหลือมากกว่า 0 หรือไม่"""
         return self.is_authenticated and self.session_data.get("hours_remaining_minutes", 0) > 0
 
-    def login(self, email: str, password: str) -> tuple[bool, str]:
+    def login(self, email: str, password: str, remember_me: bool = True) -> tuple[bool, str]:
         """
         เข้าสู่ระบบด้วย Email + Password กับ GoldBot24 Cloud API (ปิดโหมด Demo เด็ดขาด)
         """
@@ -148,6 +147,7 @@ class LicenseManager:
                     self.session_data["hours_remaining_minutes"] = int(round(hrs * 60))
                     self.session_data["status"] = "AUTHENTICATED"
                     self.session_data["last_sync"] = int(time.time())
+                    self.session_data["remember_me"] = bool(remember_me)
                     self.is_authenticated = True
                     self.save_local_store()
                     return True, f"เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับ {self.session_data['username']}"
@@ -160,43 +160,7 @@ class LicenseManager:
             except Exception:
                 return False, f"เข้าสู่ระบบไม่สำเร็จ: รหัสผ่านไม่ถูกต้อง (HTTP {he.code})"
         except Exception as e:
-            # Fallback direct Supabase check
-            return self._fallback_supabase_login(email, password)
-
-    def _fallback_supabase_login(self, email: str, password: str) -> tuple[bool, str]:
-        """ตรวจสอบรหัสผ่านโดยตรงกับ Supabase bot_config ในกรณีเน็ตสะดุด"""
-        try:
-            query_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/bot_config?mt5_server=eq.{urllib.parse.quote(email)}&select=*"
-            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-            req = urllib.request.Request(query_url, headers=headers, method="GET")
-            with urllib.request.urlopen(req, timeout=6) as resp:
-                rows = json.loads(resp.read().decode("utf-8"))
-                if not rows:
-                    return False, "ไม่พบบัญชีผู้ใช้นี้ในระบบ กรุณาสมัครสมาชิกก่อน"
-                row = rows[0]
-                stored_pwd = row.get("mt5_password", "")
-                if not stored_pwd.startswith("v1$"):
-                    return False, "รหัสผ่านไม่ถูกต้อง"
-                parts = stored_pwd.split("$")
-                salt = parts[1].encode("utf-8")
-                expected = parts[2]
-                actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(parts[1]), 10000, 32).hex()
-                if actual != expected:
-                    return False, "รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง"
-
-                hrs = float(row.get("lot_size", 0.0))
-                self.session_data["email"] = email
-                self.session_data["username"] = email.split("@")[0]
-                self.session_data["user_id"] = str(row.get("id", ""))
-                self.session_data["token"] = "offline_session"
-                self.session_data["hours_remaining_minutes"] = int(round(hrs * 60))
-                self.session_data["status"] = "AUTHENTICATED"
-                self.session_data["last_sync"] = int(time.time())
-                self.is_authenticated = True
-                self.save_local_store()
-                return True, "เข้าสู่ระบบสำเร็จ (เชื่อมต่อ Cloud Direct)"
-        except Exception as err:
-            return False, f"ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้: {err}"
+            return False, f"ไม่สามารถเชื่อมต่อ GoldBot24 Cloud ได้: {e}"
 
     def register(self, email: str, password: str, display_name: str = "") -> tuple[bool, str]:
         """
@@ -233,6 +197,7 @@ class LicenseManager:
                     self.session_data["hours_remaining_minutes"] = int(round(hrs * 60))
                     self.session_data["status"] = "AUTHENTICATED"
                     self.session_data["last_sync"] = int(time.time())
+                    self.session_data["remember_me"] = True
                     self.is_authenticated = True
                     self.save_local_store()
                     return True, "สมัครสมาชิกสำเร็จ! ได้รับโควต้าเริ่มต้น 48 ชั่วโมงเรียบร้อยแล้ว"
@@ -247,8 +212,10 @@ class LicenseManager:
         except Exception as e:
             return False, f"เกิดข้อผิดพลาดในการเชื่อมต่อ: {e}"
 
-    def logout(self):
-        """ออกจากระบบและล้างเซสชันในเครื่อง"""
+    def logout(self, flush: bool = True):
+        """ออกจากระบบและล้างเซสชันในเครื่อง (ส่งนาทีที่ค้างหักให้ Server ก่อน)"""
+        if flush:
+            self._flush_meter()
         self.session_data = {
             "email": "",
             "username": "",
@@ -265,56 +232,82 @@ class LicenseManager:
             except Exception:
                 pass
 
+    def _auth_headers(self) -> dict:
+        headers = {"Content-Type": "application/json", "User-Agent": "GoldBot24-Desktop"}
+        token = self.session_data.get("token")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
+
+    def _handle_auth_error(self, code: int):
+        """Token หมดอายุ/ไม่ถูกต้อง (เช่น token รุ่นเก่าที่ไม่มีลายเซ็น) — บังคับล็อกอินใหม่"""
+        if code == 401:
+            self.logout(flush=False)
+
     def sync_latest_hours(self):
-        """ดึงยอดเวลาคงเหลือล่าสุดจาก Cloud"""
-        if not self.session_data.get("email"):
+        """ดึงยอดเวลาคงเหลือล่าสุดจาก Cloud (ยืนยันตัวตนด้วย Token)"""
+        if not self.session_data.get("token"):
             return
-        email = self.session_data["email"]
-        me_url = f"{API_BASE_URL.rstrip('/')}/api/auth/me?email={urllib.parse.quote(email)}"
+        me_url = f"{API_BASE_URL.rstrip('/')}/api/auth/me"
         try:
-            req = urllib.request.Request(me_url, headers={"User-Agent": "GoldBot24-Desktop"}, method="GET")
+            req = urllib.request.Request(me_url, headers=self._auth_headers(), method="GET")
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 if data.get("success") and data.get("user"):
                     hrs = float(data["user"].get("hoursRemaining", 0.0))
-                    self.session_data["hours_remaining_minutes"] = int(round(hrs * 60))
+                    # หักนาทีที่ใช้ไปแล้วแต่ยังไม่ได้ส่งขึ้น Server ออกด้วย
+                    pending = int(self.session_data.get("pending_meter_minutes", 0))
+                    self.session_data["hours_remaining_minutes"] = max(0, int(round(hrs * 60)) - pending)
                     self.session_data["last_sync"] = int(time.time())
                     self.save_local_store()
+        except urllib.error.HTTPError as he:
+            self._handle_auth_error(he.code)
         except Exception:
             pass
 
-    def deduct_trading_minute(self, minutes_elapsed: int = 1):
+    def deduct_trading_minute(self, minutes_elapsed: int = 1) -> tuple[bool, int, str]:
         """
         ตัดเวลาการใช้งานจริงเมื่อบอทเปิดทำงาน (เรียกทุกๆ 1 นาที)
+        - ตัดในเครื่องทันที แล้วส่งยอดที่ค้างไปให้ Server หักจริงทุก 5 นาที (หรือเมื่อเวลาหมด)
+        - คืนค่า (ยังมีเวลาเหลือหรือไม่, นาทีคงเหลือ, ข้อความ HH.MM)
         """
         curr = self.session_data.get("hours_remaining_minutes", 0)
         new_val = max(0, curr - minutes_elapsed)
         self.session_data["hours_remaining_minutes"] = new_val
+        self.session_data["pending_meter_minutes"] = int(self.session_data.get("pending_meter_minutes", 0)) + (curr - new_val)
         self.save_local_store()
 
-        # อัปเดต Cloud ทุกๆ 5 นาที หรือเมื่อเวลาหมด
         if new_val == 0 or (int(time.time()) - self.session_data.get("last_sync", 0)) > 300:
-            self._update_cloud_hours(new_val / 60.0)
+            self._flush_meter()
 
-    def _update_cloud_hours(self, hours_val: float):
-        """บันทึกเวลาที่ลดลงกลับไปยัง Supabase bot_config"""
-        user_id = self.session_data.get("user_id")
-        if not user_id:
+        remaining = self.session_data.get("hours_remaining_minutes", 0)
+        return remaining > 0, remaining, format_hours_minutes(remaining)
+
+    def _flush_meter(self):
+        """ส่งนาทีที่ใช้ไปให้ Server หักออกจากบัญชี (/api/auth/meter) แล้วรับยอดคงเหลือที่ถูกต้องกลับมา"""
+        pending = int(self.session_data.get("pending_meter_minutes", 0))
+        if pending <= 0 or not self.session_data.get("token"):
             return
+        meter_url = f"{API_BASE_URL.rstrip('/')}/api/auth/meter"
+        payload = json.dumps({"minutes": pending}).encode("utf-8")
         try:
-            patch_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/bot_config?id=eq.{user_id}"
-            headers = {
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-                "Prefer": "return=minimal"
-            }
-            payload = json.dumps({"lot_size": hours_val, "updated_at": datetime.utcnow().isoformat()}).encode("utf-8")
-            req = urllib.request.Request(patch_url, data=payload, headers=headers, method="PATCH")
-            with urllib.request.urlopen(req, timeout=4) as _:
-                self.session_data["last_sync"] = int(time.time())
+            req = urllib.request.Request(meter_url, data=payload, headers=self._auth_headers(), method="POST")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("success"):
+                    hrs = float(data.get("hoursRemaining", 0.0))
+                    self.session_data["hours_remaining_minutes"] = int(round(hrs * 60))
+                    self.session_data["pending_meter_minutes"] = 0
+                    self.session_data["last_sync"] = int(time.time())
+                    self.save_local_store()
+        except urllib.error.HTTPError as he:
+            self._handle_auth_error(he.code)
         except Exception:
-            pass
+            pass  # เน็ตหลุด — เก็บยอดค้างไว้ส่งรอบถัดไป
+
+    def check_app_version(self, current_version: str) -> dict:
+        """ตรวจสอบว่ามีเวอร์ชันใหม่กว่าที่ใช้งานอยู่หรือไม่"""
+        return fetch_app_version_info(current_version)
 
     def redeem_product_key(self, raw_key: str) -> tuple[bool, str, int]:
         """
@@ -330,14 +323,10 @@ class LicenseManager:
             return False, "รูปแบบรหัสไม่ถูกต้อง! ต้องเป็น: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX (24 หลัก)", 0
 
         redeem_url = f"{API_BASE_URL.rstrip('/')}/api/auth/redeem"
-        payload = json.dumps({
-            "email": self.session_data["email"],
-            "keyCode": key
-        }).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
+        payload = json.dumps({"keyCode": key}).encode("utf-8")
 
         try:
-            req = urllib.request.Request(redeem_url, data=payload, headers=headers, method="POST")
+            req = urllib.request.Request(redeem_url, data=payload, headers=self._auth_headers(), method="POST")
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 if data.get("success"):
@@ -349,6 +338,9 @@ class LicenseManager:
                 else:
                     return False, data.get("error", "ไม่สามารถเติมคีย์ได้"), 0
         except urllib.error.HTTPError as he:
+            if he.code == 401:
+                self.logout(flush=False)
+                return False, "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", 0
             try:
                 err_data = json.loads(he.read().decode("utf-8"))
                 return False, err_data.get("error", f"รหัสคีย์ไม่ถูกต้อง (HTTP {he.code})"), 0
@@ -356,6 +348,32 @@ class LicenseManager:
                 return False, f"ไม่สามารถเติมคีย์ได้ (HTTP {he.code})", 0
         except Exception as e:
             return False, f"เกิดข้อผิดพลาดในการเชื่อมต่อ: {e}", 0
+
+
+def _version_tuple(v: str) -> tuple:
+    try:
+        return tuple(int(x) for x in str(v).strip().lstrip("v").split("."))
+    except Exception:
+        return (0,)
+
+
+def fetch_app_version_info(current_version: str) -> dict:
+    """ตรวจสอบเวอร์ชันล่าสุดจากตาราง app_releases (ข้อมูลสาธารณะ อ่านด้วย anon key)"""
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/app_releases?select=version,download_url,changelog,mandatory&order=released_at.desc&limit=1"
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    with urllib.request.urlopen(req, timeout=6) as resp:
+        rows = json.loads(resp.read().decode("utf-8"))
+    if not rows:
+        return {"has_update": False, "latest_version": current_version}
+    latest = rows[0]
+    return {
+        "has_update": _version_tuple(latest.get("version")) > _version_tuple(current_version),
+        "latest_version": latest.get("version"),
+        "download_url": latest.get("download_url"),
+        "changelog": latest.get("changelog"),
+        "mandatory": bool(latest.get("mandatory")),
+    }
 
 
 # Global Singleton instance

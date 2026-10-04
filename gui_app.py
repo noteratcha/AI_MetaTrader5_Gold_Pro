@@ -1,6 +1,6 @@
 """
 AI MetaTrader 5 (FBS) Gold Pro - Desktop GUI Application
-เวอร์ชัน: v2026.1003.0025
+เวอร์ชัน: v2026.1004.2030
 หน้าจอ UI สำหรับเข้าใช้งานระบบ, ตรวจสอบสิทธิ์ชั่วโมง (Hours Metering), เติมชั่วโมงด้วย Product Key,
 และควบคุมการเปิด/ปิดระบบเทรดอัตโนมัติ 100% Pure Gold Specialist (XAUUSD)
 """
@@ -29,21 +29,21 @@ ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 # กำหนด Palette สีระดับพรีเมียม (Gold & Obsidian Theme)
-COLOR_BG_DARK = "#0B0E14"          # พื้นหลังหลักโทนดำสนิท
-COLOR_CARD_BG = "#131722"          # สีพื้นกล่องการ์ด
-COLOR_CARD_BORDER = "#1E2638"      # เส้นขอบการ์ด
-COLOR_CARD_HOVER = "#1A2234"       # สีเมื่อเมาส์ชี้การ์ด
+COLOR_BG_DARK = "#0A0B0F"          # พื้นหลังหลักโทนดำสนิท
+COLOR_CARD_BG = "#14171E"          # สีพื้นกล่องการ์ด
+COLOR_CARD_BORDER = "#252A35"      # เส้นขอบการ์ด
+COLOR_CARD_HOVER = "#1F2430"       # สีเมื่อเมาส์ชี้การ์ด
 
-COLOR_GOLD_PRIMARY = "#FFD700"     # สีทองสว่าง
-COLOR_GOLD_WARM = "#F59E0B"        # สีทองอำพัน
-COLOR_GOLD_DARK = "#B45309"        # สีทองเข้ม
-COLOR_GOLD_BG = "#261D0C"          # พื้นหลังเรืองแสงสีทอง
+COLOR_GOLD_PRIMARY = "#F2C14E"     # สีทองสว่าง
+COLOR_GOLD_WARM = "#E0A92B"        # สีทองอำพัน
+COLOR_GOLD_DARK = "#9A6B12"        # สีทองเข้ม
+COLOR_GOLD_BG = "#221B0D"          # พื้นหลังเรืองแสงสีทอง
 
-COLOR_SUCCESS_GREEN = "#10B981"    # สีเขียวสำเร็จ
-COLOR_DANGER_RED = "#EF4444"       # สีแดงแจ้งเตือน
-COLOR_CYAN_ACCENT = "#38BDF8"      # สีฟ้าไฮไลท์
-COLOR_TEXT_PRIMARY = "#F8FAFC"     # ข้อความหลักสีขาวนวล
-COLOR_TEXT_MUTED = "#94A3B8"       # ข้อความรองสีเทา
+COLOR_SUCCESS_GREEN = "#34D399"    # สีเขียวสำเร็จ
+COLOR_DANGER_RED = "#F87171"       # สีแดงแจ้งเตือน
+COLOR_CYAN_ACCENT = "#60A5FA"      # สีฟ้าไฮไลท์
+COLOR_TEXT_PRIMARY = "#ECEEF3"     # ข้อความหลักสีขาวนวล
+COLOR_TEXT_MUTED = "#A3ABBA"       # ข้อความรองสีเทา
 
 
 class RedeemKeyDialog(ctk.CTkToplevel):
@@ -140,7 +140,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
             corner_radius=8,
             border_width=1,
             border_color=COLOR_GOLD_WARM,
-            fg_color="#0F131C",
+            fg_color="#101218",
             placeholder_text="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
         )
         self.key_entry.pack(fill="x")
@@ -174,8 +174,8 @@ class RedeemKeyDialog(ctk.CTkToplevel):
             btn_frame,
             text="ปิดหน้าต่าง",
             font=ctk.CTkFont(family="Segoe UI", size=14),
-            fg_color="#2D3748",
-            hover_color="#4A5568",
+            fg_color="#252A35",
+            hover_color="#323846",
             height=42,
             corner_radius=8,
             command=self.destroy
@@ -188,7 +188,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
-            text_color="#000000",
+            text_color="#1A1406",
             height=42,
             corner_radius=8,
             command=self._do_redeem
@@ -313,7 +313,7 @@ class UserStatsDialog(ctk.CTkToplevel):
         tbl_container.pack(fill="both", expand=True, padx=24, pady=(0, 16))
 
         # หัวตาราง (Table Header)
-        th_frame = ctk.CTkFrame(tbl_container, fg_color="#182030", height=38, corner_radius=8)
+        th_frame = ctk.CTkFrame(tbl_container, fg_color="#1A1E27", height=38, corner_radius=8)
         th_frame.pack(fill="x", padx=12, pady=10)
         th_frame.grid_columnconfigure(0, weight=3) # Plan Name
         th_frame.grid_columnconfigure((1, 2, 3, 4, 5), weight=2)
@@ -322,7 +322,7 @@ class UserStatsDialog(ctk.CTkToplevel):
                    ("Win Rate (%)", 3, "center"), ("กำไรสุทธิ ($ Profit)", 4, "center"), ("Profit Factor", 5, "center")]
         for title, col, anc in headers:
             lbl = ctk.CTkLabel(th_frame, text=title, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=COLOR_GOLD_PRIMARY)
-            lbl.grid(row=0, column=col, padx=8, pady=8, sticky=anc)
+            lbl.grid(row=0, column=col, padx=8, pady=8, sticky="" if anc == "center" else anc)  # Tk ไม่รับ sticky="center"
 
         # รายการแต่ละแผน (Plan Rows)
         scroll_rows = ctk.CTkScrollableFrame(tbl_container, fg_color="transparent")
@@ -338,7 +338,7 @@ class UserStatsDialog(ctk.CTkToplevel):
             p_profit = p_stat.get("total_profit_usd", 0.0)
             p_pf = p_stat.get("profit_factor", 0.0)
 
-            bg_row = "#11151F" if idx % 2 == 0 else "#141926"
+            bg_row = "#12151B" if idx % 2 == 0 else "#161A21"
             row_frame = ctk.CTkFrame(scroll_rows, fg_color=bg_row, corner_radius=6)
             row_frame.pack(fill="x", pady=2)
             row_frame.grid_columnconfigure(0, weight=3)
@@ -347,17 +347,17 @@ class UserStatsDialog(ctk.CTkToplevel):
             # 1. ชื่อแผน
             ctk.CTkLabel(row_frame, text=p_name, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=0, padx=8, pady=8, sticky="w")
             # 2. จำนวนเข้าไม้
-            ctk.CTkLabel(row_frame, text=f"{p_trades} ไม้", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=1, padx=8, sticky="center")
+            ctk.CTkLabel(row_frame, text=f"{p_trades} ไม้", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=1, padx=8)
             # 3. ชนะ/แพ้
-            ctk.CTkLabel(row_frame, text=f"{p_win}W / {p_loss}L", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_MUTED).grid(row=0, column=2, padx=8, sticky="center")
+            ctk.CTkLabel(row_frame, text=f"{p_win}W / {p_loss}L", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_MUTED).grid(row=0, column=2, padx=8)
             # 4. Win Rate %
             wr_colr = COLOR_SUCCESS_GREEN if p_wr >= 50 else (COLOR_GOLD_WARM if p_wr >= 40 else COLOR_TEXT_MUTED)
-            ctk.CTkLabel(row_frame, text=f"{p_wr:.1f}%", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=wr_colr).grid(row=0, column=3, padx=8, sticky="center")
+            ctk.CTkLabel(row_frame, text=f"{p_wr:.1f}%", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=wr_colr).grid(row=0, column=3, padx=8)
             # 5. Profit USD
             prof_colr = COLOR_SUCCESS_GREEN if p_profit > 0 else (COLOR_DANGER_RED if p_profit < 0 else COLOR_TEXT_MUTED)
-            ctk.CTkLabel(row_frame, text=f"${p_profit:+,.2f}", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=prof_colr).grid(row=0, column=4, padx=8, sticky="center")
+            ctk.CTkLabel(row_frame, text=f"${p_profit:+,.2f}", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=prof_colr).grid(row=0, column=4, padx=8)
             # 6. Profit Factor
-            ctk.CTkLabel(row_frame, text=f"{p_pf:.2f}", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_GOLD_WARM if p_pf >= 1.5 else COLOR_TEXT_MUTED).grid(row=0, column=5, padx=8, sticky="center")
+            ctk.CTkLabel(row_frame, text=f"{p_pf:.2f}", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_GOLD_WARM if p_pf >= 1.5 else COLOR_TEXT_MUTED).grid(row=0, column=5, padx=8)
 
         # ปุ่มปิดหน้าต่าง
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -367,8 +367,8 @@ class UserStatsDialog(ctk.CTkToplevel):
             btn_frame,
             text="ปิดหน้าต่าง",
             font=ctk.CTkFont(family="Segoe UI", size=13),
-            fg_color="#2D3748",
-            hover_color="#4A5568",
+            fg_color="#252A35",
+            hover_color="#323846",
             height=38,
             corner_radius=8,
             command=self.destroy
@@ -383,7 +383,7 @@ class MainTradingApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("AI Gold Commander Pro - GoldBot24 (v2026.1003.0025)")
+        self.title("AI Gold Commander Pro - GoldBot24 (v2026.1004.2030)")
         self.geometry("1180x820")
         self.minsize(1050, 720)
         self.configure(fg_color=COLOR_BG_DARK)
@@ -478,7 +478,7 @@ class MainTradingApp(ctk.CTk):
         version_badge.pack(pady=(0, 16))
         ctk.CTkLabel(
             version_badge,
-            text="v2026.1003.0025 • GoldBot24 Cloud Service (1.00 THB/hr)",
+            text="v2026.1004.2030 • GoldBot24 Cloud Service (1.00 THB/hr)",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color=COLOR_GOLD_WARM
         ).pack(padx=10, pady=4)
@@ -491,8 +491,8 @@ class MainTradingApp(ctk.CTk):
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             selected_color=COLOR_GOLD_WARM,
             selected_hover_color=COLOR_GOLD_DARK,
-            unselected_color="#1E293B",
-            unselected_hover_color="#334155",
+            unselected_color="#1A1E27",
+            unselected_hover_color="#262B36",
             text_color="#FFFFFF",
             command=self._on_auth_tab_change
         )
@@ -516,8 +516,8 @@ class MainTradingApp(ctk.CTk):
             height=40,
             corner_radius=8,
             border_width=1,
-            border_color="#2D3748",
-            fg_color="#0F131C",
+            border_color="#252A35",
+            fg_color="#101218",
             placeholder_text="เช่น GoldTrader99"
         )
 
@@ -537,8 +537,8 @@ class MainTradingApp(ctk.CTk):
             height=40,
             corner_radius=8,
             border_width=1,
-            border_color="#2D3748",
-            fg_color="#0F131C",
+            border_color="#252A35",
+            fg_color="#101218",
             placeholder_text="user@example.com"
         )
         self.entry_email.pack(fill="x", pady=(0, 10))
@@ -560,8 +560,8 @@ class MainTradingApp(ctk.CTk):
             height=40,
             corner_radius=8,
             border_width=1,
-            border_color="#2D3748",
-            fg_color="#0F131C",
+            border_color="#252A35",
+            fg_color="#101218",
             show="•",
             placeholder_text="รหัสผ่านอย่างน้อย 6 ตัวอักษร"
         )
@@ -581,8 +581,8 @@ class MainTradingApp(ctk.CTk):
             height=40,
             corner_radius=8,
             border_width=1,
-            border_color="#2D3748",
-            fg_color="#0F131C",
+            border_color="#252A35",
+            fg_color="#101218",
             show="•",
             placeholder_text="••••••••"
         )
@@ -631,7 +631,7 @@ class MainTradingApp(ctk.CTk):
             font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
-            text_color="#000000",
+            text_color="#1A1406",
             height=44,
             corner_radius=8,
             command=self._on_auth_submit
@@ -795,7 +795,7 @@ class MainTradingApp(ctk.CTk):
 
         ctk.CTkLabel(
             brand_text_box,
-            text="v2026.1003.0025 • 🪙 100% PURE GOLD SPECIALIST (XAUUSD) • GoldBot24",
+            text="v2026.1004.2030 • 🪙 100% PURE GOLD SPECIALIST (XAUUSD) • GoldBot24",
             font=ctk.CTkFont(family="Segoe UI", size=11),
             text_color=COLOR_TEXT_MUTED
         ).pack(anchor="w")
@@ -850,7 +850,7 @@ class MainTradingApp(ctk.CTk):
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
-            text_color="#000000",
+            text_color="#1A1406",
             height=36,
             corner_radius=8,
             command=self._open_redeem_modal
@@ -862,9 +862,9 @@ class MainTradingApp(ctk.CTk):
             right_frame,
             text="🔄 อัปเดต",
             font=ctk.CTkFont(family="Segoe UI", size=12),
-            fg_color="#1E293B",
-            hover_color="#334155",
-            text_color="#38BDF8",
+            fg_color="#1A1E27",
+            hover_color="#262B36",
+            text_color="#60A5FA",
             width=70,
             height=36,
             corner_radius=8,
@@ -874,7 +874,7 @@ class MainTradingApp(ctk.CTk):
 
         # ป้ายชื่อผู้ใช้ และปุ่มออกจากระบบ
         user_name = license_mgr.session_data.get("username") or "User"
-        user_chip = ctk.CTkFrame(right_frame, fg_color="#1E293B", corner_radius=8)
+        user_chip = ctk.CTkFrame(right_frame, fg_color="#1A1E27", corner_radius=8)
         user_chip.pack(side="left", padx=(0, 8))
         ctk.CTkLabel(
             user_chip,
@@ -887,7 +887,7 @@ class MainTradingApp(ctk.CTk):
             right_frame,
             text="🚪 ออก",
             font=ctk.CTkFont(family="Segoe UI", size=12),
-            fg_color="#334155",
+            fg_color="#262B36",
             hover_color="#475569",
             width=50,
             height=34,
@@ -1010,8 +1010,8 @@ class MainTradingApp(ctk.CTk):
             p_hdr,
             text="📊 ดูสถิติรายแผน (My Stats)",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            fg_color="#1E293B",
-            hover_color="#334155",
+            fg_color="#1A1E27",
+            hover_color="#262B36",
             text_color=COLOR_GOLD_PRIMARY,
             height=28,
             corner_radius=6,
@@ -1032,7 +1032,7 @@ class MainTradingApp(ctk.CTk):
 
         self.plan_stat_badges = {}
         for p_code, p_name, p_desc, full_plan_name in plans:
-            badge = ctk.CTkFrame(badges_row, fg_color="#182030", corner_radius=8, border_width=1, border_color="#2D3B55")
+            badge = ctk.CTkFrame(badges_row, fg_color="#1A1E27", corner_radius=8, border_width=1, border_color="#2D3B55")
             badge.pack(side="left", padx=4, expand=True, fill="x")
 
             ctk.CTkLabel(
@@ -1109,7 +1109,7 @@ class MainTradingApp(ctk.CTk):
             btn_row,
             text="🔊",
             font=ctk.CTkFont(size=16),
-            fg_color="#334155",
+            fg_color="#262B36",
             hover_color="#475569",
             width=44,
             height=44,
@@ -1153,8 +1153,8 @@ class MainTradingApp(ctk.CTk):
             c_controls,
             text="ล้างข้อความ",
             font=ctk.CTkFont(family="Segoe UI", size=11),
-            fg_color="#1E293B",
-            hover_color="#334155",
+            fg_color="#1A1E27",
+            hover_color="#262B36",
             width=70,
             height=26,
             corner_radius=6,
@@ -1178,7 +1178,7 @@ class MainTradingApp(ctk.CTk):
         # ข้อความเริ่มต้น
         self.txt_console.insert(
             "end",
-            f"=== 🪙 AI MetaTrader 5 (FBS) Gold Pro v2026.1003.0025 Started ===\n"
+            f"=== 🪙 AI MetaTrader 5 (FBS) Gold Pro v2026.1004.2030 Started ===\n"
             f"• ระบบโฟกัสทองคำ XAUUSD แบบ 100% Specialist | Sweet Spot RRR 1:1.50 | SL 0.75 ATR\n"
             f"• ระบบคิดค่าบริการ 1 บาท/ชั่วโมง (นับเฉพาะเวลาเปิดบอท) | รูปแบบเวลาคงเหลือ: ชั่วโมง.นาที (HH.MM)\n"
             f"• กดปุ่ม '▶️ เริ่มต้นการทำงานบอท' เพื่อเริ่มการวิเคราะห์แท่งเทียน M15/H1 และเข้าเทรดอัตโนมัติ\n\n"
@@ -1225,7 +1225,7 @@ class MainTradingApp(ctk.CTk):
                 text="⏸️ หยุดชั่วคราว (PAUSE)",
                 fg_color=COLOR_GOLD_WARM,
                 hover_color=COLOR_GOLD_DARK,
-                text_color="#000000"
+                text_color="#1A1406"
             )
             self.lbl_metering_status.configure(
                 text="🟢 กำลังตัดเวลา (-1 นาที/รอบ)",
@@ -1279,7 +1279,7 @@ class MainTradingApp(ctk.CTk):
         """เปิดหรือปิดเสียงแจ้งเตือน"""
         bot_ctrl.sound_enabled = not bot_ctrl.sound_enabled
         if bot_ctrl.sound_enabled:
-            self.btn_sound_toggle.configure(text="🔊", fg_color="#334155")
+            self.btn_sound_toggle.configure(text="🔊", fg_color="#262B36")
             sound_manager.play_tp_hit()
         else:
             self.btn_sound_toggle.configure(text="🔇", fg_color=COLOR_DANGER_RED)
@@ -1300,7 +1300,7 @@ class MainTradingApp(ctk.CTk):
 
     def _check_app_updates(self, silent_if_latest=False):
         """ตรวจสอบเวอร์ชันใหม่จาก Supabase app_releases"""
-        current_ver = "2026.1003.0025"
+        current_ver = "2026.1004.2030"
         try:
             res = license_mgr.check_app_version(current_ver)
             if res.get("has_update"):

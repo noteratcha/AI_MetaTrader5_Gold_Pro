@@ -3,9 +3,9 @@ name: ai-trading-bot
 description: Comprehensive knowledge, skills, technical indicators, execution styles, trading plans (SMC Sweep, Bounce, Breakout, Sideway), dynamic TP/SL, and risk management for AI MetaTrader 5 bot.
 ---
 
-# AI MetaTrader 5 Trading Bot v2026.1003.0025: XAUUSD Gold Specialist
+# AI MetaTrader 5 Trading Bot v2026.1004.2030: XAUUSD Gold Specialist
 
-คู่มือมาตรฐานสำหรับระบบเทรดอัตโนมัติ **AI MetaTrader 5 Gold Pro v2026.1003.0025** ที่มุ่งเน้นการดัน **Win Rate และผลตอบแทนสุทธิสูงสุด** ในสินทรัพย์ทองคำ (**XAUUSD Only 100%**) ด้วยสถาปัตยกรรม **Pure Gold Specialization**, **RRR 1:1.50**, **Breathing Room SL 0.75 ATR**, **Plan 0: SMC Liquidity Hunt + H1 Trend Anchor**, **Plan 3: H1 Bollinger Bands Reversion**, **Plan 4: M15 MA(5, 10) Cross + H1 Trend Anchor**, **Plan 5: H1 MA(5, 10) Cross + H4 Trend Anchor** และ **Strict Pro-Trend Only**
+คู่มือมาตรฐานสำหรับระบบเทรดอัตโนมัติ **AI MetaTrader 5 Gold Pro v2026.1004.2030** ที่มุ่งเน้นการดัน **Win Rate และผลตอบแทนสุทธิสูงสุด** ในสินทรัพย์ทองคำ (**XAUUSD Only 100%**) ด้วยสถาปัตยกรรม **Pure Gold Specialization**, **RRR 1:1.50**, **Breathing Room SL 0.75 ATR**, **Plan 0: SMC Liquidity Hunt + H1 Trend Anchor**, **Plan 3: H1 Bollinger Bands Reversion**, **Plan 4: M15 MA(5, 10) Cross + H1 Trend Anchor**, **Plan 5: H1 MA(5, 10) Cross + H4 Trend Anchor** และ **Strict Pro-Trend Only**
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**: รูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)**
 
@@ -135,7 +135,7 @@ description: Comprehensive knowledge, skills, technical indicators, execution st
 4. **Product Key 24 หลัก**: รูปแบบ `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX` เติมแบบบวกเพิ่ม (+) ผ่าน `RedeemKeyDialog` หรือหน้า `/dashboard`
 5. **PromptPay QR + SlipOK Auto-Verify**: สร้าง QR (`/api/checkout/create-qr`) → ตรวจสลิป (`/api/checkout/verify-slip`) / Webhook (`/api/webhook/payment`) → ผลิต Product Key อัตโนมัติ
 6. **Admin RBAC (Role-Based Access)**:
-   - Admin = `symbols_trading` มี `role:admin` หรืออีเมลขึ้นต้น `admin@`; API `/api/auth/login` และ `/api/auth/me` คืนค่า `role` / `isAdmin`
+   - Admin = `symbols_trading` มี `role:admin` หรืออีเมลอยู่ใน env `ADMIN_EMAILS` (อีเมลขึ้นต้น `admin@` เฉย ๆ ไม่นับ); API `/api/auth/login` และ `/api/auth/me` คืนค่า `role` / `isAdmin` และ `/api/admin/*` ตรวจสิทธิ์ฝั่ง Server
    - ปุ่ม `[ 🛡️ Admin Analytics ]` ใน Navbar/Footer แสดง **เฉพาะ Admin เท่านั้น**
    - หน้า `/admin/analytics` มี **Admin Access Barrier** (กันการเข้าผ่าน URL ตรง) — ข้อมูลสถิติทุกลูกค้าและเครื่องผลิต Promo Key ห้ามเปิดเผยต่อลูกค้าทั่วไป
 7. **Desktop GUI Color Rule**: CustomTkinter/Tkinter รับเฉพาะสี Hex `#RRGGBB` หรือชื่อสี Tk — **ห้ามใช้ `rgba()` แบบ CSS** (ทำให้ `TclError` และโปรแกรมเปิดไม่ขึ้น) ให้ใช้ค่าคงที่สีในธีม เช่น `COLOR_GOLD_BG`, `COLOR_GOLD_DARK`

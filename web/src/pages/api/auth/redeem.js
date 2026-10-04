@@ -1,94 +1,82 @@
-import { createClient } from '@supabase/supabase-js';
+import { getAdminClient } from '../../../lib/server/supabaseAdmin';
+import { adjustHours, allowMethods, requireUser } from '../../../lib/server/auth';
+import { isValidKeyFormat, normalizeKey } from '../../../lib/server/keys';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://isliehicmtpsnuyxedln.supabase.co';
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_a0D8-j-yM-a3SNx2mig7vw_dvwAOBkg';
-
-function normalizeKey(raw) {
-  if (!raw) return '';
-  const clean = String(raw).replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 24);
-  const chunks = [];
-  for (let i = 0; i < clean.length; i += 4) {
-    chunks.push(clean.slice(i, i + 4));
-  }
-  return chunks.join('-');
-}
-
+/**
+ * เติมชั่วโมงด้วย Product Key
+ * 1) product_keys — คีย์ที่ได้จากการซื้อผ่าน PromptPay/SlipOK
+ * 2) promo_keys   — คีย์โปรโมชันที่ Admin ผลิต
+ * การ "จอง" คีย์ทำแบบ atomic (UPDATE ... WHERE ยังไม่ถูกใช้) กันการเติมคีย์เดียวซ้ำพร้อมกัน
+ */
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  if (!allowMethods(req, res, ['POST'])) return;
+  const auth = await requireUser(req, res);
+  if (!auth) return;
+
+  const keyCode = normalizeKey(req.body?.keyCode);
+  if (!isValidKeyFormat(keyCode)) {
+    return res.status(400).json({ success: false, error: 'กรุณากรอกรหัสให้ครบ 24 หลัก (6 กลุ่ม)' });
   }
+
+  const supabase = getAdminClient();
+  const email = auth.user.email;
+  const now = new Date().toISOString();
 
   try {
-    const { email, keyCode } = req.body;
-    const emailClean = (email || '').trim().toLowerCase();
-    const keyClean = normalizeKey(keyCode);
+    let hoursToAdd = null;
 
-    if (!emailClean) {
-      return res.status(400).json({ success: false, error: 'Email required' });
+    // 1) Product Key จากการซื้อ
+    const { data: claimedProduct } = await supabase
+      .from('product_keys')
+      .update({ is_used: true, status: 'REDEEMED', redeemed_at: now })
+      .eq('key_code', keyCode)
+      .eq('is_used', false)
+      .select('hours, bonus_hours');
+
+    if (claimedProduct && claimedProduct.length === 1) {
+      hoursToAdd = Number(claimedProduct[0].hours || 0) + Number(claimedProduct[0].bonus_hours || 0);
+      // บันทึกผู้ใช้คีย์ (คอลัมน์จาก migration — ถ้ายังไม่มีจะข้ามไปเงียบ ๆ)
+      await supabase.from('product_keys').update({ redeemed_by_email: email }).eq('key_code', keyCode);
+    } else {
+      // 2) Promo Key จาก Admin
+      const { data: promo } = await supabase.from('promo_keys').select('*').eq('key_code', keyCode).maybeSingle();
+      if (!promo) {
+        const { data: usedProduct } = await supabase.from('product_keys').select('key_code').eq('key_code', keyCode).maybeSingle();
+        return res
+          .status(usedProduct ? 409 : 404)
+          .json({ success: false, error: usedProduct ? 'รหัสนี้ถูกใช้งานไปแล้ว' : 'ไม่พบรหัสนี้ในระบบ' });
+      }
+      if (promo.used) {
+        return res.status(409).json({ success: false, error: 'รหัสนี้ถูกใช้งานไปแล้ว' });
+      }
+      if (promo.expires_at && new Date(promo.expires_at) < new Date()) {
+        return res.status(410).json({ success: false, error: 'รหัสนี้หมดอายุแล้ว' });
+      }
+      const { data: claimedPromo } = await supabase
+        .from('promo_keys')
+        .update({ used: true, used_by: email, used_at: now })
+        .eq('key_code', keyCode)
+        .eq('used', false)
+        .select('hours');
+      if (!claimedPromo || claimedPromo.length !== 1) {
+        return res.status(409).json({ success: false, error: 'รหัสนี้ถูกใช้งานไปแล้ว' });
+      }
+      hoursToAdd = Number(claimedPromo[0].hours || 0);
     }
 
-    if (keyClean.length < 29) {
-      return res.status(400).json({ success: false, error: 'กรุณากรอกรหัสให้ครบ 24 หลัก (6 กลุ่ม)!' });
+    if (!(hoursToAdd > 0)) {
+      return res.status(400).json({ success: false, error: 'คีย์นี้ไม่มีชั่วโมงให้เติม' });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    const { data: keys, error: keyErr } = await supabase
-      .from('promo_keys')
-      .select('*')
-      .eq('key_code', keyClean)
-      .single();
-
-    if (keyErr || !keys) {
-      return res.status(404).json({ success: false, error: 'ไม่พบรหัสนี้ในระบบ' });
-    }
-
-    if (keys.used) {
-      return res.status(400).json({ success: false, error: 'รหัสนี้ถูกใช้งานไปแล้ว' });
-    }
-
-    if (keys.expires_at && new Date(keys.expires_at) < new Date()) {
-      return res.status(400).json({ success: false, error: 'รหัสนี้หมดอายุแล้ว' });
-    }
-
-    const { data: users, error: userErr } = await supabase
-      .from('bot_config')
-      .select('*')
-      .eq('mt5_server', emailClean)
-      .single();
-
-    if (userErr || !users) {
-      return res.status(404).json({ success: false, error: 'ไม่พบบัญชีผู้ใช้นี้' });
-    }
-
-    const currentHours = Number(users.lot_size) || 0;
-    const newHours = currentHours + Number(keys.hours);
-
-    const { error: updateErr } = await supabase
-      .from('bot_config')
-      .update({ lot_size: newHours })
-      .eq('mt5_server', emailClean);
-
-    if (updateErr) {
-      return res.status(500).json({ success: false, error: 'ไม่สามารถอัปเดตชั่วโมงได้' });
-    }
-
-    const { error: keyUpdateErr } = await supabase
-      .from('promo_keys')
-      .update({ used: true, used_by: emailClean, used_at: new Date().toISOString() })
-      .eq('key_code', keyClean);
-
-    if (keyUpdateErr) {
-      return res.status(500).json({ success: false, error: 'ไม่สามารถอัปเดตรหัสได้' });
-    }
-
+    const hoursRemaining = await adjustHours(auth.row.id, hoursToAdd);
     return res.status(200).json({
       success: true,
-      message: `เติมชั่วโมงสำเร็จ! ได้รับ ${keys.hours} ชั่วโมง (รวม ${newHours.toFixed(2)} ชม.)`,
-      hoursRemaining: newHours
+      message: `เติมชั่วโมงสำเร็จ! ได้รับ +${hoursToAdd} ชั่วโมง (คงเหลือ ${hoursRemaining.toFixed(2)} ชม.)`,
+      hoursAdded: hoursToAdd,
+      hoursRemaining,
     });
   } catch (err) {
-    console.error('Redeem exception:', err);
-    return res.status(500).json({ success: false, error: 'เกิดข้อผิดพลาด: ' + err.message });
+    console.error('[auth/redeem] error:', err);
+    return res.status(500).json({ success: false, error: 'เกิดข้อผิดพลาดในการเติมคีย์ กรุณาลองใหม่' });
   }
 }

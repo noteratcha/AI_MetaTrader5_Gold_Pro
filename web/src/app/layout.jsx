@@ -3,30 +3,30 @@ import ClientLayoutWrapper from '../components/ClientLayoutWrapper';
 
 export const metadata = {
   title: {
-    default: 'GoldBot24 | AI Gold Commander Pro (XAUUSD Specialist)',
-    template: '%s | GoldBot24',
+    default: 'GoldBot24 · AI Gold Commander Pro',
+    template: '%s · GoldBot24',
   },
   applicationName: 'GoldBot24',
-  description: 'GoldBot24 - แพลตฟอร์มและระบบบอทเทรดทองคำ AI อัจฉริยะ 100% Pure Gold Specialist (XAUUSD) • บริการเติมชั่วโมง 1 บาท/ชม. ด้วยระบบ SlipOK PromptPay',
+  description: 'บอทเทรดทองคำ XAUUSD ด้วย AI เชื่อมต่อ MetaTrader 5 · คิดค่าบริการตามจริง 1 บาท/ชั่วโมง ชำระผ่าน PromptPay',
+  icons: { icon: '/favicon.ico', apple: '/app_icon.png' },
   openGraph: {
-    title: 'GoldBot24 | AI Gold Commander Pro',
-    description: 'GoldBot24 - แพลตฟอร์มระบบบอทเทรดทองคำ AI อัจฉริยะ 100% Pure Gold Specialist (XAUUSD) • ชั่วโมงละ 1 บาท',
+    title: 'GoldBot24 · AI Gold Commander Pro',
+    description: 'บอทเทรดทองคำ XAUUSD ด้วย AI · 1 บาท/ชั่วโมง',
     siteName: 'GoldBot24',
   },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#0a0b0f',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="th" suppressHydrationWarning>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/app_icon.png" />
-      </head>
-      <body suppressHydrationWarning style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <ClientLayoutWrapper>
-          {children}
-        </ClientLayoutWrapper>
+      <body suppressHydrationWarning>
+        <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
       </body>
     </html>
   );

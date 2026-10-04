@@ -1,154 +1,149 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-const AuthContext = createContext({
-  user: null,
-  isLoading: true,
-  isAuthModalOpen: false,
-  authModalTab: 'login',
-  openAuthModal: () => {},
-  closeAuthModal: () => {},
-  login: async () => {},
-  register: async () => {},
-  logout: () => {},
-  refreshUser: async () => {},
-  redeemKey: async () => {}
-});
+const SESSION_KEY = 'goldbot_session';
+const LEGACY_KEYS = ['goldbot_user', 'remember_mt5_login', 'remember_mt5_password', 'remember_mt5_server', 'supabase_url', 'supabase_anon_key'];
+
+const AuthContext = createContext(null);
+
+function readSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.token && parsed?.user ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState('login'); // 'login' | 'register'
+  const [authModalTab, setAuthModalTab] = useState('login');
+  const tokenRef = useRef(null);
 
-  // โหลดสถานะเข้าสู่ระบบจาก LocalStorage เมื่อเปิดเว็บ
-  useEffect(() => {
+  const persist = useCallback((token, nextUser) => {
+    tokenRef.current = token;
+    setUser(nextUser);
     try {
-      const saved = localStorage.getItem('goldbot_user');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setUser(parsed);
-        // ดึงชั่วโมงล่าสุดจาก Cloud
-        fetchLatestUser(parsed.email);
-      }
-    } catch (e) {
-      console.warn('Failed to parse saved user:', e);
-    } finally {
-      setIsLoading(false);
+      if (token && nextUser) localStorage.setItem(SESSION_KEY, JSON.stringify({ token, user: nextUser }));
+      else localStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* storage ใช้ไม่ได้ (private mode) — ยังทำงานต่อได้ในหน่วยความจำ */
     }
   }, []);
 
-  const fetchLatestUser = async (email) => {
-    if (!email) return;
-    try {
-      const res = await fetch(`/api/auth/me?email=${encodeURIComponent(email)}`);
-      const data = await res.json();
-      if (data.success && data.user) {
-        setUser((prev) => {
-          const updated = { ...prev, ...data.user };
-          localStorage.setItem('goldbot_user', JSON.stringify(updated));
-          return updated;
-        });
+  const logout = useCallback(() => persist(null, null), [persist]);
+
+  /** fetch ที่แนบ Token อัตโนมัติ และออกจากระบบเมื่อ Token หมดอายุ (401) */
+  const apiFetch = useCallback(
+    async (path, options = {}) => {
+      const headers = { ...(options.headers || {}) };
+      if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+      if (tokenRef.current) headers.Authorization = `Bearer ${tokenRef.current}`;
+      const res = await fetch(path, { ...options, headers });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = { success: false, error: 'การตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง' };
       }
-    } catch (e) {
-      // offline fallback
+      if (res.status === 401 && tokenRef.current) logout();
+      if (!res.ok || data.success === false) {
+        const err = new Error(data.error || `เกิดข้อผิดพลาด (HTTP ${res.status})`);
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    },
+    [logout]
+  );
+
+  const refreshUser = useCallback(async () => {
+    if (!tokenRef.current) return;
+    try {
+      const data = await apiFetch('/api/auth/me');
+      persist(tokenRef.current, data.user);
+    } catch {
+      /* ออฟไลน์ — ใช้ข้อมูลเดิมไปก่อน */
     }
-  };
+  }, [apiFetch, persist]);
 
-  const openAuthModal = (tab = 'login') => {
-    setAuthModalTab(tab);
-    setIsAuthModalOpen(true);
-  };
-
-  const closeAuthModal = () => {
-    setIsAuthModalOpen(false);
-  };
-
-  const login = async (email, password) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error || 'เข้าสู่ระบบไม่สำเร็จ');
+  useEffect(() => {
+    try {
+      LEGACY_KEYS.forEach((k) => localStorage.removeItem(k)); // session รุ่นเก่า (token ไม่มีลายเซ็น / รหัส MT5)
+    } catch {
+      /* ignore */
     }
-    setUser(data.user);
-    localStorage.setItem('goldbot_user', JSON.stringify(data.user));
-    closeAuthModal();
-    return data.user;
-  };
-
-  const register = async (email, password, displayName) => {
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, displayName })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error || 'สมัครสมาชิกไม่สำเร็จ');
+    const saved = readSession();
+    if (saved) {
+      tokenRef.current = saved.token;
+      setUser(saved.user);
+      refreshUser();
     }
-    setUser(data.user);
-    localStorage.setItem('goldbot_user', JSON.stringify(data.user));
-    closeAuthModal();
-    return data.user;
-  };
+    setIsLoading(false);
+  }, [refreshUser]);
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('goldbot_user');
-  };
+  const login = useCallback(
+    async (email, password) => {
+      const data = await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      persist(data.token, data.user);
+      setIsAuthModalOpen(false);
+      return data.user;
+    },
+    [apiFetch, persist]
+  );
 
-  const refreshUser = async () => {
-    if (user && user.email) {
-      await fetchLatestUser(user.email);
-    }
-  };
+  const register = useCallback(
+    async (email, password, displayName) => {
+      const data = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, displayName }) });
+      persist(data.token, data.user);
+      setIsAuthModalOpen(false);
+      return data.user;
+    },
+    [apiFetch, persist]
+  );
 
-  const redeemKey = async (keyCode) => {
-    if (!user || !user.email) {
-      throw new Error('กรุณาเข้าสู่ระบบก่อนเติมชั่วโมง');
-    }
-    const res = await fetch('/api/auth/redeem', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, keyCode })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error || 'ไม่สามารถเติมคีย์ได้');
-    }
-    setUser((prev) => {
-      const updated = { ...prev, hoursRemaining: data.hoursRemaining };
-      localStorage.setItem('goldbot_user', JSON.stringify(updated));
-      return updated;
-    });
-    return data;
-  };
+  const redeemKey = useCallback(
+    async (keyCode) => {
+      const data = await apiFetch('/api/auth/redeem', { method: 'POST', body: JSON.stringify({ keyCode }) });
+      if (user) persist(tokenRef.current, { ...user, hoursRemaining: data.hoursRemaining });
+      return data;
+    },
+    [apiFetch, persist, user]
+  );
 
-  return (
-    <AuthContext.Provider value={{
+  const value = useMemo(
+    () => ({
       user,
       isLoading,
+      isAdmin: Boolean(user?.isAdmin),
       isAuthModalOpen,
       authModalTab,
-      openAuthModal,
-      closeAuthModal,
       setAuthModalTab,
+      openAuthModal: (tab = 'login') => {
+        setAuthModalTab(tab);
+        setIsAuthModalOpen(true);
+      },
+      closeAuthModal: () => setIsAuthModalOpen(false),
       login,
       register,
       logout,
       refreshUser,
-      redeemKey
-    }}>
-      {children}
-    </AuthContext.Provider>
+      redeemKey,
+      apiFetch,
+    }),
+    [user, isLoading, isAuthModalOpen, authModalTab, login, register, logout, refreshUser, redeemKey, apiFetch]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
+  return ctx;
 }

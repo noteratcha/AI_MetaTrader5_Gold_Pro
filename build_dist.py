@@ -1,6 +1,6 @@
 """
 👑 AI MetaTrader 5 Gold Pro - Automated Binary Compiler (Nuitka / PyInstaller)
-เวอร์ชัน: v2026.1003.0025
+เวอร์ชัน: v2026.1004.2030
 สคริปต์คอมไพล์โค้ดเป็น Machine Code ไบนารีเพื่อป้องกันการ Reverse Engineering และป้องกันการแกะสูตรเทรด AI
 พร้อมสร้างแพ็กเกจ .ZIP สำหรับแจกจ่ายลูกค้าใช้งานเชิงพาณิชย์
 """
@@ -24,7 +24,7 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(PROJECT_ROOT, "dist")
 BUILD_DIR = os.path.join(PROJECT_ROOT, "build_tmp")
 APP_NAME = "AI_Gold_Commander_Pro"
-VERSION_STR = "v2026.1003.0025"
+VERSION_STR = "v2026.1004.2030"
 
 def check_compiler():
     """ตรวจสอบเครื่องมือคอมไพล์ในเครื่อง"""
