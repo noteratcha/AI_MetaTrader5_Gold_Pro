@@ -808,7 +808,7 @@ class MainTradingApp(ctk.CTk):
         self._build_metric_cards()
 
         body = ctk.CTkFrame(self.dashboard_view, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=20, pady=(0, 12))
+        body.pack(fill="both", expand=True, padx=20, pady=(0, 10))
         body.grid_columnconfigure(0, weight=7, uniform="body")
         body.grid_columnconfigure(1, weight=3, uniform="body")
         body.grid_rowconfigure(0, weight=1)
@@ -869,10 +869,10 @@ class MainTradingApp(ctk.CTk):
     def _build_top_header(self):
         """แถบหัวด้านบน: โลโก้, เวลาคงเหลือ (ชั่วโมง.นาที) และโปรไฟล์ผู้ใช้"""
         header = ctk.CTkFrame(self.dashboard_view, fg_color=COLOR_CARD_BG, height=60, corner_radius=0)
-        header.pack(fill="x", side="top", pady=(0, 12))
+        header.pack(fill="x", side="top", pady=(0, 10))
 
         h_inner = ctk.CTkFrame(header, fg_color="transparent")
-        h_inner.pack(fill="both", expand=True, padx=20, pady=10)
+        h_inner.pack(fill="both", expand=True, padx=20, pady=8)
 
         brand_frame = ctk.CTkFrame(h_inner, fg_color="transparent")
         brand_frame.pack(side="left")
@@ -965,7 +965,7 @@ class MainTradingApp(ctk.CTk):
     def _build_metric_cards(self):
         """การ์ดสรุปสถานะพอร์ตและราคาทองคำ 4 กล่องแนวนอน"""
         grid_frame = ctk.CTkFrame(self.dashboard_view, fg_color="transparent")
-        grid_frame.pack(fill="x", padx=14, pady=(0, 12))
+        grid_frame.pack(fill="x", padx=14, pady=(0, 10))
         grid_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="metric_cards")
 
         self.card_mt5 = self._create_stat_card(grid_frame, 0, "🖥", "บัญชี MT5", "รอเชื่อมต่อ...", "Server: กำลังตรวจสอบ", COLOR_CYAN_ACCENT)
@@ -977,16 +977,16 @@ class MainTradingApp(ctk.CTk):
         card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
         card.grid(row=0, column=col, padx=6, sticky="nsew")
         inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=16, pady=10)
+        inner.pack(fill="both", expand=True, padx=16, pady=7)
 
         top_row = ctk.CTkFrame(inner, fg_color="transparent")
         top_row.pack(fill="x")
         ctk.CTkLabel(top_row, text=icon, font=ctk.CTkFont(size=15)).pack(side="left", padx=(0, 6))
         ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
 
-        val_label = ctk.CTkLabel(inner, text=val_text, font=self._font(21, "bold"), text_color=accent_color)
-        val_label.pack(anchor="w", pady=(4, 0))
-        sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED)
+        val_label = ctk.CTkLabel(inner, text=val_text, font=self._font(19, "bold"), text_color=accent_color, height=26)
+        val_label.pack(anchor="w", pady=(2, 0))
+        sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
         sub_label.pack(anchor="w")
         return {"val_lbl": val_label, "sub_lbl": sub_label}
 
@@ -994,8 +994,16 @@ class MainTradingApp(ctk.CTk):
     # คอลัมน์ขวา: ควบคุมบอท / ข่าวถัดไป / แผนเทรด
     # ---------------------------------------------------------------------
     def _build_control_panel(self, parent):
-        card = self._card(parent, fill="x", pady=(0, 12))
-        self._card_title(parent=card, text="🎮 ควบคุมบอท")
+        card = self._card(parent, fill="x", pady=(0, 8))
+
+        head = ctk.CTkFrame(card, fg_color="transparent")
+        head.pack(fill="x", padx=14, pady=(10, 8))
+        ctk.CTkLabel(head, text="🎮 ควบคุมบอท", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        self.lbl_bot_state = ctk.CTkLabel(
+            head, text="  ● หยุดทำงาน  ", font=self._font(11, "bold"),
+            text_color=COLOR_TEXT_MUTED, fg_color="#1F2430", corner_radius=10, height=22,
+        )
+        self.lbl_bot_state.pack(side="right")
 
         self.btn_master_toggle = ctk.CTkButton(
             card,
@@ -1004,14 +1012,27 @@ class MainTradingApp(ctk.CTk):
             fg_color=COLOR_SUCCESS_GREEN,
             hover_color="#10A374",
             text_color="#06281C",
-            height=48,
+            height=42,
             corner_radius=10,
             command=self._on_toggle_bot,
         )
-        self.btn_master_toggle.pack(fill="x", padx=16)
+        self.btn_master_toggle.pack(fill="x", padx=14)
+
+        # สถิติย่อ 3 ช่อง: ออเดอร์เปิดอยู่ / กำไรลอยตัว / เวลาทำงาน
+        stats = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)
+        stats.pack(fill="x", padx=14, pady=(8, 0))
+        stats.grid_columnconfigure((0, 1, 2), weight=1, uniform="ctl_stats")
+        self.ctl_stat_labels = {}
+        for col, (key, title, init) in enumerate((("open", "ออเดอร์", "0"), ("float", "กำไรลอยตัว", "$0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
+            box = ctk.CTkFrame(stats, fg_color="transparent")
+            box.grid(row=0, column=col, sticky="nsew", pady=5)
+            ctk.CTkLabel(box, text=title, font=self._font(10), text_color=COLOR_TEXT_MUTED, height=16).pack()
+            val = ctk.CTkLabel(box, text=init, font=self._font(14, "bold"), text_color=COLOR_TEXT_PRIMARY, height=22)
+            val.pack()
+            self.ctl_stat_labels[key] = val
 
         row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=16, pady=(8, 6))
+        row.pack(fill="x", padx=14, pady=(8, 12))
         row.grid_columnconfigure(0, weight=1)
         self.btn_close_all = ctk.CTkButton(
             row,
@@ -1020,8 +1041,10 @@ class MainTradingApp(ctk.CTk):
             fg_color="#3A2226",
             hover_color="#4A2A2F",
             text_color=COLOR_DANGER_RED,
-            height=36,
+            text_color_disabled="#6E5458",
+            height=32,
             corner_radius=8,
+            state="disabled",
             command=self._on_click_close_all,
         )
         self.btn_close_all.grid(row=0, column=0, sticky="ew", padx=(0, 8))
@@ -1031,56 +1054,77 @@ class MainTradingApp(ctk.CTk):
             font=ctk.CTkFont(size=15),
             fg_color="#262B36",
             hover_color="#323846",
-            width=44,
-            height=36,
+            width=42,
+            height=32,
             corner_radius=8,
             command=self._on_toggle_sound,
         )
         self.btn_sound_toggle.grid(row=0, column=1)
-
-        self.lbl_bot_state = ctk.CTkLabel(card, text="● บอทหยุดทำงาน", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED)
-        self.lbl_bot_state.pack(anchor="w", padx=16, pady=(0, 10))
+        self._bot_started_at = None
 
     def _build_next_news_card(self, parent):
-        card = self._card(parent, fill="x", pady=(0, 12))
-        title_row = self._card_title(
-            card,
-            "📅 ข่าวสำคัญถัดไป (USD)",
-            lambda p: self._small_button(p, "ดูทั้งหมด", lambda: self.main_tabs.set(self.TAB_CALENDAR), width=74),
-        )
-        self.lbl_news_title = ctk.CTkLabel(card, text="กำลังโหลดปฏิทินข่าว...", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY, wraplength=300, justify="left")
-        self.lbl_news_title.pack(anchor="w", padx=16)
-        self.lbl_news_time = ctk.CTkLabel(card, text="", font=self._font(12), text_color=COLOR_TEXT_MUTED, justify="left")
-        self.lbl_news_time.pack(anchor="w", padx=16)
-        status_row = ctk.CTkFrame(card, fg_color="transparent")
-        status_row.pack(fill="x", padx=16, pady=(4, 12))
-        self.lbl_news_badge = ctk.CTkLabel(status_row, text="", font=self._font(10, "bold"), text_color="#101218", fg_color=COLOR_CARD_BG, corner_radius=6, height=20)
-        self.lbl_news_badge.pack(side="left", padx=(0, 8))
-        self.lbl_news_countdown = ctk.CTkLabel(status_row, text="", font=self._font(14, "bold"), text_color=COLOR_GOLD_PRIMARY)
-        self.lbl_news_countdown.pack(side="left")
+        card = self._card(parent, fill="x", pady=(0, 8))
+        body = ctk.CTkFrame(card, fg_color="transparent")
+        body.pack(fill="x", padx=14, pady=(8, 10))
+        body.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(body, text="📅 ข่าวสำคัญถัดไป · USD", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor="w", height=20).grid(row=0, column=0, sticky="w")
+        ctk.CTkButton(
+            body, text="ดูทั้งหมด ›", font=self._font(11, "bold"), fg_color="transparent", hover_color="#1F2430",
+            text_color=COLOR_CYAN_ACCENT, width=66, height=20, corner_radius=6,
+            command=lambda: self.main_tabs.set(self.TAB_CALENDAR),
+        ).grid(row=0, column=1, sticky="e")
+
+        self.lbl_news_title = ctk.CTkLabel(body, text="กำลังโหลดปฏิทินข่าว...", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY, anchor="w", height=22)
+        self.lbl_news_title.grid(row=1, column=0, sticky="w", pady=(2, 0))
+        self.lbl_news_badge = ctk.CTkLabel(body, text="", font=self._font(10, "bold"), text_color="#101218", fg_color=COLOR_CARD_BG, corner_radius=6, height=18)
+        self.lbl_news_badge.grid(row=1, column=1, sticky="e", pady=(2, 0))
+
+        self.lbl_news_time = ctk.CTkLabel(body, text="", font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="w", height=20)
+        self.lbl_news_time.grid(row=2, column=0, sticky="w")
+        self.lbl_news_countdown = ctk.CTkLabel(body, text="", font=self._font(13, "bold"), text_color=COLOR_GOLD_PRIMARY, height=20)
+        self.lbl_news_countdown.grid(row=2, column=1, sticky="e")
+
+    PLAN_ROWS = [
+        ("⚡", "P0 · SMC Hunt", "Plan 0: SMC-LiquidityHunt"),
+        ("🎯", "P1 · SR Bounce", "Plan 1: SR-SwingBounce"),
+        ("🌊", "P3 · BB-H1", "Plan 3: BB-H1-Reversion"),
+        ("📈", "P4 · MA M15", "Plan 4: MA-Cross-Trend"),
+        ("👑", "P5 · MA H1", "Plan 5: MA-Cross-H1-Trend"),
+    ]
 
     def _build_plans_card(self, parent):
         card = self._card(parent, fill="both", expand=True)
-        self._card_title(card, "⚡ แผนเทรดทองคำ", lambda p: self._small_button(p, "สถิติละเอียด", self._open_user_stats_modal, width=92))
+        head = ctk.CTkFrame(card, fg_color="transparent")
+        head.pack(fill="x", padx=14, pady=(8, 4))
+        ctk.CTkLabel(head, text="⚡ ผลงาน 5 แผนเทรด", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        ctk.CTkButton(
+            head, text="ละเอียด ›", font=self._font(11, "bold"), fg_color="transparent", hover_color="#1F2430",
+            text_color=COLOR_CYAN_ACCENT, width=64, height=24, corner_radius=6, command=self._open_user_stats_modal,
+        ).pack(side="right")
 
-        plans = [
-            ("⚡", "Plan 0 · SMC-LiquidityHunt", "Plan 0: SMC-LiquidityHunt"),
-            ("🎯", "Plan 1 · SR-SwingBounce", "Plan 1: SR-SwingBounce"),
-            ("🌊", "Plan 3 · BB-H1-Reversion", "Plan 3: BB-H1-Reversion"),
-            ("📈", "Plan 4 · MA-Cross M15", "Plan 4: MA-Cross-Trend"),
-            ("👑", "Plan 5 · MA-Cross H1", "Plan 5: MA-Cross-H1-Trend"),
-        ]
-        # เลื่อนดูได้เมื่อจอเตี้ย (เช่น 1366x768)
-        holder = ctk.CTkScrollableFrame(card, fg_color="transparent", height=60)
-        holder.pack(fill="both", expand=True, padx=6, pady=(0, 8))
+        table = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)
+        table.pack(fill="x", padx=14, pady=(0, 10))
+        table.grid_columnconfigure(0, weight=1)
+        for col, (title, anchor) in enumerate((("แผน", "w"), ("ไม้", "e"), ("WR", "e"), ("กำไร", "e"))):
+            ctk.CTkLabel(table, text=title, font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor, height=18).grid(
+                row=0, column=col, sticky="ew", padx=(12 if col == 0 else 4, 12 if col == 3 else 4), pady=(4, 0)
+            )
+
+        # plan_stat_badges: {ชื่อแผนเต็ม: (label ไม้, label WR, label กำไร)}
         self.plan_stat_badges = {}
-        for icon, label, full_plan_name in plans:
-            row = ctk.CTkFrame(holder, fg_color="#171A21", corner_radius=8)
-            row.pack(fill="x", padx=4, pady=2)
-            ctk.CTkLabel(row, text=f"{icon}  {label}", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY, height=30).pack(side="left", padx=10)
-            stat_lbl = ctk.CTkLabel(row, text="0 ไม้", font=self._font(11), text_color=COLOR_TEXT_MUTED)
-            stat_lbl.pack(side="right", padx=10)
-            self.plan_stat_badges[full_plan_name] = stat_lbl
+        for r, (icon, short, full) in enumerate(self.PLAN_ROWS, start=1):
+            last = r == len(self.PLAN_ROWS)
+            pady = (0, 4) if last else 0
+            ctk.CTkLabel(table, text=f"{icon}  {short}", font=self._font(11, "bold"), text_color=COLOR_TEXT_PRIMARY, anchor="w", height=21).grid(
+                row=r, column=0, sticky="ew", padx=(12, 4), pady=pady
+            )
+            cells = []
+            for col in (1, 2, 3):
+                lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "$0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=21, width=40 if col < 3 else 64)
+                lbl.grid(row=r, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=pady)
+                cells.append(lbl)
+            self.plan_stat_badges[full] = tuple(cells)
 
     # ---------------------------------------------------------------------
     # คอลัมน์ซ้าย: แท็บ Console / ประวัติเทรด / ปฏิทินข่าว
@@ -1403,10 +1447,8 @@ class MainTradingApp(ctk.CTk):
             self.lbl_news_badge.configure(text="", fg_color=COLOR_CARD_BG)
             return
         self.lbl_news_badge.configure(text="  ผลกระทบสูง  ", fg_color=self.IMPACT_COLORS["High"])
-        self.lbl_news_title.configure(text=ev["title"])
-        detail = f"{econ_calendar.format_day(ev['time'])} {ev['time'].strftime('%H:%M')} น."
-        if ev["forecast"] or ev["previous"]:
-            detail += f" · คาด {ev['forecast'] or '—'} · ก่อน {ev['previous'] or '—'}"
+        self.lbl_news_title.configure(text=ev["title"] if len(ev["title"]) <= 30 else ev["title"][:29] + "…")
+        detail = f"{econ_calendar.format_day(ev['time'])} · {ev['time'].strftime('%H:%M')} น."
         self.lbl_news_time.configure(text=detail)
         countdown = econ_calendar.format_countdown(ev["time"])
         soon = (ev["time"] - econ_calendar.datetime.now(econ_calendar.BANGKOK)).total_seconds() < 3600
@@ -1447,21 +1489,23 @@ class MainTradingApp(ctk.CTk):
             bot_ctrl.pause_bot()
 
     def _on_bot_status_changed(self, status: str):
-        """อัปเดตสีและข้อความของปุ่ม Master เมื่อสถานะเปลี่ยน"""
+        """อัปเดตปุ่มหลักและป้ายสถานะเมื่อสถานะบอทเปลี่ยน"""
         if not hasattr(self, "btn_master_toggle"):
             return
         if status == "RUNNING":
+            self._bot_started_at = self._bot_started_at or time.time()
             self.btn_master_toggle.configure(text="⏸  หยุดชั่วคราว", fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, text_color="#1A1406")
             self.lbl_metering_status.configure(text="● กำลังนับเวลา", text_color=COLOR_SUCCESS_GREEN)
-            self.lbl_bot_state.configure(text="● บอทกำลังทำงาน — สแกนตลาดทุก 20 วินาที", text_color=COLOR_SUCCESS_GREEN)
+            self.lbl_bot_state.configure(text="  ● กำลังทำงาน  ", text_color=COLOR_SUCCESS_GREEN, fg_color="#12301F")
         elif status == "PAUSED":
             self.btn_master_toggle.configure(text="▶  ทำงานต่อ", fg_color=COLOR_SUCCESS_GREEN, hover_color="#10A374", text_color="#06281C")
             self.lbl_metering_status.configure(text="⏸ หยุดนับเวลา", text_color=COLOR_TEXT_MUTED)
-            self.lbl_bot_state.configure(text="● หยุดชั่วคราว (ไม่ตัดเวลา)", text_color=COLOR_GOLD_PRIMARY)
+            self.lbl_bot_state.configure(text="  ⏸ หยุดชั่วคราว  ", text_color=COLOR_GOLD_PRIMARY, fg_color="#2E2410")
         else:  # STOPPED
+            self._bot_started_at = None
             self.btn_master_toggle.configure(text="▶  เริ่มการทำงานบอท", fg_color=COLOR_SUCCESS_GREEN, hover_color="#10A374", text_color="#06281C")
             self.lbl_metering_status.configure(text="⏸ หยุดนับเวลา", text_color=COLOR_TEXT_MUTED)
-            self.lbl_bot_state.configure(text="● บอทหยุดทำงาน", text_color=COLOR_TEXT_MUTED)
+            self.lbl_bot_state.configure(text="  ● หยุดทำงาน  ", text_color=COLOR_TEXT_MUTED, fg_color="#1F2430")
 
     def _on_time_expired(self):
         """เมื่อชั่วโมงการใช้งานหมดลง"""
@@ -1626,21 +1670,39 @@ class MainTradingApp(ctk.CTk):
                     self.card_trend["val_lbl"].configure(text=h4_trend, text_color=trend_color)
                     self.card_trend["sub_lbl"].configure(text=f"H4 MA10/30 {h4_pct:+.2f}% · Strict Pro-Trend")
 
-                # อัปเดตสถิติการเทรดสดบนป้ายแผนการเทรด 5 แผน
+                # อัปเดตสถิติ 5 แผน (ตาราง: ไม้ / WR / กำไร)
                 if hasattr(self, 'plan_stat_badges'):
                     cur_u = license_mgr.get_current_user()
-                    u_stats = stats_mgr.get_user_stats(cur_u.get("user_id"))
-                    u_plans = u_stats.get("plans", {})
-                    for full_pname, stat_lbl in self.plan_stat_badges.items():
+                    u_plans = stats_mgr.get_user_stats(cur_u.get("user_id")).get("plans", {})
+                    for full_pname, (lbl_tr, lbl_wr, lbl_pf) in self.plan_stat_badges.items():
                         ps = u_plans.get(full_pname, {})
                         tr = ps.get("total_trades", 0)
                         wr = ps.get("win_rate_pct", 0.0)
                         prof = ps.get("total_profit_usd", 0.0)
-                        prof_sign = "+" if prof >= 0 else "-"
-                        stat_lbl.configure(
-                            text=f"{tr} ไม้ · {wr:.0f}% · {prof_sign}${abs(prof):.2f}",
+                        lbl_tr.configure(text=str(tr), text_color=COLOR_TEXT_PRIMARY if tr else COLOR_TEXT_MUTED)
+                        lbl_wr.configure(text=f"{wr:.0f}%" if tr else "—", text_color=COLOR_GOLD_PRIMARY if tr else COLOR_TEXT_MUTED)
+                        lbl_pf.configure(
+                            text=f"{'+' if prof >= 0 else '-'}${abs(prof):.2f}",
                             text_color=COLOR_SUCCESS_GREEN if prof > 0 else (COLOR_DANGER_RED if prof < 0 else COLOR_TEXT_MUTED),
                         )
+
+                # สถิติย่อในแผงควบคุม
+                if hasattr(self, 'ctl_stat_labels'):
+                    n_open = len(telemetry.get("open_positions") or [])
+                    self.ctl_stat_labels["open"].configure(text=str(n_open), text_color=COLOR_CYAN_ACCENT if n_open else COLOR_TEXT_PRIMARY)
+                    self.ctl_stat_labels["float"].configure(
+                        text=f"{'+' if flt >= 0 else '-'}${abs(flt):,.2f}",
+                        text_color=COLOR_SUCCESS_GREEN if flt > 0 else (COLOR_DANGER_RED if flt < 0 else COLOR_TEXT_PRIMARY),
+                    )
+                    if self._bot_started_at and bot_ctrl.is_active and not bot_ctrl.is_paused:
+                        el = int(time.time() - self._bot_started_at)
+                        self.ctl_stat_labels["uptime"].configure(text=f"{el // 3600:02d}:{el % 3600 // 60:02d}:{el % 60:02d}", text_color=COLOR_SUCCESS_GREEN)
+                    elif not bot_ctrl.is_active:
+                        self.ctl_stat_labels["uptime"].configure(text="--:--:--", text_color=COLOR_TEXT_MUTED)
+                    self.btn_close_all.configure(
+                        state="normal" if n_open else "disabled",
+                        text=f"⚠ ปิดทุกออเดอร์ ({n_open})" if n_open else "⚠ ปิดทุกออเดอร์",
+                    )
 
                 # ประวัติการเทรด / ปฏิทินข่าว (โหลดในเธรดเบื้องหลัง แล้ววาดบน UI thread)
                 self._ui_tick += 1
