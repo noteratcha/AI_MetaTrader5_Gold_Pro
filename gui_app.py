@@ -1115,6 +1115,10 @@ class MainTradingApp(ctk.CTk):
             val = ctk.CTkLabel(box, text=init, font=self._font(14, "bold"), text_color=COLOR_TEXT_PRIMARY, height=22)
             val.pack()
             self.ctl_stat_labels[key] = val
+            if key == "open":  # กดจำนวนออเดอร์ → ไปแท็บออเดอร์ที่เปิดอยู่
+                for w in (box, val):
+                    w.configure(cursor="hand2")
+                    w.bind("<Button-1>", lambda e: self.main_tabs.set(self.TAB_POSITIONS))
 
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(8, 12))
@@ -1215,6 +1219,7 @@ class MainTradingApp(ctk.CTk):
     # คอลัมน์ซ้าย: แท็บ Console / ประวัติเทรด / ปฏิทินข่าว
     # ---------------------------------------------------------------------
     TAB_CONSOLE = "🖥  Console"
+    TAB_POSITIONS = "📌  ออเดอร์ที่เปิดอยู่"
     TAB_HISTORY = "📋  ประวัติการเทรด"
     TAB_CALENDAR = "📅  ปฏิทินเศรษฐกิจ"
 
@@ -1235,10 +1240,11 @@ class MainTradingApp(ctk.CTk):
         )
         self.main_tabs.pack(fill="both", expand=True)
         self.main_tabs._segmented_button.configure(font=self._font(13, "bold"))
-        for name in (self.TAB_CONSOLE, self.TAB_HISTORY, self.TAB_CALENDAR):
+        for name in (self.TAB_CONSOLE, self.TAB_POSITIONS, self.TAB_HISTORY, self.TAB_CALENDAR):
             self.main_tabs.add(name)
 
         self._build_terminal_console(self.main_tabs.tab(self.TAB_CONSOLE))
+        self._build_positions_tab(self.main_tabs.tab(self.TAB_POSITIONS))
         self._build_history_tab(self.main_tabs.tab(self.TAB_HISTORY))
         self._build_calendar_tab(self.main_tabs.tab(self.TAB_CALENDAR))
         self.main_tabs.set(self.TAB_CONSOLE)
@@ -1320,6 +1326,150 @@ class MainTradingApp(ctk.CTk):
                 self.txt_console.insert("end", text, tag)
         self.txt_console.configure(state="disabled")
         self.txt_console.see("end")
+
+    # ---- ออเดอร์ที่เปิดอยู่ (เรียลไทม์) ----
+    POSITION_COLUMNS = [
+        ("Ticket", 78, "w"),
+        ("ฝั่ง", 44, "center"),
+        ("แผน", 120, "w"),
+        ("Lot", 36, "e"),
+        ("ราคาเข้า", 70, "e"),
+        ("ราคาปัจจุบัน", 80, "e"),
+        ("Stop Loss", 86, "e"),
+        ("Take Profit", 78, "e"),
+        ("ถือมา", 56, "e"),
+        ("กำไร", 72, "e"),
+        ("", 46, "center"),
+    ]
+
+    def _build_positions_tab(self, parent):
+        top = ctk.CTkFrame(parent, fg_color="transparent")
+        top.pack(fill="x", padx=6, pady=(0, 8))
+        self.lbl_positions_summary = ctk.CTkLabel(top, text="ไม่มีออเดอร์ที่เปิดอยู่", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED)
+        self.lbl_positions_summary.pack(side="left")
+        ctk.CTkLabel(top, text="อัปเดตอัตโนมัติ · เวลาเปิดตามเซิร์ฟเวอร์ MT5", font=self._font(10), text_color=COLOR_TEXT_MUTED).pack(side="right")
+
+        table = ctk.CTkFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
+        table.pack(fill="both", expand=True, padx=6, pady=(0, 4))
+        head = ctk.CTkFrame(table, fg_color="transparent")
+        head.pack(fill="x", padx=6, pady=(8, 0))
+        self._configure_position_grid(head)
+        for col, (title, _, anchor) in enumerate(self.POSITION_COLUMNS):
+            ctk.CTkLabel(head, text=title, font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor, height=22).grid(row=0, column=col, sticky="ew", padx=4)
+        ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).pack(fill="x", padx=10, pady=(4, 0))
+
+        self.positions_body = ctk.CTkScrollableFrame(table, fg_color="transparent")
+        self.positions_body.pack(fill="both", expand=True, padx=0, pady=(0, 6))
+        self.lbl_positions_empty = ctk.CTkLabel(
+            self.positions_body, text="ยังไม่มีออเดอร์ที่เปิดอยู่ — บอทกำลังรอสัญญาณที่เข้าเงื่อนไข",
+            font=self._font(12), text_color=COLOR_TEXT_MUTED,
+        )
+        self.lbl_positions_empty.pack(pady=40)
+        self._position_rows = {}
+
+    def _configure_position_grid(self, frame):
+        for col, (_, width, _) in enumerate(self.POSITION_COLUMNS):
+            frame.grid_columnconfigure(col, minsize=width, weight=1 if col == 2 else 0)
+
+    @staticmethod
+    def _fmt_duration(seconds):
+        seconds = max(0, int(seconds))
+        d, rem = divmod(seconds, 86400)
+        h, rem = divmod(rem, 3600)
+        m = rem // 60
+        if d:
+            return f"{d}ว {h}ชม"
+        if h:
+            return f"{h}ชม {m}น"
+        return f"{m} นาที"
+
+    def _render_positions(self, positions, server_time):
+        positions = sorted(positions or [], key=lambda p: p.get("time", 0), reverse=True)
+        tickets = [p["ticket"] for p in positions]
+
+        # สร้าง/ลบแถวเฉพาะเมื่อรายการ ticket เปลี่ยน (นอกนั้นอัปเดตข้อความในที่เดิม)
+        if tickets != list(self._position_rows.keys()):
+            for row in self._position_rows.values():
+                row["frame"].destroy()
+            self._position_rows = {}
+            for t in tickets:
+                frame = ctk.CTkFrame(self.positions_body, fg_color="#14171E", corner_radius=8)
+                frame.pack(fill="x", padx=4, pady=2)
+                self._configure_position_grid(frame)
+                cells = []
+                for col, (_, _, anchor) in enumerate(self.POSITION_COLUMNS[:-1]):
+                    lbl = ctk.CTkLabel(frame, text="", font=self._font(12), anchor=anchor, height=32)
+                    lbl.grid(row=0, column=col, sticky="ew", padx=4)
+                    cells.append(lbl)
+                btn = ctk.CTkButton(
+                    frame, text="ปิด", width=40, height=24, corner_radius=6, font=self._font(11, "bold"),
+                    fg_color="#3A2226", hover_color="#4A2A2F", text_color=COLOR_DANGER_RED,
+                    command=lambda tk_=t: self._on_close_single(tk_),
+                )
+                btn.grid(row=0, column=len(self.POSITION_COLUMNS) - 1, padx=4)
+                self._position_rows[t] = {"frame": frame, "cells": cells}
+            if tickets:
+                self.lbl_positions_empty.pack_forget()
+            else:
+                self.lbl_positions_empty.pack(pady=40)
+
+        total_profit = 0.0
+        total_lot = 0.0
+        buys = sells = 0
+        for p in positions:
+            is_buy = p.get("type") == "BUY"
+            buys += is_buy
+            sells += not is_buy
+            profit = float(p.get("profit", 0.0)) + float(p.get("swap", 0.0))
+            total_profit += profit
+            total_lot += float(p.get("volume", 0.0))
+            open_price = float(p.get("price_open", 0.0))
+            sl, tp = float(p.get("sl", 0.0)), float(p.get("tp", 0.0))
+            # SL ล็อกกำไรแล้ว = SL อยู่ฝั่งกำไรของราคาเข้า (Early Profit Lock)
+            locked = sl > 0 and ((is_buy and sl > open_price) or (not is_buy and sl < open_price))
+            sl_text = "ไม่มี" if sl <= 0 else (f"🔒 {sl:,.2f}" if locked else f"{sl:,.2f}")
+            held = self._fmt_duration(server_time - p.get("time", server_time)) if server_time and p.get("time") else "—"
+            values = [
+                f"#{p['ticket']}",
+                p.get("type", ""),
+                (p.get("comment") or "Manual")[:20],
+                f"{float(p.get('volume', 0)):.2f}",
+                f"{open_price:,.2f}",
+                f"{float(p.get('price_current', 0)):,.2f}",
+                sl_text,
+                f"{tp:,.2f}" if tp > 0 else "รันเทรนด์",
+                held,
+                f"{'+' if profit >= 0 else '-'}${abs(profit):,.2f}",
+            ]
+            colors = [
+                COLOR_TEXT_MUTED,
+                COLOR_SUCCESS_GREEN if is_buy else COLOR_DANGER_RED,
+                COLOR_TEXT_PRIMARY,
+                COLOR_TEXT_PRIMARY,
+                COLOR_TEXT_PRIMARY,
+                COLOR_GOLD_PRIMARY,
+                COLOR_CYAN_ACCENT if locked else COLOR_TEXT_MUTED,
+                COLOR_TEXT_MUTED,
+                COLOR_TEXT_MUTED,
+                COLOR_SUCCESS_GREEN if profit > 0 else (COLOR_DANGER_RED if profit < 0 else COLOR_TEXT_MUTED),
+            ]
+            for lbl, v, c in zip(self._position_rows[p["ticket"]]["cells"], values, colors):
+                if lbl.cget("text") != v:
+                    lbl.configure(text=v, text_color=c)
+
+        if positions:
+            self.lbl_positions_summary.configure(
+                text=f"{len(positions)} ไม้ (BUY {buys} · SELL {sells}) · รวม {total_lot:.2f} Lot · กำไรลอยตัว {'+' if total_profit >= 0 else '-'}${abs(total_profit):,.2f}",
+                text_color=COLOR_SUCCESS_GREEN if total_profit > 0 else (COLOR_DANGER_RED if total_profit < 0 else COLOR_TEXT_PRIMARY),
+            )
+        else:
+            self.lbl_positions_summary.configure(text="ไม่มีออเดอร์ที่เปิดอยู่", text_color=COLOR_TEXT_MUTED)
+
+    def _on_close_single(self, ticket):
+        if not messagebox.askyesno("ยืนยันการปิดออเดอร์", f"ต้องการปิดออเดอร์ #{ticket} ทันทีหรือไม่?"):
+            return
+        ok, msg = bot_ctrl.close_position_by_ticket(ticket)
+        (messagebox.showinfo if ok else messagebox.showwarning)("ผลการปิดออเดอร์", msg)
 
     # ---- ประวัติการเทรด (5 รายการต่อหน้า) ----
     HISTORY_PAGE_SIZE = 5
@@ -1802,6 +1952,10 @@ class MainTradingApp(ctk.CTk):
                             text=f"{'+' if prof >= 0 else '-'}${abs(prof):.2f}",
                             text_color=COLOR_SUCCESS_GREEN if prof > 0 else (COLOR_DANGER_RED if prof < 0 else COLOR_TEXT_MUTED),
                         )
+
+                # ออเดอร์ที่เปิดอยู่ (อัปเดตทุก ~1 วินาที)
+                if hasattr(self, 'positions_body') and self._ui_tick % 2 == 0:
+                    self._render_positions(telemetry.get("open_positions"), telemetry.get("server_time", 0))
 
                 # สถิติย่อในแผงควบคุม
                 if hasattr(self, 'ctl_stat_labels'):

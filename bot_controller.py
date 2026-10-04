@@ -221,12 +221,29 @@ class BotController:
                         "profit": pos.profit,
                         "sl": pos.sl,
                         "tp": pos.tp,
-                        "comment": pos.comment
+                        "comment": pos.comment,
+                        "price_current": pos.price_current,
+                        "swap": pos.swap,
+                        "time": int(pos.time),  # เวลาเปิดไม้ (เวลาเซิร์ฟเวอร์ MT5)
                     })
+                tick_now = mt5.symbol_info_tick("XAUUSD")
+                data["server_time"] = int(tick_now.time) if tick_now else 0
         except Exception:
             pass
 
         return data
+
+    def close_position_by_ticket(self, ticket: int) -> tuple[bool, str]:
+        """ปิดออเดอร์เดียวตาม ticket (ใช้ close_position ของบอท: บันทึกประวัติ/สถิติครบ)"""
+        try:
+            positions = mt5.positions_get(ticket=int(ticket))
+            if not positions:
+                return False, f"ไม่พบออเดอร์ #{ticket} (อาจถูกปิดไปแล้ว)"
+            if bot_core.close_position(positions[0], comment="Manual Close (GUI)"):
+                return True, f"ปิดออเดอร์ #{ticket} สำเร็จ"
+            return False, f"ปิดออเดอร์ #{ticket} ไม่สำเร็จ — ดูรายละเอียดใน Console"
+        except Exception as e:
+            return False, f"เกิดข้อผิดพลาด: {e}"
 
     def close_all_positions(self) -> tuple[int, str]:
         """ฟังก์ชัน Emergency: ปิดทุกออเดอร์ในพอร์ตทันที"""
