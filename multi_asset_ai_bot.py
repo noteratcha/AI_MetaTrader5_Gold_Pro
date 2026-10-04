@@ -868,7 +868,7 @@ def main():
         pass
 
     print(f"\n{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}")
-    print(f"{Colors.BOLD}🪙 [AI BOT] {BOT_NAME} v{BOT_VERSION} Started{Colors.RESET}")
+    print(f"{Colors.BOLD}🏆 [AI BOT] {BOT_NAME} v{BOT_VERSION} Started{Colors.RESET}")
     print(f"{Colors.GREEN}{Colors.BOLD}[ASSET FOCUS]: XAUUSD (Gold Specialist 100%){Colors.RESET}")
     print(f"{Colors.CYAN}{Colors.BOLD}[ACTIVE PLANS]: Plan 0 (SMC), Plan 1 (Bounce), Plan 3 (BB-H1 Reversion), Plan 4 (MA-Cross-Trend M15), Plan 5 (MA-Cross-H1-Trend H1){Colors.RESET}")
     print(f"{Colors.YELLOW}{Colors.BOLD}[RISK/RRR]: RRR 1:1.50 | SL 0.75 ATR | Early Profit Lock +0.35 ATR{Colors.RESET}")
@@ -1335,7 +1335,7 @@ def main():
                 if is_in_zone or has_position:
                     h1_trend_label = f"{Colors.GREEN}UPTREND [^]{Colors.RESET}" if is_uptrend_h1 else f"{Colors.RED}DOWNTREND [v]{Colors.RESET}"
                     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}")
-                    print(f"[TIME: {time.strftime('%H:%M:%S')}] 🪙 ASSET: {Colors.YELLOW}XAUUSD (GOLD){Colors.RESET} {sym_mode_tag} | v{BOT_VERSION} | Spread: {spread_pts} pts | RRR: 1:{symbol_rrr:.1f}")
+                    print(f"[TIME: {time.strftime('%H:%M:%S')}] 🏆 ASSET: {Colors.YELLOW}XAUUSD (GOLD){Colors.RESET} {sym_mode_tag} | v{BOT_VERSION} | Spread: {spread_pts} pts | RRR: 1:{symbol_rrr:.1f}")
                     print(f"{Colors.CYAN}------------------------------------------------------------{Colors.RESET}")
                     print(f"Gold Price   : {Colors.BOLD}{close_price:.{digits}f}{Colors.RESET} | ATR(14): {atr_val:.{digits}f}")
                     print(f"H4 Regime    : {h4_trend_color}{Colors.BOLD}{h4_trend_text}{Colors.RESET} | H1 Trend: {h1_trend_label}")
@@ -1353,7 +1353,7 @@ def main():
                     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}\n")
                 else:
                     # ถ้ารอนอกโซน แสดงรายงานกระชับ 1 บรรทัดสดๆ สำหรับทองคำ
-                    print(f"[{time.strftime('%H:%M:%S')}] 🪙 {Colors.YELLOW}XAUUSD{Colors.RESET} Price: {Colors.BOLD}{close_price:>{digits+7}.{digits}f}{Colors.RESET} | {h4_badge} | AI: UP {Colors.GREEN}{prob[1]:.1%}{Colors.RESET} | DOWN {Colors.RED}{prob[0]:.1%}{Colors.RESET} | {status_text}{div_tag} (M15: {ma5_val:.1f}/{ma10_val:.1f} | H1: {ma5_h1_val:.1f}/{ma10_h1_val:.1f} | Sup: {support:.{digits}f} | Res: {resistance:.{digits}f})")
+                    print(f"[{time.strftime('%H:%M:%S')}] 🏆 {Colors.YELLOW}XAUUSD{Colors.RESET} Price: {Colors.BOLD}{close_price:>{digits+7}.{digits}f}{Colors.RESET} | {h4_badge} | AI: UP {Colors.GREEN}{prob[1]:.1%}{Colors.RESET} | DOWN {Colors.RED}{prob[0]:.1%}{Colors.RESET} | {status_text}{div_tag} (M15: {ma5_val:.1f}/{ma10_val:.1f} | H1: {ma5_h1_val:.1f}/{ma10_h1_val:.1f} | Sup: {support:.{digits}f} | Res: {resistance:.{digits}f})")
                 
                 # แคชสถานะเรดาร์แบบ Real-time ให้สตรีมขึ้นเว็บอัตโนมัติ
                 is_alert_zone = bool(is_sweep_buy or is_sweep_sell or near_support or near_resistance or breakout_buy or breakout_sell or bb_buy_confirm or bb_sell_confirm or ma_cross_buy_confirm or ma_cross_sell_confirm or ma_cross_h1_up or ma_cross_h1_down or is_in_zone or bull_div_active or bear_div_active)

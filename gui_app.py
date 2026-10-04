@@ -826,7 +826,7 @@ class MainTradingApp(ctk.CTk):
 
         ctk.CTkLabel(
             brand_text_box,
-            text="v2026.1004.2030 • 🪙 100% PURE GOLD SPECIALIST (XAUUSD) • GoldBot24",
+            text="v2026.1004.2030 • 🏆 100% PURE GOLD SPECIALIST (XAUUSD) • GoldBot24",
             font=ctk.CTkFont(family="Segoe UI", size=11),
             text_color=COLOR_TEXT_MUTED
         ).pack(anchor="w")
@@ -958,7 +958,7 @@ class MainTradingApp(ctk.CTk):
         # การ์ด 3: ราคาทองคำ XAUUSD
         self.card_gold = self._create_stat_card(
             grid_frame, 2,
-            icon="🪙",
+            icon="🏆",
             title="ราคาทองคำ (XAUUSD)",
             val_text="0.00",
             sub_text="Spread: 0 pts | M15 Active",
@@ -1209,7 +1209,7 @@ class MainTradingApp(ctk.CTk):
         # ข้อความเริ่มต้น
         self.txt_console.insert(
             "end",
-            f"=== 🪙 AI MetaTrader 5 (FBS) Gold Pro v2026.1004.2030 Started ===\n"
+            f"=== 🏆 AI MetaTrader 5 (FBS) Gold Pro v2026.1004.2030 Started ===\n"
             f"• ระบบโฟกัสทองคำ XAUUSD แบบ 100% Specialist | Sweet Spot RRR 1:1.50 | SL 0.75 ATR\n"
             f"• ระบบคิดค่าบริการ 1 บาท/ชั่วโมง (นับเฉพาะเวลาเปิดบอท) | รูปแบบเวลาคงเหลือ: ชั่วโมง.นาที (HH.MM)\n"
             f"• กดปุ่ม '▶️ เริ่มต้นการทำงานบอท' เพื่อเริ่มการวิเคราะห์แท่งเทียน M15/H1 และเข้าเทรดอัตโนมัติ\n\n"
