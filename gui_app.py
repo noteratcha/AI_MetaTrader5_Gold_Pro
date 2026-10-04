@@ -830,7 +830,9 @@ class MainTradingApp(ctk.CTk):
         self._refresh_calendar_async()
 
         # ตรวจสอบอัปเดตเวอร์ชันซอฟต์แวร์อัตโนมัติแบบเงียบๆ หลังเปิดหน้าจอ 3 วินาที
-        self.after(3000, lambda: self._check_app_updates(silent_if_latest=True))
+        self._update_result = None
+        self._last_update_check = 0.0
+        self.after(800, self._start_update_check)
 
     # ---------------------------------------------------------------------
     # ส่วนประกอบ UI ใช้ซ้ำ
@@ -869,101 +871,170 @@ class MainTradingApp(ctk.CTk):
     # ---------------------------------------------------------------------
     # Header + การ์ดสรุป
     # ---------------------------------------------------------------------
+    STORE_URL = "https://goldbot24.vercel.app/store"
+    DOWNLOAD_URL = "https://goldbot24.vercel.app/download"
+    WEB_URL = "https://goldbot24.vercel.app"
+    LOW_HOURS_MINUTES = 5 * 60
+
     def _build_top_header(self):
-        """แถบหัวด้านบน: โลโก้, เวลาคงเหลือ (ชั่วโมง.นาที) และโปรไฟล์ผู้ใช้"""
+        """แถบบน: แบรนด์ + สถานะเวอร์ชัน | กระเป๋าเวลา (เติมคีย์/ซื้อชั่วโมง) | เมนูผู้ใช้"""
         header = ctk.CTkFrame(self.dashboard_view, fg_color=COLOR_CARD_BG, height=60, corner_radius=0)
         header.pack(fill="x", side="top", pady=(0, 10))
-
         h_inner = ctk.CTkFrame(header, fg_color="transparent")
         h_inner.pack(fill="both", expand=True, padx=20, pady=8)
 
-        brand_frame = ctk.CTkFrame(h_inner, fg_color="transparent")
-        brand_frame.pack(side="left")
-        ctk.CTkLabel(brand_frame, text="👑", font=ctk.CTkFont(size=24)).pack(side="left", padx=(0, 10))
-        brand_text_box = ctk.CTkFrame(brand_frame, fg_color="transparent")
-        brand_text_box.pack(side="left")
-        ctk.CTkLabel(brand_text_box, text="AI Gold Commander Pro", font=self._font(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w")
-        ctk.CTkLabel(
-            brand_text_box,
-            text=f"v{APP_VERSION} · XAUUSD Gold Specialist · GoldBot24",
-            font=self._font(11),
-            text_color=COLOR_TEXT_MUTED,
-        ).pack(anchor="w")
-
-        right_frame = ctk.CTkFrame(h_inner, fg_color="transparent")
-        right_frame.pack(side="right")
-
-        # เวลาคงเหลือ
-        self.time_pill_frame = ctk.CTkFrame(right_frame, fg_color=COLOR_GOLD_BG, corner_radius=10, border_width=1, border_color="#5A4519")
-        self.time_pill_frame.pack(side="left", padx=(0, 10))
-        time_inner = ctk.CTkFrame(self.time_pill_frame, fg_color="transparent")
-        time_inner.pack(padx=14, pady=6)
-        ctk.CTkLabel(time_inner, text="⏳ เวลาคงเหลือ", font=self._font(12), text_color="#F7D684").pack(side="left", padx=(0, 8))
-        self.lbl_header_hours = ctk.CTkLabel(
-            time_inner,
-            text=f"{license_mgr.get_remaining_time_display()} ชม.",
-            font=self._font(17, "bold"),
-            text_color=COLOR_GOLD_PRIMARY,
+        # --- ซ้าย: แบรนด์ + เวอร์ชัน/สถานะอัปเดต
+        brand = ctk.CTkFrame(h_inner, fg_color="transparent")
+        brand.pack(side="left")
+        ctk.CTkLabel(brand, text="👑", font=ctk.CTkFont(size=24)).pack(side="left", padx=(0, 10))
+        brand_text = ctk.CTkFrame(brand, fg_color="transparent")
+        brand_text.pack(side="left")
+        ctk.CTkLabel(brand_text, text="AI Gold Commander Pro", font=self._font(17, "bold"), text_color=COLOR_GOLD_PRIMARY, height=24).pack(anchor="w")
+        ver_row = ctk.CTkFrame(brand_text, fg_color="transparent")
+        ver_row.pack(anchor="w")
+        ctk.CTkLabel(ver_row, text=f"v{APP_VERSION} · XAUUSD Gold", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18).pack(side="left")
+        self.btn_update_status = ctk.CTkButton(
+            ver_row, text="กำลังตรวจสอบเวอร์ชัน…", font=self._font(10, "bold"), height=18, width=10,
+            corner_radius=9, fg_color="#1F2430", hover_color="#262B36", text_color=COLOR_TEXT_MUTED,
+            command=self._on_update_chip_clicked,
         )
-        self.lbl_header_hours.pack(side="left", padx=(0, 10))
-        self.lbl_metering_status = ctk.CTkLabel(time_inner, text="⏸ หยุดนับเวลา", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED)
-        self.lbl_metering_status.pack(side="left")
+        self.btn_update_status.pack(side="left", padx=(8, 0))
+        self._update_info = None
 
-        ctk.CTkButton(
-            right_frame,
-            text="🔑 เติมชั่วโมง",
-            font=self._font(13, "bold"),
-            fg_color=COLOR_GOLD_WARM,
-            hover_color=COLOR_GOLD_DARK,
-            text_color="#1A1406",
-            height=36,
-            width=118,
-            corner_radius=8,
-            command=self._open_redeem_modal,
-        ).pack(side="left", padx=(0, 8))
-
-        ctk.CTkButton(
-            right_frame,
-            text="🌐 เว็บ",
-            font=self._font(12),
-            fg_color="#1A1E27",
-            hover_color="#262B36",
-            text_color=COLOR_CYAN_ACCENT,
-            width=64,
-            height=36,
-            corner_radius=8,
-            command=lambda: webbrowser.open("https://goldbot24.vercel.app"),
-        ).pack(side="left", padx=(0, 8))
-
-        ctk.CTkButton(
-            right_frame,
-            text="🔄",
-            font=self._font(14),
-            fg_color="#1A1E27",
-            hover_color="#262B36",
-            width=36,
-            height=36,
-            corner_radius=8,
-            command=self._check_app_updates,
-        ).pack(side="left", padx=(0, 10))
-
+        # --- ขวา: เมนูผู้ใช้
         user_name = license_mgr.session_data.get("username") or "User"
-        user_chip = ctk.CTkFrame(right_frame, fg_color="#1A1E27", corner_radius=8)
-        user_chip.pack(side="left", padx=(0, 8))
-        ctk.CTkLabel(user_chip, text=f"👤 {user_name}", font=self._font(12), text_color=COLOR_TEXT_PRIMARY).pack(padx=10, pady=7)
+        self.btn_user_menu = ctk.CTkButton(
+            h_inner,
+            text=f"  {user_name}  ▾",
+            font=self._font(12, "bold"),
+            fg_color="#1A1E27",
+            hover_color="#262B36",
+            text_color=COLOR_TEXT_PRIMARY,
+            height=38,
+            width=40,
+            corner_radius=19,
+            command=self._open_user_menu,
+        )
+        self.btn_user_menu.pack(side="right")
+        avatar = ctk.CTkLabel(
+            h_inner, text=user_name[:1].upper(), font=self._font(14, "bold"), width=34, height=34,
+            corner_radius=17, fg_color=COLOR_GOLD_WARM, text_color="#1A1406",
+        )
+        avatar.pack(side="right", padx=(0, 6))
+        avatar.bind("<Button-1>", lambda e: self._open_user_menu())
+
+        # --- ขวา: กระเป๋าเวลา (เวลาคงเหลือ + เติมคีย์ + ซื้อชั่วโมง)
+        self.time_pill_frame = ctk.CTkFrame(h_inner, fg_color=COLOR_GOLD_BG, corner_radius=12, border_width=1, border_color="#5A4519")
+        self.time_pill_frame.pack(side="right", padx=(0, 16))
+        wallet = ctk.CTkFrame(self.time_pill_frame, fg_color="transparent")
+        wallet.pack(padx=(14, 6), pady=5)
+
+        hours_box = ctk.CTkFrame(wallet, fg_color="transparent")
+        hours_box.pack(side="left", padx=(0, 12))
+        self.lbl_header_hours = ctk.CTkLabel(
+            hours_box, text=f"⏳ {license_mgr.get_remaining_time_display()} ชม.",
+            font=self._font(16, "bold"), text_color=COLOR_GOLD_PRIMARY, height=22,
+        )
+        self.lbl_header_hours.pack(anchor="w")
+        self.lbl_metering_status = ctk.CTkLabel(hours_box, text="⏸ หยุดนับเวลา", font=self._font(10), text_color=COLOR_TEXT_MUTED, height=14)
+        self.lbl_metering_status.pack(anchor="w")
 
         ctk.CTkButton(
-            right_frame,
-            text="ออก",
-            font=self._font(12),
-            fg_color="#262B36",
-            hover_color="#3A2226",
-            text_color=COLOR_DANGER_RED,
-            width=52,
-            height=36,
-            corner_radius=8,
-            command=self._do_logout,
+            wallet, text="🔑 เติมคีย์", font=self._font(12, "bold"), fg_color="#2E2410", hover_color="#3A2E14",
+            text_color=COLOR_GOLD_PRIMARY, border_width=1, border_color="#5A4519", height=32, width=86, corner_radius=8,
+            command=self._open_redeem_modal,
+        ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(
+            wallet, text="🛒 ซื้อชั่วโมง", font=self._font(12, "bold"), fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK,
+            text_color="#1A1406", height=32, width=104, corner_radius=8,
+            command=lambda: webbrowser.open(self.STORE_URL),
         ).pack(side="left")
+
+    def _open_user_menu(self):
+        """เมนูผู้ใช้: เปิดเว็บ / สถิติ / ตรวจอัปเดต / ออกจากระบบ"""
+        email = license_mgr.session_data.get("email") or ""
+        menu = tk.Menu(
+            self, tearoff=0, bg="#1A1E27", fg=COLOR_TEXT_PRIMARY, activebackground="#2A303C",
+            activeforeground=COLOR_GOLD_PRIMARY, disabledforeground=COLOR_TEXT_MUTED, bd=0, relief="flat",
+            font=("Segoe UI", 11),
+        )
+        if email:
+            menu.add_command(label=f"  {email}", state="disabled")
+            menu.add_separator()
+        menu.add_command(label="  🌐  เปิดเว็บ GoldBot24 (พอร์ตสด)", command=lambda: webbrowser.open(self.WEB_URL))
+        menu.add_command(label="  🛒  ซื้อชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
+        menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
+        menu.add_command(label="  🔄  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
+        menu.add_separator()
+        menu.add_command(label="  ⎋  ออกจากระบบ", foreground=COLOR_DANGER_RED, command=self._do_logout)
+        x = self.btn_user_menu.winfo_rootx()
+        y = self.btn_user_menu.winfo_rooty() + self.btn_user_menu.winfo_height() + 4
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    # ---- ตรวจสอบเวอร์ชันอัตโนมัติ (เธรดเบื้องหลัง ไม่ให้ UI ค้าง) ----
+    UPDATE_CHECK_INTERVAL_SEC = 6 * 3600
+
+    def _start_update_check(self, manual=False):
+        if getattr(self, "_update_checking", False):
+            return
+        self._update_checking = True
+        self._update_manual = manual
+        if hasattr(self, "btn_update_status"):
+            self.btn_update_status.configure(text="กำลังตรวจสอบเวอร์ชัน…", fg_color="#1F2430", text_color=COLOR_TEXT_MUTED)
+
+        def worker():
+            try:
+                self._update_result = ("ok", license_mgr.check_app_version(APP_VERSION))
+            except Exception as e:
+                self._update_result = ("error", str(e))
+            self._update_checking = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_update_result(self):
+        """เรียกจาก UI loop เมื่อเธรดตรวจเวอร์ชันทำงานเสร็จ"""
+        status, info = self._update_result
+        self._update_result = None
+        self._last_update_check = time.time()
+        manual = getattr(self, "_update_manual", False)
+        if status != "ok":
+            self._update_info = None
+            self.btn_update_status.configure(text="⚠ ตรวจเวอร์ชันไม่ได้ · ลองใหม่", fg_color="#1F2430", text_color=COLOR_TEXT_MUTED)
+            if manual:
+                messagebox.showerror("ตรวจสอบเวอร์ชัน", f"ไม่สามารถตรวจสอบเวอร์ชันได้\n{info}")
+            return
+
+        self._update_info = info
+        if info.get("has_update"):
+            latest = info.get("latest_version")
+            self.btn_update_status.configure(text=f"⬆ มีเวอร์ชันใหม่ v{latest} · ดาวน์โหลด", fg_color=COLOR_GOLD_WARM, text_color="#1A1406")
+            if manual or info.get("mandatory"):
+                self._prompt_update(info)
+        else:
+            self.btn_update_status.configure(text="✓ เวอร์ชันล่าสุด", fg_color="#12301F", text_color=COLOR_SUCCESS_GREEN)
+            if manual:
+                messagebox.showinfo("ตรวจสอบเวอร์ชัน", f"ท่านใช้เวอร์ชันล่าสุดแล้ว (v{APP_VERSION})")
+
+    def _on_update_chip_clicked(self):
+        info = self._update_info
+        if info and info.get("has_update"):
+            self._prompt_update(info)
+        else:
+            self._start_update_check(manual=True)
+
+    def _prompt_update(self, info):
+        notes = (info.get("changelog") or "").strip()
+        bullets = [ln.strip()[2:] for ln in notes.splitlines() if ln.strip().startswith("- ")][:6]
+        summary = "\n".join(f"• {b}" for b in bullets) or "ปรับปรุงประสิทธิภาพและแก้ไขข้อผิดพลาด"
+        msg = (
+            f"มีเวอร์ชันใหม่ v{info.get('latest_version')} (ใช้งานอยู่ v{APP_VERSION})\n\n"
+            f"{summary}\n\nเปิดหน้าดาวน์โหลดตอนนี้หรือไม่?"
+        )
+        if messagebox.askyesno("มีเวอร์ชันใหม่ - AI Gold Commander Pro", msg):
+            webbrowser.open(info.get("download_url") or self.DOWNLOAD_URL)
 
     def _build_metric_cards(self):
         """การ์ดสรุปสถานะพอร์ตและราคาทองคำ 4 กล่องแนวนอน"""
@@ -1597,35 +1668,12 @@ class MainTradingApp(ctk.CTk):
         UserStatsDialog(self)
 
     def _check_app_updates(self, silent_if_latest=False):
-        """ตรวจสอบเวอร์ชันใหม่จาก Supabase app_releases"""
-        current_ver = APP_VERSION
-        try:
-            res = license_mgr.check_app_version(current_ver)
-            if res.get("has_update"):
-                latest_v = res.get("latest_version")
-                notes = res.get("changelog") or "มีการปรับปรุงประสิทธิภาพและความแม่นยำของระบบ AI"
-                url = res.get("download_url") or "https://goldbot24.vercel.app/store"
-                msg = (
-                    f"🎉 ตรวจพบเวอร์ชันใหม่ล่าสุด: v{latest_v}\n"
-                    f"(เวอร์ชันที่ใช้งานอยู่: v{current_ver})\n\n"
-                    f"บันทึกการเปลี่ยนแปลง (Changelog):\n{notes}\n\n"
-                    f"ท่านต้องการเปิดลิงก์ดาวน์โหลดอัปเดตทันทีหรือไม่?"
-                )
-                if messagebox.askyesno("ตรวจพบการอัปเดตใหม่ - AI Gold Pro", msg):
-                    webbrowser.open(url)
-            else:
-                if not silent_if_latest:
-                    messagebox.showinfo(
-                        "ตรวจสอบการอัปเดต - AI Gold Pro",
-                        f"✨ ท่านกำลังใช้งานเวอร์ชันล่าสุดแล้ว\n\nเวอร์ชันปัจจุบัน: v{current_ver}\nสถานะ: พร้อมเทรดทองคำ 100%"
-                    )
-        except Exception as e:
-            if not silent_if_latest:
-                messagebox.showerror("เกิดข้อผิดพลาด", f"ไม่สามารถตรวจสอบอัปเดตได้: {e}")
+        """คงไว้เพื่อความเข้ากันได้ — ใช้การตรวจแบบเธรดเบื้องหลัง"""
+        self._start_update_check(manual=not silent_if_latest)
 
     def _on_hours_updated(self, new_hrs_str: str):
         """อัปเดตเวลาบน Header เมื่อเติมชั่วโมงสำเร็จ"""
-        self.lbl_header_hours.configure(text=f"{new_hrs_str} ชม.")
+        self.lbl_header_hours.configure(text=f"⏳ {new_hrs_str} ชม.")
 
     def _do_logout(self):
         """ออกจากระบบและกลับไปยังหน้าล็อกอิน"""
@@ -1662,7 +1710,23 @@ class MainTradingApp(ctk.CTk):
                 # อัปเดตชั่วโมงคงเหลือ (ชั่วโมง.นาที)
                 hrs_str = telemetry.get("remaining_time", "0.00")
                 if hasattr(self, 'lbl_header_hours'):
-                    self.lbl_header_hours.configure(text=f"{hrs_str} ชม.")
+                    mins_left = license_mgr.get_remaining_minutes()
+                    low = mins_left <= self.LOW_HOURS_MINUTES
+                    self.lbl_header_hours.configure(
+                        text=f"⏳ {hrs_str} ชม.",
+                        text_color=COLOR_DANGER_RED if low else COLOR_GOLD_PRIMARY,
+                    )
+                    self.time_pill_frame.configure(
+                        fg_color="#2A1518" if low else COLOR_GOLD_BG,
+                        border_color="#6B2A30" if low else "#5A4519",
+                    )
+
+                # ผลการตรวจเวอร์ชันจากเธรดเบื้องหลัง + ตรวจซ้ำทุก 6 ชั่วโมง
+                if getattr(self, "_update_result", None):
+                    self._apply_update_result()
+                elif time.time() - getattr(self, "_last_update_check", time.time()) > self.UPDATE_CHECK_INTERVAL_SEC:
+                    self._last_update_check = time.time()
+                    self._start_update_check()
 
                 # อัปเดตสถานะ MT5
                 is_conn = telemetry.get("is_connected", False)
