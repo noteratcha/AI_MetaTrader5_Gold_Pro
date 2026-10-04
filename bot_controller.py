@@ -240,28 +240,64 @@ class BotController:
 
             closed_count = 0
             for pos in positions:
-                order_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
-                price = mt5.symbol_info_tick(pos.symbol).bid if order_type == mt5.ORDER_TYPE_SELL else mt5.symbol_info_tick(pos.symbol).ask
-                req = {
-                    "action": mt5.TRADE_ACTION_DEAL,
-                    "symbol": pos.symbol,
-                    "volume": pos.volume,
-                    "type": order_type,
-                    "position": pos.ticket,
-                    "price": price,
-                    "deviation": 20,
-                    "magic": 1003,
-                    "comment": "Emergency Close All GUI",
-                    "type_time": mt5.ORDER_TIME_GTC,
-                    "type_filling": mt5.ORDER_FILLING_IOC,
-                }
-                res = mt5.order_send(req)
-                if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+                # ใช้ close_position ของบอท (เลือก filling type ตามโบรกเกอร์ + บันทึกประวัติ/สถิติ)
+                if bot_core.close_position(pos, comment="Emergency Close All"):
                     closed_count += 1
 
             return closed_count, f"ปิดออเดอร์สำเร็จทั้งหมด {closed_count} ไม้"
         except Exception as e:
             return 0, f"เกิดข้อผิดพลาดในการปิดออเดอร์: {e}"
+
+    def get_trade_history(self, days: int = 90, symbol: str = "XAUUSD") -> list[dict]:
+        """
+        ประวัติการเข้าไม้/ปิดไม้จาก MT5 โดยตรง (จับคู่ Deal เข้า-ออกด้วย position_id)
+        รวมไม้ที่ยังเปิดอยู่ — เรียงจากใหม่ไปเก่า
+        """
+        from datetime import datetime, timedelta
+        trades = {}
+        try:
+            if mt5.terminal_info() is None and not mt5.initialize():
+                return []
+            deals = mt5.history_deals_get(datetime.now() - timedelta(days=days), datetime.now() + timedelta(days=1)) or []
+            for d in deals:
+                if d.symbol != symbol or d.entry not in (0, 1, 2):
+                    continue
+                t = trades.setdefault(d.position_id, {
+                    "ticket": int(d.position_id), "side": "", "plan": "", "volume": 0.0,
+                    "open_time": None, "open_price": 0.0, "close_time": None, "close_price": 0.0,
+                    "profit": 0.0, "status": "OPEN",
+                })
+                t["profit"] += float(d.profit) + float(getattr(d, "commission", 0.0)) + float(getattr(d, "swap", 0.0))
+                if d.entry == 0:  # DEAL_ENTRY_IN
+                    t["side"] = "BUY" if d.type == 0 else "SELL"
+                    t["plan"] = d.comment or ("Manual" if d.magic != 888999 else "")
+                    t["volume"] = float(d.volume)
+                    t["open_time"] = int(d.time)
+                    t["open_price"] = float(d.price)
+                else:  # DEAL_ENTRY_OUT / INOUT
+                    t["close_time"] = int(d.time)
+                    t["close_price"] = float(d.price)
+                    t["close_reason"] = d.comment or ""
+                    t["status"] = "CLOSED"
+
+            # ไม้ที่ยังเปิดอยู่: ใช้กำไรลอยตัวปัจจุบัน
+            for p in mt5.positions_get(symbol=symbol) or []:
+                t = trades.setdefault(p.ticket, {"ticket": int(p.ticket), "close_time": None, "close_price": 0.0})
+                t.update({
+                    "side": "BUY" if p.type == 0 else "SELL",
+                    "plan": p.comment or "Manual",
+                    "volume": float(p.volume),
+                    "open_time": int(p.time),
+                    "open_price": float(p.price_open),
+                    "profit": float(p.profit),
+                    "status": "OPEN",
+                })
+        except Exception:
+            return []
+
+        rows = [t for t in trades.values() if t.get("open_time")]
+        rows.sort(key=lambda t: t["close_time"] or t["open_time"], reverse=True)
+        return rows
 
 # Singleton Controller Instance
 bot_ctrl = BotController()

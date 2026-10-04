@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import queue
+import threading
 import webbrowser
 import tkinter as tk
 from tkinter import messagebox
@@ -22,6 +23,7 @@ from license_manager import (
 )
 from bot_controller import bot_ctrl
 import sound_manager
+import econ_calendar
 from stats_manager import stats_mgr, STANDARD_PLANS
 
 # ตั้งค่ารูปลักษณ์และธีม CustomTkinter เป็น Dark Mode ระดับพรีเมียม
@@ -384,8 +386,12 @@ class MainTradingApp(ctk.CTk):
         super().__init__()
 
         self.title("AI Gold Commander Pro - GoldBot24 (v2026.1004.2030)")
-        self.geometry("1180x820")
-        self.minsize(1050, 720)
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        self.geometry(f"{min(1320, sw - 40)}x{min(840, sh - 90)}")
+        self.minsize(min(1040, sw - 40), min(620, sh - 90))
+        if sh <= 900 or sw <= 1400:
+            # จอโน้ตบุ๊ก (เช่น 1366x768) — เปิดเต็มจอเพื่อไม่ให้ส่วนล่างถูกตัด
+            self.after(0, lambda: self.state("zoomed"))
         self.configure(fg_color=COLOR_BG_DARK)
 
         # ตั้งค่าไอคอนหน้าต่าง Windows
@@ -788,432 +794,623 @@ class MainTradingApp(ctk.CTk):
         self.dashboard_view = ctk.CTkFrame(self.container, fg_color="transparent")
         self.dashboard_view.pack(fill="both", expand=True)
 
+        # สถานะข้อมูลที่โหลดจากเธรดเบื้องหลัง
+        self._history_rows = []
+        self._history_page = 0
+        self._history_dirty = False
+        self._history_loading = False
+        self._calendar_events = []
+        self._calendar_dirty = False
+        self._calendar_loading = False
+        self._ui_tick = 0
+
         self._build_top_header()
         self._build_metric_cards()
-        self._build_plans_and_controls()
-        self._build_terminal_console()
+
+        body = ctk.CTkFrame(self.dashboard_view, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=20, pady=(0, 12))
+        body.grid_columnconfigure(0, weight=7, uniform="body")
+        body.grid_columnconfigure(1, weight=3, uniform="body")
+        body.grid_rowconfigure(0, weight=1)
+
+        left = ctk.CTkFrame(body, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        right = ctk.CTkFrame(body, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+
+        self._build_main_tabs(left)
+        self._build_control_panel(right)
+        self._build_next_news_card(right)
+        self._build_plans_card(right)
+
+        self._refresh_history_async()
+        self._refresh_calendar_async()
 
         # ตรวจสอบอัปเดตเวอร์ชันซอฟต์แวร์อัตโนมัติแบบเงียบๆ หลังเปิดหน้าจอ 3 วินาที
         self.after(3000, lambda: self._check_app_updates(silent_if_latest=True))
 
+    # ---------------------------------------------------------------------
+    # ส่วนประกอบ UI ใช้ซ้ำ
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def _font(size=12, weight="normal", family="Segoe UI"):
+        return ctk.CTkFont(family=family, size=size, weight=weight)
+
+    def _card(self, parent, **pack_kwargs):
+        card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        card.pack(**pack_kwargs)
+        return card
+
+    def _card_title(self, parent, text, right_widget_factory=None):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=(14, 8))
+        ctk.CTkLabel(row, text=text, font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        if right_widget_factory:
+            right_widget_factory(row).pack(side="right")
+        return row
+
+    def _small_button(self, parent, text, command, width=90, accent=False):
+        return ctk.CTkButton(
+            parent,
+            text=text,
+            font=self._font(11, "bold"),
+            fg_color=COLOR_GOLD_WARM if accent else "#1A1E27",
+            hover_color=COLOR_GOLD_DARK if accent else "#262B36",
+            text_color="#1A1406" if accent else COLOR_TEXT_PRIMARY,
+            width=width,
+            height=28,
+            corner_radius=7,
+            command=command,
+        )
+
+    # ---------------------------------------------------------------------
+    # Header + การ์ดสรุป
+    # ---------------------------------------------------------------------
     def _build_top_header(self):
         """แถบหัวด้านบน: โลโก้, เวลาคงเหลือ (ชั่วโมง.นาที) และโปรไฟล์ผู้ใช้"""
-        header = ctk.CTkFrame(self.dashboard_view, fg_color=COLOR_CARD_BG, height=68, corner_radius=0)
-        header.pack(fill="x", side="top", pady=(0, 10))
+        header = ctk.CTkFrame(self.dashboard_view, fg_color=COLOR_CARD_BG, height=60, corner_radius=0)
+        header.pack(fill="x", side="top", pady=(0, 12))
 
         h_inner = ctk.CTkFrame(header, fg_color="transparent")
         h_inner.pack(fill="both", expand=True, padx=20, pady=10)
 
-        # โลโก้ซ้ายมือ
         brand_frame = ctk.CTkFrame(h_inner, fg_color="transparent")
         brand_frame.pack(side="left")
-
-        ctk.CTkLabel(
-            brand_frame,
-            text="👑",
-            font=ctk.CTkFont(size=24)
-        ).pack(side="left", padx=(0, 8))
-
+        ctk.CTkLabel(brand_frame, text="👑", font=ctk.CTkFont(size=24)).pack(side="left", padx=(0, 10))
         brand_text_box = ctk.CTkFrame(brand_frame, fg_color="transparent")
         brand_text_box.pack(side="left")
-
+        ctk.CTkLabel(brand_text_box, text="AI Gold Commander Pro", font=self._font(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w")
         ctk.CTkLabel(
             brand_text_box,
-            text="AI Gold Commander Pro",
-            font=ctk.CTkFont(family="Segoe UI", size=17, weight="bold"),
-            text_color=COLOR_GOLD_PRIMARY
+            text="v2026.1004.2030 · XAUUSD Gold Specialist · GoldBot24",
+            font=self._font(11),
+            text_color=COLOR_TEXT_MUTED,
         ).pack(anchor="w")
 
-        ctk.CTkLabel(
-            brand_text_box,
-            text="v2026.1004.2030 • 🏆 100% PURE GOLD SPECIALIST (XAUUSD) • GoldBot24",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
-            text_color=COLOR_TEXT_MUTED
-        ).pack(anchor="w")
-
-        # ส่วนขวามือ: เวลาคงเหลือ (ชั่วโมง.นาที) และปุ่มเติมชั่วโมง
         right_frame = ctk.CTkFrame(h_inner, fg_color="transparent")
         right_frame.pack(side="right")
 
-        # การ์ดแสดงชั่วโมงแบบเรืองแสง
-        self.time_pill_frame = ctk.CTkFrame(
-            right_frame,
-            fg_color=COLOR_GOLD_BG,
-            corner_radius=10,
-            border_width=1,
-            border_color="#785B12"
-        )
-        self.time_pill_frame.pack(side="left", padx=(0, 12))
-
+        # เวลาคงเหลือ
+        self.time_pill_frame = ctk.CTkFrame(right_frame, fg_color=COLOR_GOLD_BG, corner_radius=10, border_width=1, border_color="#5A4519")
+        self.time_pill_frame.pack(side="left", padx=(0, 10))
         time_inner = ctk.CTkFrame(self.time_pill_frame, fg_color="transparent")
         time_inner.pack(padx=14, pady=6)
-
-        ctk.CTkLabel(
-            time_inner,
-            text="⏳ เวลาคงเหลือ:",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
-            text_color="#FDE68A"
-        ).pack(side="left", padx=(0, 6))
-
-        # ตัวนับเวลาคงเหลือในรูปแบบ ชั่วโมง.นาที (HH.MM)
-        hrs_str = license_mgr.get_remaining_time_display()
+        ctk.CTkLabel(time_inner, text="⏳ เวลาคงเหลือ", font=self._font(12), text_color="#F7D684").pack(side="left", padx=(0, 8))
         self.lbl_header_hours = ctk.CTkLabel(
             time_inner,
-            text=f"{hrs_str} ชม.",
-            font=ctk.CTkFont(family="Segoe UI", size=17, weight="bold"),
-            text_color=COLOR_GOLD_PRIMARY
+            text=f"{license_mgr.get_remaining_time_display()} ชม.",
+            font=self._font(17, "bold"),
+            text_color=COLOR_GOLD_PRIMARY,
         )
-        self.lbl_header_hours.pack(side="left", padx=(0, 8))
-
-        # ป้ายสถานะการตัดเวลา (Active / Deducting หรือ Idle)
-        self.lbl_metering_status = ctk.CTkLabel(
-            time_inner,
-            text="⏸️ หยุดนับเวลา",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            text_color=COLOR_TEXT_MUTED
-        )
+        self.lbl_header_hours.pack(side="left", padx=(0, 10))
+        self.lbl_metering_status = ctk.CTkLabel(time_inner, text="⏸ หยุดนับเวลา", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED)
         self.lbl_metering_status.pack(side="left")
 
-        # ปุ่มเติมชั่วโมงด้วย Key
-        btn_redeem = ctk.CTkButton(
+        ctk.CTkButton(
             right_frame,
-            text="🔑 + เติมชั่วโมง",
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            text="🔑 เติมชั่วโมง",
+            font=self._font(13, "bold"),
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
             text_color="#1A1406",
             height=36,
+            width=118,
             corner_radius=8,
-            command=self._open_redeem_modal
-        )
-        btn_redeem.pack(side="left", padx=(0, 8))
+            command=self._open_redeem_modal,
+        ).pack(side="left", padx=(0, 8))
 
-        # ปุ่มเช็คอัปเดตเวอร์ชัน
-        btn_update = ctk.CTkButton(
+        ctk.CTkButton(
             right_frame,
-            text="🔄 อัปเดต",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text="🌐 เว็บ",
+            font=self._font(12),
             fg_color="#1A1E27",
             hover_color="#262B36",
-            text_color="#60A5FA",
-            width=70,
+            text_color=COLOR_CYAN_ACCENT,
+            width=64,
             height=36,
             corner_radius=8,
-            command=self._check_app_updates
-        )
-        btn_update.pack(side="left", padx=(0, 10))
+            command=lambda: webbrowser.open("https://goldbot24.vercel.app"),
+        ).pack(side="left", padx=(0, 8))
 
-        # ป้ายชื่อผู้ใช้ และปุ่มออกจากระบบ
+        ctk.CTkButton(
+            right_frame,
+            text="🔄",
+            font=self._font(14),
+            fg_color="#1A1E27",
+            hover_color="#262B36",
+            width=36,
+            height=36,
+            corner_radius=8,
+            command=self._check_app_updates,
+        ).pack(side="left", padx=(0, 10))
+
         user_name = license_mgr.session_data.get("username") or "User"
         user_chip = ctk.CTkFrame(right_frame, fg_color="#1A1E27", corner_radius=8)
         user_chip.pack(side="left", padx=(0, 8))
-        ctk.CTkLabel(
-            user_chip,
-            text=f"👤 {user_name}",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
-            text_color="#E2E8F0"
-        ).pack(padx=10, pady=6)
+        ctk.CTkLabel(user_chip, text=f"👤 {user_name}", font=self._font(12), text_color=COLOR_TEXT_PRIMARY).pack(padx=10, pady=7)
 
-        btn_logout = ctk.CTkButton(
+        ctk.CTkButton(
             right_frame,
-            text="🚪 ออก",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text="ออก",
+            font=self._font(12),
             fg_color="#262B36",
-            hover_color="#475569",
-            width=50,
-            height=34,
-            corner_radius=6,
-            command=self._do_logout
-        )
-        btn_logout.pack(side="left")
+            hover_color="#3A2226",
+            text_color=COLOR_DANGER_RED,
+            width=52,
+            height=36,
+            corner_radius=8,
+            command=self._do_logout,
+        ).pack(side="left")
 
     def _build_metric_cards(self):
         """การ์ดสรุปสถานะพอร์ตและราคาทองคำ 4 กล่องแนวนอน"""
         grid_frame = ctk.CTkFrame(self.dashboard_view, fg_color="transparent")
-        grid_frame.pack(fill="x", padx=20, pady=(0, 12))
-
-        # ตั้งค่า Grid 4 คอลัมน์
+        grid_frame.pack(fill="x", padx=14, pady=(0, 12))
         grid_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="metric_cards")
 
-        # การ์ด 1: บัญชี MT5
-        self.card_mt5 = self._create_stat_card(
-            grid_frame, 0,
-            icon="🖥️",
-            title="บัญชี MT5 (Terminal)",
-            val_text="รอเชื่อมต่อ...",
-            sub_text="Server: กำลังตรวจสอบ",
-            accent_color=COLOR_CYAN_ACCENT
-        )
-
-        # การ์ด 2: พอร์ตและ Balance
-        self.card_balance = self._create_stat_card(
-            grid_frame, 1,
-            icon="💰",
-            title="ยอดเงินในพอร์ต (Balance)",
-            val_text="$0.00",
-            sub_text="Equity: $0.00 | Free: $0.00",
-            accent_color=COLOR_SUCCESS_GREEN
-        )
-
-        # การ์ด 3: ราคาทองคำ XAUUSD
-        self.card_gold = self._create_stat_card(
-            grid_frame, 2,
-            icon="🏆",
-            title="ราคาทองคำ (XAUUSD)",
-            val_text="0.00",
-            sub_text="Spread: 0 pts | M15 Active",
-            accent_color=COLOR_GOLD_PRIMARY
-        )
-
-        # การ์ด 4: เทรนด์ใหญ่ H4 & H1
-        self.card_trend = self._create_stat_card(
-            grid_frame, 3,
-            icon="📊",
-            title="สภาวะตลาด (Market Regime)",
-            val_text="ANALYZING...",
-            sub_text="H1 Trend: กำลังคำนวณ",
-            accent_color=COLOR_GOLD_WARM
-        )
+        self.card_mt5 = self._create_stat_card(grid_frame, 0, "🖥", "บัญชี MT5", "รอเชื่อมต่อ...", "Server: กำลังตรวจสอบ", COLOR_CYAN_ACCENT)
+        self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "$0.00", "Equity $0.00 · Float $0.00", COLOR_SUCCESS_GREEN)
+        self.card_gold = self._create_stat_card(grid_frame, 2, "🏆", "ราคาทองคำ XAUUSD", "0.00", "Spread 0 pts", COLOR_GOLD_PRIMARY)
+        self.card_trend = self._create_stat_card(grid_frame, 3, "📊", "สภาวะตลาด H4", "รอเริ่มบอท", "วิเคราะห์เมื่อบอททำงาน", COLOR_GOLD_WARM)
 
     def _create_stat_card(self, parent, col, icon, title, val_text, sub_text, accent_color):
         card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
         card.grid(row=0, column=col, padx=6, sticky="nsew")
-
         inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=14, pady=12)
+        inner.pack(fill="both", expand=True, padx=16, pady=10)
 
         top_row = ctk.CTkFrame(inner, fg_color="transparent")
         top_row.pack(fill="x")
+        ctk.CTkLabel(top_row, text=icon, font=ctk.CTkFont(size=15)).pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
 
-        ctk.CTkLabel(top_row, text=icon, font=ctk.CTkFont(size=18)).pack(side="left", padx=(0, 6))
-        ctk.CTkLabel(
-            top_row,
-            text=title,
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
-            text_color=COLOR_TEXT_MUTED
-        ).pack(side="left")
-
-        val_label = ctk.CTkLabel(
-            inner,
-            text=val_text,
-            font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"),
-            text_color=accent_color
-        )
-        val_label.pack(anchor="w", pady=(6, 2))
-
-        sub_label = ctk.CTkLabel(
-            inner,
-            text=sub_text,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
-            text_color=COLOR_TEXT_MUTED
-        )
+        val_label = ctk.CTkLabel(inner, text=val_text, font=self._font(21, "bold"), text_color=accent_color)
+        val_label.pack(anchor="w", pady=(4, 0))
+        sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED)
         sub_label.pack(anchor="w")
-
         return {"val_lbl": val_label, "sub_lbl": sub_label}
 
-    def _build_plans_and_controls(self):
-        """ส่วนแสดงแผนการเทรดเฉพาะทองคำ 5 แผน และแผงปุ่ม Master Control"""
-        control_container = ctk.CTkFrame(self.dashboard_view, fg_color="transparent")
-        control_container.pack(fill="x", padx=20, pady=(0, 12))
+    # ---------------------------------------------------------------------
+    # คอลัมน์ขวา: ควบคุมบอท / ข่าวถัดไป / แผนเทรด
+    # ---------------------------------------------------------------------
+    def _build_control_panel(self, parent):
+        card = self._card(parent, fill="x", pady=(0, 12))
+        self._card_title(parent=card, text="🎮 ควบคุมบอท")
 
-        control_container.grid_columnconfigure(0, weight=3) # แผนการเทรด 5 แผน
-        control_container.grid_columnconfigure(1, weight=2) # ปุ่มควบคุม Master Start/Stop
-
-        # 1. กล่องแผนการเทรดเฉพาะทองคำ (Trading Plans)
-        plans_box = ctk.CTkFrame(control_container, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
-        plans_box.grid(row=0, column=0, padx=(0, 8), sticky="nsew")
-
-        p_inner = ctk.CTkFrame(plans_box, fg_color="transparent")
-        p_inner.pack(fill="both", expand=True, padx=14, pady=12)
-
-        # หัวเรื่องและปุ่มดูสถิติ
-        p_hdr = ctk.CTkFrame(p_inner, fg_color="transparent")
-        p_hdr.pack(fill="x", pady=(0, 8))
-
-        ctk.CTkLabel(
-            p_hdr,
-            text="⚡ แผนการเทรดเฉพาะทองคำ (Active Trading Plans)",
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            text_color=COLOR_TEXT_PRIMARY
-        ).pack(side="left")
-
-        btn_my_stats = ctk.CTkButton(
-            p_hdr,
-            text="📊 ดูสถิติรายแผน (My Stats)",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            fg_color="#1A1E27",
-            hover_color="#262B36",
-            text_color=COLOR_GOLD_PRIMARY,
-            height=28,
-            corner_radius=6,
-            command=self._open_user_stats_modal
+        self.btn_master_toggle = ctk.CTkButton(
+            card,
+            text="▶  เริ่มการทำงานบอท",
+            font=self._font(15, "bold"),
+            fg_color=COLOR_SUCCESS_GREEN,
+            hover_color="#10A374",
+            text_color="#06281C",
+            height=48,
+            corner_radius=10,
+            command=self._on_toggle_bot,
         )
-        btn_my_stats.pack(side="right")
+        self.btn_master_toggle.pack(fill="x", padx=16)
 
-        badges_row = ctk.CTkFrame(p_inner, fg_color="transparent")
-        badges_row.pack(fill="x")
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=(8, 6))
+        row.grid_columnconfigure(0, weight=1)
+        self.btn_close_all = ctk.CTkButton(
+            row,
+            text="⚠ ปิดทุกออเดอร์",
+            font=self._font(12, "bold"),
+            fg_color="#3A2226",
+            hover_color="#4A2A2F",
+            text_color=COLOR_DANGER_RED,
+            height=36,
+            corner_radius=8,
+            command=self._on_click_close_all,
+        )
+        self.btn_close_all.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        self.btn_sound_toggle = ctk.CTkButton(
+            row,
+            text="🔊",
+            font=ctk.CTkFont(size=15),
+            fg_color="#262B36",
+            hover_color="#323846",
+            width=44,
+            height=36,
+            corner_radius=8,
+            command=self._on_toggle_sound,
+        )
+        self.btn_sound_toggle.grid(row=0, column=1)
+
+        self.lbl_bot_state = ctk.CTkLabel(card, text="● บอทหยุดทำงาน", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED)
+        self.lbl_bot_state.pack(anchor="w", padx=16, pady=(0, 10))
+
+    def _build_next_news_card(self, parent):
+        card = self._card(parent, fill="x", pady=(0, 12))
+        title_row = self._card_title(
+            card,
+            "📅 ข่าวสำคัญถัดไป (USD)",
+            lambda p: self._small_button(p, "ดูทั้งหมด", lambda: self.main_tabs.set(self.TAB_CALENDAR), width=74),
+        )
+        self.lbl_news_title = ctk.CTkLabel(card, text="กำลังโหลดปฏิทินข่าว...", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY, wraplength=300, justify="left")
+        self.lbl_news_title.pack(anchor="w", padx=16)
+        self.lbl_news_time = ctk.CTkLabel(card, text="", font=self._font(12), text_color=COLOR_TEXT_MUTED, justify="left")
+        self.lbl_news_time.pack(anchor="w", padx=16)
+        status_row = ctk.CTkFrame(card, fg_color="transparent")
+        status_row.pack(fill="x", padx=16, pady=(4, 12))
+        self.lbl_news_badge = ctk.CTkLabel(status_row, text="", font=self._font(10, "bold"), text_color="#101218", fg_color=COLOR_CARD_BG, corner_radius=6, height=20)
+        self.lbl_news_badge.pack(side="left", padx=(0, 8))
+        self.lbl_news_countdown = ctk.CTkLabel(status_row, text="", font=self._font(14, "bold"), text_color=COLOR_GOLD_PRIMARY)
+        self.lbl_news_countdown.pack(side="left")
+
+    def _build_plans_card(self, parent):
+        card = self._card(parent, fill="both", expand=True)
+        self._card_title(card, "⚡ แผนเทรดทองคำ", lambda p: self._small_button(p, "สถิติละเอียด", self._open_user_stats_modal, width=92))
 
         plans = [
-            ("⚡ Plan 0", "SMC-LiquidityHunt", "กวาดสภาพคล่อง H1", "Plan 0: SMC-LiquidityHunt"),
-            ("🎯 Plan 1", "SR-SwingBounce", "เด้งแนวรับต้าน + Div", "Plan 1: SR-SwingBounce"),
-            ("🌊 Plan 3", "BB-H1-Reversion", "หลุดกรอบ H1 + MACD", "Plan 3: BB-H1-Reversion"),
-            ("📈 Plan 4", "MA-Cross-Trend", "M15 MA5x10 (Run Trend)", "Plan 4: MA-Cross-Trend"),
-            ("👑 Plan 5", "MA-Cross-H1", "H1 MA5x10 (Swing Run)", "Plan 5: MA-Cross-H1-Trend")
+            ("⚡", "Plan 0 · SMC-LiquidityHunt", "Plan 0: SMC-LiquidityHunt"),
+            ("🎯", "Plan 1 · SR-SwingBounce", "Plan 1: SR-SwingBounce"),
+            ("🌊", "Plan 3 · BB-H1-Reversion", "Plan 3: BB-H1-Reversion"),
+            ("📈", "Plan 4 · MA-Cross M15", "Plan 4: MA-Cross-Trend"),
+            ("👑", "Plan 5 · MA-Cross H1", "Plan 5: MA-Cross-H1-Trend"),
         ]
-
+        # เลื่อนดูได้เมื่อจอเตี้ย (เช่น 1366x768)
+        holder = ctk.CTkScrollableFrame(card, fg_color="transparent", height=60)
+        holder.pack(fill="both", expand=True, padx=6, pady=(0, 8))
         self.plan_stat_badges = {}
-        for p_code, p_name, p_desc, full_plan_name in plans:
-            badge = ctk.CTkFrame(badges_row, fg_color="#1A1E27", corner_radius=8, border_width=1, border_color="#2D3B55")
-            badge.pack(side="left", padx=4, expand=True, fill="x")
-
-            ctk.CTkLabel(
-                badge,
-                text=p_code,
-                font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
-                text_color=COLOR_GOLD_PRIMARY
-            ).pack(anchor="w", padx=8, pady=(4, 0))
-
-            ctk.CTkLabel(
-                badge,
-                text=p_name,
-                font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
-                text_color=COLOR_TEXT_PRIMARY
-            ).pack(anchor="w", padx=8)
-
-            stat_lbl = ctk.CTkLabel(
-                badge,
-                text="เข้า: 0 | WR: 0% | $0.00",
-                font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
-                text_color=COLOR_CYAN_ACCENT
-            )
-            stat_lbl.pack(anchor="w", padx=8, pady=(2, 4))
+        for icon, label, full_plan_name in plans:
+            row = ctk.CTkFrame(holder, fg_color="#171A21", corner_radius=8)
+            row.pack(fill="x", padx=4, pady=2)
+            ctk.CTkLabel(row, text=f"{icon}  {label}", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY, height=30).pack(side="left", padx=10)
+            stat_lbl = ctk.CTkLabel(row, text="0 ไม้", font=self._font(11), text_color=COLOR_TEXT_MUTED)
+            stat_lbl.pack(side="right", padx=10)
             self.plan_stat_badges[full_plan_name] = stat_lbl
 
-        # 2. กล่องควบคุมการทำงานบอท (Master Bot Controls)
-        master_box = ctk.CTkFrame(control_container, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
-        master_box.grid(row=0, column=1, padx=(8, 0), sticky="nsew")
+    # ---------------------------------------------------------------------
+    # คอลัมน์ซ้าย: แท็บ Console / ประวัติเทรด / ปฏิทินข่าว
+    # ---------------------------------------------------------------------
+    TAB_CONSOLE = "🖥  Console"
+    TAB_HISTORY = "📋  ประวัติการเทรด"
+    TAB_CALENDAR = "📅  ปฏิทินเศรษฐกิจ"
 
-        m_inner = ctk.CTkFrame(master_box, fg_color="transparent")
-        m_inner.pack(fill="both", expand=True, padx=14, pady=12)
-
-        ctk.CTkLabel(
-            m_inner,
-            text="🎮 แผงควบคุมระบบ (Master Control)",
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            text_color=COLOR_TEXT_PRIMARY
-        ).pack(anchor="w", pady=(0, 8))
-
-        btn_row = ctk.CTkFrame(m_inner, fg_color="transparent")
-        btn_row.pack(fill="x")
-
-        # ปุ่ม Start / Pause บอทหลัก
-        self.btn_master_toggle = ctk.CTkButton(
-            btn_row,
-            text="▶️ เริ่มต้นการทำงานบอท (START)",
-            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
-            fg_color=COLOR_SUCCESS_GREEN,
-            hover_color="#059669",
-            text_color="#FFFFFF",
-            height=44,
-            corner_radius=8,
-            command=self._on_toggle_bot
+    def _build_main_tabs(self, parent):
+        self.main_tabs = ctk.CTkTabview(
+            parent,
+            fg_color=COLOR_CARD_BG,
+            border_width=1,
+            border_color=COLOR_CARD_BORDER,
+            corner_radius=12,
+            segmented_button_fg_color="#101218",
+            segmented_button_selected_color=COLOR_GOLD_WARM,
+            segmented_button_selected_hover_color=COLOR_GOLD_DARK,
+            segmented_button_unselected_color="#101218",
+            segmented_button_unselected_hover_color="#1F2430",
+            text_color=COLOR_TEXT_PRIMARY,
+            anchor="w",
         )
-        self.btn_master_toggle.pack(side="left", expand=True, fill="x", padx=(0, 6))
+        self.main_tabs.pack(fill="both", expand=True)
+        self.main_tabs._segmented_button.configure(font=self._font(13, "bold"))
+        for name in (self.TAB_CONSOLE, self.TAB_HISTORY, self.TAB_CALENDAR):
+            self.main_tabs.add(name)
 
-        # ปุ่ม Emergency ปิดทุกออเดอร์
-        self.btn_close_all = ctk.CTkButton(
-            btn_row,
-            text="⚠️ ปิดทุกไม้",
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            fg_color=COLOR_DANGER_RED,
-            hover_color="#DC2626",
-            text_color="#FFFFFF",
-            width=90,
-            height=44,
-            corner_radius=8,
-            command=self._on_click_close_all
-        )
-        self.btn_close_all.pack(side="left", padx=(0, 6))
+        self._build_terminal_console(self.main_tabs.tab(self.TAB_CONSOLE))
+        self._build_history_tab(self.main_tabs.tab(self.TAB_HISTORY))
+        self._build_calendar_tab(self.main_tabs.tab(self.TAB_CALENDAR))
+        self.main_tabs.set(self.TAB_CONSOLE)
 
-        # ปุ่มเปิด/ปิดเสียง
-        self.btn_sound_toggle = ctk.CTkButton(
-            btn_row,
-            text="🔊",
-            font=ctk.CTkFont(size=16),
-            fg_color="#262B36",
-            hover_color="#475569",
-            width=44,
-            height=44,
-            corner_radius=8,
-            command=self._on_toggle_sound
-        )
-        self.btn_sound_toggle.pack(side="left")
-
-    def _build_terminal_console(self):
-        """คอนโซลแสดงผลสดการทำงานของบอท (Live Trading Terminal Console)"""
-        console_frame = ctk.CTkFrame(self.dashboard_view, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
-        console_frame.pack(fill="both", expand=True, padx=20, pady=(0, 16))
-
-        c_header = ctk.CTkFrame(console_frame, fg_color="transparent")
-        c_header.pack(fill="x", padx=16, pady=(12, 6))
-
-        ctk.CTkLabel(
-            c_header,
-            text="🖥️ บันทึกการทำงานและสัญญาณเทรดสด (Live Terminal Console)",
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            text_color=COLOR_TEXT_PRIMARY
-        ).pack(side="left")
-
-        # ตัวเลือกควบคุมคอนโซล
-        c_controls = ctk.CTkFrame(c_header, fg_color="transparent")
-        c_controls.pack(side="right")
-
+    def _build_terminal_console(self, parent):
+        """คอนโซลแสดงผลสดการทำงานของบอท"""
+        bar = ctk.CTkFrame(parent, fg_color="transparent")
+        bar.pack(fill="x", padx=6, pady=(0, 6))
+        ctk.CTkLabel(bar, text="บันทึกการทำงานและสัญญาณเทรดสด", font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        self._small_button(bar, "ล้างข้อความ", self._clear_console, width=84).pack(side="right")
         self.chk_autoscroll = ctk.CTkCheckBox(
-            c_controls,
-            text="เลื่อนอัตโนมัติ (Auto-scroll)",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
+            bar,
+            text="เลื่อนอัตโนมัติ",
+            font=self._font(12),
             text_color=COLOR_TEXT_MUTED,
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
-            command=self._on_toggle_autoscroll
+            checkbox_width=18,
+            checkbox_height=18,
+            command=self._on_toggle_autoscroll,
         )
         self.chk_autoscroll.select()
-        self.chk_autoscroll.pack(side="left", padx=(0, 10))
+        self.chk_autoscroll.pack(side="right", padx=(0, 12))
 
-        btn_clear = ctk.CTkButton(
-            c_controls,
-            text="ล้างข้อความ",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
-            fg_color="#1A1E27",
-            hover_color="#262B36",
-            width=70,
-            height=26,
-            corner_radius=6,
-            command=self._clear_console
-        )
-        btn_clear.pack(side="left")
-
-        # กล่อง Textbox แสดงผลคอนโซล
         self.txt_console = ctk.CTkTextbox(
-            console_frame,
+            parent,
             font=ctk.CTkFont(family="Consolas", size=12),
-            fg_color="#0A0D14",
-            text_color="#E2E8F0",
+            fg_color="#0B0D12",
+            text_color="#D8DCE4",
             corner_radius=8,
             border_width=1,
-            border_color="#1E2638",
-            wrap="word"
+            border_color=COLOR_CARD_BORDER,
+            wrap="word",
         )
-        self.txt_console.pack(fill="both", expand=True, padx=16, pady=(0, 14))
-
-        # ข้อความเริ่มต้น
+        self.txt_console.pack(fill="both", expand=True, padx=6, pady=(0, 6))
         self.txt_console.insert(
             "end",
-            f"=== 🏆 AI MetaTrader 5 (FBS) Gold Pro v2026.1004.2030 Started ===\n"
-            f"• ระบบโฟกัสทองคำ XAUUSD แบบ 100% Specialist | Sweet Spot RRR 1:1.50 | SL 0.75 ATR\n"
-            f"• ระบบคิดค่าบริการ 1 บาท/ชั่วโมง (นับเฉพาะเวลาเปิดบอท) | รูปแบบเวลาคงเหลือ: ชั่วโมง.นาที (HH.MM)\n"
-            f"• กดปุ่ม '▶️ เริ่มต้นการทำงานบอท' เพื่อเริ่มการวิเคราะห์แท่งเทียน M15/H1 และเข้าเทรดอัตโนมัติ\n\n"
+            "=== 🏆 AI MetaTrader 5 (FBS) Gold Pro v2026.1004.2030 ===\n"
+            "• โฟกัสทองคำ XAUUSD · RRR 1:1.50 · SL 0.75 ATR\n"
+            "• คิดค่าบริการ 1 บาท/ชั่วโมง เฉพาะเวลาที่บอททำงาน\n"
+            "• กด '▶ เริ่มการทำงานบอท' ด้านขวาเพื่อเริ่มวิเคราะห์และเทรดอัตโนมัติ\n\n",
         )
+
+    # ---- ประวัติการเทรด (5 รายการต่อหน้า) ----
+    HISTORY_PAGE_SIZE = 5
+    HISTORY_COLUMNS = [
+        ("เวลาเปิด (MT5)", 96, "w"),
+        ("ฝั่ง", 40, "center"),
+        ("แผน", 140, "w"),
+        ("Lot", 36, "e"),
+        ("ราคาเข้า", 72, "e"),
+        ("ราคาออก", 72, "e"),
+        ("สถานะ", 64, "center"),
+        ("กำไร", 76, "e"),
+    ]
+
+    def _build_history_tab(self, parent):
+        top = ctk.CTkFrame(parent, fg_color="transparent")
+        top.pack(fill="x", padx=6, pady=(0, 8))
+        self.lbl_history_summary = ctk.CTkLabel(top, text="กำลังโหลดประวัติจาก MT5...", font=self._font(12), text_color=COLOR_TEXT_MUTED)
+        self.lbl_history_summary.pack(side="left")
+        self._small_button(top, "🔄 รีเฟรช", lambda: self._refresh_history_async(force=True), width=80).pack(side="right")
+
+        table = ctk.CTkFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
+        table.pack(fill="x", padx=6)
+        for col, (_, width, _) in enumerate(self.HISTORY_COLUMNS):
+            table.grid_columnconfigure(col, minsize=width, weight=1 if col == 2 else 0)
+
+        for col, (title, _, anchor) in enumerate(self.HISTORY_COLUMNS):
+            ctk.CTkLabel(table, text=title, font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor).grid(
+                row=0, column=col, sticky="ew", padx=6, pady=(10, 6)
+            )
+        ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=1, column=0, columnspan=len(self.HISTORY_COLUMNS), sticky="ew", padx=6)
+
+        # สร้างแถวไว้ล่วงหน้า 5 แถว แล้วอัปเดตข้อความแทนการสร้างใหม่ (ลื่นกว่า)
+        self.history_cells = []
+        for r in range(self.HISTORY_PAGE_SIZE):
+            cells = []
+            for col, (_, _, anchor) in enumerate(self.HISTORY_COLUMNS):
+                lbl = ctk.CTkLabel(table, text="", font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor=anchor, height=34)
+                last = r == self.HISTORY_PAGE_SIZE - 1
+                lbl.grid(row=r + 2, column=col, sticky="ew", padx=6, pady=(0, 6) if last else 0)
+                cells.append(lbl)
+            self.history_cells.append(cells)
+
+        self.lbl_history_empty = ctk.CTkLabel(parent, text="", font=self._font(12), text_color=COLOR_TEXT_MUTED)
+        self.lbl_history_empty.pack(pady=(8, 0))
+
+        pager = ctk.CTkFrame(parent, fg_color="transparent")
+        pager.pack(fill="x", padx=6, pady=(6, 0))
+        self.btn_history_prev = self._small_button(pager, "◀ ใหม่กว่า", lambda: self._change_history_page(-1), width=90)
+        self.btn_history_prev.pack(side="left")
+        self.lbl_history_page = ctk.CTkLabel(pager, text="หน้า 1 / 1", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY)
+        self.lbl_history_page.pack(side="left", expand=True)
+        self.btn_history_next = self._small_button(pager, "เก่ากว่า ▶", lambda: self._change_history_page(1), width=90)
+        self.btn_history_next.pack(side="right")
+
+    def _refresh_history_async(self, force=False):
+        if self._history_loading and not force:
+            return
+        self._history_loading = True
+
+        def worker():
+            rows = bot_ctrl.get_trade_history(days=90)
+            self._history_rows = rows
+            self._history_dirty = True
+            self._history_loading = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _change_history_page(self, delta):
+        pages = max(1, -(-len(self._history_rows) // self.HISTORY_PAGE_SIZE))
+        self._history_page = min(max(0, self._history_page + delta), pages - 1)
+        self._render_history()
+
+    @staticmethod
+    def _fmt_mt5_time(epoch):
+        if not epoch:
+            return "—"
+        return time.strftime("%d/%m %H:%M", time.gmtime(epoch))  # เวลา MT5 เก็บเป็นเวลาเซิร์ฟเวอร์
+
+    def _render_history(self):
+        rows = self._history_rows
+        total = len(rows)
+        pages = max(1, -(-total // self.HISTORY_PAGE_SIZE))
+        self._history_page = min(self._history_page, pages - 1)
+        start = self._history_page * self.HISTORY_PAGE_SIZE
+        page_rows = rows[start:start + self.HISTORY_PAGE_SIZE]
+
+        closed = [r for r in rows if r.get("status") == "CLOSED"]
+        wins = sum(1 for r in closed if r["profit"] > 0)
+        net = sum(r["profit"] for r in closed)
+        open_count = total - len(closed)
+        self.lbl_history_summary.configure(
+            text=f"90 วันล่าสุด · ปิดแล้ว {len(closed)} ไม้ (ชนะ {wins} / แพ้ {len(closed) - wins})"
+            f" · เปิดอยู่ {open_count} · กำไรสุทธิ {'+' if net >= 0 else '-'}${abs(net):,.2f}",
+            text_color=COLOR_SUCCESS_GREEN if net > 0 else (COLOR_DANGER_RED if net < 0 else COLOR_TEXT_MUTED),
+        )
+
+        for i, cells in enumerate(self.history_cells):
+            if i >= len(page_rows):
+                for c in cells:
+                    c.configure(text="")
+                continue
+            r = page_rows[i]
+            is_open = r.get("status") != "CLOSED"
+            profit = r.get("profit", 0.0)
+            values = [
+                self._fmt_mt5_time(r.get("open_time")),
+                r.get("side", ""),
+                (r.get("plan") or "—")[:22],
+                f"{r.get('volume', 0):.2f}",
+                f"{r.get('open_price', 0):,.2f}",
+                "—" if is_open else f"{r.get('close_price', 0):,.2f}",
+                "เปิดอยู่" if is_open else "ปิดแล้ว",
+                f"{'+' if profit >= 0 else '-'}${abs(profit):,.2f}",
+            ]
+            colors = [
+                COLOR_TEXT_MUTED,
+                COLOR_SUCCESS_GREEN if r.get("side") == "BUY" else COLOR_DANGER_RED,
+                COLOR_TEXT_PRIMARY,
+                COLOR_TEXT_PRIMARY,
+                COLOR_TEXT_PRIMARY,
+                COLOR_TEXT_PRIMARY,
+                COLOR_CYAN_ACCENT if is_open else COLOR_TEXT_MUTED,
+                COLOR_SUCCESS_GREEN if profit > 0 else (COLOR_DANGER_RED if profit < 0 else COLOR_TEXT_MUTED),
+            ]
+            for c, v, color in zip(cells, values, colors):
+                c.configure(text=v, text_color=color)
+
+        self.lbl_history_empty.configure(text="" if total else "ยังไม่มีประวัติการเทรด XAUUSD ใน 90 วันที่ผ่านมา")
+        self.lbl_history_page.configure(text=f"หน้า {self._history_page + 1} / {pages}  ·  ทั้งหมด {total} ไม้")
+        self.btn_history_prev.configure(state="normal" if self._history_page > 0 else "disabled")
+        self.btn_history_next.configure(state="normal" if self._history_page < pages - 1 else "disabled")
+
+    # ---- ปฏิทินเศรษฐกิจ ----
+    IMPACT_COLORS = {"High": "#F87171", "Medium": "#FB923C", "Low": "#A3ABBA", "Holiday": "#6E7687"}
+    IMPACT_TH = {"High": "สูง", "Medium": "กลาง", "Low": "ต่ำ", "Holiday": "วันหยุด"}
+
+    def _build_calendar_tab(self, parent):
+        bar = ctk.CTkFrame(parent, fg_color="transparent")
+        bar.pack(fill="x", padx=6, pady=(0, 8))
+
+        self.cal_currency = ctk.CTkSegmentedButton(
+            bar,
+            values=["USD (มีผลต่อทอง)", "ทุกสกุลเงิน"],
+            font=self._font(12),
+            selected_color=COLOR_GOLD_WARM,
+            selected_hover_color=COLOR_GOLD_DARK,
+            unselected_color="#1A1E27",
+            unselected_hover_color="#262B36",
+            command=lambda _v: self._render_calendar(),
+        )
+        self.cal_currency.set("USD (มีผลต่อทอง)")
+        self.cal_currency.pack(side="left")
+
+        self.cal_impact = ctk.CTkSegmentedButton(
+            bar,
+            values=["สูง", "กลาง+สูง", "ทั้งหมด"],
+            font=self._font(12),
+            selected_color=COLOR_GOLD_WARM,
+            selected_hover_color=COLOR_GOLD_DARK,
+            unselected_color="#1A1E27",
+            unselected_hover_color="#262B36",
+            command=lambda _v: self._render_calendar(),
+        )
+        self.cal_impact.set("กลาง+สูง")
+        self.cal_impact.pack(side="left", padx=10)
+
+        self._small_button(bar, "🌐 Investing.com", lambda: webbrowser.open(econ_calendar.INVESTING_URL), width=120).pack(side="right")
+        self._small_button(bar, "🔄", lambda: self._refresh_calendar_async(force=True), width=36).pack(side="right", padx=(0, 8))
+
+        self.cal_list = ctk.CTkScrollableFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
+        self.cal_list.pack(fill="both", expand=True, padx=6, pady=(0, 4))
+        self.cal_list.grid_columnconfigure(3, weight=1)
+
+        ctk.CTkLabel(
+            parent,
+            text="เวลาไทย (UTC+7) · ข้อมูลข่าวเศรษฐกิจรายสัปดาห์ อัปเดตทุก 30 นาที",
+            font=self._font(10),
+            text_color=COLOR_TEXT_MUTED,
+        ).pack(anchor="w", padx=8)
+
+    def _refresh_calendar_async(self, force=False):
+        if self._calendar_loading:
+            return
+        self._calendar_loading = True
+
+        def worker():
+            self._calendar_events = econ_calendar.fetch_events(force=force)
+            self._calendar_dirty = True
+            self._calendar_loading = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render_calendar(self):
+        for w in self.cal_list.winfo_children():
+            w.destroy()
+
+        usd_only = self.cal_currency.get().startswith("USD")
+        impact = {"สูง": "High", "กลาง+สูง": "Medium", "ทั้งหมด": "Low"}[self.cal_impact.get()]
+        events = econ_calendar.filter_events(self._calendar_events, usd_only=usd_only, min_impact=impact)
+
+        if not events:
+            msg = econ_calendar.last_error() and "โหลดปฏิทินข่าวไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วกด 🔄" or "ไม่มีข่าวตามตัวกรองในสัปดาห์นี้"
+            ctk.CTkLabel(self.cal_list, text=msg, font=self._font(12), text_color=COLOR_TEXT_MUTED).grid(row=0, column=0, columnspan=6, pady=30)
+            return
+
+        now = econ_calendar.datetime.now(econ_calendar.BANGKOK)
+        row = 0
+        current_day = None
+        for ev in events:
+            day = econ_calendar.format_day(ev["time"])
+            if day != current_day:
+                current_day = day
+                is_today = ev["time"].date() == now.date()
+                ctk.CTkLabel(
+                    self.cal_list,
+                    text=f"{day}{'  · วันนี้' if is_today else ''}",
+                    font=self._font(12, "bold"),
+                    text_color=COLOR_GOLD_PRIMARY if is_today else COLOR_TEXT_PRIMARY,
+                    anchor="w",
+                ).grid(row=row, column=0, columnspan=6, sticky="ew", padx=10, pady=(10, 2))
+                row += 1
+
+            past = ev["time"] < now
+            fg = COLOR_TEXT_MUTED if past else COLOR_TEXT_PRIMARY
+            ctk.CTkLabel(self.cal_list, text=ev["time"].strftime("%H:%M"), font=self._font(12, "bold"), text_color=fg, width=48, anchor="w").grid(row=row, column=0, padx=(12, 4), sticky="w")
+            ctk.CTkLabel(self.cal_list, text=ev["currency"], font=self._font(11, "bold"), text_color=fg, width=36).grid(row=row, column=1, padx=4)
+            ctk.CTkLabel(
+                self.cal_list,
+                text=self.IMPACT_TH.get(ev["impact"], ev["impact"]),
+                font=self._font(10, "bold"),
+                text_color="#101218",
+                fg_color=self.IMPACT_COLORS.get(ev["impact"], "#A3ABBA"),
+                corner_radius=6,
+                width=48,
+                height=20,
+            ).grid(row=row, column=2, padx=4, pady=3)
+            ctk.CTkLabel(self.cal_list, text=ev["title"], font=self._font(12), text_color=fg, anchor="w").grid(row=row, column=3, sticky="ew", padx=6)
+            ctk.CTkLabel(self.cal_list, text=f"คาด {ev['forecast'] or '—'}", font=self._font(11), text_color=COLOR_TEXT_MUTED, width=80, anchor="e").grid(row=row, column=4, padx=4)
+            ctk.CTkLabel(self.cal_list, text=f"ก่อน {ev['previous'] or '—'}", font=self._font(11), text_color=COLOR_TEXT_MUTED, width=84, anchor="e").grid(row=row, column=5, padx=(4, 12))
+            row += 1
+
+    def _render_next_news(self):
+        ev = econ_calendar.next_high_impact(self._calendar_events)
+        if not ev:
+            self.lbl_news_title.configure(text="ไม่มีข่าว USD ผลกระทบสูงในสัปดาห์นี้" if self._calendar_events else "กำลังโหลดปฏิทินข่าว...")
+            self.lbl_news_time.configure(text="")
+            self.lbl_news_countdown.configure(text="")
+            self.lbl_news_badge.configure(text="", fg_color=COLOR_CARD_BG)
+            return
+        self.lbl_news_badge.configure(text="  ผลกระทบสูง  ", fg_color=self.IMPACT_COLORS["High"])
+        self.lbl_news_title.configure(text=ev["title"])
+        detail = f"{econ_calendar.format_day(ev['time'])} {ev['time'].strftime('%H:%M')} น."
+        if ev["forecast"] or ev["previous"]:
+            detail += f" · คาด {ev['forecast'] or '—'} · ก่อน {ev['previous'] or '—'}"
+        self.lbl_news_time.configure(text=detail)
+        countdown = econ_calendar.format_countdown(ev["time"])
+        soon = (ev["time"] - econ_calendar.datetime.now(econ_calendar.BANGKOK)).total_seconds() < 3600
+        self.lbl_news_countdown.configure(text=countdown, text_color=COLOR_DANGER_RED if soon else COLOR_GOLD_PRIMARY)
 
     # =========================================================================
     # 3. การควบคุมบอท และเหตุการณ์ต่างๆ (BOT ACTIONS & EVENTS)
@@ -1251,39 +1448,20 @@ class MainTradingApp(ctk.CTk):
 
     def _on_bot_status_changed(self, status: str):
         """อัปเดตสีและข้อความของปุ่ม Master เมื่อสถานะเปลี่ยน"""
+        if not hasattr(self, "btn_master_toggle"):
+            return
         if status == "RUNNING":
-            self.btn_master_toggle.configure(
-                text="⏸️ หยุดชั่วคราว (PAUSE)",
-                fg_color=COLOR_GOLD_WARM,
-                hover_color=COLOR_GOLD_DARK,
-                text_color="#1A1406"
-            )
-            self.lbl_metering_status.configure(
-                text="🟢 กำลังตัดเวลา (-1 นาที/รอบ)",
-                text_color=COLOR_SUCCESS_GREEN
-            )
+            self.btn_master_toggle.configure(text="⏸  หยุดชั่วคราว", fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, text_color="#1A1406")
+            self.lbl_metering_status.configure(text="● กำลังนับเวลา", text_color=COLOR_SUCCESS_GREEN)
+            self.lbl_bot_state.configure(text="● บอทกำลังทำงาน — สแกนตลาดทุก 20 วินาที", text_color=COLOR_SUCCESS_GREEN)
         elif status == "PAUSED":
-            self.btn_master_toggle.configure(
-                text="▶️ ทำงานต่อ (RESUME)",
-                fg_color=COLOR_SUCCESS_GREEN,
-                hover_color="#059669",
-                text_color="#FFFFFF"
-            )
-            self.lbl_metering_status.configure(
-                text="⏸️ หยุดนับเวลา (บอทพัก)",
-                text_color=COLOR_TEXT_MUTED
-            )
-        else: # STOPPED
-            self.btn_master_toggle.configure(
-                text="▶️ เริ่มต้นการทำงานบอท (START)",
-                fg_color=COLOR_SUCCESS_GREEN,
-                hover_color="#059669",
-                text_color="#FFFFFF"
-            )
-            self.lbl_metering_status.configure(
-                text="⏸️ หยุดนับเวลา",
-                text_color=COLOR_TEXT_MUTED
-            )
+            self.btn_master_toggle.configure(text="▶  ทำงานต่อ", fg_color=COLOR_SUCCESS_GREEN, hover_color="#10A374", text_color="#06281C")
+            self.lbl_metering_status.configure(text="⏸ หยุดนับเวลา", text_color=COLOR_TEXT_MUTED)
+            self.lbl_bot_state.configure(text="● หยุดชั่วคราว (ไม่ตัดเวลา)", text_color=COLOR_GOLD_PRIMARY)
+        else:  # STOPPED
+            self.btn_master_toggle.configure(text="▶  เริ่มการทำงานบอท", fg_color=COLOR_SUCCESS_GREEN, hover_color="#10A374", text_color="#06281C")
+            self.lbl_metering_status.configure(text="⏸ หยุดนับเวลา", text_color=COLOR_TEXT_MUTED)
+            self.lbl_bot_state.configure(text="● บอทหยุดทำงาน", text_color=COLOR_TEXT_MUTED)
 
     def _on_time_expired(self):
         """เมื่อชั่วโมงการใช้งานหมดลง"""
@@ -1313,7 +1491,7 @@ class MainTradingApp(ctk.CTk):
             self.btn_sound_toggle.configure(text="🔊", fg_color="#262B36")
             sound_manager.play_tp_hit()
         else:
-            self.btn_sound_toggle.configure(text="🔇", fg_color=COLOR_DANGER_RED)
+            self.btn_sound_toggle.configure(text="🔇", fg_color="#3A2226")
 
     def _on_toggle_autoscroll(self):
         self.auto_scroll_logs = self.chk_autoscroll.get()
@@ -1406,10 +1584,10 @@ class MainTradingApp(ctk.CTk):
                 srv = telemetry.get("server", "N/A")
                 if hasattr(self, 'card_mt5'):
                     if is_conn:
-                        self.card_mt5["val_lbl"].configure(text=f"🟢 #{acc_num}", text_color=COLOR_SUCCESS_GREEN)
-                        self.card_mt5["sub_lbl"].configure(text=f"Server: {srv} (Connected)")
+                        self.card_mt5["val_lbl"].configure(text=f"#{acc_num}", text_color=COLOR_SUCCESS_GREEN)
+                        self.card_mt5["sub_lbl"].configure(text=f"● เชื่อมต่อแล้ว · {srv}")
                     else:
-                        self.card_mt5["val_lbl"].configure(text="🔴 Disconnected", text_color=COLOR_DANGER_RED)
+                        self.card_mt5["val_lbl"].configure(text="ไม่ได้เชื่อมต่อ", text_color=COLOR_DANGER_RED)
                         self.card_mt5["sub_lbl"].configure(text="กรุณาเปิด MT5 Terminal")
 
                 # อัปเดต Balance & Equity
@@ -1420,7 +1598,7 @@ class MainTradingApp(ctk.CTk):
                 if hasattr(self, 'card_balance'):
                     flt_sign = "+" if flt >= 0 else ""
                     self.card_balance["val_lbl"].configure(text=f"${bal:,.2f}")
-                    self.card_balance["sub_lbl"].configure(text=f"Eq: ${eq:,.2f} | Float: {flt_sign}${flt:.2f}")
+                    self.card_balance["sub_lbl"].configure(text=f"Equity ${eq:,.2f} · Float {flt_sign}${flt:.2f}")
 
                 # อัปเดตราคาทองคำ XAUUSD
                 bid = telemetry.get("xau_bid", 0.0)
@@ -1428,11 +1606,13 @@ class MainTradingApp(ctk.CTk):
                 spd = telemetry.get("spread_pts", 0)
                 if hasattr(self, 'card_gold') and bid > 0:
                     self.card_gold["val_lbl"].configure(text=f"{bid:,.2f}")
-                    self.card_gold["sub_lbl"].configure(text=f"Ask: {ask:,.2f} | Spread: {spd} pts")
+                    self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts")
 
                 # อัปเดตสภาวะตลาด H4 และ H1
                 radar = telemetry.get("radar", {})
                 h4_trend = radar.get("h4_trend", "ANALYZING...")
+                if h4_trend == "ANALYZING...":
+                    h4_trend = "รอเริ่มบอท" if not bot_ctrl.is_active else "กำลังวิเคราะห์"
                 h4_pct = radar.get("h4_diff_pct", 0.0)
                 if hasattr(self, 'card_trend'):
                     trend_color = COLOR_GOLD_WARM
@@ -1444,7 +1624,7 @@ class MainTradingApp(ctk.CTk):
                         trend_color = COLOR_CYAN_ACCENT
 
                     self.card_trend["val_lbl"].configure(text=h4_trend, text_color=trend_color)
-                    self.card_trend["sub_lbl"].configure(text=f"H4 Diff: {h4_pct:+.2f}% | Pro-Trend Active")
+                    self.card_trend["sub_lbl"].configure(text=f"H4 MA10/30 {h4_pct:+.2f}% · Strict Pro-Trend")
 
                 # อัปเดตสถิติการเทรดสดบนป้ายแผนการเทรด 5 แผน
                 if hasattr(self, 'plan_stat_badges'):
@@ -1456,8 +1636,27 @@ class MainTradingApp(ctk.CTk):
                         tr = ps.get("total_trades", 0)
                         wr = ps.get("win_rate_pct", 0.0)
                         prof = ps.get("total_profit_usd", 0.0)
-                        prof_sign = "+" if prof >= 0 else ""
-                        stat_lbl.configure(text=f"เข้า: {tr} | WR: {wr:.0f}% | {prof_sign}${prof:.2f}")
+                        prof_sign = "+" if prof >= 0 else "-"
+                        stat_lbl.configure(
+                            text=f"{tr} ไม้ · {wr:.0f}% · {prof_sign}${abs(prof):.2f}",
+                            text_color=COLOR_SUCCESS_GREEN if prof > 0 else (COLOR_DANGER_RED if prof < 0 else COLOR_TEXT_MUTED),
+                        )
+
+                # ประวัติการเทรด / ปฏิทินข่าว (โหลดในเธรดเบื้องหลัง แล้ววาดบน UI thread)
+                self._ui_tick += 1
+                if getattr(self, "_history_dirty", False):
+                    self._history_dirty = False
+                    self._render_history()
+                if getattr(self, "_calendar_dirty", False):
+                    self._calendar_dirty = False
+                    self._render_calendar()
+                    self._render_next_news()
+                if self._ui_tick % 40 == 0:      # ~20 วินาที
+                    self._refresh_history_async()
+                if self._ui_tick % 30 == 0:      # ~15 วินาที (ตัวนับถอยหลังข่าว)
+                    self._render_next_news()
+                if self._ui_tick % 3600 == 0:    # ~30 นาที
+                    self._refresh_calendar_async(force=True)
 
         except Exception as e:
             pass

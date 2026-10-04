@@ -103,6 +103,7 @@ last_lock_time = {}               # {ticket: timestamp} ป้องกัน Lo
 last_loss_plan = {}               # {sym: {direction: (plan_name, timestamp)}} บันทึกเฉพาะไม้ขาดทุน — block 60 นาที
 last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กันเข้าไม้ Plan 4/5 ซ้ำบนแท่ง Cross เดิม
 _telemetry_thread = None          # เธรดสตรีม Telemetry (เริ่มครั้งเดียวต่อโปรเซส)
+_self_closed_tickets = set()      # ticket ที่บอทปิดเองผ่าน close_position() — กันนับขาดทุน/Circuit Breaker ซ้ำ
 
 # Bot Running & Pause Controls (สำหรับการเชื่อมต่อกับ GUI Launcher)
 BOT_RUNNING_FLAG = True
@@ -561,6 +562,9 @@ def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
         # ส่งประวัติขึ้น Supabase Cloud Dashboard และบันทึกสถิติแยกตาม User และ Plan
         ticket = res.order if hasattr(res, 'order') else 0
         cur_user = license_mgr.get_current_user()
+        side = 'BUY' if order_type == 0 else 'SELL'
+        supabase_sync.log_trade(ticket, symbol, f'OPEN_{side}', plan_name, float(price), float(volume), float(sl), float(tp),
+                                profit=0, comment=f'เปิด {side} · {plan_name}', user_id=cur_user.get("user_id"), email=cur_user.get("email"))
         stats_manager.stats_mgr.record_entry(
             user_id=cur_user.get("user_id"),
             email=cur_user.get("email"),
@@ -573,6 +577,7 @@ def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
             sl=sl,
             tp=tp
         )
+        return True
     else:
         err_msg = res.comment if res is not None else "No response from MT5"
         err_code = res.retcode if res is not None else -1
@@ -603,6 +608,7 @@ def close_position(position, comment="AI Reversal Close"):
     res = mt5.order_send(request)
     if res is not None and res.retcode == mt5.TRADE_RETCODE_DONE:
         sym = position.symbol
+        _self_closed_tickets.add(position.ticket)
         print(f"{Colors.YELLOW}[ORDER CLOSED] {sym} Ticket #{position.ticket} Closed Successfully{Colors.RESET}")
         last_exit_time[sym] = time.time()
 
@@ -661,6 +667,9 @@ def close_position(position, comment="AI Reversal Close"):
         
         # ส่งประวัติปิดไม้ขึ้น Supabase Cloud Dashboard (พร้อม profit จริง) และอัปเดตสถิติ
         cur_user = license_mgr.get_current_user()
+        supabase_sync.log_trade(position.ticket, sym, 'CLOSE', position.comment or 'Manual', float(request['price']), float(position.volume),
+                                0, 0, profit=final_profit, comment=f'{comment} | {"+" if final_profit >= 0 else ""}${final_profit:.2f}',
+                                user_id=cur_user.get("user_id"), email=cur_user.get("email"))
         stats_manager.stats_mgr.record_close(
             ticket=position.ticket,
             profit=final_profit,
@@ -1273,60 +1282,73 @@ def main():
                     closed_deal_profit = None
                     closed_deal_type = None
                     closed_deal_ticket = 0
+                    closed_deal_price = 0.0
+                    closed_deal_volume = 0.0
                     try:
-                        deals = mt5.history_deals_get(datetime.now() - timedelta(minutes=15), datetime.now())
+                        # เวลา Server ของโบรกเกอร์ต่างจากเวลาเครื่อง — ใช้ช่วงกว้างแล้วเลือก Deal ล่าสุด
+                        deals = mt5.history_deals_get(datetime.now() - timedelta(days=2), datetime.now() + timedelta(days=1))
                         if deals:
                             # entry == 1 คือ DEAL_ENTRY_OUT (Deal ปิดสัญญา)
-                            out_deals = [d for d in deals if d.symbol == sym and d.entry == 1]
+                            out_deals = sorted([d for d in deals if d.symbol == sym and d.entry == 1], key=lambda d: d.time_msc)
                             if out_deals:
-                                closed_deal_profit = out_deals[-1].profit
-                                closed_deal_type = 'BUY' if out_deals[-1].type == 0 else 'SELL'
-                                closed_deal_ticket = getattr(out_deals[-1], 'position_id', 0) or getattr(out_deals[-1], 'order', 0)
+                                last_out = out_deals[-1]
+                                closed_deal_profit = last_out.profit + getattr(last_out, 'commission', 0.0) + getattr(last_out, 'swap', 0.0)
+                                # Deal ปิดเป็นฝั่งตรงข้ามกับไม้ (ปิด BUY = Deal SELL) → ทิศของไม้คือฝั่งตรงข้ามของ Deal
+                                closed_deal_type = 'SELL' if last_out.type == 0 else 'BUY'
+                                closed_deal_ticket = getattr(last_out, 'position_id', 0) or getattr(last_out, 'order', 0)
+                                closed_deal_price = float(last_out.price)
+                                closed_deal_volume = float(last_out.volume)
                     except Exception:
                         pass
 
-                    # [Priority 4] Same-Plan Cooldown: block 60 นาที เฉพาะเมื่อขาดทุน (SL Hit)
-                    if closed_deal_type:
-                        if closed_deal_profit is not None and closed_deal_profit < 0:
-                            # ไม้ขาดทุน → block 60 นาที
-                            if sym not in last_loss_plan:
-                                last_loss_plan[sym] = {}
-                            last_loss_plan[sym][closed_deal_type] = ('SL Hit', time.time())
-                            print(f"{Colors.YELLOW}[LOSS BLOCK] {sym} {closed_deal_type} ชน SL — block ทิศนี้ 60 นาที{Colors.RESET}")
-                            supabase_sync.log_risk_event(sym, 'LOSS_BLOCK', closed_deal_type, f'ชน SL — ขาดทุน ${abs(closed_deal_profit):.2f} — block {SAME_PLAN_COOLDOWN_MINUTES}m', loss=round(closed_deal_profit, 2))
-                            cur_user = license_mgr.get_current_user()
-                            supabase_sync.log_trade(closed_deal_ticket, sym, 'SL_HIT', 'SL Hit', 0, 0, 0, 0, profit=round(closed_deal_profit, 2), comment=f'SL Hit | Loss: ${closed_deal_profit:+.2f}', user_id=cur_user.get("user_id"), email=cur_user.get("email"))
-                            stats_manager.stats_mgr.record_close(ticket=closed_deal_ticket, profit=closed_deal_profit, reason="SL Hit", user_id=cur_user.get("user_id"))
-                        elif closed_deal_profit is not None and closed_deal_profit > 0:
-                            # ไม้กำไร (TP Hit) → ลบ lock ออก
-                            if sym in last_loss_plan and closed_deal_type in last_loss_plan[sym]:
-                                del last_loss_plan[sym][closed_deal_type]
-                                print(f"{Colors.GREEN}[LOSS BLOCK CLEARED] {sym} {closed_deal_type} ชน TP — ลบ block เข้าใหม่ได้ทันที{Colors.RESET}")
-                            cur_user = license_mgr.get_current_user()
-                            supabase_sync.log_trade(closed_deal_ticket, sym, 'TP_HIT', 'TP Hit', 0, 0, 0, 0, profit=round(closed_deal_profit, 2), comment=f'TP Hit | Profit: ${closed_deal_profit:+.2f}', user_id=cur_user.get("user_id"), email=cur_user.get("email"))
-                            stats_manager.stats_mgr.record_close(ticket=closed_deal_ticket, profit=closed_deal_profit, reason="TP Hit", user_id=cur_user.get("user_id"))
+                    # ไม้ที่บอทปิดเองผ่าน close_position() ถูกนับขาดทุน/บันทึกสถิติไปแล้ว — ไม่นับซ้ำ
+                    handled_by_bot = bool(closed_deal_ticket) and closed_deal_ticket in _self_closed_tickets
+                    if handled_by_bot:
+                        _self_closed_tickets.discard(closed_deal_ticket)
 
-                    # [Priority 1] Circuit Breaker: นับขาดทุนจาก SL Hit
-                    if closed_deal_profit is not None and closed_deal_profit < 0:
-                        consecutive_loss[sym] = consecutive_loss.get(sym, 0) + 1
-                        loss_count = consecutive_loss[sym]
-                        if loss_count >= MAX_CONSECUTIVE_LOSS:
-                            ban_until = time.time() + (CIRCUIT_BREAKER_MINUTES * 60)
-                            last_exit_time[sym] = ban_until
-                            print(f"{Colors.RED}{Colors.BOLD}[CIRCUIT BREAKER] {sym} ขาดทุน {loss_count} ไม้ติดกัน! หยุดเทรด {CIRCUIT_BREAKER_MINUTES} นาที จนถึง {time.strftime('%H:%M:%S', time.localtime(ban_until))}{Colors.RESET}")
-                            supabase_sync.log_risk_event(sym, 'CIRCUIT_BREAKER', 'N/A', f'ขาดทุน {loss_count} ไม้ติดต่อกัน (SL Hit) - หยุด {CIRCUIT_BREAKER_MINUTES}m', loss=round(closed_deal_profit, 2))
-                    elif closed_deal_profit is not None and closed_deal_profit > 0:
-                        consecutive_loss[sym] = 0  # reset เมื่อได้กำไร
+                    if not handled_by_bot:
+                        # [Priority 4] Same-Plan Cooldown: block 60 นาที เฉพาะเมื่อขาดทุน (SL Hit)
+                        if closed_deal_type:
+                            if closed_deal_profit is not None and closed_deal_profit < 0:
+                                # ไม้ขาดทุน → block 60 นาที
+                                if sym not in last_loss_plan:
+                                    last_loss_plan[sym] = {}
+                                last_loss_plan[sym][closed_deal_type] = ('SL Hit', time.time())
+                                print(f"{Colors.YELLOW}[LOSS BLOCK] {sym} {closed_deal_type} ชน SL — block ทิศนี้ 60 นาที{Colors.RESET}")
+                                supabase_sync.log_risk_event(sym, 'LOSS_BLOCK', closed_deal_type, f'ชน SL — ขาดทุน ${abs(closed_deal_profit):.2f} — block {SAME_PLAN_COOLDOWN_MINUTES}m', loss=round(closed_deal_profit, 2))
+                                cur_user = license_mgr.get_current_user()
+                                supabase_sync.log_trade(closed_deal_ticket, sym, 'SL_HIT', 'SL Hit', closed_deal_price, closed_deal_volume, 0, 0, profit=round(closed_deal_profit, 2), comment=f'SL Hit | Loss: ${closed_deal_profit:+.2f}', user_id=cur_user.get("user_id"), email=cur_user.get("email"))
+                                stats_manager.stats_mgr.record_close(ticket=closed_deal_ticket, profit=closed_deal_profit, reason="SL Hit", user_id=cur_user.get("user_id"))
+                            elif closed_deal_profit is not None and closed_deal_profit > 0:
+                                # ไม้กำไร (TP Hit) → ลบ lock ออก
+                                if sym in last_loss_plan and closed_deal_type in last_loss_plan[sym]:
+                                    del last_loss_plan[sym][closed_deal_type]
+                                    print(f"{Colors.GREEN}[LOSS BLOCK CLEARED] {sym} {closed_deal_type} ชน TP — ลบ block เข้าใหม่ได้ทันที{Colors.RESET}")
+                                cur_user = license_mgr.get_current_user()
+                                supabase_sync.log_trade(closed_deal_ticket, sym, 'TP_HIT', 'TP Hit', closed_deal_price, closed_deal_volume, 0, 0, profit=round(closed_deal_profit, 2), comment=f'TP Hit | Profit: ${closed_deal_profit:+.2f}', user_id=cur_user.get("user_id"), email=cur_user.get("email"))
+                                stats_manager.stats_mgr.record_close(ticket=closed_deal_ticket, profit=closed_deal_profit, reason="TP Hit", user_id=cur_user.get("user_id"))
+
+                        # [Priority 1] Circuit Breaker: นับขาดทุนจาก SL Hit
+                        if closed_deal_profit is not None and closed_deal_profit < 0:
+                            consecutive_loss[sym] = consecutive_loss.get(sym, 0) + 1
+                            loss_count = consecutive_loss[sym]
+                            if loss_count >= MAX_CONSECUTIVE_LOSS:
+                                ban_until = time.time() + (CIRCUIT_BREAKER_MINUTES * 60)
+                                last_exit_time[sym] = ban_until
+                                print(f"{Colors.RED}{Colors.BOLD}[CIRCUIT BREAKER] {sym} ขาดทุน {loss_count} ไม้ติดกัน! หยุดเทรด {CIRCUIT_BREAKER_MINUTES} นาที จนถึง {time.strftime('%H:%M:%S', time.localtime(ban_until))}{Colors.RESET}")
+                                supabase_sync.log_risk_event(sym, 'CIRCUIT_BREAKER', 'N/A', f'ขาดทุน {loss_count} ไม้ติดต่อกัน (SL Hit) - หยุด {CIRCUIT_BREAKER_MINUTES}m', loss=round(closed_deal_profit, 2))
+                        elif closed_deal_profit is not None and closed_deal_profit > 0:
+                            consecutive_loss[sym] = 0  # reset เมื่อได้กำไร
                         
-                    if closed_deal_profit is not None and closed_deal_profit > 0:
-                        print(f"\n{Colors.GREEN}{Colors.BOLD}[TP HIT] {sym} Order closed in PROFIT: +${closed_deal_profit:.2f}! (เสียงกระดิ่ง){Colors.RESET}")
-                        sound_manager.play_tp_hit()  # 2. เมื่อชน TP เป็นเสียงกระดิ่ง
-                    elif closed_deal_profit is not None and closed_deal_profit <= 0:
-                        print(f"\n{Colors.RED}{Colors.BOLD}[SL HIT] {sym} Order closed with LOSS: -${abs(closed_deal_profit):.2f}! (เสียงอ๊อด){Colors.RESET}")
-                        sound_manager.play_sl_hit()  # 3. เมื่อชน SL เป็นเสียงอ๊อด
-                    else:
-                        print(f"\n[COOLDOWN] {sym} Order closed (TP/SL Hit) -> Starting cooldown rest for {cd_show}m")
-                        sound_manager.play_tp_hit()
+                        if closed_deal_profit is not None and closed_deal_profit > 0:
+                            print(f"\n{Colors.GREEN}{Colors.BOLD}[TP HIT] {sym} Order closed in PROFIT: +${closed_deal_profit:.2f}! (เสียงกระดิ่ง){Colors.RESET}")
+                            sound_manager.play_tp_hit()  # 2. เมื่อชน TP เป็นเสียงกระดิ่ง
+                        elif closed_deal_profit is not None and closed_deal_profit <= 0:
+                            print(f"\n{Colors.RED}{Colors.BOLD}[SL HIT] {sym} Order closed with LOSS: -${abs(closed_deal_profit):.2f}! (เสียงอ๊อด){Colors.RESET}")
+                            sound_manager.play_sl_hit()  # 3. เมื่อชน SL เป็นเสียงอ๊อด
+                        else:
+                            print(f"\n[COOLDOWN] {sym} Order closed (TP/SL Hit) -> Starting cooldown rest for {cd_show}m")
+                            sound_manager.play_tp_hit()
                 last_pos_count[sym] = current_pos_count
                 
                 is_in_zone = (status_text != "[WAIT OUTSIDE ZONE]")

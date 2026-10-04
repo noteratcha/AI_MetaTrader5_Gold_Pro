@@ -9,7 +9,6 @@ import {
   CircleDollarSign,
   Clock,
   Gauge,
-  History,
   Layers,
   LineChart,
   MonitorDown,
@@ -24,6 +23,8 @@ import { useAuth } from '../context/AuthContext';
 import { EmptyState, PageHeader, PageLoading, StatCard } from '../components/ui';
 import { formatPrice, formatThaiDateTime, formatUsd, secondsSince, timeAgo } from '../lib/format';
 import { PLAN_LIST } from '../lib/packages';
+import TradeHistory from '../components/TradeHistory';
+import { NextNewsCard, useCalendar } from '../components/EconCalendar';
 
 export default function HomePage() {
   const { user, isLoading } = useAuth();
@@ -41,6 +42,7 @@ function LiveMonitor() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const calendar = useCalendar();
 
   const load = useCallback(async () => {
     try {
@@ -71,7 +73,6 @@ function LiveMonitor() {
   const isPaused = isOnline && String(t.status || '').startsWith('PAUSED');
   const positions = t?.open_positions || [];
   const radar = (t?.radar_signals || [])[0];
-  const logs = data?.trade_logs || [];
   const loading = data === null && !error;
 
   return (
@@ -128,8 +129,9 @@ function LiveMonitor() {
             <RadarCard radar={radar} loading={loading} />
           </div>
 
-          <div className="section">
-            <TradeLogCard logs={logs} loading={loading} />
+          <div className="grid grid-main-side section" style={{ alignItems: 'start' }}>
+            <TradeHistory />
+            <NextNewsCard events={calendar.events} />
           </div>
         </>
       )}
@@ -245,55 +247,6 @@ function RadarCard({ radar, loading }) {
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-function TradeLogCard({ logs, loading }) {
-  return (
-    <div className="card">
-      <div className="card-header">
-        <h3>
-          <History size={17} className="text-gold" /> ประวัติการปิดออเดอร์ล่าสุด
-        </h3>
-      </div>
-      {loading ? (
-        <div className="card-body">
-          <div className="skeleton" style={{ height: 60 }} />
-        </div>
-      ) : logs.length === 0 ? (
-        <EmptyState icon={History} title="ยังไม่มีประวัติ">เมื่อออเดอร์ชน TP/SL หรือถูกปิดโดยบอท รายการจะแสดงที่นี่</EmptyState>
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>เวลา</th>
-                <th>เหตุการณ์</th>
-                <th>รายละเอียด</th>
-                <th className="num">กำไร/ขาดทุน</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((l) => {
-                const profit = Number(l.profit) || 0;
-                return (
-                  <tr key={l.id}>
-                    <td className="faint small">{formatThaiDateTime(l.time)}</td>
-                    <td>
-                      <span className={`badge ${profit > 0 ? 'badge-green' : profit < 0 ? 'badge-red' : 'badge-muted'}`}>{l.action}</span>
-                    </td>
-                    <td className="small muted">{l.comment || l.plan || '—'}</td>
-                    <td className={`num ${profit > 0 ? 'text-green' : profit < 0 ? 'text-red' : ''}`} style={{ fontWeight: 600 }}>
-                      {formatUsd(profit, { sign: true })}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

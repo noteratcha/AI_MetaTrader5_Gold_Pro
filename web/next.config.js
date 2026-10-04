@@ -4,7 +4,8 @@ const nextConfig = {
     return [
       {
         // ข้อมูลบัญชี/คีย์ทั้งหมดผ่าน API — ห้าม cache ที่ CDN
-        source: '/api/:path*',
+        // ยกเว้นข้อมูลสาธารณะที่ cache ได้ (ปฏิทินข่าว / เวอร์ชันโปรแกรม)
+        source: '/api/:path((?!calendar$|release$).*)',
         headers: [{ key: 'Cache-Control', value: 'no-store' }],
       },
       {
