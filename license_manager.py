@@ -9,7 +9,8 @@ import urllib.error
 
 # คีย์การเข้ารหัสและโฟลเดอร์เก็บข้อมูลลิขสิทธิ์
 BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(BASE_DIR, "license_store.json")
+from app_paths import data_path
+CONFIG_FILE = data_path("license_store.json")  # %APPDATA%\GoldBot24 — อยู่รอดเมื่ออัปเดตโปรแกรม
 ENV_LOCAL_PATH = os.path.join(BASE_DIR, "web", ".env.local")
 
 # API URL ของ GoldBot24 Cloud Production

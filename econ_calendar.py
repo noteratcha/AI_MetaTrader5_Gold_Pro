@@ -20,8 +20,8 @@ CACHE_SECONDS = 30 * 60
 IMPACT_ORDER = {"High": 3, "Medium": 2, "Low": 1, "Holiday": 0}
 
 _cache = {"events": [], "fetched_at": 0.0, "error": ""}
-_BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
-DISK_CACHE = os.path.join(_BASE_DIR, "calendar_cache.json")
+from app_paths import data_path
+DISK_CACHE = data_path("calendar_cache.json")
 
 
 def _load_disk_cache():

@@ -25,6 +25,7 @@ from bot_controller import bot_ctrl
 import sound_manager
 import econ_calendar
 from version import APP_VERSION
+import secure_store
 from collections import deque
 from console_format import ConsoleFormatter, TAG_COLORS
 from stats_manager import stats_mgr, STANDARD_PLANS
@@ -539,7 +540,9 @@ class MainTradingApp(ctk.CTk):
         )
         self.lbl_email.pack(anchor="w", pady=(0, 4))
 
-        saved_user = license_mgr.session_data.get("email") or ""
+        # อีเมล/รหัสผ่านล่าสุดที่ติ๊ก "จดจำ" ไว้ (รหัสผ่านเข้ารหัสด้วย Windows DPAPI)
+        remembered_email, remembered_pwd = secure_store.load_login()
+        saved_user = remembered_email or license_mgr.session_data.get("email") or ""
         self.entry_email = ctk.CTkEntry(
             self.form_frame,
             font=ctk.CTkFont(family="Segoe UI", size=13),
@@ -628,7 +631,9 @@ class MainTradingApp(ctk.CTk):
         ).pack(padx=10, pady=6)
 
         # ตัวเลือกจดจำการล็อกอิน (เฉพาะโหมดเข้าสู่ระบบ)
-        self.remember_var = tk.BooleanVar(value=license_mgr.session_data.get("remember_me", True))
+        if remembered_pwd:
+            self.entry_pwd.insert(0, remembered_pwd)
+        self.remember_var = tk.BooleanVar(value=bool(remembered_email) or license_mgr.session_data.get("remember_me", True))
         self.chk_remember = ctk.CTkCheckBox(
             inner,
             text="จดจำการเข้าสู่ระบบในเครื่องนี้",
@@ -746,6 +751,10 @@ class MainTradingApp(ctk.CTk):
 
         success, msg = license_mgr.login(email, pwd, remember_me=remember)
         if success:
+            if remember:
+                secure_store.save_login(email, pwd)
+            else:
+                secure_store.clear_login()
             sound_manager.play_tp_hit()
             self.lbl_login_status.configure(text="เข้าสู่ระบบสำเร็จ!", text_color=COLOR_SUCCESS_GREEN)
             self.after(350, self.show_dashboard_view)
@@ -777,6 +786,8 @@ class MainTradingApp(ctk.CTk):
 
         success, msg = license_mgr.register(email, pwd, display_name=display_name)
         if success:
+            if self.remember_var.get():
+                secure_store.save_login(email, pwd)
             sound_manager.play_tp_hit()
             self.lbl_login_status.configure(text="🎉 สมัครสมาชิกสำเร็จ! ได้รับโควตาฟรี 48 ชม.", text_color=COLOR_SUCCESS_GREEN)
             self.after(600, self.show_dashboard_view)

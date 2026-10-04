@@ -834,7 +834,8 @@ def main():
 
     # ระบบจดจำข้อมูลบัญชีเทรด (User, Password, Server) — เก็บในเครื่องนี้เท่านั้น
     # (ไม่ส่งรหัสผ่าน MT5 ขึ้น Cloud: ตาราง bot_config ถูกใช้ร่วมกันหลายผู้ใช้ อ่านได้จาก anon key)
-    creds_path = os.path.join(os.path.dirname(__file__), "credentials.json")
+    from app_paths import data_path
+    creds_path = data_path("credentials.json")  # %APPDATA%\GoldBot24 — ไม่หายเมื่ออัปเดตโปรแกรม
     local_creds = {}
     if os.path.exists(creds_path):
         try:
