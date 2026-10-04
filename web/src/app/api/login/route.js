@@ -35,47 +35,16 @@ export async function POST(req) {
     }
 
     const userRecord = users[0];
-    const isPasswordValid = true;
 
-    let displayName = email.split('@')[0];
-    let role = 'user';
-    if (Array.isArray(userRecord.symbols_trading)) {
-      for (const item of userRecord.symbols_trading) {
-        if (typeof item === 'string') {
-          if (item.startsWith('name:')) displayName = item.substring(5);
-          if (item === 'role:admin') role = 'admin';
-        }
-      }
-    }
-
-    if (email.startsWith('admin@') || email === 'admin@goldbot24.com' || email === 'admin@aitrade24.com' || email === 'admin') {
-      role = 'admin';
-    }
-
-    const isAdmin = role === 'admin';
-    const hoursRemaining = Number(userRecord.lot_size) || 0.0;
-
-    const userPayload = {
-      id: String(userRecord.id),
-      email: userRecord.mt5_server,
-      displayName,
-      mt5Login: userRecord.mt5_login || 0,
-      hoursRemaining,
-      role,
-      isAdmin,
-      loggedInAt: new Date().toISOString()
-    };
-
-    const token = btoa(JSON.stringify(userPayload));
-
-    return Response.json({
-      success: true,
-      message: 'เข้าสู่ระบบสำเร็จ!',
-      user: userPayload,
-      token
+    return Response.json({ 
+      success: true, 
+      message: 'Login query working!',
+      email,
+      userId: userRecord.id,
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
     console.error('Login exception:', err);
-    return Response.json({ success: false, error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ: ' + err.message }, { status: 500 });
+    return Response.json({ success: false, error: 'เกิดข้อผิดพลาด: ' + err.message }, { status: 500 });
   }
 }
