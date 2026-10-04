@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# Logs
+*.log
+logs/
+
+# Build outputs
+dist/
+build_tmp/
+build/
+
+# Data files
+*.csv
+*.json
+!package.json
+!package-lock.json
+!user_stats_store.json
+!license_store.json
+!trade_history.csv
+!signal_history.csv
+!user_trade_history.csv
+!trade_modifications.csv
+
+# Sounds
+sounds/
+
+# Executables
+*.exe
+*.dll
+*.pyd
+
+# Vercel
+.vercel/
+
+# Node modules
+web/node_modules/
+web/.next/
+web/out/
+
+# OS generated
+ehthumbs.db
+Desktop.ini
+
+# Supabase
+supabase/

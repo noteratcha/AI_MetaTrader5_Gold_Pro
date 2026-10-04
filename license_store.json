@@ -1,0 +1,16 @@
+{
+  "email": "",
+  "username": "",
+  "user_id": "",
+  "access_token": "",
+  "refresh_token": "",
+  "remember_me": true,
+  "hours_remaining_minutes": 4320,
+  "allow_shared_pool": true,
+  "max_concurrent_sessions": 3,
+  "status": "OFFLINE",
+  "redeemed_keys": [
+    "7F9A-B23C-88DE-99A1-4F2K-5M8N"
+  ],
+  "last_heartbeat": 0
+}

@@ -1,0 +1,18 @@
+{
+  "name": "goldbot24",
+  "version": "1.0.0",
+  "description": "GoldBot24 - AI Gold Commander Pro Store & Web Portal (XAUUSD Specialist)",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "lucide-react": "^1.48.0",
+    "next": "^16.3.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
