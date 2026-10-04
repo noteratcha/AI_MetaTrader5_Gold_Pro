@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Gift, Lock, Mail, ShieldCheck, User, X } from 'lucide-react';
+import { Gift, Lock, Mail, MailCheck, ShieldCheck, User, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Alert, Spinner } from './ui';
 
@@ -11,6 +11,11 @@ export default function AuthModal() {
   const [form, setForm] = useState({ email: '', password: '', confirm: '', displayName: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // ขั้นยืนยันอีเมลตอนสมัคร: null = กรอกข้อมูล, { message } = รอกรอกรหัส 6 หลัก
+  const [verify, setVerify] = useState(null);
+  const [code, setCode] = useState('');
+  const [notice, setNotice] = useState('');
+  const [cooldown, setCooldown] = useState(0);
   const isRegister = authModalTab === 'register';
 
   useEffect(() => {
@@ -21,26 +26,74 @@ export default function AuthModal() {
     return () => window.removeEventListener('keydown', onKey);
   }, [isAuthModalOpen, closeAuthModal]);
 
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+
   if (!isAuthModalOpen) return null;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const switchTab = (tab) => {
     setAuthModalTab(tab);
     setError('');
+    setVerify(null);
+    setCode('');
+    setNotice('');
+  };
+
+  const requestCode = async () => {
+    const res = await register(form.email.trim(), form.password, form.displayName.trim());
+    setVerify(res);
+    setNotice(res.message);
+    setCode('');
+    setCooldown(60);
+  };
+
+  const resend = async () => {
+    setError('');
+    setSubmitting(true);
+    try {
+      await requestCode();
+    } catch (err) {
+      setError(err.message || 'ส่งรหัสไม่สำเร็จ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (isRegister && verify) {
+      if (code.length !== 6) return setError('กรุณากรอกรหัสยืนยัน 6 หลักจากอีเมล');
+      setSubmitting(true);
+      try {
+        await register(form.email.trim(), form.password, form.displayName.trim(), code);
+        setForm({ email: '', password: '', confirm: '', displayName: '' });
+        setVerify(null);
+        setCode('');
+        setNotice('');
+      } catch (err) {
+        setError(err.message || 'ยืนยันรหัสไม่สำเร็จ');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return setError('กรุณากรอกอีเมลที่ถูกต้อง');
     if (form.password.length < 6) return setError('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
     if (isRegister && form.password !== form.confirm) return setError('รหัสผ่านยืนยันไม่ตรงกัน');
 
     setSubmitting(true);
     try {
-      if (isRegister) await register(form.email.trim(), form.password, form.displayName.trim());
-      else await login(form.email.trim(), form.password);
-      setForm({ email: '', password: '', confirm: '', displayName: '' });
+      if (isRegister) {
+        await requestCode();
+      } else {
+        await login(form.email.trim(), form.password);
+        setForm({ email: '', password: '', confirm: '', displayName: '' });
+      }
     } catch (err) {
       setError(err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่');
     } finally {
@@ -75,6 +128,45 @@ export default function AuthModal() {
             </button>
           </div>
 
+          {isRegister && verify ? (
+            <form onSubmit={onSubmit} className="stack" style={{ gap: 14, marginTop: 18 }} noValidate>
+              <div className="alert alert-gold">
+                <MailCheck size={16} />
+                <div>
+                  {notice}
+                  <div className="small muted" style={{ marginTop: 4 }}>
+                    ส่งไปที่ <b>{form.email.trim()}</b>
+                  </div>
+                </div>
+              </div>
+              {error && <Alert type="error">{error}</Alert>}
+              <label className="field">
+                <span className="label">รหัสยืนยัน 6 หลัก</span>
+                <input
+                  className="input input-key"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="••••••"
+                  autoFocus
+                />
+              </label>
+              <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={submitting || code.length !== 6}>
+                {submitting ? <Spinner /> : null}
+                {submitting ? 'กำลังตรวจสอบ...' : 'ยืนยันและสร้างบัญชี'}
+              </button>
+              <div className="row-between small">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setVerify(null); setError(''); setCode(''); }}>
+                  แก้ไขข้อมูล
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={cooldown > 0 || submitting} onClick={resend}>
+                  {cooldown > 0 ? `ส่งรหัสอีกครั้งได้ใน ${cooldown} วินาที` : 'ส่งรหัสอีกครั้ง'}
+                </button>
+              </div>
+            </form>
+          ) : (
           <form onSubmit={onSubmit} className="stack" style={{ gap: 14, marginTop: 18 }} noValidate>
             {isRegister && (
               <div className="alert alert-gold">
@@ -137,9 +229,10 @@ export default function AuthModal() {
 
             <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={submitting} style={{ marginTop: 4 }}>
               {submitting ? <Spinner /> : null}
-              {submitting ? 'กำลังดำเนินการ...' : isRegister ? 'สร้างบัญชี' : 'เข้าสู่ระบบ'}
+              {submitting ? 'กำลังดำเนินการ...' : isRegister ? 'ส่งรหัสยืนยันทางอีเมล' : 'เข้าสู่ระบบ'}
             </button>
           </form>
+          )}
         </div>
       </div>
     </div>

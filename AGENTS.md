@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0613 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0638 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0613): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0638): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0613`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0638`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -168,14 +168,14 @@
 | **Login Gate** | ห้ามมี Demo Bypass — Dashboard และ `start_bot()` / `resume_bot()` ต้องผ่าน `is_authenticated` + `has_active_hours()` |
 | **Auth Token** | Token = HMAC-SHA256 (`AUTH_SECRET`) ส่งผ่าน `Authorization: Bearer` — API ห้ามรับ `email` จาก Body/Query เป็นตัวระบุผู้ใช้ และ Browser ห้ามเรียก Supabase ตรง (อ่าน/เขียนผ่าน `/api/*` ด้วย Service Role เท่านั้น) |
 | **Hours Metering** | Desktop หักเวลาในเครื่องแล้วส่งยอดให้ `/api/auth/meter` หักจริงบน Server ทุก 5 นาที — ห้าม PATCH `bot_config.lot_size` ตรงจาก Client |
-| **Register** | สมาชิกใหม่รับฟรี 48 ชม. รหัสผ่านเข้ารหัส PBKDF2-HMAC-SHA256 |
+| **Register** | ยืนยันอีเมลด้วยรหัส 6 หลักก่อนสร้างบัญชี (ตอบข้อความเดียวกันเสมอ ถ้ามีบัญชีอยู่แล้วส่งอีเมลแจ้งเจ้าของแทน — กันสุ่มหาอีเมล) · สมาชิกใหม่รับฟรี 48 ชม. รหัสผ่านเข้ารหัส PBKDF2-HMAC-SHA256 |
 | **Admin RBAC** | `Admin Analytics` (Navbar/Footer/หน้า `/admin/analytics`) แสดงเฉพาะ Admin เท่านั้น ห้ามเปิดเผยสถิติทุกลูกค้าและเครื่องผลิต Promo Key ต่อลูกค้าทั่วไป |
 | **Payment** | ราคา/ชั่วโมงคิดจาก `web/src/lib/packages.js` ฝั่ง Server เท่านั้น · Order ID สุ่มแบบเดาไม่ได้ · PromptPay QR → SlipOK ตรวจสลิป (`log: true` กันสลิปซ้ำ + `amount` ตรวจยอด) → ผลิต Product Key อัตโนมัติ · Webhook ต้องมี `x-webhook-secret` · ห้ามโหมดจำลองบน Production · **ถัดไป: Beam PromptPay + Webhook (ไม่ต้องแนบสลิป)** |
 | **Database Security** | RLS เปิดทุกตาราง — anon key อ่านตารางผู้ใช้/คีย์/คำสั่งซื้อ/พอร์ตไม่ได้ · Desktop เขียน Telemetry/สถิติผ่าน RPC `bot_upsert_telemetry` / `bot_upsert_plan_stats` (SECURITY DEFINER, เขียนอย่างเดียว) · Migration: `supabase_security_rls.sql` + `supabase_security_rls_patch_01.sql` |
 | **Secrets** | ห้าม commit/ส่งคีย์ลับในแชท — ใส่ผ่าน `npx vercel env add <NAME> production --sensitive` · รหัส MT5 อยู่ในเครื่องเท่านั้น (`%APPDATA%\GoldBot24\credentials.json`) ไม่ซิงค์ขึ้น Cloud |
 | **Desktop Data Dir** | ไฟล์ผู้ใช้ทั้งหมดผ่าน `app_paths.data_path()` → `%APPDATA%\GoldBot24` (ห้ามเก็บข้างไฟล์ .exe เพราะถูกลบทุกครั้งที่ build) |
 | **Desktop GUI Colors** | CustomTkinter รับเฉพาะ Hex `#RRGGBB` — **ห้ามใช้ `rgba()`** (ทำให้ `TclError` โปรแกรมเปิดไม่ขึ้น) |
-| **Release Flow** | 1) `python tools/bump_version.py` 2) Smoke Test GUI 3) `python build_dist.py` (ต้องปิดโปรแกรมก่อน ไม่งั้นไฟล์ถูกล็อก) 4) สร้าง GitHub Release `v<เวอร์ชัน>` แนบ ZIP + SHA-256 → หน้า `/download` และการแจ้งอัปเดตในโปรแกรมอัปเดตเอง · Web: `npm run build` → `npx vercel --prod --yes` |
+| **Release Flow** | 1) `python tools/bump_version.py` 2) Smoke Test GUI 3) `python build_dist.py` (ต้องปิดโปรแกรมก่อน ไม่งั้นไฟล์ถูกล็อก) 4) สร้าง GitHub Release `v<เวอร์ชัน>` แนบ ZIP + SHA-256 → หน้า `/download` และการแจ้งอัปเดตในโปรแกรมอัปเดตเอง · Web: `cd web && npm run build` → `git push` (Vercel Root Directory = `web` deploy อัตโนมัติ) หรือ `npx vercel --prod --yes` จาก root ของ repo |
 | **Responsive Desktop** | ออกแบบให้พอดีจอ 1366×768 (เปิดเต็มจออัตโนมัติเมื่อจอเล็ก) · Tk แสดงอีโมจีสีไม่ได้ ให้ใช้ Label สี/ป้ายแทน และหลีกเลี่ยงอีโมจี Unicode ใหม่ (เช่น 🪙) ที่ Windows 10 ไม่มี |
 | **Tk Grid** | `sticky` ใช้ได้เฉพาะ n/s/e/w — ห้าม `sticky="center"` (TclError) |
 

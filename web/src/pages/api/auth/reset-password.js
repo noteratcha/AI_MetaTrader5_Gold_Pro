@@ -1,7 +1,7 @@
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import { allowMethods, clientIp, hashPassword, isAdminRow, normalizeEmail, signToken, toUserPayload } from '../../../lib/server/auth';
 import { logActivity } from '../../../lib/server/activity';
-import { codeMatches, MAX_CODE_ATTEMPTS } from '../../../lib/server/passwordReset';
+import { codeMatches, MAX_CODE_ATTEMPTS, REGISTER_MARKER } from '../../../lib/server/passwordReset';
 
 const INVALID = 'รหัสยืนยันไม่ถูกต้องหรือหมดอายุ กรุณาขอรหัสใหม่';
 
@@ -21,6 +21,7 @@ export default async function handler(req, res) {
     .from('password_resets')
     .select('*')
     .eq('email', email)
+    .neq('user_id', REGISTER_MARKER)
     .is('used_at', null)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })

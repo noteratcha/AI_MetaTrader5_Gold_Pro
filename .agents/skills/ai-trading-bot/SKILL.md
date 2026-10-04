@@ -3,9 +3,9 @@ name: ai-trading-bot
 description: Comprehensive knowledge, skills, technical indicators, execution styles, trading plans (SMC Sweep, Bounce, BB-H1, MA-Cross M15/H1), dynamic TP/SL, risk management, desktop GUI (positions, history, economic calendar, smart console), and GoldBot24 web/Supabase/payment integrations for the AI MetaTrader 5 Gold bot.
 ---
 
-# AI MetaTrader 5 Trading Bot v2026.1005.0613: XAUUSD Gold Specialist
+# AI MetaTrader 5 Trading Bot v2026.1005.0638: XAUUSD Gold Specialist
 
-คู่มือมาตรฐานสำหรับระบบเทรดอัตโนมัติ **AI MetaTrader 5 Gold Pro v2026.1005.0613** ที่มุ่งเน้นการดัน **Win Rate และผลตอบแทนสุทธิสูงสุด** ในสินทรัพย์ทองคำ (**XAUUSD Only 100%**) ด้วยสถาปัตยกรรม **Pure Gold Specialization**, **RRR 1:1.50**, **Breathing Room SL 0.75 ATR**, **Plan 0: SMC Liquidity Hunt + H1 Trend Anchor**, **Plan 3: H1 Bollinger Bands Reversion**, **Plan 4: M15 MA(5, 10) Cross + H1 Trend Anchor**, **Plan 5: H1 MA(5, 10) Cross + H4 Trend Anchor** และ **Strict Pro-Trend Only**
+คู่มือมาตรฐานสำหรับระบบเทรดอัตโนมัติ **AI MetaTrader 5 Gold Pro v2026.1005.0638** ที่มุ่งเน้นการดัน **Win Rate และผลตอบแทนสุทธิสูงสุด** ในสินทรัพย์ทองคำ (**XAUUSD Only 100%**) ด้วยสถาปัตยกรรม **Pure Gold Specialization**, **RRR 1:1.50**, **Breathing Room SL 0.75 ATR**, **Plan 0: SMC Liquidity Hunt + H1 Trend Anchor**, **Plan 3: H1 Bollinger Bands Reversion**, **Plan 4: M15 MA(5, 10) Cross + H1 Trend Anchor**, **Plan 5: H1 MA(5, 10) Cross + H4 Trend Anchor** และ **Strict Pro-Trend Only**
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**: รูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)**
 
@@ -157,7 +157,7 @@ description: Comprehensive knowledge, skills, technical indicators, execution st
 ## 6. ระบบเชิงพาณิชย์และการควบคุมสิทธิ์ (GoldBot24 Commercial Platform & Access Control)
 
 1. **Zero Demo Bypass**: ปิดโหมด Demo ถาวรทั้ง Web และ Desktop — ต้อง Login ก่อนเข้าถึง Dashboard และก่อนเริ่มบอทเสมอ
-2. **Register + 48h Starter Bonus**: สมัครสมาชิกได้ทั้งเว็บและโปรแกรม รหัสผ่านเข้ารหัส **PBKDF2-HMAC-SHA256** และรับฟรี 48 ชม.
+2. **Register + 48h Starter Bonus**: สมัครสมาชิกได้ทั้งเว็บและโปรแกรม ต้องยืนยันอีเมลด้วยรหัส 6 หลัก (กันสุ่มหาอีเมล) รหัสผ่านเข้ารหัส **PBKDF2-HMAC-SHA256** และรับฟรี 48 ชม.
 3. **Hours Metering (1 บาท/ชม.)**: ตัดเวลาทุก 60 วินาทีเฉพาะตอนบอททำงาน แสดงผลรูปแบบ `HH.MM` เสมอ; `start_bot()` / `resume_bot()` ต้องผ่าน `is_authenticated` + `has_active_hours()`
 4. **Product Key 24 หลัก**: รูปแบบ `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX` เติมแบบบวกเพิ่ม (+) ผ่าน `RedeemKeyDialog` หรือหน้า `/dashboard`
 5. **PromptPay QR + SlipOK Auto-Verify**: สร้าง QR (`/api/checkout/create-qr`, ราคาคิดฝั่ง Server) → ตรวจสลิป (`/api/checkout/verify-slip`, SlipOK `log: true` + `amount`) / Webhook (`/api/webhook/payment` ต้องมี `x-webhook-secret`) → ผลิต Product Key อัตโนมัติ (ล็อกคำสั่งซื้อด้วยสถานะ `PROCESSING` กันออกคีย์ซ้ำ)
@@ -167,7 +167,7 @@ description: Comprehensive knowledge, skills, technical indicators, execution st
    - ปุ่ม `[ 🛡️ Admin Analytics ]` ใน Navbar/Footer แสดง **เฉพาะ Admin เท่านั้น**
    - หน้า `/admin/analytics` มี **Admin Access Barrier** (กันการเข้าผ่าน URL ตรง) — ข้อมูลสถิติทุกลูกค้าและเครื่องผลิต Promo Key ห้ามเปิดเผยต่อลูกค้าทั่วไป
 7. **Desktop GUI Color Rule**: CustomTkinter/Tkinter รับเฉพาะสี Hex `#RRGGBB` หรือชื่อสี Tk — **ห้ามใช้ `rgba()` แบบ CSS** (ทำให้ `TclError` และโปรแกรมเปิดไม่ขึ้น) ให้ใช้ค่าคงที่สีในธีม เช่น `COLOR_GOLD_BG`, `COLOR_GOLD_DARK`
-8. **Release Discipline**: ทุกครั้งที่แก้โค้ด `python tools/bump_version.py` (แหล่งเดียว `version.py`) → Smoke Test GUI (`MainTradingApp()` → `update()` → `destroy()`) → ปิดโปรแกรมแล้ว `python build_dist.py` → GitHub Release `v<เวอร์ชัน>` + ZIP + SHA-256 (หน้า `/download` และป้ายอัปเดตในโปรแกรมอ่านจากที่นี่); หลังแก้เว็บให้ `npm run build` แล้ว `npx vercel --prod --yes`
+8. **Release Discipline**: ทุกครั้งที่แก้โค้ด `python tools/bump_version.py` (แหล่งเดียว `version.py`) → Smoke Test GUI (`MainTradingApp()` → `update()` → `destroy()`) → ปิดโปรแกรมแล้ว `python build_dist.py` → GitHub Release `v<เวอร์ชัน>` + ZIP + SHA-256 (หน้า `/download` และป้ายอัปเดตในโปรแกรมอ่านจากที่นี่); หลังแก้เว็บให้ `npm run build` แล้ว `git push` (Root Directory = `web` deploy อัตโนมัติ)
 9. **Auth & Data Security**: Token ลงลายเซ็น HMAC (`AUTH_SECRET`) ผ่าน `Authorization: Bearer` · Browser ไม่เรียก Supabase ตรง · RLS เปิดทุกตาราง · Desktop เขียน Telemetry/สถิติผ่าน RPC `bot_upsert_telemetry` / `bot_upsert_plan_stats` (เขียนอย่างเดียว) · หักชั่วโมงผ่าน `/api/auth/meter` เท่านั้น · รหัส MT5 อยู่ในเครื่องเท่านั้น · คีย์ลับใส่ผ่าน `npx vercel env add ... --sensitive` ห้ามส่งในแชท
 10. **Desktop UI Rules**: พอดีจอ 1366×768 · ห้าม `sticky="center"` ใน Tk grid · ห้ามอีโมจี Unicode ใหม่ที่ Windows 10 ไม่มี (เช่น 🪙) · งานเครือข่าย/MT5 ที่ช้าให้ทำในเธรดเบื้องหลังแล้วอัปเดต UI จาก UI loop เท่านั้น
 

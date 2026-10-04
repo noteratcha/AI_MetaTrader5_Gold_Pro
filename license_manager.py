@@ -163,9 +163,40 @@ class LicenseManager:
         except Exception as e:
             return False, f"ไม่สามารถเชื่อมต่อ GoldBot24 Cloud ได้: {e}"
 
-    def register(self, email: str, password: str, display_name: str = "") -> tuple[bool, str]:
+    def request_register_code(self, email: str, password: str, display_name: str = "") -> tuple[bool, str]:
         """
-        สมัครสมาชิกบัญชีใหม่ผ่าน GoldBot24 Cloud API (รับทันที 48 ชั่วโมงทดลองใช้)
+        ขั้นที่ 1 ของการสมัคร: ขอรหัสยืนยัน 6 หลักทางอีเมล (ยังไม่สร้างบัญชี)
+        """
+        email = email.strip().lower()
+        if not email or "@" not in email:
+            return False, "กรุณากรอกอีเมลที่ถูกต้อง"
+        if len(password) < 6:
+            return False, "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร"
+        reg_url = f"{API_BASE_URL.rstrip('/')}/api/auth/register"
+        payload = json.dumps({
+            "email": email,
+            "password": password,
+            "displayName": display_name.strip() or email.split("@")[0],
+        }).encode("utf-8")
+        try:
+            req = urllib.request.Request(reg_url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("success"):
+                    return True, data.get("message", "ส่งรหัสยืนยันไปที่อีเมลแล้ว")
+                return False, data.get("error", "ส่งรหัสยืนยันไม่สำเร็จ")
+        except urllib.error.HTTPError as he:
+            try:
+                err_data = json.loads(he.read().decode("utf-8"))
+                return False, err_data.get("error", f"ส่งรหัสยืนยันไม่สำเร็จ (HTTP {he.code})")
+            except Exception:
+                return False, f"ส่งรหัสยืนยันไม่สำเร็จ (HTTP {he.code})"
+        except Exception as e:
+            return False, f"เกิดข้อผิดพลาดในการเชื่อมต่อ: {e}"
+
+    def register(self, email: str, password: str, display_name: str = "", code: str = "") -> tuple[bool, str]:
+        """
+        ขั้นที่ 2 ของการสมัคร: ยืนยันรหัส 6 หลักจากอีเมล แล้วสร้างบัญชี (รับทันที 48 ชั่วโมงทดลองใช้)
         """
         email = email.strip().lower()
         # ไม่ตัดช่องว่างของรหัสผ่าน (ต้องตรงกับเว็บ — เว็บส่งรหัสผ่านตามที่พิมพ์)
@@ -180,7 +211,8 @@ class LicenseManager:
         payload = json.dumps({
             "email": email,
             "password": password,
-            "displayName": display_name
+            "displayName": display_name,
+            "code": "".join(ch for ch in str(code) if ch.isdigit()),
         }).encode("utf-8")
         headers = {"Content-Type": "application/json"}
 

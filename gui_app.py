@@ -801,10 +801,33 @@ class MainTradingApp(ctk.CTk):
             self.lbl_login_status.configure(text="รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน", text_color=COLOR_DANGER_RED)
             return
 
-        self.lbl_login_status.configure(text="กำลังสร้างบัญชีผู้ใช้ใหม่...", text_color=COLOR_GOLD_PRIMARY)
+        self.lbl_login_status.configure(text="กำลังส่งรหัสยืนยันไปที่อีเมล...", text_color=COLOR_GOLD_PRIMARY)
         self.update_idletasks()
 
-        success, msg = license_mgr.register(email, pwd, display_name=display_name)
+        # ขั้นที่ 1: ขอรหัสยืนยัน 6 หลักทางอีเมล (กันการสมัครด้วยอีเมลที่ไม่ใช่ของตัวเอง)
+        sent, msg = license_mgr.request_register_code(email, pwd, display_name=display_name)
+        if not sent:
+            sound_manager.play_sl_hit()
+            self.lbl_login_status.configure(text=f"การสมัครสมาชิกล้มเหลว: {msg}", text_color=COLOR_DANGER_RED)
+            return
+        self.lbl_login_status.configure(text=msg, text_color=COLOR_GOLD_PRIMARY)
+
+        # ขั้นที่ 2: กรอกรหัสจากอีเมล (ผิดได้หลายครั้งตามที่เซิร์ฟเวอร์อนุญาต)
+        success = False
+        prompt = f"กรอกรหัสยืนยัน 6 หลักที่ส่งไปที่\n{email}\n(ตรวจกล่องจดหมายขยะด้วย)"
+        while True:
+            dialog = ctk.CTkInputDialog(title="ยืนยันอีเมล", text=prompt)
+            code = "".join(ch for ch in (dialog.get_input() or "") if ch.isdigit())
+            if not code:
+                self.lbl_login_status.configure(text="ยกเลิกการยืนยันอีเมล — กดสมัครอีกครั้งเพื่อขอรหัสใหม่", text_color=COLOR_DANGER_RED)
+                return
+            self.lbl_login_status.configure(text="กำลังตรวจสอบรหัสและสร้างบัญชี...", text_color=COLOR_GOLD_PRIMARY)
+            self.update_idletasks()
+            success, msg = license_mgr.register(email, pwd, display_name=display_name, code=code)
+            if success or "เหลืออีก" not in msg:
+                break
+            prompt = f"{msg}\nกรอกรหัสยืนยัน 6 หลักที่ส่งไปที่\n{email}"
+
         if success:
             if self.remember_var.get():
                 secure_store.save_login(email, pwd)

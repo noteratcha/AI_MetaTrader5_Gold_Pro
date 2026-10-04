@@ -100,8 +100,10 @@ export function AuthProvider({ children }) {
   );
 
   const register = useCallback(
-    async (email, password, displayName) => {
-      const data = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, displayName }) });
+    async (email, password, displayName, code = '') => {
+      const data = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, displayName, code }) });
+      // ขั้นแรก: เซิร์ฟเวอร์ส่งรหัสยืนยันไปที่อีเมล ยังไม่สร้างบัญชี
+      if (data.step === 'verify') return { step: 'verify', message: data.message };
       persist(data.token, data.user);
       setIsAuthModalOpen(false);
       return data.user;

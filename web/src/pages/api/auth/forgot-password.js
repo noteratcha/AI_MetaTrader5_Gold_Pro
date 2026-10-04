@@ -2,7 +2,7 @@ import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import { allowMethods, clientIp, isDisabledRow, isValidEmail, normalizeEmail, toUserPayload } from '../../../lib/server/auth';
 import { logActivity } from '../../../lib/server/activity';
 import { isMailConfigured, sendResetCodeEmail } from '../../../lib/server/mailer';
-import { CODE_TTL_MINUTES, generateCode, hashCode, MAX_REQUESTS_PER_EMAIL_HOUR, MAX_REQUESTS_PER_IP_HOUR } from '../../../lib/server/passwordReset';
+import { CODE_TTL_MINUTES, generateCode, hashCode, MAX_REQUESTS_PER_EMAIL_HOUR, MAX_REQUESTS_PER_IP_HOUR, REGISTER_MARKER } from '../../../lib/server/passwordReset';
 
 // ขอรหัสยืนยันรีเซ็ตรหัสผ่านทางอีเมล
 // ตอบข้อความเดียวกันเสมอ ไม่ว่าจะมีบัญชีหรือไม่ (กันการสุ่มหาอีเมลสมาชิก)
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   }
 
   // ยกเลิกรหัสเดิมที่ยังไม่ใช้ แล้วออกรหัสใหม่
-  await supabase.from('password_resets').update({ used_at: new Date().toISOString() }).eq('email', email).is('used_at', null);
+  await supabase.from('password_resets').update({ used_at: new Date().toISOString() }).eq('email', email).neq('user_id', REGISTER_MARKER).is('used_at', null);
   const code = generateCode();
   const { error: insErr } = await supabase.from('password_resets').insert({
     user_id: String(row.id),
