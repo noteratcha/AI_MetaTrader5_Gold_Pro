@@ -45,7 +45,7 @@ def create_quickstart_guide(out_dir):
 2. สิทธิ์การใช้งาน (Trial & Product Key):
    - สมาชิกใหม่ที่เข้าสู่ระบบครั้งแรก รับฟรีทันที 48.00 ชั่วโมง!
    - เมื่อชั่วโมงหมด สามารถซื้อ Product Key ได้ที่ร้านค้า GoldBot24:
-     https://goldbot24-4jnnk2of7-noteratchas-projects.vercel.app/store (รองรับสแกนสลิปผ่าน SlipOK และ PromptPay)
+     https://goldbot24.vercel.app/store (รองรับสแกนสลิปผ่าน SlipOK และ PromptPay)
    - นำ Product Key (รูปแบบ: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX) 
      มากดปุ่ม "เติมชั่วโมง" ในโปรแกรมเพื่อบวกเพิ่มชั่วโมงทันที
 
