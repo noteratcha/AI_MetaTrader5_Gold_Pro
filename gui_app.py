@@ -11,6 +11,7 @@ import time
 import queue
 import threading
 import webbrowser
+import urllib.parse
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
@@ -597,6 +598,17 @@ class MainTradingApp(ctk.CTk):
         )
         self.chk_show_pwd.pack(anchor="w", pady=(0, 10))
 
+        # ลืมรหัสผ่าน → หน้าเว็บรีเซ็ตรหัสผ่าน (ส่งรหัสยืนยันทางอีเมล)
+        self.lbl_forgot = ctk.CTkLabel(
+            self.form_frame,
+            text="ลืมรหัสผ่าน?",
+            font=ctk.CTkFont(family="Segoe UI", size=11, underline=True),
+            text_color=COLOR_CYAN_ACCENT,
+            cursor="hand2",
+        )
+        self.lbl_forgot.place(relx=1.0, y=0, anchor="ne")
+        self.lbl_forgot.bind("<Button-1>", lambda e: self._open_forgot_password())
+
         # 4) ยืนยันรหัสผ่าน (สำหรับ Register)
         self.lbl_reg_confirm = ctk.CTkLabel(
             self.form_frame,
@@ -714,6 +726,13 @@ class MainTradingApp(ctk.CTk):
             self.chk_remember.pack(before=self.lbl_login_status, anchor="w", pady=(0, 12))
 
             self.btn_auth_submit.configure(text="🚀 เข้าสู่ระบบ (Sign In)")
+
+    def _open_forgot_password(self):
+        email = self.entry_email.get().strip()
+        url = "https://goldbot24.vercel.app/forgot-password"
+        if email:
+            url += "?email=" + urllib.parse.quote(email)
+        webbrowser.open(url)
 
     def _toggle_show_password(self):
         """สลับการแสดงรหัสผ่านแบบตัวอักษรจริง / จุด"""

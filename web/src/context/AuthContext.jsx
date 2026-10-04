@@ -127,6 +127,9 @@ export function AuthProvider({ children }) {
     [apiFetch, persist, user]
   );
 
+  /** เข้าสู่ระบบด้วย token ที่ได้จาก API อื่น (เช่น ตั้งรหัสผ่านใหม่สำเร็จ) */
+  const completeLogin = useCallback((token, nextUser) => persist(token, nextUser), [persist]);
+
   const value = useMemo(
     () => ({
       user,
@@ -146,9 +149,10 @@ export function AuthProvider({ children }) {
       refreshUser,
       redeemKey,
       changePassword,
+      completeLogin,
       apiFetch,
     }),
-    [user, isLoading, isAuthModalOpen, authModalTab, login, register, logout, refreshUser, redeemKey, changePassword, apiFetch]
+    [user, isLoading, isAuthModalOpen, authModalTab, login, register, logout, refreshUser, redeemKey, changePassword, completeLogin, apiFetch]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

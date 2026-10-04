@@ -7,6 +7,8 @@ export const ACTIVITY_LABELS = {
   redeem: { label: 'เติมคีย์', badge: 'badge-gold' },
   purchase_paid: { label: 'ชำระเงิน', badge: 'badge-gold' },
   password_changed: { label: 'เปลี่ยนรหัสผ่าน', badge: 'badge-sky' },
+  password_reset_requested: { label: 'ขอรีเซ็ตรหัสผ่าน', badge: 'badge-gold' },
+  password_reset: { label: 'รีเซ็ตรหัสผ่านสำเร็จ', badge: 'badge-sky' },
   admin_create: { label: 'แอดมินสร้างบัญชี', badge: 'badge-muted' },
   admin_update: { label: 'แอดมินแก้ไข', badge: 'badge-muted' },
   admin_delete: { label: 'แอดมินลบบัญชี', badge: 'badge-red' },

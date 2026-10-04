@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0604 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0613 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0604): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0613): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0604`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0613`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -200,6 +200,8 @@
 | :--- | :--- | :--- |
 | `POST /api/auth/login`, `/register` | สาธารณะ | คืน Token ลงลายเซ็น (30 วัน) · hash v2 (210k รอบ) · อัปเกรด v1 อัตโนมัติ |
 | `GET /api/auth/me` · `POST /meter` · `POST /redeem` | Bearer | ข้อมูลบัญชี · หักนาทีใช้งาน · เติมคีย์ (จองคีย์แบบ atomic) |
+| `POST /api/auth/forgot-password` · `/reset-password` | สาธารณะ (จำกัดความถี่) | ส่งรหัสยืนยัน 6 หลักทางอีเมล (15 นาที, 3 ครั้ง/ชม., ผิดได้ 5 ครั้ง) · ตั้งรหัสใหม่ + เข้าสู่ระบบ |
+| `POST /api/auth/change-password` | Bearer | เปลี่ยนรหัสผ่านของตัวเอง (แอดมิน ≥ 10 ตัว ไม่ใช่ตัวเลขล้วน) |
 | `POST /api/checkout/create-qr` · `GET /check-status` · `POST /verify-slip` | Bearer + เจ้าของคำสั่งซื้อ | สร้างคำสั่งซื้อ/QR · ตรวจสถานะ · ตรวจสลิป SlipOK |
 | `POST /api/webhook/payment` | `x-webhook-secret` | แจ้งชำระจากผู้ให้บริการ |
 | `GET /api/user/telemetry` · `/trades` · `/stats` · `/keys` | Bearer | พอร์ตสด · ประวัติ (แบ่งหน้า) · สถิติรายแผน · คีย์ของฉัน |
@@ -207,7 +209,7 @@
 | `GET /api/calendar` · `/api/release` | สาธารณะ (CDN cache) | ปฏิทินเศรษฐกิจ (30 นาที) · เวอร์ชันล่าสุด (10 นาที) |
 
 ### 8.2 Environment Variables (Vercel)
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `ADMIN_EMAILS`, `PROMPTPAY_ID`, `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`, `PAYMENT_WEBHOOK_SECRET` · *(ถัดไป)* `PAYMENT_PROVIDER`, `BEAM_MERCHANT_ID`, `BEAM_API_KEY`, `BEAM_WEBHOOK_HMAC_KEY`, `BEAM_ENV`
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `ADMIN_EMAILS`, `PROMPTPAY_ID`, `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`, `PAYMENT_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (ลืมรหัสผ่าน) · *(ถัดไป)* `PAYMENT_PROVIDER`, `BEAM_MERCHANT_ID`, `BEAM_API_KEY`, `BEAM_WEBHOOK_HMAC_KEY`, `BEAM_ENV`
 
 ### 8.3 ผู้ใช้และข้อมูลใน Supabase
 * ผู้ใช้อยู่ในตาราง `bot_config` (`mt5_server` = อีเมล, `mt5_password` = hash, `lot_size` = ชั่วโมงคงเหลือ, `symbols_trading` = tag เช่น `name:`, `role:admin`) — แถว `id = 1` เป็น config ระบบ

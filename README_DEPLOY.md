@@ -52,6 +52,7 @@
 | `PROMPTPAY_ID` | ✅ | เบอร์/เลขผู้เสียภาษีรับเงิน |
 | `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY` | ✅ | ถ้าไม่ตั้ง ระบบจะไม่ออกคีย์ให้ (ไม่มีโหมดจำลองบน Production) |
 | `ADMIN_EMAILS` | ⬜ | ค่าเริ่มต้น `admin@goldbot24.com,admin@aitrade24.com` |
+| `SMTP_USER`, `SMTP_PASS` (+ `SMTP_HOST`, `SMTP_PORT`, `MAIL_FROM`) | ✅ สำหรับลืมรหัสผ่าน | Gmail: ใช้ App Password จาก myaccount.google.com/apppasswords (ต้องเปิด 2-Step Verification) |
 | `PAYMENT_WEBHOOK_SECRET` | ⬜ | ถ้าใช้ Webhook ผู้ให้บริการต้องส่ง Header `x-webhook-secret` |
 
 ## 🚀 ลำดับการอัปเดตจากเวอร์ชันเก่า (สำคัญ)

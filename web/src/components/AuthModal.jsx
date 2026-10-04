@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Gift, Lock, Mail, ShieldCheck, User, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Alert, Spinner } from './ui';
@@ -115,6 +116,14 @@ export default function AuthModal() {
                 />
               </span>
             </label>
+
+            {!isRegister && (
+              <div style={{ textAlign: 'right', marginTop: -6 }}>
+                <Link href="/forgot-password" className="small text-sky" onClick={closeAuthModal}>
+                  ลืมรหัสผ่าน?
+                </Link>
+              </div>
+            )}
 
             {isRegister && (
               <label className="field">
