@@ -8,16 +8,19 @@
 
 | ข้อมูล | ค่า |
 |--------|-----|
-| **Vercel Project URL** | https://vercel.com/noteratchas-projects/aitrade24 |
-| **Git Integration Settings** | https://vercel.com/noteratchas-projects/aitrade24/settings/git |
-| **Production Domain** | https://goldbot24-4jnnk2of7-noteratchas-projects.vercel.app |
-| **Project ID** | `prj_AlzfccPhRSjMN1uH8TtqG6y7BAMf` |
+| **Vercel Project URL** | https://vercel.com/noteratchas-projects/goldbot24 |
+| **Git Integration Settings** | https://vercel.com/noteratchas-projects/goldbot24/settings/git |
+| **Production Domain** | **https://goldbot24.vercel.app** ✅ |
+| **Project ID** | `prj_e3MpPY5dfKa9ZIjtHpfBqR1Ob0ZG` |
 | **Team/Org ID** | `team_7mZ7uSVTYfzo93wt2d6ftnJ9` |
-| **Project Name** | `aitrade24` |
+| **Project Name** | `goldbot24` |
 | **Framework** | Next.js 16 (Auto-detected) |
 | **Root Directory** | `web` |
+| **GitHub Repository** | https://github.com/noteratcha/AI_MetaTrader5_Gold_Pro |
+| **Git Branch** | `main` |
+| **Auto-deploy** | Enabled (Push to main → Auto deploy) |
 
-> 💡 **หมายเหตุ**: โปรเจคนี้เป็น **Team Project** (`noteratchas-projects`) ไม่ใช่ Personal Account จึงไม่ได้รับ domain `goldbot24.vercel.app` (Reserved ให้ Personal Account เท่านั้น) ต้องใช้ `goldbot24-4jnnk2of7-noteratchas-projects.vercel.app` แทน
+> ✅ **อัปเดตล่าสุด**: โปรเจค Team ได้รับ domain `goldbot24.vercel.app` แล้ว (Vercel อนุญาตในบางกรณี)
 
 ---
 
