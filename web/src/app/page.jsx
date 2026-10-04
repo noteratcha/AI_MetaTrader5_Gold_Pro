@@ -41,83 +41,121 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
-  const { user, openAuthModal, logout } = useAuth();
-  // Config & Credentials State
+  const { user, isLoading, openAuthModal } = useAuth();
+
+  // Login Gate: ถ้ายังไม่ได้ Login ให้แสดงหน้าจอเข้าสู่ระบบ
+  if (!isLoading && !user) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <Navbar />
+
+        <main style={{ maxWidth: '620px', margin: 'auto', padding: '4rem 1.5rem', width: '100%' }}>
+          <div style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid rgba(251, 191, 36, 0.4)',
+            borderRadius: '20px',
+            padding: '3rem 2rem',
+            textAlign: 'center',
+            boxShadow: '0 0 35px rgba(251, 191, 36, 0.15)'
+          }}>
+            <div style={{
+              width: '68px',
+              height: '68px',
+              borderRadius: '18px',
+              backgroundColor: 'rgba(251, 191, 36, 0.12)',
+              border: '1.5px solid rgba(251, 191, 36, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem auto'
+            }}>
+              <Bot size={32} color="#fbbf24" />
+            </div>
+
+            <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff', marginBottom: '0.6rem', letterSpacing: '-0.02em' }}>
+              เข้าสู่ระบบเพื่อใช้งานแดชบอร์ด
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '2rem' }}>
+              หน้านี้สำหรับสมาชิก <strong>GoldBot24</strong> ในการดูข้อมูลบอทเรียลไทม์ กรุณาเข้าสู่ระบบหรือสมัครสมาชิกเพื่อเริ่มต้นใช้งาน
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => openAuthModal('login')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '12px 26px',
+                  borderRadius: '10px',
+                  backgroundColor: '#fbbf24',
+                  color: '#07090e',
+                  fontWeight: 800,
+                  fontSize: '0.92rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 20px rgba(251, 191, 36, 0.3)'
+                }}
+              >
+                <LogIn size={16} />
+                <span>เข้าสู่ระบบ (Login)</span>
+              </button>
+              <button
+                onClick={() => openAuthModal('register')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '12px 24px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: '0.92rem',
+                  border: '1px solid var(--border-subtle)',
+                  cursor: 'pointer'
+                }}
+              >
+                <UserPlus size={16} />
+                <span>สมัครสมาชิกใหม่ฟรี (+48 ชม.)</span>
+              </button>
+            </div>
+          </div>
+        </main>
+
+        <Footer />
+      </div>
+    );
+  }
+
+  // Config & Credentials State (Gold Only)
   const [botConfig, setBotConfig] = useState({
     mt5_login: '',
     mt5_password: '',
     mt5_server: 'FBS-Real',
     is_bot_active: true,
     lot_size: 0.01,
-    tp_rrr_btc: 2.0,
-    tp_rrr_xau: 2.0,
-    cooldown_btc: 15,
+    tp_rrr_xau: 1.50,
     cooldown_xau: 10,
-    symbols_trading: ['BTCUSD', 'XAUUSD']
+    symbols_trading: ['XAUUSD']
   });
 
-  // Telemetry & Market State
+  // Telemetry & Market State - เริ่มต้นเป็น 0/ว่าง
   const [telemetry, setTelemetry] = useState({
-    status: 'ONLINE',
-    balance: 1024.02,
-    equity: 1024.02,
+    status: 'OFFLINE',
+    balance: 0.0,
+    equity: 0.0,
     floating_profit: 0.0,
-    margin_free: 1024.02,
+    margin_free: 0.0,
     last_heartbeat: null,
     open_positions: [],
     radar_signals: [
-      { symbol: 'BTCUSD', price: 0, up_prob: 0.50, status: '[WAIT OUTSIDE ZONE]', in_zone: false },
       { symbol: 'XAUUSD', price: 0, up_prob: 0.50, status: '[WAIT OUTSIDE ZONE]', in_zone: false }
     ]
   });
 
-  // Trade History Logs
-  const [tradeLogs, setTradeLogs] = useState([
-    {
-      id: 1,
-      time: '2026-09-28 13:55:28',
-      symbol: 'XAUUSD',
-      action: 'SELL',
-      plan: 'Plan 2 (Breakout Forward)',
-      price: 4165.65,
-      lot: 0.01,
-      profit: 15.34,
-      status: 'OPEN'
-    },
-    {
-      id: 2,
-      time: '2026-09-28 15:28:34',
-      symbol: 'BTCUSD',
-      action: 'BUY',
-      plan: 'Plan 1 (Bounce)',
-      price: 82844.15,
-      lot: 0.01,
-      profit: 1.91,
-      status: 'OPEN'
-    },
-    {
-      id: 3,
-      time: '2026-09-28 10:46:25',
-      symbol: 'XAUUSD',
-      action: 'SELL',
-      plan: 'Plan 2 (Breakout Forward)',
-      price: 4192.41,
-      lot: 0.01,
-      profit: 25.14,
-      status: 'TP'
-    },
-    {
-      id: 4,
-      time: '2026-09-28 12:33:45',
-      symbol: 'BTCUSD',
-      action: 'SELL',
-      plan: 'Plan 2 (Breakout Forward)',
-      price: 82938.50,
-      lot: 0.01,
-      profit: -1.04,
-      status: 'AI CUT'
-    }
-  ]);
+  // Trade History Logs - เริ่มต้นว่าง
+  const [tradeLogs, setTradeLogs] = useState([]);
 
   // UI States
   const [mounted, setMounted] = useState(false);
@@ -133,10 +171,8 @@ export default function Dashboard() {
   const [cloudUrl, setCloudUrl] = useState('');
   const [cloudAnonKey, setCloudAnonKey] = useState('');
 
-  // Initial Data Fetch
+  // Initial Data Fetch - ดึงข้อมูลเฉพาะตอน Login แล้ว
   useEffect(() => {
-    setMounted(true);
-    setLastRefreshed(new Date());
 
     // โหลดข้อมูลล็อกอินที่เคยจำไว้ในเครื่อง (localStorage) ทันที
     if (typeof window !== 'undefined') {
