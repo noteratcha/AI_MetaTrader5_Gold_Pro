@@ -129,16 +129,6 @@ export default function AdminPlansPage() {
                     </tr>
                   );
                 })}
-                <tr style={{ opacity: 0.5 }}>
-                  <td>
-                    <div style={{ fontWeight: 700 }}>Plan 2 · Trend-Breakout</div>
-                    <div className="tiny faint">ปิดถาวรบนทองคำ (กันกับดัก False Breakout)</div>
-                  </td>
-                  <td colSpan={4} />
-                  <td style={{ textAlign: 'right' }}>
-                    <span className="badge badge-muted">ปิดถาวร</span>
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>

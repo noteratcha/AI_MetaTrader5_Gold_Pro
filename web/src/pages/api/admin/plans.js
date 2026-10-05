@@ -4,8 +4,8 @@ import { logActivity } from '../../../lib/server/activity';
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 
 const PLAN_STAT_NAMES = {
-  'SMC-LiquidityHunt': 'Plan 0: SMC-LiquidityHunt',
-  'SR-SwingBounce': 'Plan 1: SR-SwingBounce',
+  'SMC-LiquidityHunt': 'Plan 1: SMC-LiquidityHunt',
+  'SR-SwingBounce': 'Plan 2: SR-SwingBounce',
   'BB-H1-Reversion': 'Plan 3: BB-H1-Reversion',
   'MA-Cross-Trend': 'Plan 4: MA-Cross-Trend',
   'MA-Cross-H1-Trend': 'Plan 5: MA-Cross-H1-Trend',

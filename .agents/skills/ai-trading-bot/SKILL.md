@@ -3,9 +3,9 @@ name: ai-trading-bot
 description: Comprehensive knowledge, skills, technical indicators, execution styles, trading plans (SMC Sweep, Bounce, BB-H1, MA-Cross M15/H1), dynamic TP/SL, risk management, desktop GUI (positions, history, economic calendar, smart console), and GoldBot24 web/Supabase/payment integrations for the AI MetaTrader 5 Gold bot.
 ---
 
-# AI MetaTrader 5 Trading Bot v2026.1005.1338: XAUUSD Gold Specialist
+# AI MetaTrader 5 Trading Bot v2026.1005.1414: XAUUSD Gold Specialist
 
-คู่มือมาตรฐานสำหรับระบบเทรดอัตโนมัติ **AI MetaTrader 5 Gold Pro v2026.1005.1338** ที่มุ่งเน้นการดัน **Win Rate และผลตอบแทนสุทธิสูงสุด** ในสินทรัพย์ทองคำ (**XAUUSD Only 100%**) ด้วยสถาปัตยกรรม **Pure Gold Specialization**, **RRR 1:1.50**, **Breathing Room SL 0.75 ATR**, **Plan 0: SMC Liquidity Hunt + H1 Trend Anchor**, **Plan 3: H1 Bollinger Bands Reversion**, **Plan 4: M15 MA(5, 10) Cross + H1 Trend Anchor**, **Plan 5: H1 MA(5, 10) Cross + H4 Trend Anchor** และ **Strict Pro-Trend Only**
+คู่มือมาตรฐานสำหรับระบบเทรดอัตโนมัติ **AI MetaTrader 5 Gold Pro v2026.1005.1414** ที่มุ่งเน้นการดัน **Win Rate และผลตอบแทนสุทธิสูงสุด** ในสินทรัพย์ทองคำ (**XAUUSD Only 100%**) ด้วยสถาปัตยกรรม **Pure Gold Specialization**, **RRR 1:1.50**, **Breathing Room SL 0.75 ATR**, **Plan 1: SMC Liquidity Hunt + H1 Trend Anchor**, **Plan 3: H1 Bollinger Bands Reversion**, **Plan 4: M15 MA(5, 10) Cross + H1 Trend Anchor**, **Plan 5: H1 MA(5, 10) Cross + H4 Trend Anchor** และ **Strict Pro-Trend Only**
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**: รูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)**
 
@@ -14,7 +14,7 @@ description: Comprehensive knowledge, skills, technical indicators, execution st
 ## 1. สกิลและทักษะหลักของระบบ (Core Skills & System Capabilities)
 
 1. **Pure Gold Specialization Engine (โฟกัสทองคำ 100%)**
-   - **XAUUSD (Gold Only)**: โฟกัส **Plan 0 (SMC-LiquidityHunt + H1 Trend)**, **Plan 1 (SR-SwingBounce)**, **Plan 3 (BB-H1-Reversion)**, **Plan 4 (MA-Cross-Trend M15)** และ **Plan 5 (MA-Cross-H1-Trend H1)** ปิด Breakout ถาวร และปิดสินทรัพย์อื่นทั้งหมด
+   - **XAUUSD (Gold Only)**: โฟกัส **Plan 1 (SMC-LiquidityHunt + H1 Trend)**, **Plan 2 (SR-SwingBounce)**, **Plan 3 (BB-H1-Reversion)**, **Plan 4 (MA-Cross-Trend M15)** และ **Plan 5 (MA-Cross-H1-Trend H1)** นำแผน Breakout ออกจากระบบ และปิดสินทรัพย์อื่นทั้งหมด
 2. **Multi-Timeframe Market Vision (การวิเคราะห์หลายกรอบเวลาประสานกัน)**
    - **H4**: กำหนดทิศทางเทรนด์หลัก (Strict Pro-Trend Filter) ด้วย `ma_fast_h4 (10)` / `ma_slow_h4 (30)`
    - **H1**: กำหนดกรอบแนวรับ-แนวต้านโครงสร้างหลัก (Structure Support & Resistance 20 ชม. ย้อนหลัง), **กรอบความผันผวนใหญ่ระดับวัน (H1 Bollinger Bands SMA 20, 2 STD) + H1 MACD** และ **สัญญาณเข้าไม้ Plan 5 (H1 MA5 x MA10)**
@@ -65,20 +65,17 @@ description: Comprehensive knowledge, skills, technical indicators, execution st
 
 ## 3. แผนการเทรดเฉพาะสินทรัพย์ (Asset-Specialized Trading Plans)
 
-### Plan 0: `SMC-LiquidityHunt` (การกวาดสภาพคล่อง + Divergence + H1 Trend Anchor)
+### Plan 1: `SMC-LiquidityHunt` (การกวาดสภาพคล่อง + Divergence + H1 Trend Anchor)
 * **คอนเซปต์**: ตามรอยสถาบันการเงิน (Smart Money) เมื่อราคาวิ่งหลุดแนวรับหรือแนวต้านเพื่อกวาด Stop Loss แล้วดึงกลับเข้าสู่โซนอย่างรวดเร็ว โดยต้องบังคับเข้าตามทิศทางเทรนด์ใหญ่ H1 เท่านั้นเพื่อตัดปัญหาการรับมีดตก
 * **เงื่อนไข BUY**: `low < support H1` และ `close >= support H1` พร้อม `lower_wick_ratio >= 0.30` + AI UP $\ge 50\%$ *(หากมี Bullish Divergence ลดเกณฑ์เป็น $\ge 0.48$)* **และบังคับต้องอยู่ในแนวโน้มขาขึ้น H1 (`is_uptrend_h1 == True`)**
 * **เงื่อนไข SELL**: `high > resistance H1` และ `close <= resistance H1` พร้อม `upper_wick_ratio >= 0.30` + AI DOWN $\ge 50\%$ *(หากมี Bearish Divergence ลดเกณฑ์เป็น $\ge 0.48$)* **และบังคับต้องอยู่ในแนวโน้มขาลง H1 (`is_uptrend_h1 == False`)**
 * **การตั้ง SL/TP**: SL = 0.75 ATR, TP = RRR 1:1.50 (1.125 ATR)
 
-### Plan 1: `SR-SwingBounce` (การเด้งจากแนวรับ-แนวต้านหลัก + Divergence)
+### Plan 2: `SR-SwingBounce` (การเด้งจากแนวรับ-แนวต้านหลัก + Divergence)
 * **คอนเซปต์**: เข้าออเดอร์ตามรอบการแกว่งตัวในกรอบแนวรับ/ต้าน H1 (Mean Reversion - Win Rate 53.3% - 57.1%)
 * **เงื่อนไข BUY**: ราคาแตะโซนแนวรับ (`|close - support| <= 1.0 * ATR`) + มีแท่งปฏิเสธราคา + **ต้องมี Bullish/Hidden Bullish Div Confluence** + AI UP $\ge 51\%$
 * **เงื่อนไข SELL**: ราคาแตะโซนแนวต้าน (`|resistance - close| <= 1.0 * ATR`) + มีแท่งปฏิเสธราคา + **ต้องมี Bearish/Hidden Bearish Div Confluence** + AI DOWN $\ge 51\%$
 * **การตั้ง SL/TP**: SL = 0.75 ATR, TP = RRR 1:1.50 (1.125 ATR)
-
-### Plan 2: `Trend-Breakout` (ปิดถาวรบนทองคำ)
-* *หมายเหตุ: ปิดการทำงานบน XAUUSD ถาวรเพื่อตัดกับดัก False Breakout*
 
 ### Plan 3: `BB-H1-Reversion` (เด้งขอบแบนด์ H1 + Divergence + MACD Exhaustion)
 * **คอนเซปต์**: ดักจังหวะราคาทองคำหลุดกรอบความผันผวนใหญ่ระดับวันของ H1 (SMA 20, 2 STD) แล้วถูกปฏิเสธดีดกลับเข้าหากึ่งกลาง ผสานการยืนยันการหมดแรงของโมเมนตัมด้วย H1 MACD (**Win Rate สูงถึง 66.7% - 75.0%**)
@@ -93,12 +90,12 @@ description: Comprehensive knowledge, skills, technical indicators, execution st
 * **เงื่อนไขการปิดไม้ (Exit Condition - ไม่ต้องตั้ง TP)**:
   - 🔄 **สำหรับไม้ BUY**: เมื่อเข้าไม้อยู่ แล้ว MA 5 ตัดลงใต้ MA 10 บน M15 ➔ **ปิดไม้ทันที (Market Close)!**
   - 🔄 **สำหรับไม้ SELL**: เมื่อเข้าไม้อยู่ แล้ว MA 5 ตัดขึ้นเหนือ MA 10 บน M15 ➔ **ปิดไม้ทันที (Market Close)!**
-* **การตั้ง SL/TP**: **ไม่ต้องตั้ง TP** (TP = 0.0) | ตั้ง Safety Stop Loss = **0.75 ATR** ป้องกันข่าวกระชากแรง
+* **การตั้ง SL/TP**: **ไม่ต้องตั้ง TP** (TP = 0.0) | **Swing SL** เลย High/Low ของ 2 แท่ง M15 ที่ปิดแล้ว + 0.1 ATR (ไม่น้อยกว่า 0.75 ATR)
 
 ### Plan 5: `MA-Cross-H1-Trend` (MA 5 x MA 10 Crossover บน H1 + กรองเทรนด์ H4 + ปิดไม้ด้วย H1 MA Cross ขั้วตรงข้าม)
 * **คอนเซปต์**: เข้าออเดอร์ตามการตัดกันของเส้น Moving Average (5 และ 10) บนกรอบเวลาแท่งชั่วโมง H1 โดยต้องสอดคล้องกับทิศทางเทรนด์ใหญ่ H4 100% ปล่อยให้กำไรวิ่งตามรอบสวิงใหญ่ระดับวัน (Daily Swing) และปิดไม้ทันทีเมื่อ MA ตัดกลับขั้วตรงข้ามบน H1
-* **เงื่อนไข BUY**: เส้น MA 5 ตัดขึ้นเหนือ MA 10 บนแท่ง H1 **และ** แนวโน้มใหญ่ H4 เป็นขาขึ้น/ไซด์เวย์บูลลิช (`H4 MA10 > H4 MA30` หรือ `is_sideway_h4`)
-* **เงื่อนไข SELL**: เส้น MA 5 ตัดลงใต้ MA 10 บนแท่ง H1 **และ** แนวโน้มใหญ่ H4 เป็นขาลง/ไซด์เวย์แบร์ริช (`H4 MA10 < H4 MA30` หรือ `is_sideway_h4`)
+* **เงื่อนไข BUY**: เส้น MA 5 ตัดขึ้นเหนือ MA 10 บนแท่ง H1 **และ** แนวโน้มใหญ่ H4 เป็นขาขึ้นหรือไซด์เวย์บูลลิช (`H4 MA10 > H4 MA30` เสมอ)
+* **เงื่อนไข SELL**: เส้น MA 5 ตัดลงใต้ MA 10 บนแท่ง H1 **และ** แนวโน้มใหญ่ H4 เป็นขาลงหรือไซด์เวย์แบร์ริช (`H4 MA10 < H4 MA30` เสมอ)
 * **เงื่อนไขการปิดไม้ (Exit Condition - ไม่ต้องตั้ง TP)**:
   - 🌊 **สำหรับไม้ BUY**: เมื่อถือไม้อยู่ แล้ว MA 5 ตัดลงใต้ MA 10 บน H1 ➔ **ปิดไม้ทันที (Market Close)!**
   - 🌊 **สำหรับไม้ SELL**: เมื่อถือไม้อยู่ แล้ว MA 5 ตัดขึ้นเหนือ MA 10 บน H1 ➔ **ปิดไม้ทันที (Market Close)!**

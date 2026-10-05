@@ -1,6 +1,6 @@
 """
 AI MetaTrader 5 Gold Pro - User & Plan Performance Analytics Engine
-โมดูลเก็บและวิเคราะห์สถิติการเทรดแยกตาม User และแยกตาม Trading Plan (Plan 0, 1, 3, 4, 5)
+โมดูลเก็บและวิเคราะห์สถิติการเทรดแยกตาม User และแยกตาม Trading Plan (Plan 1–5)
 เก็บบันทึกทั้งแบบ Local JSON, CSV และซิงค์ขึ้น Supabase Cloud Real-time
 """
 
@@ -17,8 +17,8 @@ TRADE_CSV_FILE = os.path.join(BASE_DIR, "user_trade_history.csv")
 
 # รายชื่อแผนการเทรดมาตรฐาน 5 แผนเฉพาะทองคำ
 STANDARD_PLANS = [
-    "Plan 0: SMC-LiquidityHunt",
-    "Plan 1: SR-SwingBounce",
+    "Plan 1: SMC-LiquidityHunt",
+    "Plan 2: SR-SwingBounce",
     "Plan 3: BB-H1-Reversion",
     "Plan 4: MA-Cross-Trend",
     "Plan 5: MA-Cross-H1-Trend"
@@ -30,9 +30,9 @@ def clean_plan_name(raw_plan: str) -> str:
     # จับจากชื่อแผนก่อน (ชื่ออย่าง "BB-H1-Reversion" / "MA-Cross-H1-Trend" มีเลข 1 อยู่ในคำว่า H1
     # ถ้าเช็คตัวเลขก่อนจะถูกจัดเป็น Plan 1 ผิด)
     if "SMC" in p or "Sweep" in p or "Hunt" in p:
-        return "Plan 0: SMC-LiquidityHunt"
+        return "Plan 1: SMC-LiquidityHunt"
     if "Bounce" in p or "Swing" in p:
-        return "Plan 1: SR-SwingBounce"
+        return "Plan 2: SR-SwingBounce"
     if "BB" in p or "Reversion" in p:
         return "Plan 3: BB-H1-Reversion"
     if "Cross-H1" in p:
@@ -40,14 +40,43 @@ def clean_plan_name(raw_plan: str) -> str:
     if "Cross-Trend" in p or "MA-Cross" in p:
         return "Plan 4: MA-Cross-Trend"
     if "Breakout" in p:
-        return "Plan 2: Trend-Breakout"
-    # รูปแบบ "Plan N" (ข้อมูลเก่า)
-    for n, name in (("0", "Plan 0: SMC-LiquidityHunt"), ("1", "Plan 1: SR-SwingBounce"),
+        return "Manual/Other"  # แผน Breakout เดิมถูกนำออกจากระบบแล้ว
+    # รูปแบบ "Plan N" เปล่า ๆ เป็นข้อมูลยุคเลขแผนเก่า (0 = SMC, 1 = Bounce)
+    for n, name in (("0", "Plan 2: SMC-LiquidityHunt"), ("1", "Plan 2: SR-SwingBounce"),
                     ("3", "Plan 3: BB-H1-Reversion"), ("4", "Plan 4: MA-Cross-Trend"),
-                    ("5", "Plan 5: MA-Cross-H1-Trend"), ("2", "Plan 2: Trend-Breakout")):
+                    ("5", "Plan 5: MA-Cross-H1-Trend")):
         if f"Plan {n}" in p:
             return name
     return p or "Manual/Other"
+
+
+_SUM_FIELDS = ("total_trades", "win_trades", "loss_trades", "total_profit_usd", "gross_profit_usd", "gross_loss_usd")
+
+
+def migrate_plan_keys(plans: dict) -> dict:
+    """
+    ย้ายสถิติจากชื่อแผนเลขเก่า (Plan 1: SMC / Plan 2: Bounce) ไปชื่อใหม่ (Plan 2 / Plan 2)
+    และตัดแผน Breakout ที่นำออกจากระบบแล้ว — รวมยอดถ้ามีทั้งชื่อเก่าและใหม่
+    """
+    out = {}
+    for key, st in (plans or {}).items():
+        if "Breakout" in key:
+            continue
+        new_key = clean_plan_name(key) if key.startswith("Plan ") else key
+        st = dict(st or {})
+        st["plan_name"] = new_key
+        if new_key not in out:
+            out[new_key] = st
+            continue
+        cur = out[new_key]
+        for f in _SUM_FIELDS:
+            cur[f] = (cur.get(f) or 0) + (st.get(f) or 0)
+        cur["last_trade_time"] = max(str(cur.get("last_trade_time") or ""), str(st.get("last_trade_time") or ""))
+        tt = cur.get("total_trades") or 0
+        cur["win_rate_pct"] = round((cur.get("win_trades") or 0) / tt * 100, 2) if tt else 0.0
+        gl = abs(cur.get("gross_loss_usd") or 0)
+        cur["profit_factor"] = round((cur.get("gross_profit_usd") or 0) / gl, 2) if gl else 0.0
+    return out
 
 
 class StatsManager:
@@ -62,6 +91,16 @@ class StatsManager:
             try:
                 with open(STATS_FILE, "r", encoding="utf-8") as f:
                     self.stats_data = json.load(f)
+                # ย้ายชื่อแผนเลขเก่า → เลขใหม่ (ครั้งเดียว แล้วบันทึกกลับ)
+                changed = False
+                for udata in self.stats_data.values():
+                    if isinstance(udata, dict) and isinstance(udata.get("plans"), dict):
+                        migrated = migrate_plan_keys(udata["plans"])
+                        if migrated != udata["plans"]:
+                            udata["plans"] = migrated
+                            changed = True
+                if changed:
+                    self.save_stats()
             except Exception as e:
                 print(f"[StatsManager] Error loading stats: {e}")
                 self.stats_data = {}
@@ -187,7 +226,7 @@ class StatsManager:
         )
 
     def record_close(self, ticket: int, profit: float, close_price: float = 0, reason: str = "",
-                     user_id: str = None, fallback_plan: str = "Plan 0: SMC-LiquidityHunt"):
+                     user_id: str = None, fallback_plan: str = "Plan 1: SMC-LiquidityHunt"):
         """
         บันทึกผลเมื่อปิดไม้ (Trade Exit / TP Hit / SL Hit):
         - คำนวณ กำไร/ขาดทุน สุทธิ

@@ -145,7 +145,9 @@ textarea {
   padding-inline: 20px;
 }
 .container-wide {
-  max-width: 1360px;
+  /* หน้าพอร์ต/แอดมิน: ใช้พื้นที่จอกว้างให้เต็มขึ้น (จอ 1080p+ ไม่เหลือขอบว่างมาก) */
+  max-width: 1680px;
+  padding-inline: clamp(16px, 2.2vw, 36px);
 }
 .container-narrow {
   max-width: 720px;

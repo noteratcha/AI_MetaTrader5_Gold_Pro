@@ -1306,8 +1306,8 @@ class MainTradingApp(ctk.CTk):
         self.lbl_news_countdown.grid(row=2, column=1, sticky="e")
 
     PLAN_ROWS = [
-        ("⚡", "P0 · SMC Hunt", "Plan 0: SMC-LiquidityHunt"),
-        ("🎯", "P1 · SR Bounce", "Plan 1: SR-SwingBounce"),
+        ("⚡", "P1 · SMC Hunt", "Plan 1: SMC-LiquidityHunt"),
+        ("🎯", "P2 · SR Bounce", "Plan 2: SR-SwingBounce"),
         ("🌊", "P3 · BB-H1", "Plan 3: BB-H1-Reversion"),
         ("📈", "P4 · MA M15", "Plan 4: MA-Cross-Trend"),
         ("👑", "P5 · MA H1", "Plan 5: MA-Cross-H1-Trend"),
@@ -2114,7 +2114,7 @@ class MainTradingApp(ctk.CTk):
                             st.update(sup=sup, res=res, price=price)
                             self._draw_sr_bar(row["bar"], st)
 
-                    # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 0/1)
+                    # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 1/2)
                     h1_state = self.card_sr["rows"]["H1"]["state"]
                     pos = self._sr_position(h1_state["sup"], h1_state["res"], price)
                     if pos is None:

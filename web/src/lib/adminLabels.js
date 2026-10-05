@@ -30,8 +30,8 @@ export const TRADE_ACTION_LABELS = {
 };
 
 export const PLAN_SHORT = {
-  'Plan 0: SMC-LiquidityHunt': 'P0 SMC',
-  'Plan 1: SR-SwingBounce': 'P1 Bounce',
+  'Plan 1: SMC-LiquidityHunt': 'P1 SMC',
+  'Plan 2: SR-SwingBounce': 'P2 Bounce',
   'Plan 3: BB-H1-Reversion': 'P3 BB-H1',
   'Plan 4: MA-Cross-Trend': 'P4 MA M15',
   'Plan 5: MA-Cross-H1-Trend': 'P5 MA H1',

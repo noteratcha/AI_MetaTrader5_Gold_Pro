@@ -73,7 +73,7 @@ def base_plan(plan_name: str) -> str:
 def is_enabled(plan_name: str) -> bool:
     base = base_plan(plan_name)
     if base not in BASE_PLANS:
-        return True  # แผนที่ไม่ได้อยู่ในรายการควบคุม (เช่น Breakout ที่ปิดถาวรอยู่แล้ว)
+        return True  # แผนที่ไม่ได้อยู่ในรายการควบคุม 
     with _lock:
         return _state["plans"].get(base, True)
 

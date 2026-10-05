@@ -51,8 +51,8 @@ def create_quickstart_guide(out_dir):
      มากดปุ่ม "เติมชั่วโมง" ในโปรแกรมเพื่อบวกเพิ่มชั่วโมงทันที
 
 3. แผนการเทรด 100% Pure Gold Specialist (XAUUSD):
-   - Plan 0: SMC-LiquidityHunt (กวาดสภาพคล่องแนวรับ/ต้าน H1 + เทรนด์ H1)
-   - Plan 1: SR-SwingBounce (เด้งโซนแนวรับ/ต้าน H1 + RSI Divergence)
+   - Plan 1: SMC-LiquidityHunt (กวาดสภาพคล่องแนวรับ/ต้าน H1 + เทรนด์ H1)
+   - Plan 2: SR-SwingBounce (เด้งโซนแนวรับ/ต้าน H1 + RSI Divergence)
    - Plan 3: BB-H1-Reversion (เด้งขอบแบนด์ H1 2STD + MACD Confluence)
    - Plan 4: MA-Cross-Trend (MA5 x MA10 M15 + ตัวกรองเทรนด์ใหญ่ H1)
    - Plan 5: MA-Cross-H1-Trend (MA5 x MA10 H1 + ตัวกรองเทรนด์ใหญ่ H4)

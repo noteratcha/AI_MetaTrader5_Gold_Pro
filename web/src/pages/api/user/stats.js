@@ -2,8 +2,8 @@ import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import { allowMethods, requireUser } from '../../../lib/server/auth';
 
 const PLAN_ORDER = [
-  'Plan 0: SMC-LiquidityHunt',
-  'Plan 1: SR-SwingBounce',
+  'Plan 1: SMC-LiquidityHunt',
+  'Plan 2: SR-SwingBounce',
   'Plan 3: BB-H1-Reversion',
   'Plan 4: MA-Cross-Trend',
   'Plan 5: MA-Cross-H1-Trend',

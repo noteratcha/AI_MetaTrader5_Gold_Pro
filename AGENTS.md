@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1338 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1414 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1338): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1414): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1338`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1414`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -12,17 +12,16 @@
 
 - **ความเชี่ยวชาญเฉพาะทองคำ 100% (XAUUSD Gold Specialist Architecture)**:
   - **XAUUSD (Gold Only)**: โฟกัสเฉพาะสินทรัพย์ทองคำ 100% (ปิด BTCUSD และคู่เงิน Forex ทั้งหมด) เพื่อรวบรวมมาร์จิ้น สมาธิ และคัดกรองเฉพาะชุดแผนเทรดที่สถิติดีที่สุดสำหรับพฤติกรรมทองคำ:
-    - ⚡ **Plan 0: `SMC-LiquidityHunt`** (ดักกวาดสภาพคล่องนอกแนวรับต้าน H1 + กรองเทรนด์ H1 100%)
-    - 🎯 **Plan 1: `SR-SwingBounce`** (เด้งแนวรับต้าน H1 พร้อม Divergence Confluence)
+    - ⚡ **Plan 1: `SMC-LiquidityHunt`** (ดักกวาดสภาพคล่องนอกแนวรับต้าน H1 + กรองเทรนด์ H1 100%)
+    - 🎯 **Plan 2: `SR-SwingBounce`** (เด้งแนวรับต้าน H1 พร้อม Divergence Confluence)
     - 🌊 **Plan 3: `BB-H1-Reversion`** (ดักจังหวะหลุดกรอบ Bollinger Bands H1 พร้อม Divergence + MACD Exhaustion)
     - 📈 **Plan 4: `MA-Cross-Trend`** (Moving Average 5 ตัด 10 บนแท่ง M15 พร้อมกรองเทรนด์ใหญ่ H1 100%)
     - 👑 **Plan 5: `MA-Cross-H1-Trend`** (Moving Average 5 ตัด 10 บนแท่ง H1 พร้อมกรองเทรนด์ใหญ่ H4 100%)
-    - 🚫 *ปิด Plan 2 Breakout ถาวรเพื่อตัดกับดัก False Breakout ของทองคำ*
 - **สไตล์การเทรดแบบปรับตัวตามสภาวะตลาด (Market Regime Adaptation)**:
   - **Trending Market (ตลาดมีแนวโน้มชัดเจน)**: บังคับ **Strict Pro-Trend 100%** เทรดฝั่งเดียวกับเทรนด์ H4 MA เท่านั้น ห้ามสวนเทรนด์เด็ดขาดเพื่อตัดการรับมีด
   - **Sideway / Range-Bound Market (ตลาดแกว่งตัวในกรอบ)**: เมื่อ `|h4_diff_pct| < 0.20%` สลับสู่โหมด Range Play อนุมัติการเข้าเทรดได้ทั้ง BUY และ SELL
 - **Zero Emotion & Realistic Asymmetric RRR (Sweet Spot)**:
-  - อัตราผลตอบแทนต่อความเสี่ยง **RRR 1:1.50** สำหรับแผนที่มี TP ชัดเจน (Plan 0, 1, 3)
+  - อัตราผลตอบแทนต่อความเสี่ยง **RRR 1:1.50** สำหรับแผนที่มี TP ชัดเจน (Plan 1, 2, 3)
   - ขยายระยะตัดขาดทุนให้มีพื้นที่หายใจ **SL 0.75 ATR** ป้องกัน Market Noise และไส้เทียนสะบัดหลุดก่อนเวลา
   - แผนรันเทรนด์ **Plan 4 (M15)** และ **Plan 5 (H1)** ไม่ต้องตั้ง TP เพื่อ Let Profit Run เต็มรอบ และตัดรอบด้วย **Opposite MA Crossover Exit**
 
@@ -35,7 +34,7 @@
 3. **H1 Bollinger Bands & MACD Exhaustion Edge**: อ้างอิงกรอบความผันผวนใหญ่ระดับวันจาก Timeframe H1 (SMA 20, 2 STD) ผสานการยืนยันการหมดแรงของโมเมนตัมด้วย **H1 MACD Histogram Exhaustion** ดัน Win Rate แตะระดับสูง
 4. **M15 MA Crossover with H1 Trend Anchor (Plan 4)**: ระบบตรวจจับ MA 5 ตัดขึ้น/ตัดลง MA 10 บน M15 พร้อมบังคับให้สอดคล้องกับทิศทางเทรนด์ H1 (MA10 vs MA30)
 5. **H1 MA Crossover with H4 Trend Anchor (Plan 5)**: ระบบตรวจจับ MA 5 ตัดขึ้น/ตัดลง MA 10 บน H1 พร้อมบังคับให้สอดคล้องกับเทรนด์ใหญ่ H4 (MA10 vs MA30) ปล่อยให้กำไรวิ่งรอบสวิงใหญ่ระดับหลายร้อยจุด
-6. **H1 Trend Confluence on SMC Liquidity Hunt**: บังคับให้ Plan 0 เทรดตามทิศทางหลักของแท่งเทียนชั่วโมง H1 เสมอ (BUY เมื่อ H1 Uptrend, SELL เมื่อ H1 Downtrend) ตัดการรับมีดตก 85%
+6. **H1 Trend Confluence on SMC Liquidity Hunt**: บังคับให้ Plan 1 เทรดตามทิศทางหลักของแท่งเทียนชั่วโมง H1 เสมอ (BUY เมื่อ H1 Uptrend, SELL เมื่อ H1 Downtrend) ตัดการรับมีดตก 85%
 7. **Continuous AI Retraining**: รีเทรนโมเดลใหม่ทุก 24 ชั่วโมง พร้อม Features พิเศษ 16 ตัว เพื่อปรับความเข้าใจต่อพฤติกรรมทองคำล่าสุด
 8. **Market Regime Classification & Strict Pro-Trend Filter**: ระบบตรวจจับสภาวะตลาด H4 MA10 vs MA30 แบบ Real-time หากมีแนวโน้มชัดเจนจะบังคับเทรดตามเทรนด์ 100%
 9. **Gold Real-time Terminal Dashboard**: แสดงผลข้อมูลราคาทองคำ, ATR, H4 Regime, H1 Trend, MA(5/10) M15, MA(5/10) H1, AI Predict, S&R Zone H1, Bollinger Bands H1 และ H1 MACD Histogram อย่างชัดเจน
@@ -61,29 +60,25 @@
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   XAUUSD (GOLD) EXCLUSIVE SUITE                        │
 ├────────────────────────────────────────────────────────────────────────┤
-│ ⚡ Plan 0: SMC-LiquidityHunt (กวาดสภาพคล่องแนวรับ/ต้าน H1 + เทรนด์ H1)    │
-│ 🎯 Plan 1: SR-SwingBounce (เด้งโซนแนวรับ/ต้าน H1 + RSI Divergence)     │
+│ ⚡ Plan 1: SMC-LiquidityHunt (กวาดสภาพคล่องแนวรับ/ต้าน H1 + เทรนด์ H1)    │
+│ 🎯 Plan 2: SR-SwingBounce (เด้งโซนแนวรับ/ต้าน H1 + RSI Divergence)     │
 │ 🌊 Plan 3: BB-H1-Reversion (เด้งขอบแบนด์ H1 2STD + MACD Confluence)    │
 │ 📈 Plan 4: MA-Cross-Trend (MA5 x MA10 M15 + ตัวกรองเทรนด์ใหญ่ H1)      │
 │ 👑 Plan 5: MA-Cross-H1-Trend (MA5 x MA10 H1 + ตัวกรองเทรนด์ใหญ่ H4)   │
-│       *(ปิด Plan 2 Breakout ถาวร เพื่อป้องกัน False Breakout)*         │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 🔹 Plan 0: `SMC-LiquidityHunt` (กวาดสภาพคล่อง + เทรนด์ H1 Confluence)
+### 🔹 Plan 1: `SMC-LiquidityHunt` (กวาดสภาพคล่อง + เทรนด์ H1 Confluence)
 * **จุดประสงค์**: ดักเก็บจังหวะ Fakeout ที่ราคากวาด Stop Loss นอกแนวรับ/ต้าน แล้วดึงกลับ โดยต้องสอดคล้องกับเทรนด์ใหญ่ H1 เท่านั้น
 * **เงื่อนไข BUY**: `Low < Support H1` และ `Close >= Support H1` พร้อมไส้ล่าง `lower_wick_ratio >= 0.30` + **เทรนด์ H1 ต้องเป็น Uptrend (`H1 MA10 > MA30`)** + AI UP $\ge 50\%$ *(หากมี Bullish Divergence ลดเกณฑ์ AI เป็น $\ge 48\%$)*
 * **เงื่อนไข SELL**: `High > Resistance H1` และ `Close <= Resistance H1` พร้อมไส้บน `upper_wick_ratio >= 0.30` + **เทรนด์ H1 ต้องเป็น Downtrend (`H1 MA10 < MA30`)** + AI DOWN $\ge 50\%$ *(หากมี Bearish Divergence ลดเกณฑ์ AI เป็น $\ge 48\%$)*
 * **ความเสี่ยง/เป้าหมาย**: SL = 0.75 ATR | TP = RRR 1:1.50 (1.125 ATR)
 
-### 🔹 Plan 1: `SR-SwingBounce` (เด้งแนวรับ-ต้าน + Divergence Confluence)
+### 🔹 Plan 2: `SR-SwingBounce` (เด้งแนวรับ-ต้าน + Divergence Confluence)
 * **จุดประสงค์**: เข้าออเดอร์ตามรอบการแกว่งตัวในกรอบแนวรับ/ต้านหลัก H1 (Mean Reversion - Win Rate 53.3% - 57.1%)
 * **เงื่อนไข BUY**: ราคาแตะโซนแนวรับ (`|Close - Support| <= 1.0 ATR`) + สัญญาณแท่งเทียนปฏิเสธราคา + **ต้องมี Bullish/Hidden Bullish Div Confluence** + AI UP $\ge 51\%$
 * **เงื่อนไข SELL**: ราคาแตะโซนแนวต้าน (`|Resistance - Close| <= 1.0 ATR`) + สัญญาณแท่งเทียนปฏิเสธราคา + **ต้องมี Bearish/Hidden Bearish Div Confluence** + AI DOWN $\ge 51\%$
 * **ความเสี่ยง/เป้าหมาย**: SL = 0.75 ATR | TP = RRR 1:1.50 (1.125 ATR)
-
-### 🔹 Plan 2: `Trend-Breakout` (ปิดถาวรบนทองคำ)
-* *หมายเหตุ: ปิดการทำงานบน XAUUSD ถาวรเพื่อป้องกันการติดกับดัก False Breakout*
 
 ### 🔹 Plan 3: `BB-H1-Reversion` (เด้งขอบแบนด์ H1 + Divergence + MACD Exhaustion)
 * **จุดประสงค์**: ดักจังหวะราคาทองคำหลุดกรอบความผันผวนใหญ่ระดับวันของ H1 (SMA 20, 2 STD) แล้วถูกปฏิเสธดีดกลับเข้าหากึ่งกลาง ผสานการยืนยันการหมดแรงของโมเมนตัมด้วย MACD (**Win Rate สูงถึง 66.7% - 75.0%**)
@@ -98,12 +93,12 @@
 * **เงื่อนไขการปิดไม้ (Exit Condition - ไม่ต้องตั้ง TP)**:
   - 🔄 **สำหรับไม้ BUY**: เมื่อเข้าไม้อยู่ แล้ว MA 5 ตัดลงใต้ MA 10 บน M15 ➔ **ปิดไม้ทันที (Market Close)!**
   - 🔄 **สำหรับไม้ SELL**: เมื่อเข้าไม้อยู่ แล้ว MA 5 ตัดขึ้นเหนือ MA 10 บน M15 ➔ **ปิดไม้ทันที (Market Close)!**
-* **การควบคุมความเสี่ยง**: **ไม่ต้องตั้ง TP** (TP = 0.0) เพื่อปล่อยให้กำไรวิ่งสุดเทรนด์ | ตั้ง Safety Stop Loss = **0.75 ATR** ป้องกันข่าวกระชากรุนแรง
+* **การควบคุมความเสี่ยง**: **ไม่ต้องตั้ง TP** (TP = 0.0) เพื่อปล่อยให้กำไรวิ่งสุดเทรนด์ | **Swing SL**: วาง SL เลย High (SELL) / Low (BUY) ของ 2 แท่ง M15 ที่ปิดแล้ว + 0.1 ATR และไม่น้อยกว่า **0.75 ATR** (Backtest 2.5 ปี: กำไรสุทธิ 496 → 952 จุด, PF 1.07 → 1.11, Max DD 405 → 372)
 
 ### 🔹 Plan 5: `MA-Cross-H1-Trend` (MA5 x MA10 H1 + H4 Trend Anchor + Opposite Cross Exit)
 * **จุดประสงค์**: ตามรอบโมเมนตัมแท่งเทียนระดับชั่วโมง H1 ที่สอดคล้องกับเทรนด์ใหญ่ H4 โดยเข้าไม้บน H1 และปล่อยให้กำไรวิ่งตามแนวโน้มระดับวัน (Swing Trend) พร้อมปิดทันทีเมื่อ MA ตัดกลับขั้วตรงข้ามบน H1
-* **เงื่อนไข BUY**: MA 5 ตัดขึ้นเหนือ MA 10 บนแท่ง H1 (`MA5_H1[t-1] <= MA10_H1[t-1]` และ `MA5_H1[t] > MA10_H1[t]`) **และ** เทรนด์ใหญ่ H4 ต้องเป็นขาขึ้น/ไซด์เวย์บูลลิช (`H4 MA10 > H4 MA30` หรือ `is_sideway_h4`)
-* **เงื่อนไข SELL**: MA 5 ตัดลงใต้ MA 10 บนแท่ง H1 (`MA5_H1[t-1] >= MA10_H1[t-1]` และ `MA5_H1[t] < MA10_H1[t]`) **และ** เทรนด์ใหญ่ H4 ต้องเป็นขาลง/ไซด์เวย์แบร์ริช (`H4 MA10 < H4 MA30` หรือ `is_sideway_h4`)
+* **เงื่อนไข BUY**: MA 5 ตัดขึ้นเหนือ MA 10 บนแท่ง H1 (`MA5_H1[t-1] <= MA10_H1[t-1]` และ `MA5_H1[t] > MA10_H1[t]`) **และ** เทรนด์ใหญ่ H4 ต้องเป็นขาขึ้นหรือไซด์เวย์บูลลิช (`H4 MA10 > H4 MA30` เสมอ — ไซด์เวย์ที่ MA10 < MA30 ห้าม BUY)
+* **เงื่อนไข SELL**: MA 5 ตัดลงใต้ MA 10 บนแท่ง H1 (`MA5_H1[t-1] >= MA10_H1[t-1]` และ `MA5_H1[t] < MA10_H1[t]`) **และ** เทรนด์ใหญ่ H4 ต้องเป็นขาลงหรือไซด์เวย์แบร์ริช (`H4 MA10 < H4 MA30` เสมอ — ไซด์เวย์ที่ MA10 > MA30 ห้าม SELL · Backtest: กำไร 386 → 757 จุด, DD 374 → 297)
 * **เงื่อนไขการปิดไม้ (Exit Condition - ไม่ต้องตั้ง TP)**:
   - 🌊 **สำหรับไม้ BUY**: เมื่อถือไม้อยู่ แล้ว MA 5 ตัดลงใต้ MA 10 บนแท่ง H1 ➔ **ปิดไม้ทันที (Market Close)!**
   - 🌊 **สำหรับไม้ SELL**: เมื่อถือไม้อยู่ แล้ว MA 5 ตัดขึ้นเหนือ MA 10 บนแท่ง H1 ➔ **ปิดไม้ทันที (Market Close)!**
@@ -142,7 +137,7 @@
 | **Breathing Room SL** | `0.75 * ATR` | ให้พื้นที่ราคาหายใจ ป้องกันไส้เทียนสะบัดกิน SL ใน Timeframe M15 |
 | **Sweet Spot RRR** | `1:1.50` | สร้างความสมดุลระหว่าง Win Rate สูง (45-50%) และกำไรสุทธิ |
 | **Strict Pro-Trend** | บล็อกสวนเทรนด์ 100% | ห้ามเข้าออเดอร์สวนทิศ H4 MA เด็ดขาดเมื่อตลาดมีแนวโน้ม |
-| **Asset Specialization** | คัดแผนเฉพาะทาง | ปิด Breakout บน XAU และปิด Bounce บน BTC เพื่อตัดไม้แพ้ซ้ำซาก |
+| **Asset Specialization** | คัดแผนเฉพาะทาง | นำแผน Breakout ออกจากระบบ (กับดัก False Breakout ของทองคำ) และใช้เฉพาะ 5 แผนที่สถิติดี |
 | **Circuit Breaker** | ขาดทุนติดกัน 2 ไม้ ➔ พัก 60 นาที | ป้องกัน Drawdown รุนแรงในสภาวะตลาดผิดปกติ (นับไม้ละ 1 ครั้งเท่านั้น — ดูเทคนิคข้อ 6) |
 | **Same-Plan Loss Block** | บล็อกทิศเดิม 60 นาทีเมื่อแพ้ | ป้องกันการเข้าซ้ำสวนแนวโน้มที่กำลังวิ่งแรง (ปลดล็อกเมื่อชนะ) |
 | **Margin per Trade** | $400 ต่อ 1 ไม้ (Free Margin) | คุมขนาดพอร์ตและป้องกัน Overtrading / Margin Call |

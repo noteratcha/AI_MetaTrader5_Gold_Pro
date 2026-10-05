@@ -352,7 +352,7 @@ function Landing() {
           <div className="card">
             <div className="card-header">
               <h3>แผนเทรดที่ทำงานอยู่</h3>
-              <span className="badge badge-muted">ปิด Breakout ถาวร</span>
+              <span className="badge badge-muted">5 แผน · XAUUSD</span>
             </div>
             <div className="table-wrap">
               <table className="table">

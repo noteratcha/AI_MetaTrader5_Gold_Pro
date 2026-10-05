@@ -11,8 +11,8 @@ import { formatHHMM, formatPrice, formatThaiDateTime, formatUsd, timeAgo } from 
 import { ACTIVITY_LABELS, TRADE_ACTION_LABELS } from '../../../../lib/adminLabels';
 
 const PLAN_ROWS = [
-  'Plan 0: SMC-LiquidityHunt',
-  'Plan 1: SR-SwingBounce',
+  'Plan 1: SMC-LiquidityHunt',
+  'Plan 2: SR-SwingBounce',
   'Plan 3: BB-H1-Reversion',
   'Plan 4: MA-Cross-Trend',
   'Plan 5: MA-Cross-H1-Trend',
