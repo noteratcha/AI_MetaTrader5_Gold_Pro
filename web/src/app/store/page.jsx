@@ -93,12 +93,12 @@ export default function StorePage() {
               </div>
               <div className="row" style={{ alignItems: 'baseline', gap: 6 }}>
                 <span className="mono" style={{ fontSize: '2.4rem', fontWeight: 700, lineHeight: 1 }}>
-                  {total}
+                  {Number(total).toLocaleString('en-US')}
                 </span>
                 <span className="muted">ชั่วโมง</span>
               </div>
               <div className="tiny" style={{ minHeight: 20, marginTop: 6, color: 'var(--green)' }}>
-                {pkg.bonus > 0 ? `${pkg.hours} + โบนัส ${pkg.bonus} ชม.` : ''}
+                {pkg.bonus > 0 ? `${Number(pkg.hours).toLocaleString('en-US')} + โบนัส ${Number(pkg.bonus).toLocaleString('en-US')} ชม.` : ''}
               </div>
               <p className="small muted" style={{ margin: '10px 0 22px', minHeight: 44 }}>
                 {pkg.desc}
@@ -335,7 +335,7 @@ function CheckoutModal({ pkg, onClose }) {
           <div className="center" style={{ marginBottom: 14 }}>
             <span className="eyebrow">PromptPay QR</span>
             <h2 id="checkout-title" style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-              {pkg.name} · {pkg.hours + pkg.bonus} ชั่วโมง
+              {pkg.name} · {Number(pkg.hours + pkg.bonus).toLocaleString('en-US')} ชั่วโมง
             </h2>
           </div>
           <CheckoutSteps step={step} />
@@ -349,11 +349,11 @@ function CheckoutModal({ pkg, onClose }) {
               <p className="small muted" style={{ marginBottom: 16 }}>
                 {redeemState?.type === 'success' ? (
                   <>
-                    เติม <strong className="text-gold">+{pkg.hours + pkg.bonus} ชั่วโมง</strong> เข้าบัญชีแล้ว · ส่งใบเสร็จไปที่อีเมลของคุณแล้ว
+                    เติม <strong className="text-gold">+{Number(pkg.hours + pkg.bonus).toLocaleString('en-US')} ชั่วโมง</strong> เข้าบัญชีแล้ว · ส่งใบเสร็จไปที่อีเมลของคุณแล้ว
                   </>
                 ) : (
                   <>
-                    ได้รับ <strong className="text-gold">+{pkg.hours + pkg.bonus} ชั่วโมง</strong> · คีย์ถูกเก็บไว้ในหน้า “คีย์ของฉัน” แล้ว
+                    ได้รับ <strong className="text-gold">+{Number(pkg.hours + pkg.bonus).toLocaleString('en-US')} ชั่วโมง</strong> · คีย์ถูกเก็บไว้ในหน้า “คีย์ของฉัน” แล้ว
                   </>
                 )}
               </p>

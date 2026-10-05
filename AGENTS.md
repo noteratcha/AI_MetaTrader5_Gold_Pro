@@ -143,7 +143,7 @@
 | **Asset Specialization** | คัดแผนเฉพาะทาง | นำแผน Breakout ออกจากระบบ (กับดัก False Breakout ของทองคำ) และใช้เฉพาะ 5 แผนที่สถิติดี |
 | **Circuit Breaker** | ขาดทุนติดกัน 2 ไม้ ➔ พัก 60 นาที | ป้องกัน Drawdown รุนแรงในสภาวะตลาดผิดปกติ (นับไม้ละ 1 ครั้งเท่านั้น — ดูเทคนิคข้อ 6) |
 | **Same-Plan Loss Block** | บล็อกทิศเดิม 60 นาทีเมื่อแพ้ | ป้องกันการเข้าซ้ำสวนแนวโน้มที่กำลังวิ่งแรง (ปลดล็อกเมื่อชนะ) |
-| **Margin per Trade** | $400 ต่อ 1 ไม้ (Free Margin) | คุมขนาดพอร์ตและป้องกัน Overtrading / Margin Call |
+| **Margin per Trade** | $400 ต่อ 1 ไม้ที่ 0.01 lot (ปรับตามขนาดไม้ที่ตั้ง) | คุมขนาดพอร์ตและป้องกัน Overtrading / Margin Call |
 | **Cooldown Rest** | BTC 15 นาที / XAU 10 นาที | พักรอบแท่งเทียนป้องกันอาการ Whipsaw หลังปิดออเดอร์ |
 | **Cross-Bar Guard** | 1 ไม้ ต่อ 1 แท่ง Cross | Plan 1/2 ห้ามเข้าซ้ำบนสัญญาณ Cross เดิมหลัง Cooldown หมด |
 | **News Awareness** | นับถอยหลังข่าว USD ผลกระทบสูง | เตือนช่วงสเปรดกว้าง/ราคาสะบัดแรง 15–30 นาทีรอบข่าว |
@@ -180,6 +180,8 @@
 | **Desktop GUI Colors** | CustomTkinter รับเฉพาะ Hex `#RRGGBB` — **ห้ามใช้ `rgba()`** (ทำให้ `TclError` โปรแกรมเปิดไม่ขึ้น) |
 | **Release Flow** | 1) `python tools/bump_version.py` 2) Smoke Test GUI 3) `python build_dist.py` (ต้องปิดโปรแกรมก่อน ไม่งั้นไฟล์ถูกล็อก) → ได้ทั้ง ZIP และ**ตัวติดตั้ง `GoldBot24_Setup_v<เวอร์ชัน>.exe`** (Inno Setup จาก `installer/goldbot24.iss`: ติดตั้งแบบผู้ใช้ไม่ต้อง Admin, ไอคอน Desktop + Start Menu, อัปเดตทับได้, ไม่ลบ %APPDATA%\GoldBot24 · ติดตั้ง ISCC: `winget install JRSoftware.InnoSetup --scope user`) 4) สร้าง GitHub Release `v<เวอร์ชัน>` แนบ Setup .exe + ZIP + SHA-256 (`/api/release` เลือก Setup เป็นไฟล์หลัก) → หน้า `/download` และการแจ้งอัปเดตในโปรแกรมอัปเดตเอง · Web: `cd web && npm run build` → `git push` (Vercel Root Directory = `web` deploy อัตโนมัติ) · เปลี่ยน env บน Vercel แล้วต้อง redeploy: `cd web && npx vercel redeploy <URL production ล่าสุด> --target production` (โฟลเดอร์ `web` คือที่ link กับ Vercel) |
 | **Backtest บนเว็บ** | `python tools/backtest_all.py` (เปิด MT5 ค้างไว้ ~3–4 นาที) → จำลองทุกแผนตามกฎปัจจุบัน 2.5 ปี (AI แบบ Walk-forward) → เขียน `web/public/backtest.json` → หน้า `/backtest` แสดงผลรวม/กราฟกำไรสะสม/รายแผน/รายเดือน · **รันใหม่ทุกครั้งที่เปลี่ยนกฎแผน** แล้ว deploy เว็บ |
+| **ขนาดไม้ (Lot)** | ผู้ใช้ตั้งได้ที่แผงควบคุมบอท (ค่าเริ่มต้น 0.01) → `%APPDATA%\GoldBot24ot_settings.json` · บอทอ่านค่าใหม่ทุกครั้งที่เปิดออเดอร์ (`current_lot()`) · Step Trailing ของ Plan 1 นับเป็นจุดราคา (5 จุด = $5 ที่ 0.01 lot, $10 ที่ 0.02 lot) |
+| **บัญชี MT5 บนเว็บ** | Telemetry ส่ง `radar_signals[0].account` (login, server, name, โหมด Demo/Real, leverage, lot) → หน้าพอร์ตสดแสดงแถบบัญชีที่เชื่อมต่อ |
 | **Responsive Desktop** | ออกแบบให้พอดีจอ 1366×768 (เปิดเต็มจออัตโนมัติเมื่อจอเล็ก) · Tk แสดงอีโมจีสีไม่ได้ ให้ใช้ Label สี/ป้ายแทน และหลีกเลี่ยงอีโมจี Unicode ใหม่ (เช่น 🪙) ที่ Windows 10 ไม่มี |
 | **Tk Grid** | `sticky` ใช้ได้เฉพาะ n/s/e/w — ห้าม `sticky="center"` (TclError) |
 

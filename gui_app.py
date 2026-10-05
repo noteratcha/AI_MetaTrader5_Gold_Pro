@@ -6,6 +6,7 @@ AI MetaTrader 5 (FBS) Gold Pro - Desktop GUI Application
 """
 
 import os
+import json
 import sys
 import time
 import queue
@@ -28,6 +29,7 @@ import econ_calendar
 from version import APP_VERSION
 import secure_store
 import plan_config
+from app_paths import data_path
 from collections import deque
 from console_format import ConsoleFormatter, TAG_COLORS
 from stats_manager import stats_mgr, STANDARD_PLANS
@@ -1212,6 +1214,36 @@ class MainTradingApp(ctk.CTk):
     # ---------------------------------------------------------------------
     # คอลัมน์ขวา: ควบคุมบอท / ข่าวถัดไป / แผนเทรด
     # ---------------------------------------------------------------------
+    @staticmethod
+    def _load_lot() -> float:
+        try:
+            with open(data_path("bot_settings.json"), "r", encoding="utf-8") as f:
+                return max(0.01, float(json.load(f).get("lot", 0.01)))
+        except Exception:
+            return 0.01
+
+    def _save_lot(self, value):
+        """ตรวจและบันทึกขนาดไม้ — บอทอ่านค่าใหม่ทันทีตอนเปิดออเดอร์ถัดไป"""
+        try:
+            lot = round(float(str(value).strip()), 2)
+            if not (0.01 <= lot <= 100):
+                raise ValueError
+        except ValueError:
+            self.lot_var.set(f"{self._load_lot():.2f}")
+            self.lbl_lot_hint.configure(text="0.01 – 100 เท่านั้น", text_color=COLOR_DANGER_RED)
+            return
+        if abs(lot - self._load_lot()) < 1e-9:
+            self.lot_var.set(f"{lot:.2f}")
+            return
+        try:
+            with open(data_path("bot_settings.json"), "w", encoding="utf-8") as f:
+                json.dump({"lot": lot}, f)
+            self.lot_var.set(f"{lot:.2f}")
+            self.lbl_lot_hint.configure(text="บันทึกแล้ว ✓", text_color=COLOR_SUCCESS_GREEN)
+            self.after(2500, lambda: self.lbl_lot_hint.configure(text=""))
+        except Exception as e:
+            self.lbl_lot_hint.configure(text=f"บันทึกไม่ได้: {e}", text_color=COLOR_DANGER_RED)
+
     def _build_control_panel(self, parent):
         card = self._card(parent, fill="x", pady=(0, 8))
 
@@ -1236,6 +1268,22 @@ class MainTradingApp(ctk.CTk):
             command=self._on_toggle_bot,
         )
         self.btn_master_toggle.pack(fill="x", padx=14)
+
+        # ขนาดไม้ (Lot) ที่บอทใช้เปิดออเดอร์ — บันทึกใน %APPDATA%\GoldBot24ot_settings.json (ค่าเริ่มต้น 0.01)
+        lot_row = ctk.CTkFrame(card, fg_color="transparent")
+        lot_row.pack(fill="x", padx=14, pady=(8, 0))
+        ctk.CTkLabel(lot_row, text="ขนาดไม้ (Lot)", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        self.lot_var = tk.StringVar(value=f"{self._load_lot():.2f}")
+        self.cmb_lot = ctk.CTkComboBox(
+            lot_row, width=96, height=28, variable=self.lot_var,
+            values=["0.01", "0.02", "0.03", "0.05", "0.10", "0.20", "0.50", "1.00"],
+            command=lambda v: self._save_lot(v), font=self._font(12, "bold"),
+        )
+        self.cmb_lot.pack(side="right")
+        self.cmb_lot.bind("<Return>", lambda e: self._save_lot(self.lot_var.get()))
+        self.cmb_lot.bind("<FocusOut>", lambda e: self._save_lot(self.lot_var.get()))
+        self.lbl_lot_hint = ctk.CTkLabel(lot_row, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED)
+        self.lbl_lot_hint.pack(side="right", padx=(0, 8))
 
         # สถิติย่อ 3 ช่อง: ออเดอร์เปิดอยู่ / กำไรลอยตัว / เวลาทำงาน
         stats = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)

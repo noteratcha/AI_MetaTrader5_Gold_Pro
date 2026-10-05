@@ -233,6 +233,17 @@ def telemetry_background_worker():
                         "h1_trend": h1_tr,
                         "h1_diff_pct": round(h1_df, 2),
                         **sr_fields,
+                        # บัญชี MT5 ที่บอทกำลังเชื่อมต่อ (แสดงบนเว็บ)
+                        "account": {
+                            "login": int(acc_info.login),
+                            "server": str(acc_info.server),
+                            "name": str(acc_info.name),
+                            "company": str(acc_info.company),
+                            "currency": str(acc_info.currency),
+                            "leverage": int(acc_info.leverage),
+                            "mode": "DEMO" if int(acc_info.trade_mode) == 0 else ("CONTEST" if int(acc_info.trade_mode) == 1 else "REAL"),
+                            "lot": float(current_lot()),
+                        },
                     })
 
                 # แยกแถว Telemetry ตามบัญชีผู้ใช้ GoldBot24 (id ใน bot_config) — ลูกค้าแต่ละคนเห็นเฉพาะพอร์ตตัวเอง
@@ -465,7 +476,26 @@ def get_filling_type(symbol_info):
     else:
         return mt5.ORDER_FILLING_RETURN
 
-def get_valid_lot(symbol_info, base_lot=LOT):
+BOT_SETTINGS_FILE = _data_path('bot_settings.json')   # {"lot": 0.01} — ตั้งจากหน้าโปรแกรม
+_lot_cache = {"mtime": None, "lot": LOT}
+
+
+def current_lot():
+    """ขนาดไม้ที่ผู้ใช้ตั้งไว้ (ค่าเริ่มต้น 0.01) — อ่านใหม่เมื่อไฟล์ตั้งค่าเปลี่ยน"""
+    try:
+        mtime = os.path.getmtime(BOT_SETTINGS_FILE)
+        if mtime != _lot_cache["mtime"]:
+            with open(BOT_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                lot = float(json.load(f).get("lot", LOT))
+            _lot_cache.update(mtime=mtime, lot=min(max(lot, 0.01), 100.0))
+    except Exception:
+        _lot_cache.update(mtime=None, lot=LOT)
+    return _lot_cache["lot"]
+
+
+def get_valid_lot(symbol_info, base_lot=None):
+    if base_lot is None:
+        base_lot = current_lot()
     if symbol_info is None:
         return base_lot
     min_vol = symbol_info.volume_min
@@ -701,7 +731,7 @@ def log_signal_event(symbol, signal_type, plan, direction, price, ai_up, ai_down
 def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
     info = mt5.symbol_info(symbol)
     filling_type = get_filling_type(info)
-    volume = get_valid_lot(info, LOT)
+    volume = get_valid_lot(info)
     # ตรวจสอบ Margin ก่อนส่งคำสั่งซื้อขาย (Margin Pre-check Guard)
     try:
         acc = mt5.account_info()
@@ -1522,7 +1552,7 @@ def main():
                 # แสดงผลแบบ Dashboard สวยงาม โดยปรับจุดทศนิยมอัตโนมัติ
                 info = mt5.symbol_info(sym)
                 digits = 2  # บังคับทศนิยม 2 ตำแหน่งตามมาตรฐานระบบ
-                volume = get_valid_lot(info, LOT)
+                volume = get_valid_lot(info)
                 spread_pts = info.spread if info is not None else 0
                 symbol_rrr = TP_RRR_XAU
                 sym_mode_tag = f"{Colors.GREEN}{Colors.BOLD}[GOLD AUTO-TRADE]{Colors.RESET}"
@@ -1703,7 +1733,8 @@ def main():
                     all_open_pos = mt5.positions_get()
                     total_open_pos = len(all_open_pos) if all_open_pos else 0
                     free_margin = float(acc_info.margin_free) if acc_info else 0.0
-                    max_allowed = max(1, int(free_margin / MARGIN_PER_TRADE))  # อย่างน้อย  1 ไม้
+                    # มาร์จิ้นต่อไม้ปรับตามขนาดไม้ ($400 ต่อ 0.01 lot)
+                    max_allowed = max(1, int(free_margin / (MARGIN_PER_TRADE * max(current_lot(), 0.01) / 0.01)))  # อย่างน้อย 1 ไม้
                     if total_open_pos >= max_allowed:
                         if is_in_zone:
                             print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} มาจิน ${free_margin:.0f} → เปิดได้สูงสุด {max_allowed} ไม้ (เปิดอยู่แล้ว {total_open_pos} ไม้) — รอเปิดมาจินเพิ่มหรือปิดไม้เดิมก่อน{Colors.RESET}")

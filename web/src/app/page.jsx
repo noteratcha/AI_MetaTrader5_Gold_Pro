@@ -94,6 +94,22 @@ function LiveMonitor() {
 
       {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
 
+      {radar?.account && (
+        <div className="card account-strip">
+          <span className="account-strip-title">
+            <MonitorDown size={15} className="text-gold" /> บัญชี MT5 ที่เชื่อมต่อ
+          </span>
+          <span className="mono">
+            <strong>#{radar.account.login}</strong>
+          </span>
+          <span>{radar.account.server}</span>
+          {radar.account.name && <span className="muted">{radar.account.name}</span>}
+          <span className={`badge ${radar.account.mode === 'REAL' ? 'badge-gold' : 'badge-sky'}`}>{radar.account.mode === 'REAL' ? 'บัญชีจริง' : 'บัญชีทดลอง (Demo)'}</span>
+          {radar.account.leverage ? <span className="muted">Leverage 1:{Number(radar.account.leverage).toLocaleString('en-US')}</span> : null}
+          {radar.account.lot ? <span className="muted">ขนาดไม้ {Number(radar.account.lot).toFixed(2)} lot</span> : null}
+        </div>
+      )}
+
       {!loading && !t ? (
         <div className="card">
           <EmptyState

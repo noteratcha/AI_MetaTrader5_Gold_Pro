@@ -1669,3 +1669,20 @@ select.input {
   color: #b42318;
   font-size: 0.95rem;
 }
+
+/* แถบบัญชี MT5 ที่เชื่อมต่อ (หน้าพอร์ตสด) */
+.account-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 18px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+.account-strip-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
