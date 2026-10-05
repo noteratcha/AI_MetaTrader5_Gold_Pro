@@ -24,6 +24,8 @@ const PAYEE = {
 };
 
 const PAY_WINDOW_SEC = 15 * 60;
+// หลัง QR หมดเวลา ให้เวลาแนบสลิปต่ออีก 10 นาที (เผื่อโอนแล้วแต่ยังไม่ได้แนบ) ก่อนยกเลิกรายการ
+const SLIP_GRACE_SEC = 10 * 60;
 
 export default function StorePage() {
   const { user, openAuthModal } = useAuth();
@@ -155,7 +157,7 @@ function CheckoutModal({ pkg, onClose }) {
   const { user, apiFetch, redeemKey } = useAuth();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
-  const [remaining, setRemaining] = useState(PAY_WINDOW_SEC);
+  const [remaining, setRemaining] = useState(PAY_WINDOW_SEC + SLIP_GRACE_SEC); // นับรวม: เวลาจ่าย + เวลาแนบสลิป
   const [verifying, setVerifying] = useState(false);
   const [slip, setSlip] = useState(null); // { dataUrl } รูปที่แนบล่าสุด (แสดงตัวอย่าง + ใช้ตรวจซ้ำ)
   const [slipError, setSlipError] = useState(null); // { message, hint }
@@ -173,7 +175,7 @@ function CheckoutModal({ pkg, onClose }) {
     setOrder(null);
     setError('');
     setExpired(false);
-    setRemaining(PAY_WINDOW_SEC);
+    setRemaining(PAY_WINDOW_SEC + SLIP_GRACE_SEC);
     setSlip(null);
     setSlipError(null);
     setRetryIn(0);
@@ -315,8 +317,10 @@ function CheckoutModal({ pkg, onClose }) {
     }
   }
 
-  const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
-  const ss = String(remaining % 60).padStart(2, '0');
+  const inGrace = !expired && remaining <= SLIP_GRACE_SEC; // QR หมดเวลาแล้ว เหลือเวลาแนบสลิป
+  const shown = inGrace ? remaining : Math.max(0, remaining - SLIP_GRACE_SEC);
+  const mm = String(Math.floor(shown / 60)).padStart(2, '0');
+  const ss = String(shown % 60).padStart(2, '0');
   const step = productKey ? 3 : slip ? 1 : 0;
   const retryText = `${Math.floor(retryIn / 60)}:${String(retryIn % 60).padStart(2, '0')}`;
 
@@ -393,16 +397,16 @@ function CheckoutModal({ pkg, onClose }) {
           ) : (
             <div className="stack" style={{ gap: 14, marginTop: 16 }}>
               <div className="checkout-pay">
-                <div className={`thaiqr-frame ${expired ? 'is-expired' : ''}`}>
+                <div className={`thaiqr-frame ${expired || inGrace ? 'is-expired' : ''}`}>
                   <div className="thaiqr-head">
                     <img src="/thai-qr-payment.png" alt="Thai QR Payment" width={120} height={47} />
                   </div>
                   <div className="thaiqr-body">
-                    {expired ? (
+                    {expired || inGrace ? (
                       <div className="thaiqr-expired">
                         <Clock size={28} />
                         <strong>QR หมดเวลา</strong>
-                        <span>รายการนี้ถูกยกเลิกแล้ว</span>
+                        <span>{expired ? 'รายการนี้ถูกยกเลิกแล้ว' : 'โอนแล้ว? แนบสลิปด้านล่าง'}</span>
                       </div>
                     ) : (
                       <img src={order.qr_image_url} alt={`PromptPay QR ${formatThb(order.amount_thb)}`} width={164} height={164} />
@@ -417,9 +421,9 @@ function CheckoutModal({ pkg, onClose }) {
                     </div>
                   </div>
                   <div>
-                    <div className="tiny faint">ชำระภายใน</div>
-                    <div className={`mono ${remaining < 120 ? 'text-red' : ''}`} style={{ fontSize: '1.05rem', fontWeight: 600 }}>
-                      {mm}:{ss}
+                    <div className="tiny faint">{expired ? 'สถานะ' : inGrace ? 'แนบสลิปได้อีก' : 'ชำระภายใน'}</div>
+                    <div className={`mono ${expired || inGrace || shown < 120 ? 'text-red' : ''}`} style={{ fontSize: '1.05rem', fontWeight: 600 }}>
+                      {expired ? 'ยกเลิกแล้ว' : `${mm}:${ss}`}
                     </div>
                   </div>
                   <div className="small muted payee-info">
@@ -435,11 +439,22 @@ function CheckoutModal({ pkg, onClose }) {
                 มือถือ: แคปหน้าจอ QR → เปิดแอปธนาคาร → สแกนจากรูปในเครื่อง
               </p>
 
+              {inGrace && (
+                <Alert type="gold">
+                  <strong>หมดเวลาชำระด้วย QR นี้แล้ว</strong>
+                  <div className="small" style={{ marginTop: 4 }}>
+                    ถ้าโอนเงินไปแล้ว แนบสลิปด้านล่างภายใน {mm}:{ss} นาที · ถ้ายังไม่ได้โอน กด “สร้าง QR ใหม่”
+                  </div>
+                  <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setOrderSeq((n) => n + 1)}>
+                    <QrCode size={14} /> สร้าง QR ใหม่
+                  </button>
+                </Alert>
+              )}
               {expired && (
                 <Alert type="error">
                   <strong>หมดเวลาชำระเงิน — ยกเลิกรายการนี้แล้ว</strong>
                   <div className="small" style={{ marginTop: 4 }}>
-                    ถ้ายังไม่ได้โอน กด “สร้าง QR ใหม่” · ถ้าโอนไปแล้ว แนบสลิปด้านล่างได้ภายใน 24 ชั่วโมง ระบบจะตรวจและเติมชั่วโมงให้ตามปกติ
+                    ถ้ายังไม่ได้โอน กด “สร้าง QR ใหม่” · ถ้าโอนไปแล้วแต่ยังไม่ได้แนบสลิป ยังแนบด้านล่างได้ภายใน 24 ชั่วโมง ระบบจะตรวจและเติมชั่วโมงให้ตามปกติ
                   </div>
                   <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={() => setOrderSeq((n) => n + 1)}>
                     <QrCode size={14} /> สร้าง QR ใหม่

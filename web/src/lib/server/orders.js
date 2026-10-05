@@ -5,13 +5,14 @@ import { notifyPurchase } from './lineNotify';
 import { issueReceipt } from './receipts';
 
 export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-// เวลาชำระตาม QR (ตรงกับตัวนับถอยหลังหน้าร้าน) — เกินแล้วยกเลิกคำสั่งซื้อ
+// เวลาชำระตาม QR 15 นาที + เวลาแนบสลิปต่ออีก 10 นาที (ตรงกับตัวนับถอยหลังหน้าร้าน) — เกินแล้วยกเลิกคำสั่งซื้อ
 export const ORDER_PAY_WINDOW_MS = 15 * 60 * 1000;
+export const ORDER_SLIP_GRACE_MS = 10 * 60 * 1000;
 
 /** ยกเลิกคำสั่งซื้อที่ยังไม่ชำระและเกินเวลา QR (ทั้งระบบ) — คืนจำนวนที่ยกเลิก */
 export async function expireStaleOrders() {
   try {
-    const cutoff = new Date(Date.now() - ORDER_PAY_WINDOW_MS).toISOString();
+    const cutoff = new Date(Date.now() - ORDER_PAY_WINDOW_MS - ORDER_SLIP_GRACE_MS).toISOString();
     const { data } = await getAdminClient()
       .from('orders')
       .update({ status: 'CANCELLED' })

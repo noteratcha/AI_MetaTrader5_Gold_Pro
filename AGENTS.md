@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1425 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1453 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1425): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1453): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1425`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1453`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -165,7 +165,7 @@
 | **Hours Metering** | Desktop หักเวลาในเครื่องแล้วส่งยอดให้ `/api/auth/meter` หักจริงบน Server ทุก 5 นาที — ห้าม PATCH `bot_config.lot_size` ตรงจาก Client |
 | **Register** | ยืนยันอีเมลด้วยรหัส 6 หลักก่อนสร้างบัญชี (ตอบข้อความเดียวกันเสมอ ถ้ามีบัญชีอยู่แล้วส่งอีเมลแจ้งเจ้าของแทน — กันสุ่มหาอีเมล) · สมาชิกใหม่รับฟรี 48 ชม. รหัสผ่านเข้ารหัส PBKDF2-HMAC-SHA256 |
 | **Admin RBAC** | `Admin Analytics` (Navbar/Footer/หน้า `/admin/analytics`) แสดงเฉพาะ Admin เท่านั้น ห้ามเปิดเผยสถิติทุกลูกค้าและเครื่องผลิต Promo Key ต่อลูกค้าทั่วไป · แอดมินสลับ **โหมดการดู ผู้ใช้ ↔ แอดมิน** ได้ที่ Navbar (`viewMode` ใน `AuthContext`, จำไว้ใน `localStorage`) — โหมดผู้ใช้ซ่อนเมนูแอดมินทั้งหมด (`isAdminView`) แต่สิทธิ์จริงยังตรวจที่ Server เสมอ |
-| **Payment** | ราคา/ชั่วโมงคิดจาก `web/src/lib/packages.js` ฝั่ง Server เท่านั้น · Order ID สุ่มแบบเดาไม่ได้ · PromptPay QR → SlipOK ตรวจสลิป (`log: true` กันสลิปซ้ำ + `amount` ตรวจยอด) → ผลิต Product Key อัตโนมัติ · Webhook ต้องมี `x-webhook-secret` · ห้ามโหมดจำลองบน Production · **QR หมดเวลา 15 นาที** → ยกเลิกคำสั่งซื้อ (`CANCELLED`) ทันทีจากหน้าร้าน + เก็บกวาดฝั่ง Server (`expireStaleOrders()` ตอนสร้าง QR ใหม่/Cron) · คำสั่งซื้อที่ยกเลิกยังแนบสลิปได้ภายใน 24 ชม. (กันเงินค้างกรณีโอนวินาทีสุดท้าย) · ข้อผิดพลาด SlipOK แปลเป็นข้อความ+คำแนะนำภาษาไทย (`code`, `hint`, `retryAfterSec`) · ปัญหาฝั่งร้าน (แพ็กเกจ/โควตา SlipOK 1000–1004, 1015) แจ้งแอดมินทาง LINE · **ใบเสร็จ**: ชำระสำเร็จ → `issueReceipt()` บันทึกตาราง `receipts` (เลขที่ `GB24-YYYYMM-000001`, 1 คำสั่งซื้อ = 1 ใบ) + ส่งอีเมลผู้ซื้อ · ดู/พิมพ์ที่ `/receipts` (`supabase_receipts_patch_04.sql`) |
+| **Payment** | ราคา/ชั่วโมงคิดจาก `web/src/lib/packages.js` ฝั่ง Server เท่านั้น · Order ID สุ่มแบบเดาไม่ได้ · PromptPay QR → SlipOK ตรวจสลิป (`log: true` กันสลิปซ้ำ + `amount` ตรวจยอด) → ผลิต Product Key อัตโนมัติ · Webhook ต้องมี `x-webhook-secret` · ห้ามโหมดจำลองบน Production · **QR หมดเวลา 15 นาที** → ซ่อน QR แล้วให้เวลาแนบสลิปต่ออีก **10 นาที** → ครบแล้วยกเลิกคำสั่งซื้อ (`CANCELLED`) จากหน้าร้าน + เก็บกวาดฝั่ง Server เมื่อเกิน 25 นาที (`expireStaleOrders()` ตอนสร้าง QR ใหม่/Cron) · คำสั่งซื้อที่ยกเลิกยังแนบสลิปได้ภายใน 24 ชม. (กันเงินค้างกรณีโอนวินาทีสุดท้าย) · ข้อผิดพลาด SlipOK แปลเป็นข้อความ+คำแนะนำภาษาไทย (`code`, `hint`, `retryAfterSec`) · ปัญหาฝั่งร้าน (แพ็กเกจ/โควตา SlipOK 1000–1004, 1015) แจ้งแอดมินทาง LINE · **ใบเสร็จ**: ชำระสำเร็จ → `issueReceipt()` บันทึกตาราง `receipts` (เลขที่ `GB24-YYYYMM-000001`, 1 คำสั่งซื้อ = 1 ใบ) + ส่งอีเมลผู้ซื้อ · ดู/พิมพ์ที่ `/receipts` (`supabase_receipts_patch_04.sql`) |
 | **Database Security** | RLS เปิดทุกตาราง — anon key อ่านตารางผู้ใช้/คีย์/คำสั่งซื้อ/พอร์ตไม่ได้ · Desktop เขียน Telemetry/สถิติผ่าน RPC `bot_upsert_telemetry` / `bot_upsert_plan_stats` (SECURITY DEFINER, เขียนอย่างเดียว) · Migration: `supabase_security_rls.sql` + `supabase_security_rls_patch_01.sql` |
 | **Secrets** | ห้าม commit/ส่งคีย์ลับในแชท — ใส่ผ่าน `npx vercel env add <NAME> production --sensitive` · รหัส MT5 อยู่ในเครื่องเท่านั้น (`%APPDATA%\GoldBot24\credentials.json`) ไม่ซิงค์ขึ้น Cloud |
 | **Desktop Data Dir** | ไฟล์ผู้ใช้ทั้งหมดผ่าน `app_paths.data_path()` → `%APPDATA%\GoldBot24` (ห้ามเก็บข้างไฟล์ .exe เพราะถูกลบทุกครั้งที่ build) |
