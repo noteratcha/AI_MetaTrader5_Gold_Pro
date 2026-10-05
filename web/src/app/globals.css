@@ -1608,3 +1608,47 @@ select.input {
   border: 1px solid var(--border);
   flex-shrink: 0;
 }
+
+/* กรอบ QR แบบ Thai QR Payment (โลโก้ด้านบน + พื้นขาวรอบ QR) */
+.thaiqr-frame {
+  width: 196px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #1a3763;
+  border: 2px solid #1a3763;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
+}
+.thaiqr-head {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 10px 6px;
+}
+.thaiqr-head img {
+  height: 40px;
+  width: auto;
+}
+.thaiqr-body {
+  display: flex;
+  justify-content: center;
+  padding: 14px;
+  background: #fff;
+  border-radius: 12px 12px 0 0;
+}
+.thaiqr-body img {
+  width: 164px;
+  height: 164px;
+  object-fit: contain;
+}
+.payee-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.payee-name {
+  color: var(--text);
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

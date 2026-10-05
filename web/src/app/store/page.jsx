@@ -18,7 +18,7 @@ const ACCENTS = {
 
 // ข้อมูลผู้รับเงิน (แสดงประกอบ QR)
 const PAYEE = {
-  name: 'นาย รัชวุฒิ เพิ่มมหา...',
+  name: 'นาย รัชวุฒิ เพิ่มมหาศาล',
   promptpay: '088-123-2388',
   bank: 'กสิกรไทย 119-8-69683-4',
 };
@@ -162,7 +162,6 @@ function CheckoutModal({ pkg, onClose }) {
   const [retryIn, setRetryIn] = useState(0); // สลิป SCB/BBL ที่ธนาคารให้รอ → นับถอยหลังแล้วตรวจซ้ำอัตโนมัติ
   const [dragging, setDragging] = useState(false);
   const [productKey, setProductKey] = useState(null);
-  const [autoRedeem, setAutoRedeem] = useState(true);
   const [redeemState, setRedeemState] = useState(null);
   const fileRef = useRef(null);
 
@@ -227,9 +226,9 @@ function CheckoutModal({ pkg, onClose }) {
     return () => clearTimeout(id);
   }, [retryIn, productKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ได้คีย์แล้ว → เติมเข้าบัญชีให้อัตโนมัติ (ถ้าเลือกไว้)
+  // ได้คีย์แล้ว → เติมชั่วโมงเข้าบัญชีผู้ซื้อทันที
   useEffect(() => {
-    if (productKey && autoRedeem && !redeemState) redeemNow();
+    if (productKey && !redeemState) redeemNow();
   }, [productKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onPaid(key) {
@@ -378,8 +377,13 @@ function CheckoutModal({ pkg, onClose }) {
           ) : (
             <div className="stack" style={{ gap: 14, marginTop: 16 }}>
               <div className="checkout-pay">
-                <div className="qr-box qr-box-sm">
-                  <img src={order.qr_image_url} alt={`PromptPay QR ${formatThb(order.amount_thb)}`} width={170} height={170} />
+                <div className="thaiqr-frame">
+                  <div className="thaiqr-head">
+                    <img src="/thai-qr-payment.png" alt="Thai QR Payment" width={120} height={47} />
+                  </div>
+                  <div className="thaiqr-body">
+                    <img src={order.qr_image_url} alt={`PromptPay QR ${formatThb(order.amount_thb)}`} width={164} height={164} />
+                  </div>
                 </div>
                 <div className="stack" style={{ gap: 8, minWidth: 0 }}>
                   <div>
@@ -394,10 +398,12 @@ function CheckoutModal({ pkg, onClose }) {
                       {mm}:{ss}
                     </div>
                   </div>
-                  <div className="tiny muted">
-                    {PAYEE.name}
-                    <br />
-                    พร้อมเพย์ <span className="mono">{PAYEE.promptpay}</span>
+                  <div className="small muted payee-info">
+                    <div className="tiny faint">ชื่อบัญชี</div>
+                    <div className="payee-name">{PAYEE.name}</div>
+                    <div>
+                      พร้อมเพย์ <span className="mono">{PAYEE.promptpay}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -465,10 +471,6 @@ function CheckoutModal({ pkg, onClose }) {
                 </Alert>
               )}
 
-              <label className="row small muted" style={{ gap: 8, cursor: 'pointer', justifyContent: 'center' }}>
-                <input type="checkbox" checked={autoRedeem} onChange={(e) => setAutoRedeem(e.target.checked)} />
-                เติมชั่วโมงเข้าบัญชีของฉันทันทีเมื่อชำระสำเร็จ
-              </label>
               <p className="tiny faint center" style={{ margin: 0 }}>
                 ระบบตรวจสลิปอัตโนมัติด้วย SlipOK (ยอดเงิน · บัญชีผู้รับ · สลิปซ้ำ) แล้วออก Product Key + ใบเสร็จทางอีเมลทันที
               </p>
