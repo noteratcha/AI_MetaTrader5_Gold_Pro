@@ -85,3 +85,19 @@ export function notifyPurchase({ email, amountThb, hours, orderId, productKey, m
       .join('\n')
   );
 }
+
+export function notifyAccountLocked({ email, ip, exists, isAdmin, attempts, lockMinutes }) {
+  return notifyAdmins(
+    [
+      '🔒 แจ้งเตือนความปลอดภัย',
+      `บัญชีถูกล็อกชั่วคราว ${lockMinutes} นาที`,
+      `อีเมล: ${email}${isAdmin ? ' (แอดมิน!)' : ''}`,
+      `ใส่รหัสผิด: ${attempts} ครั้งติดกัน`,
+      exists ? null : '⚠️ ไม่มีบัญชีนี้ในระบบ (อาจเป็นการสุ่มเดาอีเมล)',
+      ip ? `IP: ${ip}` : null,
+      `เวลา: ${bangkokTime()}`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+  );
+}

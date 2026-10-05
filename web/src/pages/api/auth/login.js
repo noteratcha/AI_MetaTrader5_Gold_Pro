@@ -11,6 +11,7 @@ import {
   verifyPassword,
 } from '../../../lib/server/auth';
 import { countRecentFailedLogins, logActivity } from '../../../lib/server/activity';
+import { notifyAccountLocked } from '../../../lib/server/lineNotify';
 
 const INVALID_CREDENTIALS = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
 const MAX_FAILED = 5;
@@ -29,7 +30,8 @@ export default async function handler(req, res) {
     }
 
     // กันการเดารหัสผ่าน: ผิดเกิน 5 ครั้งใน 15 นาที → ล็อกชั่วคราว
-    if ((await countRecentFailedLogins(email, LOCK_MINUTES)) >= MAX_FAILED) {
+    const failedSoFar = await countRecentFailedLogins(email, LOCK_MINUTES);
+    if (failedSoFar >= MAX_FAILED) {
       return res.status(429).json({ success: false, error: `ใส่รหัสผ่านผิดหลายครั้ง กรุณารอ ${LOCK_MINUTES} นาทีแล้วลองใหม่` });
     }
 
@@ -44,6 +46,12 @@ export default async function handler(req, res) {
     const row = rows?.[0];
     if (!row || !verifyPassword(password, row.mt5_password)) {
       await logActivity({ userId: row?.id, email, event: 'login_failed', detail: row ? 'รหัสผ่านไม่ถูกต้อง' : 'ไม่พบบัญชี', ip });
+      // ผิดครบ 5 ครั้งพอดี → บัญชีถูกล็อก: บันทึก + แจ้งแอดมินทาง LINE (ครั้งเดียวต่อรอบล็อก)
+      if (failedSoFar + 1 === MAX_FAILED) {
+        await logActivity({ userId: row?.id, email, event: 'account_locked', detail: `ใส่รหัสผิด ${MAX_FAILED} ครั้ง ล็อก ${LOCK_MINUTES} นาที`, ip });
+        // แจ้ง LINE เฉพาะบัญชีที่มีอยู่จริง — อีเมลที่ไม่มีในระบบนับรวมในสรุปรายวัน (กันผู้โจมตีสุ่มอีเมลจนโควตา LINE หมด)
+        if (row) await notifyAccountLocked({ email, ip, exists: true, isAdmin: toUserPayload(row).isAdmin, attempts: MAX_FAILED, lockMinutes: LOCK_MINUTES });
+      }
       return res.status(401).json({ success: false, error: INVALID_CREDENTIALS });
     }
     if (isDisabledRow(row)) {

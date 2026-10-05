@@ -17,11 +17,11 @@ export default function AdminOverviewPage() {
   const [lineStatus, setLineStatus] = useState(null);
   const [lineBusy, setLineBusy] = useState(false);
 
-  const testLine = async () => {
+  const testLine = async (path = '/api/admin/line-test') => {
     setLineBusy(true);
     setLineStatus(null);
     try {
-      const res = await apiFetch('/api/admin/line-test', { method: 'POST' });
+      const res = await apiFetch(path, { method: 'POST' });
       setLineStatus({ type: 'success', message: res.message });
     } catch (err) {
       setLineStatus({ type: 'error', message: err.message });
@@ -56,8 +56,11 @@ export default function AdminOverviewPage() {
       description="สรุปผู้ใช้ รายได้ คีย์ และผลการเทรดของทุกบัญชี"
       actions={
         <>
-          <button className="btn btn-ghost btn-sm" onClick={testLine} disabled={lineBusy} title="ส่งข้อความทดสอบไปที่ LINE OA">
+          <button className="btn btn-ghost btn-sm" onClick={() => testLine()} disabled={lineBusy} title="ส่งข้อความทดสอบไปที่ LINE OA">
             <MessageCircle size={14} /> {lineBusy ? 'กำลังส่ง...' : 'ทดสอบ LINE'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => testLine('/api/cron/daily-summary')} disabled={lineBusy} title="ส่งสรุปยอดของวันนี้ไปที่ LINE ทันที (ปกติส่งอัตโนมัติ 21:00 น.)">
+            <TrendingUp size={14} /> ส่งสรุปวันนี้
           </button>
           <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'spin' : ''} /> รีเฟรช
