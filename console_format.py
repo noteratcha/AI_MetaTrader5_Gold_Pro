@@ -60,7 +60,7 @@ _RULES = [
     (re.compile(r"^\[PLAN DISABLED\]"), "warn", "key"),
     (re.compile(r"^\[MARKET CLOSED\]"), "warn", "key"),
     (re.compile(r"^\[MARKET OPEN\]"), "profit", "key"),
-    (re.compile(r"^\[(AI TRAINING|OK|AI READY|ACCOUNT|SUCCESS|LICENSE|STOP|\*)\]"), "system", "key"),
+    (re.compile(r"^\[(AI TRAINING|AI QUALITY|OK|AI READY|ACCOUNT|SUCCESS|LICENSE|STOP|\*)\]"), "system", "key"),
     (re.compile(r"^\[(AI BOT|ASSET FOCUS|ACTIVE PLANS|RISK/RRR|DATA RETENTION)\]"), "system", "detail"),
     (re.compile(r"^\[REQUOTE RETRY"), "warn", "detail"),
     (re.compile(r"^\[(COOLDOWN|PLAN BLOCK|H4 CONFLUENCE FILTER|MAX POSITIONS|SIDEWAY GUARD)\]"), "warn", "detail"),

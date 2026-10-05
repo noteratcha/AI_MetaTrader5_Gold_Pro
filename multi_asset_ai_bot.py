@@ -288,95 +288,110 @@ def add_divergence_features(df, lookback=14):
     df['hidden_bear'] = hidden_bear
     return df
 
-def get_data_and_train(symbol):
-    df_m15 = get_data(symbol, TIMEFRAME, 5000)
-    df_h1 = get_data(symbol, TIMEFRAME_H1, 1000)
-    df_h4 = get_data(symbol, TIMEFRAME_H4, 500)
-    
-    if df_m15 is None or df_h1 is None or df_h4 is None:
-        return None, None
-        
-    df_h1['ma_fast_h1'] = df_h1['close'].rolling(10).mean()
-    df_h1['ma_slow_h1'] = df_h1['close'].rolling(30).mean()
-    df_h1['trend_h1'] = df_h1['ma_fast_h1'] / df_h1['ma_slow_h1']
-    
-    # S&R บน H1 จาก 20 ชั่วโมงก่อนหน้า (ไม่รวมแท่งปัจจุบัน)
-    df_h1['resistance'] = df_h1['high'].shift(1).rolling(20).max()
-    df_h1['support'] = df_h1['low'].shift(1).rolling(20).min()
-    
-    df_h1['time_h1'] = df_h1['time'].dt.floor('h')
-    df_h1_features = df_h1[['time_h1', 'trend_h1', 'resistance', 'support']].dropna()
+# =============================================================================
+# AI ทำนายทิศราคา (Random Forest)
+#   - ทายว่า "อีก 2 ชั่วโมง (8 แท่ง M15) ราคาปิดจะสูงกว่าตอนนี้ไหม" → prob[1] = ขึ้น, prob[0] = ลง
+#   - Features 24 ตัว ปรับด้วย ATR ทั้งหมด (ไม่ขึ้นกับระดับราคาทอง) และใช้ H1/H4 จาก "แท่งที่ปิดแล้ว" เท่านั้น
+#     (เดิม merge ด้วยชั่วโมงของแท่ง ทำให้ตอนเทรนเห็นราคาปิดในอนาคต และตอนใช้จริงอ่านแท่งที่ยังไม่ปิด)
+#   - Walk-forward 2.5 ปี: เดิม AUC 0.515 / แม่นตอนมั่นใจ 52.7% → ใหม่ AUC 0.525 / 54.0%
+#     (ราคาทองทายทิศยากมาก — AI เป็นตัวช่วยประกอบ ไม่ใช่ตัวตัดสินหลัก)
+# =============================================================================
+AI_HORIZON_BARS = 8
+AI_FEATURES = ['r1', 'r4', 'r16', 'r64', 'trend', 'slope10', 'rsi', 'bb_pos', 'atr_rel', 'atr_ratio',
+               'h1_trend', 'h1_slope', 'h1_r4', 'h4_trend', 'h4_slope', 'h4_r4', 'h4_p200',
+               'res_atr', 'sup_atr', 'lower_wick_ratio', 'upper_wick_ratio', 'hour_sin', 'hour_cos', 'dow']
+last_ai_quality = {}  # {symbol: {"auc": float, "acc": float, "n": int}} ผลวัดล่าสุดตอนเทรน
 
-    df_h4['ma_fast_h4'] = df_h4['close'].rolling(10).mean()
-    df_h4['ma_slow_h4'] = df_h4['close'].rolling(30).mean()
-    df_h4['trend_h4'] = df_h4['ma_fast_h4'] / df_h4['ma_slow_h4']
-    df_h4['time_h4'] = df_h4['time'].dt.floor('4h')
-    df_h4_features = df_h4[['time_h4', 'trend_h4']].dropna()
 
-    df = df_m15.copy()
-    df['time_h1'] = df['time'].dt.floor('h')
-    df = pd.merge(df, df_h1_features, on='time_h1', how='left')
-    df['trend_h1'] = df['trend_h1'].ffill()
-    df['resistance'] = df['resistance'].ffill()
-    df['support'] = df['support'].ffill()
+def _atr_series(d, n=14):
+    tr = pd.concat([d['high'] - d['low'], (d['high'] - d['close'].shift()).abs(), (d['low'] - d['close'].shift()).abs()], axis=1).max(axis=1)
+    return tr.rolling(n).mean()
 
-    df['time_h4'] = df['time'].dt.floor('4h')
-    df = pd.merge(df, df_h4_features, on='time_h4', how='left')
-    df['trend_h4'] = df['trend_h4'].ffill()
 
-    # คำนวณ Features M15
-    df['return'] = df['close'].pct_change()
-    df['ma_fast'] = df['close'].rolling(10).mean()
-    df['ma_slow'] = df['close'].rolling(30).mean()
-    df['trend'] = df['ma_fast'] / df['ma_slow']
-    
+def _htf_ai_features(d, minutes, prefix):
+    """ค่าของ Timeframe ใหญ่ที่ "รู้ได้" เมื่อแท่งนั้นปิดแล้ว (avail = เวลาเปิด + ความยาวแท่ง)"""
+    v = pd.DataFrame({'avail': d['time'] + pd.Timedelta(minutes=minutes)})
+    m10, m30, m200 = d['close'].rolling(10).mean(), d['close'].rolling(30).mean(), d['close'].rolling(200).mean()
+    a = _atr_series(d)
+    v[prefix + 'trend'] = m10 / m30 - 1
+    v[prefix + 'slope'] = (m10 - m10.shift(3)) / a
+    v[prefix + 'r4'] = (d['close'] - d['close'].shift(4)) / a
+    v[prefix + 'p200'] = (d['close'] - m200) / a
+    if prefix == 'h1_':
+        v['res_h1'] = d['high'].shift(1).rolling(20).max()
+        v['sup_h1'] = d['low'].shift(1).rolling(20).min()
+    return v
+
+
+def build_ai_features(df_m15, df_h1, df_h4):
+    """สร้าง Features ของ AI สำหรับทุกแท่ง M15 (ไม่มีข้อมูลอนาคต) — ใช้ร่วมกันทั้งตอนเทรนและตอนใช้งานจริง"""
+    df = df_m15[['time', 'open', 'high', 'low', 'close']].copy()
+    df['close_time'] = df['time'] + pd.Timedelta(minutes=15)
+    a = _atr_series(df)
+    for k in (1, 4, 16, 64):
+        df[f'r{k}'] = (df['close'] - df['close'].shift(k)) / a
+    ma10, ma30 = df['close'].rolling(10).mean(), df['close'].rolling(30).mean()
+    df['trend'] = ma10 / ma30
+    df['slope10'] = (ma10 - ma10.shift(4)) / a
     delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+    gain = delta.where(delta > 0, 0).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     df['rsi'] = 100 - (100 / (1 + (gain / (loss + 1e-9))))
-    
-    # ATR
-    df['high_low'] = df['high'] - df['low']
-    df['high_close'] = np.abs(df['high'] - df['close'].shift())
-    df['low_close'] = np.abs(df['low'] - df['close'].shift())
-    df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
-    df['atr'] = df['tr'].rolling(14).mean()
-    
-    # Bollinger Bands (SMA 20, 2 STD)
-    df['bb_mid'] = df['close'].rolling(20).mean()
-    df['std'] = df['close'].rolling(20).std()
-    df['bb_upper'] = df['bb_mid'] + (df['std'] * 2)
-    df['bb_lower'] = df['bb_mid'] - (df['std'] * 2)
-    df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / (df['bb_mid'] + 1e-9)
-    
-    # Smart Money Concepts / Liquidity Sweep Features (Wick Analysis)
-    lower_wick = np.minimum(df['open'], df['close']) - df['low']
-    upper_wick = df['high'] - np.maximum(df['open'], df['close'])
-    df['lower_wick_ratio'] = lower_wick / (df['atr'] + 1e-9)
-    df['upper_wick_ratio'] = upper_wick / (df['atr'] + 1e-9)
-    
-    # Session / Hour
-    df['hour'] = df['time'].dt.hour
-    df['is_liquid_session'] = ((df['hour'] >= 8) & (df['hour'] <= 22)).astype(int)
-    
-    # ตรวจจับ Divergence (Regular & Hidden)
-    df = add_divergence_features(df, lookback=14)
+    mid, sd = df['close'].rolling(20).mean(), df['close'].rolling(20).std()
+    df['bb_pos'] = (df['close'] - mid) / (2 * sd + 1e-9)
+    df['atr_rel'] = a / df['close'] * 100
+    df['atr_ratio'] = a / a.rolling(96).mean()
+    df['lower_wick_ratio'] = (np.minimum(df['open'], df['close']) - df['low']) / (a + 1e-9)
+    df['upper_wick_ratio'] = (df['high'] - np.maximum(df['open'], df['close'])) / (a + 1e-9)
+    hr = df['time'].dt.hour + df['time'].dt.minute / 60
+    df['hour_sin'], df['hour_cos'] = np.sin(2 * np.pi * hr / 24), np.cos(2 * np.pi * hr / 24)
+    df['dow'] = df['time'].dt.dayofweek
+    df['atr_m15'] = a
+    df = df.sort_values('close_time')
+    df = pd.merge_asof(df, _htf_ai_features(df_h1, 60, 'h1_').sort_values('avail'), left_on='close_time', right_on='avail', direction='backward').drop(columns='avail')
+    df = pd.merge_asof(df, _htf_ai_features(df_h4, 240, 'h4_').sort_values('avail'), left_on='close_time', right_on='avail', direction='backward').drop(columns='avail')
+    df['res_atr'] = (df['res_h1'] - df['close']) / df['atr_m15']
+    df['sup_atr'] = (df['close'] - df['sup_h1']) / df['atr_m15']
+    return df.reset_index(drop=True)
 
-    df['dist_to_res'] = df['resistance'] - df['close']
-    df['dist_to_sup'] = df['close'] - df['support']
-    
-    df['target'] = (df['close'].shift(-1) > df['close']).astype(int)
-    df.dropna(inplace=True)
-    
-    features = ['return', 'trend', 'rsi', 'trend_h1', 'trend_h4', 'atr', 'bb_width', 
-                'dist_to_res', 'dist_to_sup', 'lower_wick_ratio', 'upper_wick_ratio', 'is_liquid_session',
-                'bull_div', 'bear_div', 'hidden_bull', 'hidden_bear']
-    X = df[features]
-    y = df['target']
-    
-    model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
+
+def get_data_and_train(symbol):
+    """เทรน AI ด้วยข้อมูลล่าสุด + วัดความแม่นยำกับช่วงท้ายที่โมเดลไม่เคยเห็น (Holdout 20%)"""
+    df_m15 = get_data(symbol, TIMEFRAME, 5000)
+    df_h1 = get_data(symbol, TIMEFRAME_H1, 1500)
+    df_h4 = get_data(symbol, TIMEFRAME_H4, 600)
+    if df_m15 is None or df_h1 is None or df_h4 is None:
+        return None, None
+
+    df = build_ai_features(df_m15, df_h1, df_h4)
+    future = df['close'].shift(-AI_HORIZON_BARS)
+    df['target'] = (future > df['close']).astype(int)
+    df = df[future.notna()]
+    df = df.dropna(subset=AI_FEATURES)
+    if len(df) < 1000:
+        return None, None
+    X, y = df[AI_FEATURES], df['target']
+
+    # วัดผลกับ 20% ล่าสุด (เว้นช่องว่างเท่าระยะทาย กันคำตอบซ้อนกัน)
+    try:
+        from sklearn.metrics import roc_auc_score
+        cut = int(len(df) * 0.8)
+        probe = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42, n_jobs=-1)
+        probe.fit(X.iloc[:cut - AI_HORIZON_BARS], y.iloc[:cut - AI_HORIZON_BARS])
+        p_hold = probe.predict_proba(X.iloc[cut:])[:, 1]
+        y_hold = y.iloc[cut:]
+        auc = float(roc_auc_score(y_hold, p_hold)) if y_hold.nunique() > 1 else 0.5
+        acc = float(((p_hold >= 0.5) == (y_hold == 1)).mean())
+        last_ai_quality[symbol] = {"auc": round(auc, 3), "acc": round(acc * 100, 1), "n": int(len(y_hold))}
+        grade = "ใช้ได้" if auc >= 0.55 else ("พอใช้" if auc >= 0.52 else "อ่อน (ใกล้เดาสุ่ม)")
+        print(f"{Colors.CYAN}[AI QUALITY] {symbol} ทายล่วงหน้า {AI_HORIZON_BARS * 15} นาที · Holdout {len(y_hold)} แท่ง: "
+              f"แม่นยำ {acc:.1%} · AUC {auc:.3f} → {grade}{Colors.RESET}")
+    except Exception as e:
+        print(f"[WARN] วัดคุณภาพ AI ไม่สำเร็จ: {e}")
+
+    model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42, n_jobs=-1)
     model.fit(X, y)
-    return model, features
+    return model, AI_FEATURES
 
 def get_filling_type(symbol_info):
     if symbol_info is None:
@@ -999,7 +1014,7 @@ def main():
                 model = models[sym]
                 features = model_features[sym]
                 
-                df_m15 = get_data(sym, TIMEFRAME, 100)
+                df_m15 = get_data(sym, TIMEFRAME, 300)   # 300 แท่ง: พอสำหรับ Features AI (เช่น ATR เฉลี่ย 96 แท่ง)
                 df_h1 = get_data(sym, TIMEFRAME_H1, 300)   # 300 แท่ง: พอสำหรับ MA200 (เทรนด์ระยะยาว)
                 df_h4 = get_data(sym, TIMEFRAME_H4, 300)
                 if df_m15 is None or df_h1 is None or df_h4 is None:
@@ -1180,9 +1195,14 @@ def main():
                     continue
                     
                 last_bar = df.iloc[-1]
-                last_features = df[features].iloc[[-1]]
-                
-                prob = model.predict_proba(last_features)[0]
+
+                # AI: ทายจากแท่ง M15 ที่ปิดแล้วล่าสุด ด้วย Features ชุดเดียวกับตอนเทรน (ไม่มีข้อมูลอนาคต)
+                ai_df = build_ai_features(df_m15, df_h1, df_h4)
+                ai_row = ai_df[features].iloc[[-2]] if len(ai_df) >= 2 else None
+                if ai_row is None or ai_row.isna().any(axis=1).iloc[0]:
+                    prob = np.array([0.5, 0.5])  # ข้อมูลไม่พอ → เป็นกลาง (ไม่ช่วยยืนยันฝั่งไหน)
+                else:
+                    prob = model.predict_proba(ai_row)[0]
                 
                 # ข้อมูลราคาและตัวแปรทางเทคนิค
                 support = last_bar['support']

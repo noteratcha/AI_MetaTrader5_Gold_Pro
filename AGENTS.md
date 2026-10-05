@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1711 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.2037 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1711): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.2037): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1711`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.2037`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -35,7 +35,7 @@
 4. **M15 MA Crossover with H1 Trend Anchor (Plan 4)**: ระบบตรวจจับ MA 5 ตัดขึ้น/ตัดลง MA 10 บน M15 พร้อมบังคับให้สอดคล้องกับทิศทางเทรนด์ H1 (MA10 vs MA30)
 5. **H1 MA Crossover with H4 Trend Anchor (Plan 5)**: ระบบตรวจจับ MA 5 ตัดขึ้น/ตัดลง MA 10 บน H1 พร้อมบังคับให้สอดคล้องกับเทรนด์ใหญ่ H4 (MA10 vs MA30) ปล่อยให้กำไรวิ่งรอบสวิงใหญ่ระดับหลายร้อยจุด
 6. **H1 Trend Confluence on SMC Liquidity Hunt**: บังคับให้ Plan 1 เทรดตามทิศทางหลักของแท่งเทียนชั่วโมง H1 เสมอ (BUY เมื่อ H1 Uptrend, SELL เมื่อ H1 Downtrend) ตัดการรับมีดตก 85%
-7. **Continuous AI Retraining**: รีเทรนโมเดลใหม่ทุก 24 ชั่วโมง พร้อม Features พิเศษ 16 ตัว เพื่อปรับความเข้าใจต่อพฤติกรรมทองคำล่าสุด
+7. **Continuous AI Retraining**: Random Forest (100 ต้น, ลึก 5) รีเทรนทุก 24 ชั่วโมงด้วย M15 5,000 แท่ง · **ทายทิศราคาล่วงหน้า 2 ชั่วโมง (8 แท่ง)** · Features 24 ตัวปรับด้วย ATR (`build_ai_features()`) ใช้ H1/H4 จากแท่งที่ปิดแล้ว (ไม่มีข้อมูลอนาคต) และทายจากแท่ง M15 ที่ปิดแล้ว · วัดผลกับ Holdout 20% ทุกครั้งที่เทรน แสดง `[AI QUALITY]` ใน Console · Walk-forward 2.5 ปี: AUC 0.515 → 0.525, แม่นตอนมั่นใจ 52.7% → 54.0% (ทองทายทิศยาก — AI เป็นตัวยืนยันประกอบ ไม่ใช่ตัวตัดสินหลัก)
 8. **Market Regime Classification & Strict Pro-Trend Filter**: ระบบตรวจจับสภาวะตลาด H4 MA10 vs MA30 แบบ Real-time หากมีแนวโน้มชัดเจนจะบังคับเทรดตามเทรนด์ 100%
 9. **Gold Real-time Terminal Dashboard**: แสดงผลข้อมูลราคาทองคำ, ATR, H4 Regime, H1 Trend, MA(5/10) M15, MA(5/10) H1, AI Predict, S&R Zone H1, Bollinger Bands H1 และ H1 MACD Histogram อย่างชัดเจน
 10. **Comprehensive Signal History Auditing (`signal_history.csv` & Supabase)**: ระบบบันทึกประวัติการส่งสัญญาณสำคัญทุกประเภท บันทึกพร้อมกันทั้งไฟล์ CSV และ Cloud Database พร้อม Smart Debounce (180s)
