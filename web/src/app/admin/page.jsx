@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Activity, Banknote, Clock, KeyRound, MessageCircle, RefreshCw, Target, TrendingUp, Users } from 'lucide-react';
 import AdminShell from '../../components/admin/AdminShell';
-import { Alert, StatCard } from '../../components/ui';
+import { Alert, Pager, StatCard } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { formatThaiDateTime, formatThb, formatUsd } from '../../lib/format';
 import { ACTIVITY_LABELS } from '../../lib/adminLabels';
@@ -15,6 +15,27 @@ export default function AdminOverviewPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [lineStatus, setLineStatus] = useState(null);
+  const [activity, setActivity] = useState(null); // { items, page, totalPages, total }
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  const loadActivity = useCallback(
+    async (page) => {
+      setActivityLoading(true);
+      try {
+        setActivity(await apiFetch(`/api/admin/activity?page=${page}`));
+      } catch {
+        /* แสดงข้อมูลเดิมไว้ */
+      } finally {
+        setActivityLoading(false);
+      }
+    },
+    [apiFetch]
+  );
+
+  useEffect(() => {
+    if (isAdmin) loadActivity(activityPage);
+  }, [isAdmin, activityPage, loadActivity]);
   const [lineBusy, setLineBusy] = useState(false);
 
   const testLine = async (path = '/api/admin/line-test') => {
@@ -62,7 +83,7 @@ export default function AdminOverviewPage() {
           <button className="btn btn-ghost btn-sm" onClick={() => testLine('/api/cron/daily-summary')} disabled={lineBusy} title="ส่งสรุปยอดของวันนี้ไปที่ LINE ทันที (ปกติส่งอัตโนมัติ 21:00 น.)">
             <TrendingUp size={14} /> ส่งสรุปวันนี้
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
+          <button className="btn btn-secondary btn-sm" onClick={() => { load(); loadActivity(activityPage); }} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'spin' : ''} /> รีเฟรช
           </button>
         </>
@@ -151,12 +172,15 @@ export default function AdminOverviewPage() {
         <div className="card">
           <div className="card-header">
             <h3>กิจกรรมล่าสุด</h3>
+            {activity?.total ? <span className="badge badge-muted">{activity.total} รายการ</span> : null}
           </div>
-          <div className="card-body stack" style={{ gap: 12 }}>
-            {(data?.recentActivity || []).length === 0 ? (
+          <div className="card-body stack" style={{ gap: 12, opacity: activityLoading ? 0.6 : 1 }}>
+            {!activity ? (
+              <div className="skeleton" style={{ height: 160 }} />
+            ) : activity.items.length === 0 ? (
               <p className="small muted">ยังไม่มีกิจกรรม</p>
             ) : (
-              data.recentActivity.map((a) => (
+              activity.items.map((a) => (
                 <div key={a.id} className="small" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
                   <div className="row-between">
                     <span className={`badge ${ACTIVITY_LABELS[a.event]?.badge || 'badge-muted'}`}>{ACTIVITY_LABELS[a.event]?.label || a.event}</span>
@@ -168,6 +192,11 @@ export default function AdminOverviewPage() {
               ))
             )}
           </div>
+          {activity && activity.totalPages > 1 && (
+            <div style={{ padding: '0 16px 14px' }}>
+              <Pager page={activity.page} totalPages={activity.totalPages} onChange={setActivityPage} loading={activityLoading} />
+            </div>
+          )}
         </div>
       </div>
     </AdminShell>
