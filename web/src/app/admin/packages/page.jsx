@@ -225,10 +225,11 @@ function DeletePackageModal({ pkg, onClose, onDone }) {
   const { apiFetch } = useAuth();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [force, setForce] = useState(false);
   const del = async () => {
     setBusy(true);
     try {
-      const res = await apiFetch(`/api/admin/packages/${pkg.id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/admin/packages/${pkg.id}${force ? '?force=1' : ''}`, { method: 'DELETE' });
       onDone(res.message || `ลบแพ็กเกจ ${pkg.name} แล้ว`);
     } catch (err) {
       setError(err.message);
@@ -242,8 +243,14 @@ function DeletePackageModal({ pkg, onClose, onDone }) {
         <p className="small">
           ลบ <strong>{pkg.name}</strong> ออกจากร้านค้า? ถ้ามีคำสั่งซื้อที่อ้างอิงแพ็กเกจนี้อยู่ ระบบจะ <strong>ปิดการขาย</strong> แทนการลบ
         </p>
+        <label className="row small" style={{ gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
+          <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} style={{ marginTop: 3 }} />
+          <span>
+            <strong className="text-red">ลบถาวร</strong> แม้มีคำสั่งซื้ออ้างอิง — คำสั่งซื้อ ยอดเงิน และคีย์เดิมยังอยู่ครบ แค่ไม่ผูกกับแพ็กเกจนี้แล้ว (ย้อนกลับไม่ได้)
+          </span>
+        </label>
         <button className="btn btn-danger btn-block" onClick={del} disabled={busy}>
-          {busy && <Spinner />} ยืนยันลบ
+          {busy && <Spinner />} {force ? 'ยืนยันลบถาวร' : 'ยืนยันลบ'}
         </button>
       </div>
     </Modal>

@@ -4,6 +4,7 @@ import { packageToRow, rowToPackage, validatePackage } from '../../../../lib/ser
 import { logActivity } from '../../../../lib/server/activity';
 
 // PATCH แก้ไขแพ็กเกจ · DELETE ลบ (ถ้ามีคำสั่งซื้ออ้างอิงอยู่ จะปิดการขายแทนการลบ)
+//   DELETE ?force=1 → ลบถาวร: ปลดการอ้างอิงจากคำสั่งซื้อ (package_id = null) แล้วลบ — ยอดเงิน/ชั่วโมง/คีย์ในคำสั่งซื้อยังอยู่ครบ
 export default async function handler(req, res) {
   if (!allowMethods(req, res, ['PATCH', 'DELETE'])) return;
   const auth = await requireAdmin(req, res);
@@ -16,15 +17,24 @@ export default async function handler(req, res) {
   if (!current) return res.status(404).json({ success: false, error: 'ไม่พบแพ็กเกจ' });
 
   if (req.method === 'DELETE') {
+    const force = req.query.force === '1' || req.query.force === 'true';
     const { count } = await supabase.from('orders').select('order_id', { count: 'exact', head: true }).eq('package_id', id);
-    if (count) {
+    if (count && force) {
+      const { error: unlinkErr } = await supabase.from('orders').update({ package_id: null }).eq('package_id', id);
+      if (unlinkErr) return res.status(500).json({ success: false, error: 'ปลดคำสั่งซื้อออกจากแพ็กเกจไม่สำเร็จ' });
+    }
+    if (count && !force) {
       await supabase.from('packages').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', id);
       await logActivity({ event: 'admin_package_disable', detail: `ปิดการขาย ${current.name} (มีคำสั่งซื้ออ้างอิง ${count} รายการ)`, actor: auth.user.email });
       return res.status(200).json({ success: true, deactivated: true, message: 'แพ็กเกจนี้มีคำสั่งซื้ออ้างอิงอยู่ จึงปิดการขายแทนการลบ' });
     }
     const { error } = await supabase.from('packages').delete().eq('id', id);
     if (error) return res.status(500).json({ success: false, error: 'ลบแพ็กเกจไม่สำเร็จ' });
-    await logActivity({ event: 'admin_package_delete', detail: `ลบแพ็กเกจ ${current.name}`, actor: auth.user.email });
+    await logActivity({
+      event: 'admin_package_delete',
+      detail: `ลบแพ็กเกจ ${current.name}${count ? ` ถาวร (ปลดคำสั่งซื้อ ${count} รายการ)` : ''}`,
+      actor: auth.user.email,
+    });
     return res.status(200).json({ success: true });
   }
 
