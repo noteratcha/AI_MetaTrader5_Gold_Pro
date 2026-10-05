@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0650 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0708 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0650): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0708): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0650`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0708`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -204,12 +204,14 @@
 | `POST /api/auth/change-password` | Bearer | เปลี่ยนรหัสผ่านของตัวเอง (แอดมิน ≥ 10 ตัว ไม่ใช่ตัวเลขล้วน) |
 | `POST /api/checkout/create-qr` · `GET /check-status` · `POST /verify-slip` | Bearer + เจ้าของคำสั่งซื้อ | สร้างคำสั่งซื้อ/QR · ตรวจสถานะ · ตรวจสลิป SlipOK |
 | `POST /api/webhook/payment` | `x-webhook-secret` | แจ้งชำระจากผู้ให้บริการ |
+| `POST /api/webhook/line` | ลายเซ็น `x-line-signature` | LINE OA Webhook — พิมพ์ `id` เพื่อรับ userId/groupId สำหรับ `LINE_ADMIN_TO` |
+| `POST /api/admin/line-test` | Admin | ส่งข้อความทดสอบไป LINE OA |
 | `GET /api/user/telemetry` · `/trades` · `/stats` · `/keys` | Bearer | พอร์ตสด · ประวัติ (แบ่งหน้า) · สถิติรายแผน · คีย์ของฉัน |
 | `GET /api/admin/overview` · `POST /promo-key` | Admin | ภาพรวมระบบ · ผลิต Promo Key |
 | `GET /api/calendar` · `/api/release` | สาธารณะ (CDN cache) | ปฏิทินเศรษฐกิจ (30 นาที) · เวอร์ชันล่าสุด (10 นาที) |
 
 ### 8.2 Environment Variables (Vercel)
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `ADMIN_EMAILS`, `PROMPTPAY_ID`, `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`, `PAYMENT_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (ลืมรหัสผ่าน) · *(ถัดไป)* `PAYMENT_PROVIDER`, `BEAM_MERCHANT_ID`, `BEAM_API_KEY`, `BEAM_WEBHOOK_HMAC_KEY`, `BEAM_ENV`
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `ADMIN_EMAILS`, `PROMPTPAY_ID`, `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`, `PAYMENT_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (ลืมรหัสผ่าน/ยืนยันสมัคร), `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_ADMIN_TO`, `LINE_CHANNEL_SECRET` (แจ้งเตือนแอดมินทาง LINE OA) · *(ถัดไป)* `PAYMENT_PROVIDER`, `BEAM_MERCHANT_ID`, `BEAM_API_KEY`, `BEAM_WEBHOOK_HMAC_KEY`, `BEAM_ENV`
 
 ### 8.3 ผู้ใช้และข้อมูลใน Supabase
 * ผู้ใช้อยู่ในตาราง `bot_config` (`mt5_server` = อีเมล, `mt5_password` = hash, `lot_size` = ชั่วโมงคงเหลือ, `symbols_trading` = tag เช่น `name:`, `role:admin`) — แถว `id = 1` เป็น config ระบบ
@@ -223,6 +225,7 @@
 | **Vercel** | เว็บ + API | `goldbot24.vercel.app` |
 | **GitHub Releases** | แจกไฟล์ติดตั้ง Desktop | `noteratcha/AI_MetaTrader5_Gold_Pro` (public) |
 | **SlipOK** | ตรวจสลิปโอนเงิน | ต้องมีสลิปเสมอ (ไม่มี API ตรวจยอดเข้าเอง) |
+| **LINE OA (Messaging API)** | แจ้งเตือนแอดมินเมื่อมีสมาชิกใหม่ / ซื้อชั่วโมงสำเร็จ (`lib/server/lineNotify.js`) | Push Message นับโควตารายเดือนของ OA · ส่งไม่สำเร็จไม่กระทบการสมัคร/ชำระเงิน |
 | **Beam** *(รออนุมัติ)* | PromptPay อัตโนมัติผ่าน Webhook | `CHECKLIST_BEAM.md` |
 | **Economic Calendar Feed** | ปฏิทินข่าวรายสัปดาห์ | จำกัดจำนวนครั้ง (429) → ใช้ผ่าน `/api/calendar` ที่ cache ไว้ |
 | **Investing.com Widget** | ปฏิทินแบบฝัง (เว็บ) | มีปุ่มเปิดหน้า Investing.com สำรอง |

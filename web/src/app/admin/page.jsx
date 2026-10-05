@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Activity, Banknote, Clock, KeyRound, RefreshCw, Target, TrendingUp, Users } from 'lucide-react';
+import { Activity, Banknote, Clock, KeyRound, MessageCircle, RefreshCw, Target, TrendingUp, Users } from 'lucide-react';
 import AdminShell from '../../components/admin/AdminShell';
 import { Alert, StatCard } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
@@ -14,6 +14,21 @@ export default function AdminOverviewPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [lineStatus, setLineStatus] = useState(null);
+  const [lineBusy, setLineBusy] = useState(false);
+
+  const testLine = async () => {
+    setLineBusy(true);
+    setLineStatus(null);
+    try {
+      const res = await apiFetch('/api/admin/line-test', { method: 'POST' });
+      setLineStatus({ type: 'success', message: res.message });
+    } catch (err) {
+      setLineStatus({ type: 'error', message: err.message });
+    } finally {
+      setLineBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,11 +55,21 @@ export default function AdminOverviewPage() {
       title="ภาพรวมระบบ"
       description="สรุปผู้ใช้ รายได้ คีย์ และผลการเทรดของทุกบัญชี"
       actions={
-        <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
-          <RefreshCw size={14} className={loading ? 'spin' : ''} /> รีเฟรช
-        </button>
+        <>
+          <button className="btn btn-ghost btn-sm" onClick={testLine} disabled={lineBusy} title="ส่งข้อความทดสอบไปที่ LINE OA">
+            <MessageCircle size={14} /> {lineBusy ? 'กำลังส่ง...' : 'ทดสอบ LINE'}
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'spin' : ''} /> รีเฟรช
+          </button>
+        </>
       }
     >
+      {lineStatus && (
+        <div style={{ marginBottom: 16 }}>
+          <Alert type={lineStatus.type}>{lineStatus.message}</Alert>
+        </div>
+      )}
       {error && (
         <div style={{ marginBottom: 16 }}>
           <Alert type="error">{error}</Alert>

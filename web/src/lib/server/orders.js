@@ -1,6 +1,7 @@
 import { getAdminClient, insertTolerant } from './supabaseAdmin';
 import { generateProductKey } from './keys';
 import { logActivity } from './activity';
+import { notifyPurchase } from './lineNotify';
 
 export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -99,6 +100,13 @@ export async function fulfillOrder(order, paymentRef) {
     email: order.owner_email,
     event: 'purchase_paid',
     detail: `ชำระ ฿${Number(order.amount_thb)} (${order.order_id}) → คีย์ ${productKey} +${baseHours} ชม.`,
+  });
+  await notifyPurchase({
+    email: order.owner_email,
+    amountThb: order.amount_thb,
+    hours: baseHours,
+    orderId: order.order_id,
+    productKey,
   });
   return { ok: true, productKey, alreadyPaid: false };
 }

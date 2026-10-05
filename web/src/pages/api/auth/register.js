@@ -13,6 +13,7 @@ import {
   isDisabledRow,
 } from '../../../lib/server/auth';
 import { isMailConfigured, sendAlreadyRegisteredEmail, sendRegisterCodeEmail } from '../../../lib/server/mailer';
+import { notifyNewMember } from '../../../lib/server/lineNotify';
 import {
   CODE_TTL_MINUTES,
   codeMatches,
@@ -186,6 +187,7 @@ export default async function handler(req, res) {
 
     const user = toUserPayload(created);
     await logActivity({ userId: created.id, email, event: 'register', detail: `สมัครสมาชิก (ยืนยันอีเมลแล้ว) รับฟรี ${STARTER_HOURS} ชม.`, ip });
+    await notifyNewMember({ email, displayName: user.displayName, hours: STARTER_HOURS, ip });
     return res.status(200).json({
       success: true,
       message: `สมัครสมาชิกสำเร็จ! ได้รับโควต้าเริ่มต้น ${STARTER_HOURS} ชั่วโมง`,
