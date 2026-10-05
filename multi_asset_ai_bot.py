@@ -159,6 +159,7 @@ def telemetry_background_worker():
                     h1_tr = str(cached.get("h1_trend", "ANALYZING..."))
                     h1_df = float(cached.get("h1_diff_pct", 0.0))
                     sr_fields = {k: round(float(cached.get(k, 0.0) or 0.0), 2) for k in ("h1_support", "h1_resistance", "h4_support", "h4_resistance")}
+                    sr_fields.update({k: int(cached.get(k, 0) or 0) for k in ("h1_lt_dir", "h4_lt_dir")})
                     
                     current_radar.append({
                         "symbol": str(s),
@@ -433,6 +434,22 @@ def closed_trend(ma_fast, ma_slow, slope_bars=3):
         return is_up, diff, 0
     direction = 1 if (is_up and f > f_prev) else (-1 if (not is_up and f < f_prev) else 0)
     return is_up, diff, direction
+
+
+def long_term_dir(close, fast=None, slow=200):
+    """
+    เทรนด์ระยะยาวจาก 200 แท่ง (แท่งที่ปิดแล้ว):
+      fast=None → ราคาปิดเหนือ MA200 = +1 / ใต้ = -1
+      fast=50   → MA50 เหนือ MA200 = +1 / ใต้ = -1
+    ข้อมูลไม่พอ (น้อยกว่า 200 แท่ง) คืน 0 = ไม่อนุญาตเข้าไม้
+    """
+    if close is None or len(close) < slow + 2:
+        return 0, float('nan')
+    ma_slow = close.rolling(slow).mean().iloc[-2]
+    ref = close.iloc[-2] if fast is None else close.rolling(fast).mean().iloc[-2]
+    if pd.isna(ma_slow) or pd.isna(ref):
+        return 0, float('nan')
+    return (1 if ref > ma_slow else -1), float(ma_slow)
 
 
 def check_h4_confluence(direction, is_uptrend_h4, prob_up, prob_down, bull_div, bear_div, hidden_bull=False, hidden_bear=False, is_sideway_h4=False, h4_diff_pct=0.0):
@@ -983,8 +1000,8 @@ def main():
                 features = model_features[sym]
                 
                 df_m15 = get_data(sym, TIMEFRAME, 100)
-                df_h1 = get_data(sym, TIMEFRAME_H1, 100)
-                df_h4 = get_data(sym, TIMEFRAME_H4, 100)
+                df_h1 = get_data(sym, TIMEFRAME_H1, 300)   # 300 แท่ง: พอสำหรับ MA200 (เทรนด์ระยะยาว)
+                df_h4 = get_data(sym, TIMEFRAME_H4, 300)
                 if df_m15 is None or df_h1 is None or df_h4 is None:
                     continue
                 
@@ -1247,12 +1264,22 @@ def main():
                 ma_cross_buy_confirm = ma_cross_up and h1_dir == 1 and (is_sideway_h4 or h4_dir == 1)
                 ma_cross_sell_confirm = ma_cross_down and h1_dir == -1 and (is_sideway_h4 or h4_dir == -1)
 
+                # เทรนด์ระยะยาว 200 แท่ง (Backtest 2.5 ปี)
+                #   Plan 4: H1 MA50 เทียบ MA200 ต้องตรงทิศ — กำไร 1228 → 1336 จุด, PF 1.24 → 1.36, Max DD 264 → 188
+                #   Plan 5: ราคาปิด H4 เทียบ MA200 ต้องตรงทิศ — กำไร 767 → 991 จุด, PF 1.20 → 1.37, Max DD 315 → 268
+                h1_lt_dir, h1_ma200 = long_term_dir(df_h1['close'], fast=50)
+                h4_lt_dir, h4_ma200 = long_term_dir(df_h4['close'])
+                ma_cross_buy_confirm = ma_cross_buy_confirm and h1_lt_dir == 1
+                ma_cross_sell_confirm = ma_cross_sell_confirm and h1_lt_dir == -1
+
                 # (A) Plan 5: ช่วง H4 ไซด์เวย์ ต้องเทรดตามฝั่งที่ MA10/MA30 H4 เอียง
                 #     ไซด์เวย์บูลลิช (MA10 > MA30) = BUY เท่านั้น · ไซด์เวย์แบร์ริช (MA10 < MA30) = SELL เท่านั้น
                 #     Backtest 2.5 ปี (P5): กำไรสุทธิ 386 → 757 จุด, Max DD 374 → 297
                 #     + MA10 H4 ต้องชันไปทางเดียวกัน (กันซื้อตอน MA10 H4 กำลังม้วนลง) — Backtest: PF 1.13 → 1.20
                 plan5_buy_ok = bool(h4_buy_ok and h4_dir == 1)
                 plan5_sell_ok = bool(h4_sell_ok and h4_dir == -1)
+                plan5_buy_ok = plan5_buy_ok and h4_lt_dir == 1
+                plan5_sell_ok = plan5_sell_ok and h4_lt_dir == -1
 
                 ma_status_str = f"{Colors.GREEN}MA5 > MA10 (+{(ma5_val - ma10_val):.2f}){Colors.RESET}" if ma5_val >= ma10_val else f"{Colors.RED}MA5 < MA10 ({(ma5_val - ma10_val):.2f}){Colors.RESET}"
                 
@@ -1422,6 +1449,9 @@ def main():
                     "h1_support": round(float(support), 2) if pd.notna(support) else 0.0,
                     "h1_resistance": round(float(resistance), 2) if pd.notna(resistance) else 0.0,
                     "h4_support": round(h4_support, 2),
+                    "h1_lt_dir": int(h1_lt_dir),
+                    "h4_lt_dir": int(h4_lt_dir),
+                    "h4_ma200": round(h4_ma200, 2) if pd.notna(h4_ma200) else 0.0,
                     "h4_resistance": round(h4_resistance, 2),
                 }
                 

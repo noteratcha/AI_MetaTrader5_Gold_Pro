@@ -1150,7 +1150,10 @@ class MainTradingApp(ctk.CTk):
         val.pack(side="left")
         pct = ctk.CTkLabel(row, text="", font=self._font(12, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=22)
         pct.pack(side="right")
-        return {"val": val, "pct": pct}
+        # เทรนด์ระยะยาว 200 แท่ง (H1: MA50 vs MA200 · H4: ราคา vs MA200)
+        lt = ctk.CTkLabel(row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, height=22)
+        lt.pack(side="right", padx=(0, 8))
+        return {"val": val, "pct": pct, "lt": lt}
 
     def _create_sr_row(self, parent, tf):
         row = ctk.CTkFrame(parent, fg_color="transparent", height=24)
@@ -2100,6 +2103,12 @@ class MainTradingApp(ctk.CTk):
                         text=f"{h1_pct:+.2f}%" if h1_trend[:2] in ("UP", "DO") else "",
                         text_color=pct_color(h1_pct),
                     )
+                    for tf, key in (("H1", "h1_lt_dir"), ("H4", "h4_lt_dir")):
+                        lt_dir = int(radar.get(key, 0) or 0)
+                        rows[tf]["lt"].configure(
+                            text="MA200 ▲" if lt_dir > 0 else ("MA200 ▼" if lt_dir < 0 else ""),
+                            text_color=COLOR_SUCCESS_GREEN if lt_dir > 0 else COLOR_DANGER_RED,
+                        )
 
                 if hasattr(self, 'card_sr'):
                     price = float(bid or radar.get("price", 0.0) or 0.0)
