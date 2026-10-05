@@ -160,7 +160,7 @@ def telemetry_background_worker():
                     h1_tr = str(cached.get("h1_trend", "ANALYZING..."))
                     h1_df = float(cached.get("h1_diff_pct", 0.0))
                     sr_fields = {k: round(float(cached.get(k, 0.0) or 0.0), 2) for k in ("h1_support", "h1_resistance", "h4_support", "h4_resistance")}
-                    sr_fields.update({k: int(cached.get(k, 0) or 0) for k in ("h1_lt_dir", "h4_lt_dir")})
+                    sr_fields.update({k: int(cached.get(k, 0) or 0) for k in ("h1_lt_dir", "h4_lt_dir", "h1_dir", "h4_dir")})
                     
                     current_radar.append({
                         "symbol": str(s),
@@ -440,11 +440,15 @@ def strip_ansi(text) -> str:
     return _ANSI_RE.sub("", str(text or ""))
 
 
-def closed_trend(ma_fast, ma_slow, slope_bars=3):
+TREND_SLOPE_TOL_ATR = 0.1  # ยอมให้ MA10 แบน/สวนเล็กน้อยได้ไม่เกิน 0.1 ATR (Backtest: P4 กำไร 1336 → 1463, P5 991 → 1107)
+
+
+def closed_trend(ma_fast, ma_slow, slope_bars=3, atr=None, tol=TREND_SLOPE_TOL_ATR):
     """
     เทรนด์จาก "แท่งที่ปิดแล้ว" (ไม่ Repaint ตามราคาที่วิ่งอยู่ในแท่ง)
     คืน (is_up, diff_pct, direction) — direction = +1 ขาขึ้นจริง (MA10 > MA30 และ MA10 ชันขึ้น),
     -1 ขาลงจริง (MA10 < MA30 และ MA10 ชันลง), 0 = MA10 กำลังกลับตัว (ยังไม่ยืนยันเทรนด์)
+    ถ้าส่ง atr มา: ความชันวัดเป็นหน่วย ATR และยอมให้ MA10 สวนทางได้ไม่เกิน tol (แบนถือว่ายังเป็นเทรนด์เดิม)
     Backtest 2.5 ปี: อ่านจากแท่งที่ปิด + ความชัน ทำให้ Plan 4 กำไร 816 → 1228 จุด (DD 413 → 264)
     """
     if len(ma_fast) < slope_bars + 2:
@@ -456,7 +460,12 @@ def closed_trend(ma_fast, ma_slow, slope_bars=3):
     diff = float((f / sl - 1.0) * 100.0)
     if pd.isna(f_prev):
         return is_up, diff, 0
-    direction = 1 if (is_up and f > f_prev) else (-1 if (not is_up and f < f_prev) else 0)
+    slope = f - f_prev
+    if atr is not None and len(atr) >= 2 and pd.notna(atr.iloc[-2]) and atr.iloc[-2] > 0:
+        slope = slope / atr.iloc[-2]
+        direction = 1 if (is_up and slope > -tol) else (-1 if (not is_up and slope < tol) else 0)
+    else:
+        direction = 1 if (is_up and slope > 0) else (-1 if (not is_up and slope < 0) else 0)
     return is_up, diff, direction
 
 
@@ -1076,7 +1085,7 @@ def main():
                 ma_h1_status_str = f"{Colors.GREEN}MA5 > MA10 (+{(ma5_h1_val - ma10_h1_val):.2f}){Colors.RESET}" if ma5_h1_val >= ma10_h1_val else f"{Colors.RED}MA5 < MA10 ({(ma5_h1_val - ma10_h1_val):.2f}){Colors.RESET}"
                 
                 # เทรนด์ H1 จากแท่งที่ปิดแล้ว (เดิมใช้แท่งที่กำลังวิ่ง ทำให้เทรนด์กระพริบตามราคา)
-                is_uptrend_h1, h1_diff_pct, h1_dir = closed_trend(df_h1['ma_fast_h1'], df_h1['ma_slow_h1'])
+                is_uptrend_h1, h1_diff_pct, h1_dir = closed_trend(df_h1['ma_fast_h1'], df_h1['ma_slow_h1'], atr=atr_h1_series)
                 h1_cloud_status = f"UPTREND ({h1_diff_pct:+.2f}%)" if is_uptrend_h1 else f"DOWNTREND ({h1_diff_pct:+.2f}%)"
                 
                 # เช็คการเริ่มแท่ง H1 ใหม่ (แสดงเฉพาะคู่ที่เข้าเทรดจริง BTC/XAU)
@@ -1101,7 +1110,8 @@ def main():
                 h4_resistance = float(h4_res_series.iloc[-1]) if pd.notna(h4_res_series.iloc[-1]) else 0.0
                 h4_support = float(h4_sup_series.iloc[-1]) if pd.notna(h4_sup_series.iloc[-1]) else 0.0
                 # สภาวะตลาด H4 จากแท่งที่ปิดแล้ว (ไม่ Repaint) + ทิศความชัน MA10
-                is_uptrend_h4, h4_diff_pct, h4_dir = closed_trend(df_h4['ma_fast_h4'], df_h4['ma_slow_h4'])
+                atr_h4_series = _atr_series(df_h4)
+                is_uptrend_h4, h4_diff_pct, h4_dir = closed_trend(df_h4['ma_fast_h4'], df_h4['ma_slow_h4'], atr=atr_h4_series)
                 is_sideway_h4 = bool(abs(h4_diff_pct) < 0.20)
 
                 if is_sideway_h4:
@@ -1480,6 +1490,8 @@ def main():
                     "h1_resistance": round(float(resistance), 2) if pd.notna(resistance) else 0.0,
                     "h4_support": round(h4_support, 2),
                     "h1_lt_dir": int(h1_lt_dir),
+                    "h1_dir": int(h1_dir),
+                    "h4_dir": int(h4_dir),
                     "h4_lt_dir": int(h4_lt_dir),
                     "h4_ma200": round(h4_ma200, 2) if pd.notna(h4_ma200) else 0.0,
                     "h4_resistance": round(h4_resistance, 2),

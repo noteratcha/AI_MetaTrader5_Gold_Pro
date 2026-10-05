@@ -210,8 +210,10 @@ function RadarCard({ radar, loading }) {
   const h4 = String(radar?.h4_trend || '');
   const h4Tone = h4.startsWith('BULL') ? 'badge-green' : h4.startsWith('BEAR') ? 'badge-red' : 'badge-sky';
   const h1 = String(radar?.h1_trend || '');
-  const h1Tone = h1.startsWith('UP') ? 'badge-green' : h1.startsWith('DOWN') ? 'badge-red' : 'badge-muted';
-  const h1Label = h1.startsWith('UP') ? h1.replace('UPTREND', '▲ ขาขึ้น') : h1.startsWith('DOWN') ? h1.replace('DOWNTREND', '▼ ขาลง') : '';
+  const h1Tone = radar?.h1_dir !== undefined && Number(radar.h1_dir) === 0 && h1 ? 'badge-gold' : h1.startsWith('UP') ? 'badge-green' : h1.startsWith('DOWN') ? 'badge-red' : 'badge-muted';
+  const h1Confirmed = radar?.h1_dir === undefined || Number(radar.h1_dir) === (h1.startsWith('UP') ? 1 : -1);
+  const h1Base = h1.startsWith('UP') ? h1.replace('UPTREND', '▲ ขาขึ้น') : h1.startsWith('DOWN') ? h1.replace('DOWNTREND', '▼ ขาลง') : '';
+  const h1Label = h1Base && !h1Confirmed ? h1Base.replace(/ \(/, ' · ชะลอ (') : h1Base;
   const status = cleanText(radar?.status) || '[WAIT OUTSIDE ZONE]';
 
   return (

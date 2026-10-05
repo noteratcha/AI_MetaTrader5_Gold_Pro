@@ -2082,10 +2082,12 @@ class MainTradingApp(ctk.CTk):
                         rows["H4"]["pct"].configure(text="")
                         self._set_badge(self.card_trend["badge"], "")
                     elif "BULL" in h4_trend:
-                        rows["H4"]["val"].configure(text="▲ ขาขึ้น", text_color=COLOR_SUCCESS_GREEN)
+                        h4_ok = int(radar.get("h4_dir", 1) or 0) == 1
+                        rows["H4"]["val"].configure(text="▲ ขาขึ้น" if h4_ok else "▲ ขาขึ้น · ชะลอ", text_color=COLOR_SUCCESS_GREEN if h4_ok else COLOR_GOLD_PRIMARY)
                         self._set_badge(self.card_trend["badge"], "BUY เท่านั้น", "#0F2A20", COLOR_SUCCESS_GREEN)
                     elif "BEAR" in h4_trend:
-                        rows["H4"]["val"].configure(text="▼ ขาลง", text_color=COLOR_DANGER_RED)
+                        h4_ok = int(radar.get("h4_dir", -1) or 0) == -1
+                        rows["H4"]["val"].configure(text="▼ ขาลง" if h4_ok else "▼ ขาลง · ชะลอ", text_color=COLOR_DANGER_RED if h4_ok else COLOR_GOLD_PRIMARY)
                         self._set_badge(self.card_trend["badge"], "SELL เท่านั้น", "#2A1414", COLOR_DANGER_RED)
                     else:
                         rows["H4"]["val"].configure(text="◆ ไซด์เวย์", text_color=COLOR_CYAN_ACCENT)
@@ -2093,10 +2095,14 @@ class MainTradingApp(ctk.CTk):
                     if analyzed:
                         rows["H4"]["pct"].configure(text=f"{h4_pct:+.2f}%", text_color=pct_color(h4_pct))
 
+                    # ทิศยืนยัน (h1_dir): 0 = MA10 กำลังชะลอ/สวนทาง → บอทยังไม่ใช้เทรนด์นี้เข้าไม้ (Plan 4)
+                    h1_dir_v = int(radar.get("h1_dir", 0) or 0)
                     if h1_trend.startswith("UP"):
-                        rows["H1"]["val"].configure(text="▲ ขาขึ้น", text_color=COLOR_SUCCESS_GREEN)
+                        ok = h1_dir_v == 1
+                        rows["H1"]["val"].configure(text="▲ ขาขึ้น" if ok else "▲ ขาขึ้น · ชะลอ", text_color=COLOR_SUCCESS_GREEN if ok else COLOR_GOLD_PRIMARY)
                     elif h1_trend.startswith("DOWN"):
-                        rows["H1"]["val"].configure(text="▼ ขาลง", text_color=COLOR_DANGER_RED)
+                        ok = h1_dir_v == -1
+                        rows["H1"]["val"].configure(text="▼ ขาลง" if ok else "▼ ขาลง · ชะลอ", text_color=COLOR_DANGER_RED if ok else COLOR_GOLD_PRIMARY)
                     else:
                         rows["H1"]["val"].configure(text="—", text_color=COLOR_TEXT_MUTED)
                     rows["H1"]["pct"].configure(
