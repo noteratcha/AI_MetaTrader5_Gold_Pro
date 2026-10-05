@@ -5,6 +5,50 @@ import { FlaskConical, LineChart, ShieldAlert, Target, TrendingDown, TrendingUp 
 import { Alert, EmptyState, PageHeader, PageLoading, StatCard } from '../../components/ui';
 
 const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa' };
+
+// หลักการของแต่ละแผน (ตรงกับกฎในโปรแกรมเวอร์ชันล่าสุด)
+const PLAN_INFO = {
+  1: {
+    type: 'ตามเทรนด์ · M15',
+    rules: [
+      'เทรนด์ H1: MA100 < MA150 < MA200 = ขาลง (SELL) · MA100 > MA150 > MA200 = ขาขึ้น (BUY)',
+      'จุดเข้า: MA5 ตัด MA13 บนแท่ง M15 ที่ปิดแล้ว ตามทิศเทรนด์',
+      'SL 0.75 ATR · เลื่อน SL ทุกกำไร $5 ครั้งละ 40% · ปิดเมื่อ MA5 ตัด MA13 กลับ (ไม่ตั้ง TP)',
+    ],
+  },
+  2: {
+    type: 'ตามเทรนด์ · H1',
+    rules: [
+      'เทรนด์ H4: MA10/MA30 + ความชัน MA5 + ราคาอยู่ฝั่งเดียวกับ MA200',
+      'จุดเข้า: MA5 ตัด MA10 บนแท่ง H1 ที่ปิดแล้ว ตามทิศเทรนด์',
+      'SL 0.75 ATR (H1) · ปิดเมื่อ MA5 ตัด MA10 กลับ (ไม่ตั้ง TP · ปล่อยกำไรวิ่ง)',
+    ],
+  },
+  3: {
+    type: 'กวาดสภาพคล่อง · M15',
+    rules: [
+      'ราคาทะลุแนวรับ/ต้าน H1 (โซนกลับตัว 500 แท่ง) แล้วดึงกลับ พร้อมไส้เทียนยาว ≥ 0.3 ATR',
+      'ต้องตามเทรนด์ H1 และ AI ยืนยันทิศ ≥ 50% (มี Divergence ≥ 48%)',
+      'SL 0.75 ATR · TP 1.125 ATR (RRR 1:1.5) · ล็อกกำไรที่ 70% ของเป้า',
+    ],
+  },
+  4: {
+    type: 'เด้งแนวรับ/ต้าน · M15',
+    rules: [
+      'ราคาเข้าใกล้แนวรับ/ต้าน H1 (500 แท่ง) ไม่เกิน 1 ATR + แท่งปฏิเสธราคา',
+      'ต้องมี RSI Divergence และ AI ยืนยันทิศ ≥ 51%',
+      'SL 0.75 ATR · TP 1.125 ATR (RRR 1:1.5) · ล็อกกำไรที่ 70% ของเป้า',
+    ],
+  },
+  5: {
+    type: 'กลับตัวขอบ Bollinger · H1',
+    rules: [
+      'ราคาหลุดขอบ Bollinger Bands H1 (20, 2 SD) แล้วปิดกลับเข้ากรอบ + ไส้เทียน ≥ 0.2 ATR',
+      'ต้องมี RSI Divergence + MACD H1 เริ่มหมดแรง และ AI ยืนยันทิศ ≥ 50%',
+      'SL 0.75 ATR · TP 1.125 ATR (RRR 1:1.5)',
+    ],
+  },
+};
 const pts = (v) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${Number(v).toLocaleString('th-TH', { maximumFractionDigits: 1 })}`);
 const tone = (v) => (v > 0 ? 'text-green' : v < 0 ? 'text-red' : 'muted');
 
@@ -91,11 +135,44 @@ export default function BacktestPage() {
   return (
     <div className="container container-wide page">
       <PageHeader
-        eyebrow="Backtest"
+        eyebrow="Trading Plans"
         icon={FlaskConical}
-        title="ผลทดสอบย้อนหลังทุกแผน"
-        description={`XAUUSD · ${data.period[0]} ถึง ${data.period[1]} · กฎเวอร์ชัน v${data.app_version} · อัปเดต ${data.generated_at}`}
+        title="แผนเทรดทองคำ (XAUUSD)"
+        description={`หลักการเข้า-ออกของบอททั้ง 5 แผน พร้อมผลทดสอบย้อนหลัง ${data.period[0]} ถึง ${data.period[1]} (กฎเวอร์ชัน v${data.app_version})`}
       />
+
+      <div className="grid grid-3" style={{ marginBottom: 24 }}>
+        {data.plans.map((p) => {
+          const info = PLAN_INFO[p.key] || { type: '', rules: [p.rule] };
+          return (
+            <div key={p.key} className="card card-pad" style={{ borderTop: `3px solid ${PLAN_COLORS[p.key]}` }}>
+              <div className="row-between" style={{ marginBottom: 8, gap: 8 }}>
+                <strong>
+                  {p.label} · {p.name}
+                </strong>
+                <span className="badge badge-muted">{info.type}</span>
+              </div>
+              <ul className="small muted" style={{ margin: '0 0 12px 18px', padding: 0 }}>
+                {info.rules.map((r) => (
+                  <li key={r} style={{ marginBottom: 4 }}>
+                    {r}
+                  </li>
+                ))}
+              </ul>
+              <div className="row wrap small" style={{ gap: 12 }}>
+                <span>
+                  ย้อนหลัง <strong className={tone(p.net)}>{pts(p.net)} จุด</strong>
+                </span>
+                <span className="muted">PF {p.pf ?? '—'}</span>
+                <span className="muted">ชนะ {p.n ? `${p.win}%` : '—'}</span>
+                <span className="muted">{p.n ?? 0} ไม้</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '8px 0 12px' }}>ผลทดสอบย้อนหลังรวมทุกแผน</h2>
 
       <div className="grid grid-4">
         <StatCard icon={TrendingUp} label="กำไรสุทธิรวม (0.01 lot)" value={`${pts(s.net)} จุด`} tone={s.net >= 0 ? 'green' : 'red'} sub={`≈ $${Math.round(s.net).toLocaleString()}`} />

@@ -11,7 +11,7 @@ const NAV_ITEMS = [
   { href: '/', label: 'พอร์ตสด', icon: Activity },
   { href: '/dashboard', label: 'กระเป๋าเวลา', icon: BarChart3 },
   { href: '/calendar', label: 'ปฏิทินข่าว', icon: CalendarDays },
-  { href: '/backtest', label: 'ผล Backtest', icon: FlaskConical },
+  { href: '/backtest', label: 'แผนเทรด', icon: FlaskConical },
   { href: '/store', label: 'ซื้อชั่วโมง', icon: ShoppingBag },
   { href: '/my-keys', label: 'คีย์ของฉัน', icon: Key },
 ];
