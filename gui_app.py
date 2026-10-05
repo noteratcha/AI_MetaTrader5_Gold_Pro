@@ -1100,20 +1100,94 @@ class MainTradingApp(ctk.CTk):
         self.card_mt5 = self._create_stat_card(grid_frame, 0, "🖥", "บัญชี MT5", "รอเชื่อมต่อ...", "Server: กำลังตรวจสอบ", COLOR_CYAN_ACCENT)
         self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "$0.00", "Equity $0.00 · Float $0.00", COLOR_SUCCESS_GREEN)
         self.card_gold = self._create_stat_card(grid_frame, 2, "🏆", "ราคาทองคำ XAUUSD", "0.00", "Spread 0 pts", COLOR_GOLD_PRIMARY)
-        self.card_trend = self._create_stat_card(grid_frame, 3, "📊", "สภาวะตลาด H4 · H1", "รอเริ่มบอท", "", COLOR_GOLD_WARM)
-        # บรรทัดล่าง: เทรนด์ H1 (สีตามทิศ) + ระยะห่าง MA H4 — แทน sub label เดิม ความสูงการ์ดเท่าเดิม
-        trend_sub = self.card_trend["sub_lbl"].master
-        self.card_trend["sub_lbl"].pack_forget()
-        sub_row = ctk.CTkFrame(trend_sub, fg_color="transparent", height=18)
-        sub_row.pack(anchor="w")
-        self.card_trend["h1_lbl"] = ctk.CTkLabel(sub_row, text="H1 —", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, height=18)
-        self.card_trend["h1_lbl"].pack(side="left")
-        self.card_trend["sub_lbl"] = ctk.CTkLabel(sub_row, text="  ·  วิเคราะห์เมื่อบอททำงาน", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
-        self.card_trend["sub_lbl"].pack(side="left")
+        # สภาวะตลาด: 2 แถว H4 / H1 + ป้ายทิศที่อนุญาตให้เทรด (Strict Pro-Trend)
+        self.card_trend = self._create_dual_card(grid_frame, 3, "📊", "สภาวะตลาด")
+        self.card_trend["rows"] = {tf: self._create_trend_row(self.card_trend["body"], tf) for tf in ("H4", "H1")}
 
-        # แนวรับ–แนวต้าน H1 (บรรทัดใหญ่) และ H4 (บรรทัดล่าง) — ช่วงราคา Low/High 20 แท่งก่อนหน้า
-        self.card_sr = self._create_stat_card(grid_frame, 4, "🧱", "แนวรับ – แนวต้าน", "H1 —", "H4 —", COLOR_CYAN_ACCENT)
-        self.card_sr["val_lbl"].configure(font=self._font(16, "bold"))
+        # แนวรับ–แนวต้าน: 2 แถว H1 / H4 พร้อมแถบตำแหน่งราคาปัจจุบันในกรอบ
+        self.card_sr = self._create_dual_card(grid_frame, 4, "🧱", "แนวรับ – แนวต้าน")
+        self.card_sr["rows"] = {tf: self._create_sr_row(self.card_sr["body"], tf) for tf in ("H1", "H4")}
+
+    # ---------------------------------------------------------------------
+    # การ์ด 2 แถว (สภาวะตลาด / แนวรับ–แนวต้าน)
+    # ---------------------------------------------------------------------
+    def _create_dual_card(self, parent, col, icon, title):
+        card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        card.grid(row=0, column=col, padx=6, sticky="nsew")
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="both", expand=True, padx=14, pady=7)
+
+        top_row = ctk.CTkFrame(inner, fg_color="transparent")
+        top_row.pack(fill="x")
+        ctk.CTkLabel(top_row, text=icon, font=ctk.CTkFont(size=15)).pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        badge = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED,
+                             fg_color="transparent", corner_radius=8, height=18)
+        badge.pack(side="right")
+
+        body = ctk.CTkFrame(inner, fg_color="transparent")
+        body.pack(fill="x", pady=(3, 0))
+        return {"badge": badge, "body": body}
+
+    @staticmethod
+    def _set_badge(badge, text, fg="#1F2430", color=COLOR_TEXT_MUTED):
+        if text:
+            badge.configure(text=f"  {text}  ", fg_color=fg, text_color=color)
+        else:
+            badge.configure(text="", fg_color="transparent")
+
+    def _tf_tag(self, parent, tf):
+        tag = ctk.CTkLabel(parent, text=tf, width=30, height=18, corner_radius=6, fg_color="#1F2430",
+                           font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED)
+        tag.pack(side="left", padx=(0, 8))
+        return tag
+
+    def _create_trend_row(self, parent, tf):
+        row = ctk.CTkFrame(parent, fg_color="transparent", height=24)
+        row.pack(fill="x", pady=1)
+        self._tf_tag(row, tf)
+        val = ctk.CTkLabel(row, text="—", font=self._font(14, "bold"), text_color=COLOR_TEXT_MUTED, height=22)
+        val.pack(side="left")
+        pct = ctk.CTkLabel(row, text="", font=self._font(12, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=22)
+        pct.pack(side="right")
+        return {"val": val, "pct": pct}
+
+    def _create_sr_row(self, parent, tf):
+        row = ctk.CTkFrame(parent, fg_color="transparent", height=24)
+        row.pack(fill="x", pady=1)
+        self._tf_tag(row, tf)
+        sup = ctk.CTkLabel(row, text="—", font=self._font(11, "bold", "Consolas"), text_color=COLOR_SUCCESS_GREEN, height=22)
+        sup.pack(side="left")
+        res = ctk.CTkLabel(row, text="—", font=self._font(11, "bold", "Consolas"), text_color=COLOR_DANGER_RED, height=22)
+        res.pack(side="right")
+        bar = tk.Canvas(row, height=12, bg=COLOR_CARD_BG, highlightthickness=0, bd=0)
+        bar.pack(side="left", fill="x", expand=True, padx=6)
+        state = {"sup": 0.0, "res": 0.0, "price": 0.0}
+        bar.bind("<Configure>", lambda e, b=bar, st=state: self._draw_sr_bar(b, st))
+        return {"sup": sup, "res": res, "bar": bar, "state": state}
+
+    @staticmethod
+    def _sr_position(sup, res, price):
+        """ตำแหน่งราคาในกรอบ 0..1 (None ถ้าข้อมูลไม่ครบ) — อาจ < 0 หรือ > 1 เมื่อหลุดกรอบ"""
+        if sup <= 0 or res <= sup or price <= 0:
+            return None
+        return (price - sup) / (res - sup)
+
+    def _draw_sr_bar(self, bar, st):
+        bar.delete("all")
+        w = max(bar.winfo_width(), 20)
+        y = 6
+        bar.create_line(5, y, w - 5, y, fill="#2A303C", width=4, capstyle="round")
+        pos = self._sr_position(st["sup"], st["res"], st["price"])
+        if pos is None:
+            return
+        clamped = min(max(pos, 0.0), 1.0)
+        x = 5 + clamped * (w - 10)
+        # แถบสีจากแนวรับถึงราคา: เขียวเมื่อยังใกล้แนวรับ / แดงเมื่อเข้าใกล้แนวต้าน
+        fill = COLOR_SUCCESS_GREEN if clamped < 0.5 else COLOR_DANGER_RED
+        bar.create_line(5, y, x, y, fill=fill, width=4, capstyle="round")
+        color = COLOR_DANGER_RED if pos > 1 else COLOR_SUCCESS_GREEN if pos < 0 else COLOR_GOLD_PRIMARY
+        bar.create_oval(x - 5, y - 5, x + 5, y + 5, fill=color, outline=COLOR_CARD_BG, width=2)
 
     def _create_stat_card(self, parent, col, icon, title, val_text, sub_text, accent_color):
         card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
@@ -1993,35 +2067,68 @@ class MainTradingApp(ctk.CTk):
                 h4_trend = radar.get("h4_trend", "ANALYZING...")
                 if h4_trend == "ANALYZING...":
                     h4_trend = "รอเริ่มบอท" if not bot_ctrl.is_active else "กำลังวิเคราะห์"
-                h4_pct = radar.get("h4_diff_pct", 0.0)
+                h4_pct = float(radar.get("h4_diff_pct", 0.0) or 0.0)
+                h1_pct = float(radar.get("h1_diff_pct", 0.0) or 0.0)
+                h1_trend = str(radar.get("h1_trend", "ANALYZING..."))
+                analyzed = "BULL" in h4_trend or "BEAR" in h4_trend or "SIDEWAY" in h4_trend
                 if hasattr(self, 'card_trend'):
-                    trend_color = COLOR_GOLD_WARM
-                    if "BULL" in h4_trend:
-                        trend_color = COLOR_SUCCESS_GREEN
+                    rows = self.card_trend["rows"]
+                    pct_color = lambda v: COLOR_SUCCESS_GREEN if v > 0 else COLOR_DANGER_RED if v < 0 else COLOR_TEXT_MUTED
+                    if not analyzed:
+                        rows["H4"]["val"].configure(text=h4_trend, text_color=COLOR_TEXT_MUTED)
+                        rows["H4"]["pct"].configure(text="")
+                        self._set_badge(self.card_trend["badge"], "")
+                    elif "BULL" in h4_trend:
+                        rows["H4"]["val"].configure(text="▲ ขาขึ้น", text_color=COLOR_SUCCESS_GREEN)
+                        self._set_badge(self.card_trend["badge"], "BUY เท่านั้น", "#0F2A20", COLOR_SUCCESS_GREEN)
                     elif "BEAR" in h4_trend:
-                        trend_color = COLOR_DANGER_RED
-                    elif "SIDEWAY" in h4_trend:
-                        trend_color = COLOR_CYAN_ACCENT
-
-                    self.card_trend["val_lbl"].configure(text=f"H4 {h4_trend}" if h4_trend[:1].isupper() and "รอ" not in h4_trend else h4_trend, text_color=trend_color)
-
-                    h1_trend = str(radar.get("h1_trend", "ANALYZING..."))
-                    if h1_trend.startswith("UP"):
-                        h1_text, h1_color = f"H1 ▲ ขาขึ้น {radar.get('h1_diff_pct', 0.0):+.2f}%", COLOR_SUCCESS_GREEN
-                    elif h1_trend.startswith("DOWN"):
-                        h1_text, h1_color = f"H1 ▼ ขาลง {radar.get('h1_diff_pct', 0.0):+.2f}%", COLOR_DANGER_RED
+                        rows["H4"]["val"].configure(text="▼ ขาลง", text_color=COLOR_DANGER_RED)
+                        self._set_badge(self.card_trend["badge"], "SELL เท่านั้น", "#2A1414", COLOR_DANGER_RED)
                     else:
-                        h1_text, h1_color = "H1 —", COLOR_TEXT_MUTED
-                    self.card_trend["h1_lbl"].configure(text=h1_text, text_color=h1_color)
-                    self.card_trend["sub_lbl"].configure(text=f"  ·  H4 MA10/30 {h4_pct:+.2f}%")
+                        rows["H4"]["val"].configure(text="◆ ไซด์เวย์", text_color=COLOR_CYAN_ACCENT)
+                        self._set_badge(self.card_trend["badge"], "BUY / SELL", "#132036", COLOR_CYAN_ACCENT)
+                    if analyzed:
+                        rows["H4"]["pct"].configure(text=f"{h4_pct:+.2f}%", text_color=pct_color(h4_pct))
+
+                    if h1_trend.startswith("UP"):
+                        rows["H1"]["val"].configure(text="▲ ขาขึ้น", text_color=COLOR_SUCCESS_GREEN)
+                    elif h1_trend.startswith("DOWN"):
+                        rows["H1"]["val"].configure(text="▼ ขาลง", text_color=COLOR_DANGER_RED)
+                    else:
+                        rows["H1"]["val"].configure(text="—", text_color=COLOR_TEXT_MUTED)
+                    rows["H1"]["pct"].configure(
+                        text=f"{h1_pct:+.2f}%" if h1_trend[:2] in ("UP", "DO") else "",
+                        text_color=pct_color(h1_pct),
+                    )
 
                 if hasattr(self, 'card_sr'):
-                    def _sr_text(tf):
-                        sup = float(radar.get(f"{tf}_support", 0.0) or 0.0)
-                        res = float(radar.get(f"{tf}_resistance", 0.0) or 0.0)
-                        return f"{tf.upper()} {sup:,.2f} – {res:,.2f}" if sup > 0 and res > 0 else f"{tf.upper()} —"
-                    self.card_sr["val_lbl"].configure(text=_sr_text("h1"))
-                    self.card_sr["sub_lbl"].configure(text=_sr_text("h4"))
+                    price = float(bid or radar.get("price", 0.0) or 0.0)
+                    for tf, row in self.card_sr["rows"].items():
+                        sup = float(radar.get(f"{tf.lower()}_support", 0.0) or 0.0)
+                        res = float(radar.get(f"{tf.lower()}_resistance", 0.0) or 0.0)
+                        ok = sup > 0 and res > 0
+                        row["sup"].configure(text=f"{sup:,.2f}" if ok else "—")
+                        row["res"].configure(text=f"{res:,.2f}" if ok else "—")
+                        st = row["state"]
+                        if (st["sup"], st["res"], st["price"]) != (sup, res, price):
+                            st.update(sup=sup, res=res, price=price)
+                            self._draw_sr_bar(row["bar"], st)
+
+                    # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 0/1)
+                    h1_state = self.card_sr["rows"]["H1"]["state"]
+                    pos = self._sr_position(h1_state["sup"], h1_state["res"], price)
+                    if pos is None:
+                        self._set_badge(self.card_sr["badge"], "")
+                    elif pos > 1:
+                        self._set_badge(self.card_sr["badge"], "เหนือแนวต้าน", "#0F2A20", COLOR_SUCCESS_GREEN)
+                    elif pos < 0:
+                        self._set_badge(self.card_sr["badge"], "หลุดแนวรับ", "#2A1414", COLOR_DANGER_RED)
+                    elif pos <= 0.25:
+                        self._set_badge(self.card_sr["badge"], "ใกล้แนวรับ", "#0F2A20", COLOR_SUCCESS_GREEN)
+                    elif pos >= 0.75:
+                        self._set_badge(self.card_sr["badge"], "ใกล้แนวต้าน", "#2A1414", COLOR_DANGER_RED)
+                    else:
+                        self._set_badge(self.card_sr["badge"], "กลางกรอบ")
 
                 # อัปเดตสถิติ 5 แผน (ตาราง: ไม้ / WR / กำไร)
                 if hasattr(self, 'plan_stat_badges'):
