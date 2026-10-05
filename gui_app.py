@@ -2095,24 +2095,24 @@ class MainTradingApp(ctk.CTk):
                     if analyzed:
                         rows["H4"]["pct"].configure(text=f"{h4_pct:+.2f}%", text_color=pct_color(h4_pct))
 
-                    # ทิศยืนยัน (h1_dir): 0 = MA10 กำลังชะลอ/สวนทาง → บอทยังไม่ใช้เทรนด์นี้เข้าไม้ (Plan 4)
-                    h1_dir_v = int(radar.get("h1_dir", 0) or 0)
-                    if h1_trend.startswith("UP"):
-                        ok = h1_dir_v == 1
-                        rows["H1"]["val"].configure(text="▲ ขาขึ้น" if ok else "▲ ขาขึ้น · ชะลอ", text_color=COLOR_SUCCESS_GREEN if ok else COLOR_GOLD_PRIMARY)
-                    elif h1_trend.startswith("DOWN"):
-                        ok = h1_dir_v == -1
-                        rows["H1"]["val"].configure(text="▼ ขาลง" if ok else "▼ ขาลง · ชะลอ", text_color=COLOR_DANGER_RED if ok else COLOR_GOLD_PRIMARY)
-                    else:
+                    # H1 = เทรนด์ที่ Plan 4 ใช้: MA100/MA150/MA200 เรียงตัว
+                    stack = radar.get("h1_stack_dir")
+                    if stack is None or not h1_trend[:2] in ("UP", "DO"):
                         rows["H1"]["val"].configure(text="—", text_color=COLOR_TEXT_MUTED)
+                    elif int(stack) == 1:
+                        rows["H1"]["val"].configure(text="▲ ขาขึ้น", text_color=COLOR_SUCCESS_GREEN)
+                    elif int(stack) == -1:
+                        rows["H1"]["val"].configure(text="▼ ขาลง", text_color=COLOR_DANGER_RED)
+                    else:
+                        rows["H1"]["val"].configure(text="◆ ไม่เรียงตัว", text_color=COLOR_GOLD_PRIMARY)
                     rows["H1"]["pct"].configure(
                         text=f"{h1_pct:+.2f}%" if h1_trend[:2] in ("UP", "DO") else "",
                         text_color=pct_color(h1_pct),
                     )
-                    for tf, key in (("H1", "h1_lt_dir"), ("H4", "h4_lt_dir")):
+                    for tf, key, tag in (("H1", "h1_stack_dir", "MA100-200"), ("H4", "h4_lt_dir", "MA200")):
                         lt_dir = int(radar.get(key, 0) or 0)
                         rows[tf]["lt"].configure(
-                            text="MA200 ▲" if lt_dir > 0 else ("MA200 ▼" if lt_dir < 0 else ""),
+                            text=f"{tag} ▲" if lt_dir > 0 else (f"{tag} ▼" if lt_dir < 0 else ""),
                             text_color=COLOR_SUCCESS_GREEN if lt_dir > 0 else COLOR_DANGER_RED,
                         )
 
