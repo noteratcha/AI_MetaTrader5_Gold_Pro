@@ -30,7 +30,7 @@ function ViewModeSwitch({ className = '' }) {
 
   return (
     <div className={`view-switch ${className}`} role="radiogroup" aria-label="โหมดการดู">
-      <button type="button" role="radio" aria-checked={viewMode === 'user'} className={viewMode === 'user' ? 'is-active' : ''} onClick={() => choose('user')} title="ดูเว็บแบบผู้ใช้ทั่วไป">
+      <button type="button" role="radio" aria-checked={viewMode === 'user'} className={viewMode === 'user' ? 'is-active is-user' : ''} onClick={() => choose('user')} title="ดูเว็บแบบผู้ใช้ทั่วไป">
         <Eye size={14} /> ผู้ใช้
       </button>
       <button type="button" role="radio" aria-checked={viewMode === 'admin'} className={viewMode === 'admin' ? 'is-active is-admin' : ''} onClick={() => choose('admin')} title="ดูเว็บแบบผู้ดูแลระบบ">

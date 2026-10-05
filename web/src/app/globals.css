@@ -1393,6 +1393,10 @@ select.input {
   background: var(--surface-hover);
   color: var(--text);
 }
+.view-switch button.is-active.is-user {
+  background: var(--green-soft);
+  color: var(--green);
+}
 .view-switch button.is-active.is-admin {
   background: var(--gold-soft);
   color: var(--gold);
