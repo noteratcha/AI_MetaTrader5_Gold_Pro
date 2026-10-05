@@ -41,6 +41,7 @@ export default function Footer() {
               <li><Link href="/">พอร์ตสด</Link></li>
               <li><Link href="/dashboard">กระเป๋าเวลา & สถิติ</Link></li>
               <li><Link href="/calendar">ปฏิทินเศรษฐกิจ</Link></li>
+              <li><Link href="/backtest">ผลทดสอบย้อนหลัง (Backtest)</Link></li>
               <li><Link href="/store">ซื้อชั่วโมง</Link></li>
               <li><Link href="/my-keys">คีย์ของฉัน</Link></li>
               {isAdminView && <li><Link href="/admin">Admin</Link></li>}
