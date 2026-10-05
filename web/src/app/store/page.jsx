@@ -28,14 +28,14 @@ const PAY_WINDOW_SEC = 15 * 60;
 export default function StorePage() {
   const { user, openAuthModal } = useAuth();
   const [checkoutPkg, setCheckoutPkg] = useState(null);
-  const [packages, setPackages] = useState(PACKAGES);
+  const [packages, setPackages] = useState(null); // null = กำลังโหลด (ไม่แสดงชุดค่าเริ่มต้นก่อน กันภาพกระพริบ)
 
-  // แพ็กเกจจากฐานข้อมูล (แอดมินแก้ไขได้) — ใช้ค่าเริ่มต้นระหว่างโหลด
+  // แพ็กเกจจากฐานข้อมูล (แอดมินแก้ไขได้) — ใช้ชุดค่าเริ่มต้นในโค้ดเฉพาะเมื่อโหลดไม่สำเร็จ
   useEffect(() => {
-    fetch('/api/packages')
+    fetch('/api/packages', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => d.success && Array.isArray(d.packages) && setPackages(d.packages))
-      .catch(() => {});
+      .then((d) => setPackages(d.success && Array.isArray(d.packages) ? d.packages : PACKAGES))
+      .catch(() => setPackages(PACKAGES));
   }, []);
 
   const buy = (pkg) => {
@@ -74,7 +74,9 @@ export default function StorePage() {
       </div>
 
       <div className="grid grid-4">
-        {packages.map((pkg) => {
+        {!packages &&
+          Array.from({ length: 8 }, (_, i) => <div key={i} className="card skeleton" style={{ height: 260 }} aria-hidden="true" />)}
+        {(packages || []).map((pkg) => {
           const accent = ACCENTS[pkg.accent] || ACCENTS.gold;
           const Icon = accent.icon;
           const total = pkg.hours + pkg.bonus;
