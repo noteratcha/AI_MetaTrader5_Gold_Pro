@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1536 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1657 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1536): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1657): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1536`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1657`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -149,6 +149,10 @@
 
 ## 6. 🐂🐻 ตัวกรองเทรนด์ใหญ่ H4 (Strict Pro-Trend Confluence)
 
+> **อ่านเทรนด์จากแท่งที่ปิดแล้วเท่านั้น** (`closed_trend()` — ไม่ใช้แท่งที่กำลังวิ่งซึ่ง Repaint ตามราคา) และกำหนด **ทิศเทรนด์ยืนยัน** (`h1_dir` / `h4_dir`): +1 = MA10 > MA30 และ MA10 ชันขึ้น (เทียบ 3 แท่งก่อน), −1 = MA10 < MA30 และชันลง, 0 = MA10 กำลังกลับตัว
+> - Plan 4 ต้องมี `h1_dir` ตรงทิศ และถ้า H4 ไม่ไซด์เวย์ `h4_dir` ต้องตรงทิศ · Plan 5 ต้องมี `h4_dir` ตรงทิศเสมอ
+> - Backtest 2.5 ปี (เทียบแบบเดิมที่อ่านแท่งที่กำลังวิ่ง): Plan 4 กำไร 816 → 1228 จุด, PF 1.10 → 1.24, Max DD 413 → 264 · Plan 5 กำไร 555 → 767 จุด, PF 1.10 → 1.20
+
 ระบบวิเคราะห์ทิศทางเทรนด์และสภาวะตลาดจาก Timeframe H4 โดยใช้ Moving Average Fast (10) และ Slow (30):
 * **🐂 BULLISH [^]**: `MA Fast > MA Slow` และ `h4_diff_pct >= +0.20%` ➔ **BUY เท่านั้น (ห้าม SELL 100%)**
 * **🐻 BEARISH [v]**: `MA Fast < MA Slow` และ `h4_diff_pct <= -0.20%` ➔ **SELL เท่านั้น (ห้าม BUY 100%)**
@@ -168,7 +172,7 @@
 | **Payment** | ราคา/ชั่วโมงคิดจาก `web/src/lib/packages.js` ฝั่ง Server เท่านั้น · Order ID สุ่มแบบเดาไม่ได้ · PromptPay QR → SlipOK ตรวจสลิป (`log: true` กันสลิปซ้ำ + `amount` ตรวจยอด) → ผลิต Product Key อัตโนมัติ · Webhook ต้องมี `x-webhook-secret` · ห้ามโหมดจำลองบน Production · **QR หมดเวลา 15 นาที** → ซ่อน QR แล้วให้เวลาแนบสลิปต่ออีก **10 นาที** → ครบแล้วยกเลิกคำสั่งซื้อ (`CANCELLED`) จากหน้าร้าน + เก็บกวาดฝั่ง Server เมื่อเกิน 25 นาที (`expireStaleOrders()` ตอนสร้าง QR ใหม่/Cron) · คำสั่งซื้อที่ยกเลิกยังแนบสลิปได้ภายใน 24 ชม. (กันเงินค้างกรณีโอนวินาทีสุดท้าย) · ข้อผิดพลาด SlipOK แปลเป็นข้อความ+คำแนะนำภาษาไทย (`code`, `hint`, `retryAfterSec`) · ปัญหาฝั่งร้าน (แพ็กเกจ/โควตา SlipOK 1000–1004, 1015) แจ้งแอดมินทาง LINE · **ใบเสร็จ**: ชำระสำเร็จ → `issueReceipt()` บันทึกตาราง `receipts` (เลขที่ `GB24-YYYYMM-000001`, 1 คำสั่งซื้อ = 1 ใบ) + ส่งอีเมลผู้ซื้อ · ดู/พิมพ์ที่ `/receipts` (`supabase_receipts_patch_04.sql`) |
 | **Database Security** | RLS เปิดทุกตาราง — anon key อ่านตารางผู้ใช้/คีย์/คำสั่งซื้อ/พอร์ตไม่ได้ · Desktop เขียน Telemetry/สถิติผ่าน RPC `bot_upsert_telemetry` / `bot_upsert_plan_stats` (SECURITY DEFINER, เขียนอย่างเดียว) · Migration: `supabase_security_rls.sql` + `supabase_security_rls_patch_01.sql` |
 | **Secrets** | ห้าม commit/ส่งคีย์ลับในแชท — ใส่ผ่าน `npx vercel env add <NAME> production --sensitive` · รหัส MT5 อยู่ในเครื่องเท่านั้น (`%APPDATA%\GoldBot24\credentials.json`) ไม่ซิงค์ขึ้น Cloud |
-| **Desktop Data Dir** | ไฟล์ผู้ใช้ทั้งหมดผ่าน `app_paths.data_path()` → `%APPDATA%\GoldBot24` (ห้ามเก็บข้างไฟล์ .exe เพราะถูกลบทุกครั้งที่ build) |
+| **Desktop Data Dir** | ไฟล์ผู้ใช้ทั้งหมดผ่าน `app_paths.data_path()` → `%APPDATA%\GoldBot24` (รวม `trade_history.csv`, `trade_modifications.csv`, `signal_history.csv`) (ห้ามเก็บข้างไฟล์ .exe เพราะถูกลบทุกครั้งที่ build) |
 | **Desktop GUI Colors** | CustomTkinter รับเฉพาะ Hex `#RRGGBB` — **ห้ามใช้ `rgba()`** (ทำให้ `TclError` โปรแกรมเปิดไม่ขึ้น) |
 | **Release Flow** | 1) `python tools/bump_version.py` 2) Smoke Test GUI 3) `python build_dist.py` (ต้องปิดโปรแกรมก่อน ไม่งั้นไฟล์ถูกล็อก) → ได้ทั้ง ZIP และ**ตัวติดตั้ง `GoldBot24_Setup_v<เวอร์ชัน>.exe`** (Inno Setup จาก `installer/goldbot24.iss`: ติดตั้งแบบผู้ใช้ไม่ต้อง Admin, ไอคอน Desktop + Start Menu, อัปเดตทับได้, ไม่ลบ %APPDATA%\GoldBot24 · ติดตั้ง ISCC: `winget install JRSoftware.InnoSetup --scope user`) 4) สร้าง GitHub Release `v<เวอร์ชัน>` แนบ Setup .exe + ZIP + SHA-256 (`/api/release` เลือก Setup เป็นไฟล์หลัก) → หน้า `/download` และการแจ้งอัปเดตในโปรแกรมอัปเดตเอง · Web: `cd web && npm run build` → `git push` (Vercel Root Directory = `web` deploy อัตโนมัติ) · เปลี่ยน env บน Vercel แล้วต้อง redeploy: `cd web && npx vercel redeploy <URL production ล่าสุด> --target production` (โฟลเดอร์ `web` คือที่ link กับ Vercel) |
 | **Responsive Desktop** | ออกแบบให้พอดีจอ 1366×768 (เปิดเต็มจออัตโนมัติเมื่อจอเล็ก) · Tk แสดงอีโมจีสีไม่ได้ ให้ใช้ Label สี/ป้ายแทน และหลีกเลี่ยงอีโมจี Unicode ใหม่ (เช่น 🪙) ที่ Windows 10 ไม่มี |

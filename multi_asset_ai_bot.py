@@ -103,6 +103,11 @@ MARGIN_PER_TRADE = 400            # Max Positions: มาจินทุก $400
 consecutive_loss = {}             # {sym: int} นับขาดทุนติดต่อกัน
 last_lock_time = {}               # {ticket: timestamp} ป้องกัน Lock SL ซ้ำใน 60 วินาที
 last_loss_plan = {}               # {sym: {direction: (plan_name, timestamp)}} บันทึกเฉพาะไม้ขาดทุน — block 60 นาที
+from app_paths import data_path as _data_path
+# ไฟล์ประวัติทั้งหมดเก็บใน %APPDATA%\GoldBot24 (ไม่ขึ้นกับโฟลเดอร์ที่เปิดโปรแกรม และไม่หายเมื่ออัปเดต/ถอนการติดตั้ง)
+TRADE_HISTORY_CSV = _data_path('trade_history.csv')
+TRADE_MODS_CSV = _data_path('trade_modifications.csv')
+SIGNAL_HISTORY_CSV = _data_path('signal_history.csv')
 last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กันเข้าไม้ Plan 4/5 ซ้ำบนแท่ง Cross เดิม
 _telemetry_thread = None          # เธรดสตรีม Telemetry (เริ่มครั้งเดียวต่อโปรเซส)
 _self_closed_tickets = set()      # ticket ที่บอทปิดเองผ่าน close_position() — กันนับขาดทุน/Circuit Breaker ซ้ำ
@@ -410,6 +415,26 @@ def play_celebration_sound():
     except Exception:
         pass
 
+def closed_trend(ma_fast, ma_slow, slope_bars=3):
+    """
+    เทรนด์จาก "แท่งที่ปิดแล้ว" (ไม่ Repaint ตามราคาที่วิ่งอยู่ในแท่ง)
+    คืน (is_up, diff_pct, direction) — direction = +1 ขาขึ้นจริง (MA10 > MA30 และ MA10 ชันขึ้น),
+    -1 ขาลงจริง (MA10 < MA30 และ MA10 ชันลง), 0 = MA10 กำลังกลับตัว (ยังไม่ยืนยันเทรนด์)
+    Backtest 2.5 ปี: อ่านจากแท่งที่ปิด + ความชัน ทำให้ Plan 4 กำไร 816 → 1228 จุด (DD 413 → 264)
+    """
+    if len(ma_fast) < slope_bars + 2:
+        return False, 0.0, 0
+    f, sl, f_prev = ma_fast.iloc[-2], ma_slow.iloc[-2], ma_fast.iloc[-2 - slope_bars]
+    if pd.isna(f) or pd.isna(sl) or sl == 0:
+        return False, 0.0, 0
+    is_up = bool(f > sl)
+    diff = float((f / sl - 1.0) * 100.0)
+    if pd.isna(f_prev):
+        return is_up, diff, 0
+    direction = 1 if (is_up and f > f_prev) else (-1 if (not is_up and f < f_prev) else 0)
+    return is_up, diff, direction
+
+
 def check_h4_confluence(direction, is_uptrend_h4, prob_up, prob_down, bull_div, bear_div, hidden_bull=False, hidden_bear=False, is_sideway_h4=False, h4_diff_pct=0.0):
     """
     Dynamic H4 Market Regime & Trend Confluence Filter (v2026.1002.2225)
@@ -454,7 +479,7 @@ def log_signal_event(symbol, signal_type, plan, direction, price, ai_up, ai_down
     time_str = time.strftime('%Y-%m-%d %H:%M:%S')
     
     # 1. บันทึกลงไฟล์ signal_history.csv
-    sig_file = 'signal_history.csv'
+    sig_file = SIGNAL_HISTORY_CSV
     sig_exists = os.path.isfile(sig_file)
     try:
         with open(sig_file, 'a', newline='', encoding='utf-8') as f:
@@ -550,8 +575,8 @@ def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
         sound_manager.play_order_entry()
         
         # บันทึกประวัติการเทรดลงไฟล์ CSV
-        file_exists = os.path.isfile('trade_history.csv')
-        with open('trade_history.csv', 'a', newline='', encoding='utf-8') as f:
+        file_exists = os.path.isfile(TRADE_HISTORY_CSV)
+        with open(TRADE_HISTORY_CSV, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             if not file_exists:
                 writer.writerow(['Time', 'Symbol', 'Action', 'Plan', 'Price', 'Lot', 'SL', 'TP', 'Profit', 'Risk_Event'])
@@ -659,7 +684,7 @@ def close_position(position, comment="AI Reversal Close"):
         risk_event = ''
         if position.profit < 0:
             risk_event = 'LOSS_BLOCK'
-        with open('trade_history.csv', 'a', newline='', encoding='utf-8') as f:
+        with open(TRADE_HISTORY_CSV, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([
                 time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -720,7 +745,7 @@ def modify_position(position, new_sl, new_tp, reason="Break-Even Lock"):
             sound_manager.play_sl_moved()
         
         # 1. บันทึกลง trade_history.csv (เพิ่ม Profit + Risk_Event)
-        with open('trade_history.csv', 'a', newline='', encoding='utf-8') as f:
+        with open(TRADE_HISTORY_CSV, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([
                 time_str,
@@ -736,7 +761,7 @@ def modify_position(position, new_sl, new_tp, reason="Break-Even Lock"):
             ])
 
         # 2. บันทึกลง trade_modifications.csv (ไฟล์ประวัติการปรับ SL/TP ละเอียดทุกครั้ง)
-        mod_file = 'trade_modifications.csv'
+        mod_file = TRADE_MODS_CSV
         mod_exists = os.path.isfile(mod_file)
         with open(mod_file, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
@@ -787,11 +812,10 @@ def prune_old_csv_records(days=365):
     ครอบคลุม trade_history.csv, trade_modifications.csv, signal_history.csv
     """
     cutoff_time = datetime.now() - timedelta(days=days)
-    target_files = ['trade_history.csv', 'trade_modifications.csv', 'signal_history.csv']
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    target_files = [TRADE_HISTORY_CSV, TRADE_MODS_CSV, SIGNAL_HISTORY_CSV]
 
-    for filename in target_files:
-        filepath = os.path.join(base_dir, filename)
+    for filepath in target_files:
+        filename = os.path.basename(filepath)
         if not os.path.isfile(filepath):
             continue
         try:
@@ -1009,11 +1033,8 @@ def main():
                 atr_h1_val = float(atr_h1_series.iloc[-2]) if len(df_h1) >= 2 and pd.notna(atr_h1_series.iloc[-2]) else float('nan')
                 ma_h1_status_str = f"{Colors.GREEN}MA5 > MA10 (+{(ma5_h1_val - ma10_h1_val):.2f}){Colors.RESET}" if ma5_h1_val >= ma10_h1_val else f"{Colors.RED}MA5 < MA10 ({(ma5_h1_val - ma10_h1_val):.2f}){Colors.RESET}"
                 
-                ma10 = df_h1['ma_fast_h1'].iloc[-1]
-                ma30 = df_h1['ma_slow_h1'].iloc[-1]
-                is_uptrend_h1 = ma10 > ma30
-                # ระยะห่าง MA10/MA30 บน H1 (%) — แสดงบน Dashboard คู่กับ H4
-                h1_diff_pct = float(((ma10 / ma30) - 1.0) * 100.0) if (pd.notna(ma30) and ma30 != 0) else 0.0
+                # เทรนด์ H1 จากแท่งที่ปิดแล้ว (เดิมใช้แท่งที่กำลังวิ่ง ทำให้เทรนด์กระพริบตามราคา)
+                is_uptrend_h1, h1_diff_pct, h1_dir = closed_trend(df_h1['ma_fast_h1'], df_h1['ma_slow_h1'])
                 h1_cloud_status = f"UPTREND ({h1_diff_pct:+.2f}%)" if is_uptrend_h1 else f"DOWNTREND ({h1_diff_pct:+.2f}%)"
                 
                 # เช็คการเริ่มแท่ง H1 ใหม่ (แสดงเฉพาะคู่ที่เข้าเทรดจริง BTC/XAU)
@@ -1032,15 +1053,13 @@ def main():
                 df_h4['ma_slow_h4'] = df_h4['close'].rolling(30).mean()
                 df_h4['trend_h4'] = df_h4['ma_fast_h4'] / df_h4['ma_slow_h4']
                 
-                ma10_h4 = df_h4['ma_fast_h4'].iloc[-1]
                 # แนวรับ/ต้าน H4 = Low ต่ำสุด / High สูงสุด 20 แท่งก่อนหน้า (วิธีเดียวกับ H1) — ใช้แสดงผลบน Dashboard
                 h4_res_series = df_h4['high'].shift(1).rolling(20).max()
                 h4_sup_series = df_h4['low'].shift(1).rolling(20).min()
                 h4_resistance = float(h4_res_series.iloc[-1]) if pd.notna(h4_res_series.iloc[-1]) else 0.0
                 h4_support = float(h4_sup_series.iloc[-1]) if pd.notna(h4_sup_series.iloc[-1]) else 0.0
-                ma30_h4 = df_h4['ma_slow_h4'].iloc[-1]
-                is_uptrend_h4 = bool(ma10_h4 > ma30_h4)
-                h4_diff_pct = float(((ma10_h4 / ma30_h4) - 1.0) * 100.0) if (pd.notna(ma30_h4) and ma30_h4 != 0) else 0.0
+                # สภาวะตลาด H4 จากแท่งที่ปิดแล้ว (ไม่ Repaint) + ทิศความชัน MA10
+                is_uptrend_h4, h4_diff_pct, h4_dir = closed_trend(df_h4['ma_fast_h4'], df_h4['ma_slow_h4'])
                 is_sideway_h4 = bool(abs(h4_diff_pct) < 0.20)
 
                 if is_sideway_h4:
@@ -1224,14 +1243,16 @@ def main():
                 ma_cross_bar_time = df.iloc[-2]['time'] if len(df) >= 2 else df.iloc[-1]['time']
 
                 # เงื่อนไข Plan 4: MA 5 ตัดขึ้น ➔ BUY (เมื่อ H1 Uptrend), MA 5 ตัดลง ➔ SELL (เมื่อ H1 Downtrend)
-                ma_cross_buy_confirm = ma_cross_up and is_uptrend_h1
-                ma_cross_sell_confirm = ma_cross_down and (not is_uptrend_h1)
+                # Plan 4: เทรนด์ H1 ต้องยืนยันด้วยความชัน MA10 และถ้า H4 มีเทรนด์ (ไม่ไซด์เวย์) ต้องชันไปทางเดียวกัน
+                ma_cross_buy_confirm = ma_cross_up and h1_dir == 1 and (is_sideway_h4 or h4_dir == 1)
+                ma_cross_sell_confirm = ma_cross_down and h1_dir == -1 and (is_sideway_h4 or h4_dir == -1)
 
                 # (A) Plan 5: ช่วง H4 ไซด์เวย์ ต้องเทรดตามฝั่งที่ MA10/MA30 H4 เอียง
                 #     ไซด์เวย์บูลลิช (MA10 > MA30) = BUY เท่านั้น · ไซด์เวย์แบร์ริช (MA10 < MA30) = SELL เท่านั้น
                 #     Backtest 2.5 ปี (P5): กำไรสุทธิ 386 → 757 จุด, Max DD 374 → 297
-                plan5_buy_ok = bool(h4_buy_ok and is_uptrend_h4)
-                plan5_sell_ok = bool(h4_sell_ok and not is_uptrend_h4)
+                #     + MA10 H4 ต้องชันไปทางเดียวกัน (กันซื้อตอน MA10 H4 กำลังม้วนลง) — Backtest: PF 1.13 → 1.20
+                plan5_buy_ok = bool(h4_buy_ok and h4_dir == 1)
+                plan5_sell_ok = bool(h4_sell_ok and h4_dir == -1)
 
                 ma_status_str = f"{Colors.GREEN}MA5 > MA10 (+{(ma5_val - ma10_val):.2f}){Colors.RESET}" if ma5_val >= ma10_val else f"{Colors.RED}MA5 < MA10 ({(ma5_val - ma10_val):.2f}){Colors.RESET}"
                 
