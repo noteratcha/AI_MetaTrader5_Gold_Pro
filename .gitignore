@@ -88,3 +88,5 @@ Desktop.ini
 
 # Supabase
 supabase/
+# ผล Backtest สำหรับหน้า /backtest (สร้างโดย tools/backtest_all.py)
+!web/public/backtest.json
