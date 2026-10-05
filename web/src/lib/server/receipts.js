@@ -68,7 +68,7 @@ export async function emailReceipt(receipt) {
  * ออกใบเสร็จสำหรับคำสั่งซื้อที่ชำระแล้ว (ทำซ้ำได้ — ถ้ามีใบเสร็จอยู่แล้วจะใช้ใบเดิม) แล้วส่งอีเมลถ้ายังไม่เคยส่ง
  * ไม่ throw — ข้อผิดพลาดใด ๆ ต้องไม่ทำให้การชำระเงินล้ม
  */
-export async function issueReceipt(order, { productKey, paymentRef } = {}) {
+export async function issueReceipt(order, { productKey, paymentRef, sendEmail = true } = {}) {
   try {
     const supabase = getAdminClient();
     let receipt = await findReceipt(order.order_id);
@@ -96,6 +96,8 @@ export async function issueReceipt(order, { productKey, paymentRef } = {}) {
           payment_method: order.payment_method || 'PROMPTPAY',
           payment_ref: String(paymentRef || order.payment_ref || '').slice(0, 120) || null,
           product_key: productKey || order.generated_key_code || null,
+          // ออกย้อนหลัง: ใช้วันที่ชำระจริงของคำสั่งซื้อ
+          issued_at: order.paid_at || new Date().toISOString(),
         })
         .select()
         .maybeSingle();
@@ -110,10 +112,36 @@ export async function issueReceipt(order, { productKey, paymentRef } = {}) {
       }
     }
 
-    if (receipt && !receipt.emailed_at) await emailReceipt(receipt);
+    if (receipt && sendEmail && !receipt.emailed_at) await emailReceipt(receipt);
     return receipt;
   } catch (err) {
     console.error('[receipts] issue failed:', err.message);
     return null;
   }
+}
+
+/** ตาราง receipts พร้อมใช้หรือยัง (ต้องรัน supabase_receipts_patch_04.sql) */
+export async function receiptsReady() {
+  const { error } = await getAdminClient().from('receipts').select('id', { head: true, count: 'exact' }).limit(1);
+  return !error;
+}
+
+/**
+ * ออกใบเสร็จย้อนหลังให้คำสั่งซื้อที่ชำระแล้วแต่ยังไม่มีใบเสร็จ (ไม่ส่งอีเมล)
+ * — คำสั่งซื้อก่อนเปิดระบบใบเสร็จ หรือช่วงที่ยังไม่ได้รัน SQL
+ */
+export async function backfillReceipts(orders) {
+  const paid = (orders || []).filter((o) => o?.status === 'PAID');
+  if (!paid.length) return 0;
+  const { data: existing } = await getAdminClient()
+    .from('receipts')
+    .select('order_id')
+    .in('order_id', paid.map((o) => o.order_id));
+  const have = new Set((existing || []).map((r) => r.order_id));
+  let created = 0;
+  for (const order of paid) {
+    if (have.has(order.order_id)) continue;
+    if (await issueReceipt(order, { sendEmail: false })) created += 1;
+  }
+  return created;
 }

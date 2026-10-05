@@ -21,7 +21,10 @@ function ReceiptList() {
 
   useEffect(() => {
     apiFetch('/api/user/receipts')
-      .then((res) => setReceipts(res.receipts || []))
+      .then((res) => {
+        setReceipts(res.receipts || []);
+        if (res.error) setError(res.error);
+      })
       .catch((err) => {
         setReceipts([]);
         setError(err.message);

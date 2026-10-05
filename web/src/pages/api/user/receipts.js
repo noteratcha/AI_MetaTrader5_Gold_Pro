@@ -1,6 +1,9 @@
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import { allowMethods, normalizeEmail, requireUser } from '../../../lib/server/auth';
-import { emailReceipt, findReceipt, toPublicReceipt } from '../../../lib/server/receipts';
+import { backfillReceipts, emailReceipt, findReceipt, receiptsReady, toPublicReceipt } from '../../../lib/server/receipts';
+import { getOrder } from '../../../lib/server/orders';
+
+const SETUP_ERROR = 'ระบบใบเสร็จยังไม่พร้อม — แอดมินต้องรัน supabase_receipts_patch_04.sql ใน Supabase ก่อน';
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
@@ -16,7 +19,22 @@ export default async function handler(req, res) {
   const canSee = (r) => auth.user.isAdmin || normalizeEmail(r.email) === normalizeEmail(auth.user.email);
   const id = req.method === 'GET' ? req.query.id : req.body?.id;
 
+  if (!(await receiptsReady())) {
+    if (req.method === 'GET' && !id) return res.status(200).json({ success: true, receipts: [], setupRequired: true, error: SETUP_ERROR });
+    return res.status(503).json({ success: false, error: SETUP_ERROR });
+  }
+
   if (req.method === 'GET' && !id) {
+    // ออกใบเสร็จย้อนหลังให้คำสั่งซื้อที่ชำระแล้วของฉันที่ยังไม่มีใบเสร็จ
+    const { data: myOrders } = await getAdminClient()
+      .from('orders')
+      .select('*')
+      .eq('owner_email', normalizeEmail(auth.user.email))
+      .eq('status', 'PAID')
+      .order('paid_at', { ascending: false })
+      .limit(50);
+    await backfillReceipts(myOrders);
+
     const { data, error } = await getAdminClient()
       .from('receipts')
       .select('*')
@@ -27,7 +45,18 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, receipts: (data || []).map(toPublicReceipt) });
   }
 
-  const receipt = await findReceipt(id);
+  let receipt = await findReceipt(id);
+  if (!receipt) {
+    // ลิงก์จากเลขคำสั่งซื้อที่ยังไม่มีใบเสร็จ → ออกให้ย้อนหลังถ้าชำระแล้วและเป็นเจ้าของ/แอดมิน
+    const order = await getOrder(String(id));
+    const ownsOrder = order && (auth.user.isAdmin || normalizeEmail(order.owner_email) === normalizeEmail(auth.user.email));
+    if (order && ownsOrder && order.status === 'PAID') {
+      await backfillReceipts([order]);
+      receipt = await findReceipt(order.order_id);
+    } else if (order && ownsOrder) {
+      return res.status(404).json({ success: false, error: 'คำสั่งซื้อนี้ยังไม่ได้ชำระเงิน จึงยังไม่มีใบเสร็จ' });
+    }
+  }
   if (!receipt || !canSee(receipt)) return res.status(404).json({ success: false, error: 'ไม่พบใบเสร็จ' });
 
   if (req.method === 'GET') return res.status(200).json({ success: true, receipt: toPublicReceipt(receipt) });
