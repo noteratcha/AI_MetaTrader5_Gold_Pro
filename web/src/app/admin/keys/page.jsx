@@ -119,8 +119,10 @@ export default function AdminKeysPage() {
                     <td className="num text-gold">{formatThb(o.amount)}</td>
                     <td className="num">{o.hours}</td>
                     <td>
-                      <span className={`badge ${o.status === 'PAID' ? 'badge-green' : o.status === 'PROCESSING' ? 'badge-sky' : 'badge-gold'}`}>
-                        {o.status === 'PAID' ? 'ชำระแล้ว' : o.status === 'PROCESSING' ? 'กำลังออกคีย์' : 'รอชำระ'}
+                      <span
+                        className={`badge ${o.status === 'PAID' ? 'badge-green' : o.status === 'PROCESSING' ? 'badge-sky' : o.status === 'CANCELLED' ? 'badge-muted' : 'badge-gold'}`}
+                      >
+                        {o.status === 'PAID' ? 'ชำระแล้ว' : o.status === 'PROCESSING' ? 'กำลังออกคีย์' : o.status === 'CANCELLED' ? 'ยกเลิก (หมดเวลา)' : 'รอชำระ'}
                       </span>
                     </td>
                     <td className="mono tiny">{o.keyCode || '—'}</td>

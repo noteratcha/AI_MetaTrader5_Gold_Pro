@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { requireAdmin } from '../../../lib/server/auth';
 import { sendDailySummary } from '../../../lib/server/dailySummary';
+import { expireStaleOrders } from '../../../lib/server/orders';
 
 // สรุปยอดรายวันส่ง LINE OA — Vercel Cron รันหลังเที่ยงคืนเวลาไทย (17:00 UTC, ดู web/vercel.json)
 //   แล้วสรุป "เมื่อวาน" เต็มวัน 00:00–23:59 น. (แพ็กเกจฟรีของ Vercel รัน Cron ไม่ตรงนาที จึงไม่ตั้ง 23:59 ตรง ๆ)
@@ -16,6 +17,7 @@ function isCron(req) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET' && isCron(req)) {
+    await expireStaleOrders();
     const result = await sendDailySummary({ completedDay: true });
     return res.status(200).json({ success: result.sent > 0, sent: result.sent, errors: result.errors });
   }

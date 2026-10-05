@@ -77,7 +77,7 @@ export default async function handler(req, res) {
 
   if (filter === 'pending' || filter === 'paid') {
     let query = supabase.from('orders').select('*', { count: 'exact' });
-    query = filter === 'paid' ? query.eq('status', 'PAID') : query.in('status', ['PENDING', 'PROCESSING']);
+    query = filter === 'paid' ? query.eq('status', 'PAID') : query.in('status', ['PENDING', 'PROCESSING', 'CANCELLED']);
     if (q) query = query.or(`order_id.ilike.%${q}%,generated_key_code.ilike.%${q}%`);
     const { data, count } = await query.order('created_at', { ascending: false }).range(from, to);
     items = (data || []).map(orderRow);

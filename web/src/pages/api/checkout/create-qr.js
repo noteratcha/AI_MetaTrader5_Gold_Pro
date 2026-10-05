@@ -2,6 +2,7 @@ import { insertTolerant } from '../../../lib/server/supabaseAdmin';
 import { allowMethods, requireUser } from '../../../lib/server/auth';
 import { generateOrderId } from '../../../lib/server/keys';
 import { getPackage } from '../../../lib/server/catalog';
+import { expireStaleOrders } from '../../../lib/server/orders';
 
 const PROMPTPAY_ID = process.env.PROMPTPAY_ID || '';
 
@@ -10,6 +11,9 @@ export default async function handler(req, res) {
   if (!allowMethods(req, res, ['POST'])) return;
   const auth = await requireUser(req, res);
   if (!auth) return;
+
+  // ยกเลิกคำสั่งซื้อที่หมดเวลา QR แล้วค้างอยู่ (เช่น ลูกค้าปิดหน้าต่างไปก่อน)
+  await expireStaleOrders();
 
   const pkg = await getPackage(req.body?.package_id);
   if (!pkg) {

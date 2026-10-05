@@ -5,6 +5,35 @@ import { notifyPurchase } from './lineNotify';
 import { issueReceipt } from './receipts';
 
 export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+// เวลาชำระตาม QR (ตรงกับตัวนับถอยหลังหน้าร้าน) — เกินแล้วยกเลิกคำสั่งซื้อ
+export const ORDER_PAY_WINDOW_MS = 15 * 60 * 1000;
+
+/** ยกเลิกคำสั่งซื้อที่ยังไม่ชำระและเกินเวลา QR (ทั้งระบบ) — คืนจำนวนที่ยกเลิก */
+export async function expireStaleOrders() {
+  try {
+    const cutoff = new Date(Date.now() - ORDER_PAY_WINDOW_MS).toISOString();
+    const { data } = await getAdminClient()
+      .from('orders')
+      .update({ status: 'CANCELLED' })
+      .eq('status', 'PENDING')
+      .lt('created_at', cutoff)
+      .select('order_id');
+    return data?.length || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** ยกเลิกคำสั่งซื้อเดียว (เฉพาะที่ยังรอชำระ) */
+export async function cancelOrder(orderId) {
+  const { data } = await getAdminClient()
+    .from('orders')
+    .update({ status: 'CANCELLED' })
+    .eq('order_id', orderId)
+    .eq('status', 'PENDING')
+    .select('order_id');
+  return Boolean(data?.length);
+}
 
 export async function getOrder(orderId) {
   if (!orderId || typeof orderId !== 'string' || orderId.length > 64) return null;
@@ -25,6 +54,7 @@ export function publicOrder(order) {
     order_id: order.order_id,
     status: order.status,
     is_paid: isPaid,
+    is_cancelled: order.status === 'CANCELLED',
     amount_thb: Number(order.amount_thb),
     hours_to_add: Number(order.hours_to_add),
     package_id: order.package_id,
@@ -50,7 +80,7 @@ export async function fulfillOrder(order, paymentRef) {
     .from('orders')
     .update({ status: 'PROCESSING' })
     .eq('order_id', order.order_id)
-    .eq('status', 'PENDING')
+    .in('status', ['PENDING', 'CANCELLED'])
     .select('order_id');
 
   if (!locked || locked.length !== 1) {
@@ -82,7 +112,7 @@ export async function fulfillOrder(order, paymentRef) {
 
   if (keyErr) {
     console.error('[orders] product key insert failed:', keyErr.message);
-    await supabase.from('orders').update({ status: 'PENDING' }).eq('order_id', order.order_id);
+    await supabase.from('orders').update({ status: order.status === 'CANCELLED' ? 'CANCELLED' : 'PENDING' }).eq('order_id', order.order_id);
     return { ok: false, error: 'ออกรหัส Product Key ไม่สำเร็จ กรุณาติดต่อแอดมิน' };
   }
 

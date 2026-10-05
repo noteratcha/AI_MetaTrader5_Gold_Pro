@@ -162,19 +162,35 @@ function CheckoutModal({ pkg, onClose }) {
   const [retryIn, setRetryIn] = useState(0); // สลิป SCB/BBL ที่ธนาคารให้รอ → นับถอยหลังแล้วตรวจซ้ำอัตโนมัติ
   const [dragging, setDragging] = useState(false);
   const [productKey, setProductKey] = useState(null);
+  const [expired, setExpired] = useState(false); // QR หมดเวลา → ยกเลิกคำสั่งซื้อแล้ว
+  const [orderSeq, setOrderSeq] = useState(0); // เพิ่มค่าเพื่อสร้างคำสั่งซื้อใหม่
   const [redeemState, setRedeemState] = useState(null);
   const fileRef = useRef(null);
 
-  // สร้างคำสั่งซื้อ
+  // สร้างคำสั่งซื้อ (และสร้างใหม่เมื่อกด "สร้าง QR ใหม่" หลังหมดเวลา)
   useEffect(() => {
     let cancelled = false;
+    setOrder(null);
+    setError('');
+    setExpired(false);
+    setRemaining(PAY_WINDOW_SEC);
+    setSlip(null);
+    setSlipError(null);
+    setRetryIn(0);
     apiFetch('/api/checkout/create-qr', { method: 'POST', body: JSON.stringify({ package_id: pkg.id }) })
       .then((res) => !cancelled && setOrder(res))
       .catch((err) => !cancelled && setError(err.message));
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, pkg.id]);
+  }, [apiFetch, pkg.id, orderSeq]);
+
+  // หมดเวลาแล้วยังไม่ชำระ → ยกเลิกคำสั่งซื้อทันที (ยกเว้นกำลังรอธนาคารยืนยันสลิป)
+  useEffect(() => {
+    if (!order || productKey || expired || remaining > 0 || verifying || retryIn > 0) return;
+    setExpired(true);
+    apiFetch('/api/checkout/cancel', { method: 'POST', body: JSON.stringify({ order_id: order.order_id }) }).catch(() => {});
+  }, [remaining, order, productKey, expired, verifying, retryIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // นับถอยหลังเวลาชำระ
   useEffect(() => {
@@ -377,12 +393,20 @@ function CheckoutModal({ pkg, onClose }) {
           ) : (
             <div className="stack" style={{ gap: 14, marginTop: 16 }}>
               <div className="checkout-pay">
-                <div className="thaiqr-frame">
+                <div className={`thaiqr-frame ${expired ? 'is-expired' : ''}`}>
                   <div className="thaiqr-head">
                     <img src="/thai-qr-payment.png" alt="Thai QR Payment" width={120} height={47} />
                   </div>
                   <div className="thaiqr-body">
-                    <img src={order.qr_image_url} alt={`PromptPay QR ${formatThb(order.amount_thb)}`} width={164} height={164} />
+                    {expired ? (
+                      <div className="thaiqr-expired">
+                        <Clock size={28} />
+                        <strong>QR หมดเวลา</strong>
+                        <span>รายการนี้ถูกยกเลิกแล้ว</span>
+                      </div>
+                    ) : (
+                      <img src={order.qr_image_url} alt={`PromptPay QR ${formatThb(order.amount_thb)}`} width={164} height={164} />
+                    )}
                   </div>
                 </div>
                 <div className="stack" style={{ gap: 8, minWidth: 0 }}>
@@ -411,7 +435,17 @@ function CheckoutModal({ pkg, onClose }) {
                 มือถือ: แคปหน้าจอ QR → เปิดแอปธนาคาร → สแกนจากรูปในเครื่อง
               </p>
 
-              {remaining === 0 && <Alert type="error">หมดเวลาชำระเงินแล้ว หากโอนแล้วยังแนบสลิปได้ภายใน 24 ชั่วโมง</Alert>}
+              {expired && (
+                <Alert type="error">
+                  <strong>หมดเวลาชำระเงิน — ยกเลิกรายการนี้แล้ว</strong>
+                  <div className="small" style={{ marginTop: 4 }}>
+                    ถ้ายังไม่ได้โอน กด “สร้าง QR ใหม่” · ถ้าโอนไปแล้ว แนบสลิปด้านล่างได้ภายใน 24 ชั่วโมง ระบบจะตรวจและเติมชั่วโมงให้ตามปกติ
+                  </div>
+                  <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={() => setOrderSeq((n) => n + 1)}>
+                    <QrCode size={14} /> สร้าง QR ใหม่
+                  </button>
+                </Alert>
+              )}
 
               <input
                 ref={fileRef}
