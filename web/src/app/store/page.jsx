@@ -120,7 +120,12 @@ export default function StorePage() {
 
 /** ย่อรูปสลิปเป็น JPEG ไม่เกิน 1600px ก่อนอัปโหลด (กันไฟล์ใหญ่เกินลิมิต) */
 async function compressSlip(file) {
-  const bitmap = await createImageBitmap(file);
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error('เปิดรูปนี้ไม่ได้ (เช่นไฟล์ HEIC) กรุณาแคปหน้าจอสลิปแล้วแนบใหม่');
+  }
   const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(bitmap.width * scale);
@@ -129,14 +134,33 @@ async function compressSlip(file) {
   return canvas.toDataURL('image/jpeg', 0.88);
 }
 
+const STEPS = ['สแกนจ่าย', 'แนบสลิป', 'รับชั่วโมง'];
+
+function CheckoutSteps({ step }) {
+  return (
+    <ol className="checkout-steps" aria-label="ขั้นตอนการชำระเงิน">
+      {STEPS.map((label, i) => (
+        <li key={label} className={i < step ? 'is-done' : i === step ? 'is-active' : ''}>
+          <span className="checkout-step-dot">{i < step ? <Check size={12} /> : i + 1}</span>
+          {label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function CheckoutModal({ pkg, onClose }) {
   const { user, apiFetch, redeemKey } = useAuth();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
   const [remaining, setRemaining] = useState(PAY_WINDOW_SEC);
   const [verifying, setVerifying] = useState(false);
-  const [slipError, setSlipError] = useState('');
+  const [slip, setSlip] = useState(null); // { dataUrl } รูปที่แนบล่าสุด (แสดงตัวอย่าง + ใช้ตรวจซ้ำ)
+  const [slipError, setSlipError] = useState(null); // { message, hint }
+  const [retryIn, setRetryIn] = useState(0); // สลิป SCB/BBL ที่ธนาคารให้รอ → นับถอยหลังแล้วตรวจซ้ำอัตโนมัติ
+  const [dragging, setDragging] = useState(false);
   const [productKey, setProductKey] = useState(null);
+  const [autoRedeem, setAutoRedeem] = useState(true);
   const [redeemState, setRedeemState] = useState(null);
   const fileRef = useRef(null);
 
@@ -151,14 +175,14 @@ function CheckoutModal({ pkg, onClose }) {
     };
   }, [apiFetch, pkg.id]);
 
-  // นับถอยหลัง
+  // นับถอยหลังเวลาชำระ
   useEffect(() => {
     if (!order || productKey) return;
     const id = setInterval(() => setRemaining((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(id);
   }, [order, productKey]);
 
-  // ตรวจสถานะการชำระเงิน (กรณีชำระผ่าน Webhook)
+  // ตรวจสถานะการชำระเงิน (กรณีชำระผ่าน Webhook / ตรวจจากอุปกรณ์อื่น)
   useEffect(() => {
     if (!order || productKey) return;
     const id = setInterval(async () => {
@@ -173,13 +197,42 @@ function CheckoutModal({ pkg, onClose }) {
   }, [order, productKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onKey = (e) => e.key === 'Escape' && !verifying && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, verifying]);
+
+  // วางสลิปด้วย Ctrl+V (คัดลอกรูปจากแอปธนาคาร/แคปหน้าจอ)
+  useEffect(() => {
+    if (!order || productKey) return;
+    const onPaste = (e) => {
+      const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+      if (!item) return;
+      e.preventDefault();
+      handleFile(item.getAsFile());
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [order, productKey, verifying]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ตรวจซ้ำอัตโนมัติเมื่อครบเวลาที่ธนาคารกำหนด (code 1010)
+  useEffect(() => {
+    if (retryIn <= 0 || productKey) return;
+    const id = setTimeout(() => {
+      if (retryIn === 1 && slip) verify(slip.dataUrl);
+      setRetryIn((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [retryIn, productKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ได้คีย์แล้ว → เติมเข้าบัญชีให้อัตโนมัติ (ถ้าเลือกไว้)
+  useEffect(() => {
+    if (productKey && autoRedeem && !redeemState) redeemNow();
+  }, [productKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onPaid(key) {
     setProductKey(key);
+    setRetryIn(0);
     rememberLocalKey(user.email, {
       keyCode: key,
       packageName: pkg.name,
@@ -189,27 +242,52 @@ function CheckoutModal({ pkg, onClose }) {
     });
   }
 
-  const onSlipSelected = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !order) return;
-    setSlipError('');
+  async function verify(dataUrl) {
+    if (!order) return;
+    setSlipError(null);
     setVerifying(true);
     try {
-      const dataUrl = await compressSlip(file);
       const res = await apiFetch('/api/checkout/verify-slip', {
         method: 'POST',
         body: JSON.stringify({ order_id: order.order_id, slip_base64: dataUrl, mime: 'image/jpeg' }),
       });
       onPaid(res.product_key);
     } catch (err) {
-      setSlipError(err.message || 'ตรวจสลิปไม่สำเร็จ');
+      const data = err.data || {};
+      if (data.retryAfterSec > 0) {
+        setRetryIn(Math.ceil(data.retryAfterSec));
+        setSlipError({ type: 'wait', message: err.message, hint: 'ไม่ต้องทำอะไร ระบบจะตรวจสลิปนี้ให้อัตโนมัติเมื่อครบเวลา' });
+      } else {
+        setSlipError({ type: 'error', message: err.message || 'ตรวจสลิปไม่สำเร็จ', hint: data.hint });
+      }
     } finally {
       setVerifying(false);
     }
+  }
+
+  async function handleFile(file) {
+    if (!file || !order || verifying || productKey) return;
+    if (!file.type.startsWith('image/')) {
+      setSlipError({ type: 'error', message: 'กรุณาแนบไฟล์รูปภาพสลิป (JPG, PNG)' });
+      return;
+    }
+    setRetryIn(0);
+    try {
+      const dataUrl = await compressSlip(file);
+      setSlip({ dataUrl });
+      await verify(dataUrl);
+    } catch (err) {
+      setSlipError({ type: 'error', message: err.message });
+    }
+  }
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    handleFile(e.dataTransfer.files?.[0]);
   };
 
-  const redeemNow = async () => {
+  async function redeemNow() {
     setRedeemState({ loading: true });
     try {
       const res = await redeemKey(productKey);
@@ -218,44 +296,60 @@ function CheckoutModal({ pkg, onClose }) {
     } catch (err) {
       setRedeemState({ type: 'error', message: err.message });
     }
-  };
+  }
 
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
   const ss = String(remaining % 60).padStart(2, '0');
+  const step = productKey ? 3 : slip ? 1 : 0;
+  const retryText = `${Math.floor(retryIn / 60)}:${String(retryIn % 60).padStart(2, '0')}`;
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !verifying && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title" style={{ maxWidth: 460 }}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title" style={{ maxWidth: 480 }}>
         <button className="btn btn-ghost btn-icon modal-close" onClick={onClose} aria-label="ปิด" disabled={verifying}>
           <X size={18} />
         </button>
 
-        <div style={{ padding: '28px 26px 26px' }}>
+        <div style={{ padding: '26px 24px 24px' }}>
+          <div className="center" style={{ marginBottom: 14 }}>
+            <span className="eyebrow">PromptPay QR</span>
+            <h2 id="checkout-title" style={{ fontSize: '1.2rem', fontWeight: 700 }}>
+              {pkg.name} · {pkg.hours + pkg.bonus} ชั่วโมง
+            </h2>
+          </div>
+          <CheckoutSteps step={step} />
+
           {productKey ? (
-            <div className="center">
+            <div className="center" style={{ marginTop: 18 }}>
               <div className="empty-icon" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>
                 <Check size={28} />
               </div>
-              <h2 id="checkout-title" style={{ fontSize: '1.3rem', fontWeight: 700 }}>
-                ชำระเงินสำเร็จ
-              </h2>
-              <p className="small muted" style={{ marginBottom: 18 }}>
-                ได้รับ <strong className="text-gold">+{pkg.hours + pkg.bonus} ชั่วโมง</strong> · คีย์ถูกเก็บไว้ในหน้า “คีย์ของฉัน” แล้ว
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>ชำระเงินสำเร็จ</h3>
+              <p className="small muted" style={{ marginBottom: 16 }}>
+                {redeemState?.type === 'success' ? (
+                  <>
+                    เติม <strong className="text-gold">+{pkg.hours + pkg.bonus} ชั่วโมง</strong> เข้าบัญชีแล้ว · ส่งใบเสร็จไปที่อีเมลของคุณแล้ว
+                  </>
+                ) : (
+                  <>
+                    ได้รับ <strong className="text-gold">+{pkg.hours + pkg.bonus} ชั่วโมง</strong> · คีย์ถูกเก็บไว้ในหน้า “คีย์ของฉัน” แล้ว
+                  </>
+                )}
               </p>
-              <div className="card" style={{ padding: 16, background: 'var(--surface)' }}>
+              <div className="card" style={{ padding: 14, background: 'var(--surface)' }}>
                 <div className="tiny faint" style={{ marginBottom: 6 }}>
                   Product Key
                 </div>
-                <div className="key-code" style={{ fontSize: '1.05rem' }}>
+                <div className="key-code" style={{ fontSize: '1.02rem' }}>
                   {productKey}
                 </div>
               </div>
               {redeemState?.message && (
-                <div style={{ marginTop: 14 }}>
+                <div style={{ marginTop: 12 }}>
                   <Alert type={redeemState.type}>{redeemState.message}</Alert>
                 </div>
               )}
-              <div className="grid grid-2" style={{ marginTop: 16, gap: 10 }}>
+              <div className="grid grid-2" style={{ marginTop: 14, gap: 10 }}>
                 <CopyButton text={productKey} label="คัดลอกคีย์" className="btn btn-secondary btn-block" />
                 {redeemState?.type === 'success' ? (
                   <Link href="/dashboard" className="btn btn-primary btn-block">
@@ -263,84 +357,120 @@ function CheckoutModal({ pkg, onClose }) {
                   </Link>
                 ) : (
                   <button className="btn btn-primary btn-block" onClick={redeemNow} disabled={redeemState?.loading}>
-                    {redeemState?.loading ? <Spinner /> : <Sparkles size={16} />} เติมเข้าบัญชีเลย
+                    {redeemState?.loading ? <Spinner /> : <Sparkles size={16} />} {redeemState?.loading ? 'กำลังเติม...' : 'เติมเข้าบัญชีเลย'}
                   </button>
                 )}
               </div>
             </div>
-          ) : (
-            <>
-              <div className="center" style={{ marginBottom: 18 }}>
-                <span className="eyebrow">PromptPay QR</span>
-                <h2 id="checkout-title" style={{ fontSize: '1.25rem', fontWeight: 700 }}>
-                  {pkg.name} · {pkg.hours + pkg.bonus} ชั่วโมง
-                </h2>
+          ) : error ? (
+            <div style={{ marginTop: 16 }}>
+              <Alert type="error">{error}</Alert>
+            </div>
+          ) : !order ? (
+            <div className="center" style={{ padding: 40 }}>
+              <Spinner size={24} />
+              <div className="small muted" style={{ marginTop: 10 }}>
+                กำลังสร้างคำสั่งซื้อ...
               </div>
-
-              {error ? (
-                <Alert type="error">{error}</Alert>
-              ) : !order ? (
-                <div className="center" style={{ padding: 40 }}>
-                  <Spinner size={24} />
-                  <div className="small muted" style={{ marginTop: 10 }}>
-                    กำลังสร้างคำสั่งซื้อ...
+            </div>
+          ) : (
+            <div className="stack" style={{ gap: 14, marginTop: 16 }}>
+              <div className="checkout-pay">
+                <div className="qr-box qr-box-sm">
+                  <img src={order.qr_image_url} alt={`PromptPay QR ${formatThb(order.amount_thb)}`} width={170} height={170} />
+                </div>
+                <div className="stack" style={{ gap: 8, minWidth: 0 }}>
+                  <div>
+                    <div className="tiny faint">ยอดชำระ (โอนให้ตรงยอด)</div>
+                    <div className="mono text-gold" style={{ fontSize: '1.45rem', fontWeight: 700 }}>
+                      {formatThb(order.amount_thb)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="tiny faint">ชำระภายใน</div>
+                    <div className={`mono ${remaining < 120 ? 'text-red' : ''}`} style={{ fontSize: '1.05rem', fontWeight: 600 }}>
+                      {mm}:{ss}
+                    </div>
+                  </div>
+                  <div className="tiny muted">
+                    {PAYEE.name}
+                    <br />
+                    พร้อมเพย์ <span className="mono">{PAYEE.promptpay}</span>
                   </div>
                 </div>
-              ) : (
-                <div className="stack" style={{ gap: 16 }}>
-                  <div className="qr-box">
-                    <img src={order.qr_image_url} alt={`PromptPay QR ${formatThb(order.amount_thb)}`} width={210} height={210} />
-                  </div>
+              </div>
+              <p className="tiny faint center" style={{ margin: 0 }}>
+                มือถือ: แคปหน้าจอ QR → เปิดแอปธนาคาร → สแกนจากรูปในเครื่อง
+              </p>
 
-                  <div className="row-between card" style={{ padding: '12px 16px', background: 'var(--surface)' }}>
-                    <div>
-                      <div className="tiny faint">ยอดชำระ</div>
-                      <div className="mono text-gold" style={{ fontSize: '1.4rem', fontWeight: 700 }}>
-                        {formatThb(order.amount_thb)}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div className="tiny faint">ชำระภายใน</div>
-                      <div className={`mono ${remaining < 120 ? 'text-red' : ''}`} style={{ fontSize: '1.15rem', fontWeight: 600 }}>
-                        {mm}:{ss}
-                      </div>
-                    </div>
-                  </div>
+              {remaining === 0 && <Alert type="error">หมดเวลาชำระเงินแล้ว หากโอนแล้วยังแนบสลิปได้ภายใน 24 ชั่วโมง</Alert>}
 
-                  <div className="small muted stack" style={{ gap: 4 }}>
-                    <div className="row-between">
-                      <span className="faint">ผู้รับเงิน</span>
-                      <span>{PAYEE.name}</span>
-                    </div>
-                    <div className="row-between">
-                      <span className="faint">พร้อมเพย์</span>
-                      <span className="mono">{PAYEE.promptpay}</span>
-                    </div>
-                    <div className="row-between">
-                      <span className="faint">บัญชีธนาคาร</span>
-                      <span className="mono">{PAYEE.bank}</span>
-                    </div>
-                    <div className="row-between">
-                      <span className="faint">เลขคำสั่งซื้อ</span>
-                      <span className="mono tiny">{order.order_id}</span>
-                    </div>
-                  </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  handleFile(f);
+                }}
+              />
+              <button
+                type="button"
+                className={`slip-drop ${dragging ? 'is-drag' : ''} ${verifying ? 'is-busy' : ''} ${slipError?.type === 'error' ? 'is-error' : ''}`}
+                onClick={() => !verifying && fileRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+                disabled={verifying}
+              >
+                {slip ? <img src={slip.dataUrl} alt="สลิปที่แนบ" className="slip-thumb" /> : <ImageUp size={26} className="text-gold" />}
+                <span className="slip-drop-text">
+                  {verifying ? (
+                    <>
+                      <strong>
+                        <Spinner /> กำลังตรวจสลิป...
+                      </strong>
+                      <span className="tiny muted">ใช้เวลาไม่กี่วินาที</span>
+                    </>
+                  ) : retryIn > 0 ? (
+                    <>
+                      <strong>รอธนาคารยืนยัน · ตรวจอีกครั้งใน {retryText}</strong>
+                      <span className="tiny muted">หรือแตะเพื่อแนบสลิปใหม่</span>
+                    </>
+                  ) : slip ? (
+                    <>
+                      <strong>แตะเพื่อเลือกสลิปใหม่</strong>
+                      <span className="tiny muted">หรือวาง (Ctrl+V) / ลากรูปมาวาง</span>
+                    </>
+                  ) : (
+                    <>
+                      <strong>โอนแล้ว? แนบสลิปที่นี่</strong>
+                      <span className="tiny muted">แตะเพื่อเลือกรูป · วาง Ctrl+V · หรือลากไฟล์มาวาง</span>
+                    </>
+                  )}
+                </span>
+              </button>
 
-                  {slipError && <Alert type="error">{slipError}</Alert>}
-
-                  {remaining === 0 ? (
-                    <Alert type="error">หมดเวลาชำระเงินแล้ว กรุณาปิดหน้าต่างและสั่งซื้อใหม่ (หากโอนแล้ว ยังแนบสลิปได้ภายใน 24 ชั่วโมง)</Alert>
-                  ) : null}
-
-                  <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onSlipSelected} />
-                  <button className="btn btn-primary btn-lg btn-block" onClick={() => fileRef.current?.click()} disabled={verifying}>
-                    {verifying ? <Spinner /> : <ImageUp size={18} />}
-                    {verifying ? 'กำลังตรวจสลิป...' : 'โอนแล้ว · แนบสลิปเพื่อรับคีย์'}
-                  </button>
-                  <p className="tiny faint center">โอนยอดให้ตรงตามจำนวน แล้วแนบรูปสลิปจากแอปธนาคาร ระบบจะออก Product Key ให้อัตโนมัติ</p>
-                </div>
+              {slipError && (
+                <Alert type={slipError.type === 'wait' ? 'gold' : 'error'}>
+                  <strong>{slipError.message}</strong>
+                  {slipError.hint && <div className="small" style={{ marginTop: 4 }}>{slipError.hint}</div>}
+                </Alert>
               )}
-            </>
+
+              <label className="row small muted" style={{ gap: 8, cursor: 'pointer', justifyContent: 'center' }}>
+                <input type="checkbox" checked={autoRedeem} onChange={(e) => setAutoRedeem(e.target.checked)} />
+                เติมชั่วโมงเข้าบัญชีของฉันทันทีเมื่อชำระสำเร็จ
+              </label>
+              <p className="tiny faint center" style={{ margin: 0 }}>
+                ระบบตรวจสลิปอัตโนมัติด้วย SlipOK (ยอดเงิน · บัญชีผู้รับ · สลิปซ้ำ) แล้วออก Product Key + ใบเสร็จทางอีเมลทันที
+              </p>
+            </div>
           )}
         </div>
       </div>

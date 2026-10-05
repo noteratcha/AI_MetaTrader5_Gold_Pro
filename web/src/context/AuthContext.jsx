@@ -76,6 +76,7 @@ export function AuthProvider({ children }) {
       if (!res.ok || data.success === false) {
         const err = new Error(data.error || `เกิดข้อผิดพลาด (HTTP ${res.status})`);
         err.status = res.status;
+        err.data = data;
         throw err;
       }
       return data;
