@@ -2,8 +2,9 @@ import nodemailer from 'nodemailer';
 
 // ส่งอีเมลผ่าน SMTP (เช่น Gmail + App Password) — ตั้งค่าด้วย env:
 //   SMTP_HOST (ค่าเริ่มต้น smtp.gmail.com), SMTP_PORT (465), SMTP_USER, SMTP_PASS, MAIL_FROM
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_USER = (process.env.SMTP_USER || '').trim();
+// Gmail App Password แสดงเป็นกลุ่มละ 4 ตัวคั่นช่องว่าง — ตัดช่องว่างออกกันใส่ผิดรูปแบบ
+const SMTP_PASS = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 
 let transporter = null;
 
