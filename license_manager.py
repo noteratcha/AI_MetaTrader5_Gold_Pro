@@ -310,7 +310,8 @@ class LicenseManager:
         self.session_data["pending_meter_minutes"] = int(self.session_data.get("pending_meter_minutes", 0)) + (curr - new_val)
         self.save_local_store()
 
-        if new_val == 0 or (int(time.time()) - self.session_data.get("last_sync", 0)) > 300:
+        # ส่งยอดที่หักขึ้น Server ทุก ~1 นาที ให้ชั่วโมงบนเว็บตรงกับโปรแกรม
+        if new_val == 0 or (int(time.time()) - self.session_data.get("last_sync", 0)) >= 55:
             self._flush_meter()
 
         remaining = self.session_data.get("hours_remaining_minutes", 0)

@@ -111,6 +111,15 @@ export function AuthProvider({ children }) {
     setIsLoading(false);
   }, [refreshUser]);
 
+  // ดึงชั่วโมงคงเหลือใหม่ทุก 60 วินาที (เฉพาะตอนแท็บเปิดอยู่) ให้ตรงกับโปรแกรม Desktop ที่กำลังหักเวลา
+  useEffect(() => {
+    if (!user) return undefined;
+    const id = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') refreshUser();
+    }, 60000);
+    return () => clearInterval(id);
+  }, [user?.id, refreshUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const login = useCallback(
     async (email, password) => {
       const data = await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
