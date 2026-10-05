@@ -13,33 +13,46 @@ const n = (v) => Number(v || 0).toLocaleString('th-TH');
 const thb = (v) => `฿${Number(v || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`;
 const usd = (v) => `${v >= 0 ? '+' : '-'}$${Math.abs(Number(v || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** รวบรวมตัวเลขของวันนี้ (เวลาไทย) */
-export async function collectDailySummary(now = Date.now()) {
+/**
+ * รวบรวมตัวเลขของ 1 วัน (เวลาไทย 00:00 – 23:59)
+ *   completedDay = true → วันก่อนหน้าแบบเต็มวัน (ใช้ตอน Cron รันหลังเที่ยงคืน)
+ *   completedDay = false → วันนี้ตั้งแต่ 00:00 ถึงตอนนี้ (แอดมินกดดูระหว่างวัน)
+ */
+export async function collectDailySummary({ completedDay = false, now = Date.now() } = {}) {
   const supabase = getAdminClient();
-  const since = bangkokDayStart(now).toISOString();
+  const todayStart = bangkokDayStart(now).getTime();
+  const startMs = completedDay ? todayStart - DAY_MS : todayStart;
+  const endMs = completedDay ? todayStart : now;
+  const since = new Date(startMs).toISOString();
+  const until = new Date(endMs).toISOString();
   const online = new Date(now - 120000).toISOString();
   const head = { count: 'exact', head: true };
-  const activityCount = (event) => supabase.from('user_activity').select('id', head).eq('event', event).gte('created_at', since);
+  const activityCount = (event) =>
+    supabase.from('user_activity').select('id', head).eq('event', event).gte('created_at', since).lt('created_at', until);
 
   const [users, registers, paid, pending, onlineNow, activeToday, logins, failed, locked, redeems, trades] = await Promise.all([
     supabase.from('bot_config').select('id', head).gt('id', 1),
     activityCount('register'),
-    supabase.from('orders').select('amount_thb, hours_to_add').eq('status', 'PAID').gte('paid_at', since).limit(5000),
-    supabase.from('orders').select('order_id', head).in('status', ['PENDING', 'PROCESSING']).gte('created_at', since),
+    supabase.from('orders').select('amount_thb, hours_to_add').eq('status', 'PAID').gte('paid_at', since).lt('paid_at', until).limit(5000),
+    supabase.from('orders').select('order_id', head).in('status', ['PENDING', 'PROCESSING']).gte('created_at', since).lt('created_at', until),
     supabase.from('bot_telemetry').select('id', head).gt('id', 1).gte('last_heartbeat', online),
     supabase.from('bot_telemetry').select('id', head).gt('id', 1).gte('last_heartbeat', since),
-    supabase.from('user_activity').select('email').eq('event', 'login').gte('created_at', since).limit(5000),
+    supabase.from('user_activity').select('email').eq('event', 'login').gte('created_at', since).lt('created_at', until).limit(5000),
     activityCount('login_failed'),
     activityCount('account_locked'),
     activityCount('redeem'),
-    supabase.from('trade_logs').select('action, profit').gte('time', since).limit(20000),
+    supabase.from('trade_logs').select('action, profit').gte('time', since).lt('time', until).limit(20000),
   ]);
 
   const paidRows = paid.data || [];
   const tradeRows = trades.data || [];
   const closes = tradeRows.filter((t) => !String(t.action || '').startsWith('OPEN'));
   return {
-    date: new Date(now).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long' }),
+    date: new Date(startMs).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long' }),
+    period: completedDay
+      ? 'ทั้งวัน 00:00 – 23:59 น.'
+      : `00:00 – ${new Date(endMs).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} น. (ระหว่างวัน)`,
+    completedDay,
     totalUsers: users.count || 0,
     newMembers: registers.count || 0,
     salesCount: paidRows.length,
@@ -62,7 +75,7 @@ export async function collectDailySummary(now = Date.now()) {
 export function formatDailySummary(m) {
   return [
     `📊 สรุปประจำวัน GoldBot24`,
-    `${m.date}`,
+    `${m.date} · ${m.period}`,
     ``,
     `👥 สมาชิก`,
     `• สมัครใหม่: ${n(m.newMembers)} คน (รวม ${n(m.totalUsers)})`,
@@ -71,10 +84,10 @@ export function formatDailySummary(m) {
     `💰 ยอดขาย`,
     `• ชำระสำเร็จ: ${n(m.salesCount)} รายการ · ${thb(m.salesThb)}`,
     `• ชั่วโมงที่ขาย: ${n(m.hoursSold)} ชม. · เติมคีย์ ${n(m.redeems)} ครั้ง`,
-    m.pendingOrders ? `• ค้างชำระวันนี้: ${n(m.pendingOrders)} รายการ` : null,
+    m.pendingOrders ? `• คำสั่งซื้อที่ไม่ได้ชำระ: ${n(m.pendingOrders)} รายการ` : null,
     ``,
     `🤖 บอท`,
-    `• ออนไลน์ตอนนี้: ${n(m.onlineBots)} เครื่อง · ทำงานวันนี้ ${n(m.activeBotsToday)} เครื่อง`,
+    `• ออนไลน์ตอนนี้: ${n(m.onlineBots)} เครื่อง · ทำงาน${m.completedDay ? 'ในวันนั้น' : 'วันนี้'} ${n(m.activeBotsToday)} เครื่อง`,
     `• เปิดไม้: ${n(m.tradesOpened)} · TP ${n(m.tp)} · SL ${n(m.sl)}`,
     `• กำไรสุทธิรวม: ${usd(m.netProfit)}`,
     ``,
@@ -85,8 +98,8 @@ export function formatDailySummary(m) {
     .join('\n');
 }
 
-export async function sendDailySummary() {
-  const metrics = await collectDailySummary();
+export async function sendDailySummary({ completedDay = false } = {}) {
+  const metrics = await collectDailySummary({ completedDay });
   const result = await notifyAdmins(formatDailySummary(metrics));
   return { metrics, ...result };
 }

@@ -2,7 +2,8 @@ import crypto from 'crypto';
 import { requireAdmin } from '../../../lib/server/auth';
 import { sendDailySummary } from '../../../lib/server/dailySummary';
 
-// สรุปยอดรายวันส่ง LINE OA — เรียกโดย Vercel Cron ทุกวัน 21:00 น. (14:00 UTC, ดู web/vercel.json)
+// สรุปยอดรายวันส่ง LINE OA — Vercel Cron รันหลังเที่ยงคืนเวลาไทย (17:00 UTC, ดู web/vercel.json)
+//   แล้วสรุป "เมื่อวาน" เต็มวัน 00:00–23:59 น. (แพ็กเกจฟรีของ Vercel รัน Cron ไม่ตรงนาที จึงไม่ตั้ง 23:59 ตรง ๆ)
 //   Vercel ส่ง Authorization: Bearer <CRON_SECRET> มาให้อัตโนมัติ · แอดมินกดส่งเองจากหน้า Admin ได้ (POST)
 function isCron(req) {
   const secret = process.env.CRON_SECRET;
@@ -15,7 +16,7 @@ function isCron(req) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET' && isCron(req)) {
-    const result = await sendDailySummary();
+    const result = await sendDailySummary({ completedDay: true });
     return res.status(200).json({ success: result.sent > 0, sent: result.sent, errors: result.errors });
   }
   if (req.method !== 'POST') return res.status(401).json({ success: false, error: 'Unauthorized' });

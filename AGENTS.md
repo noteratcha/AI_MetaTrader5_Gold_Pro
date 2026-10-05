@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1122 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.1124 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1122): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.1124): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1122`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.1124`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -207,7 +207,7 @@
 | `POST /api/webhook/line` | ลายเซ็น `x-line-signature` | LINE OA Webhook — พิมพ์ `id` เพื่อรับ userId/groupId สำหรับ `LINE_ADMIN_TO` |
 | `POST /api/admin/line-test` | Admin | ส่งข้อความทดสอบไป LINE OA |
 | `POST /api/admin/users/[id]/unlock` | Admin | ปลดล็อกการเข้าสู่ระบบ (รหัสผิด 5 ครั้ง/15 นาที) — บันทึก `account_unlocked` แล้วนับรหัสผิดใหม่จากศูนย์ |
-| `GET/POST /api/cron/daily-summary` | Vercel Cron (`CRON_SECRET`) / Admin | สรุปยอดรายวันส่ง LINE ทุกวัน 21:00 น. (`web/vercel.json` → `0 14 * * *` UTC) · แอดมินกด "ส่งสรุปวันนี้" ได้ |
+| `GET/POST /api/cron/daily-summary` | Vercel Cron (`CRON_SECRET`) / Admin | สรุปยอดรายวันเต็มวัน 00:00–23:59 น. ส่ง LINE หลังเที่ยงคืน (`web/vercel.json` → `0 17 * * *` UTC = 00:00 น. ไทย, แพ็กเกจฟรีคลาดได้ภายใน 1 ชม.) · แอดมินกด "ส่งสรุปวันนี้" = ยอดตั้งแต่ 00:00 ถึงตอนกด |
 | `GET/POST /api/user/receipts` | Bearer (เจ้าของ/แอดมิน) | ใบเสร็จของฉัน · ใบเดียว `?id=` (เลขใบเสร็จหรือเลขคำสั่งซื้อ) · ส่งอีเมลซ้ำ (เว้น 60 วิ) |
 | `GET /api/user/telemetry` · `/trades` · `/stats` · `/keys` | Bearer | พอร์ตสด · ประวัติ (แบ่งหน้า) · สถิติรายแผน · คีย์ของฉัน |
 | `GET /api/admin/overview` · `POST /promo-key` | Admin | ภาพรวมระบบ · ผลิต Promo Key |
@@ -228,7 +228,7 @@
 | **Vercel** | เว็บ + API | `goldbot24.vercel.app` |
 | **GitHub Releases** | แจกไฟล์ติดตั้ง Desktop | `noteratcha/AI_MetaTrader5_Gold_Pro` (public) |
 | **SlipOK** | ตรวจสลิปโอนเงิน | ต้องมีสลิปเสมอ (ไม่มี API ตรวจยอดเข้าเอง) |
-| **LINE OA (Messaging API)** | แจ้งเตือนแอดมิน: สมาชิกใหม่ · ซื้อชั่วโมงสำเร็จ · บัญชีถูกล็อก (รหัสผิด 5 ครั้ง เฉพาะบัญชีที่มีจริง) · สรุปยอดรายวัน 21:00 (`lib/server/lineNotify.js`, `dailySummary.js`) | Push Message นับโควตารายเดือนของ OA · ส่งไม่สำเร็จไม่กระทบการสมัคร/ชำระเงิน |
+| **LINE OA (Messaging API)** | แจ้งเตือนแอดมิน: สมาชิกใหม่ · ซื้อชั่วโมงสำเร็จ · บัญชีถูกล็อก (รหัสผิด 5 ครั้ง เฉพาะบัญชีที่มีจริง) · สรุปยอดรายวันเต็มวัน (`lib/server/lineNotify.js`, `dailySummary.js`) | Push Message นับโควตารายเดือนของ OA · ส่งไม่สำเร็จไม่กระทบการสมัคร/ชำระเงิน |
 | **Beam** *(รออนุมัติ)* | PromptPay อัตโนมัติผ่าน Webhook | `CHECKLIST_BEAM.md` |
 | **Economic Calendar Feed** | ปฏิทินข่าวรายสัปดาห์ | จำกัดจำนวนครั้ง (429) → ใช้ผ่าน `/api/calendar` ที่ cache ไว้ |
 | **Investing.com Widget** | ปฏิทินแบบฝัง (เว็บ) | มีปุ่มเปิดหน้า Investing.com สำรอง |
