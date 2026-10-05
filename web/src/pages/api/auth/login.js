@@ -10,12 +10,12 @@ import {
   toUserPayload,
   verifyPassword,
 } from '../../../lib/server/auth';
-import { countRecentFailedLogins, logActivity } from '../../../lib/server/activity';
+import { countRecentFailedLogins, LOGIN_LOCK_MINUTES, LOGIN_MAX_FAILED, logActivity } from '../../../lib/server/activity';
 import { notifyAccountLocked } from '../../../lib/server/lineNotify';
 
 const INVALID_CREDENTIALS = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
-const MAX_FAILED = 5;
-const LOCK_MINUTES = 15;
+const MAX_FAILED = LOGIN_MAX_FAILED;
+const LOCK_MINUTES = LOGIN_LOCK_MINUTES;
 
 export default async function handler(req, res) {
   if (!allowMethods(req, res, ['POST'])) return;
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     }
 
     // กันการเดารหัสผ่าน: ผิดเกิน 5 ครั้งใน 15 นาที → ล็อกชั่วคราว
-    const failedSoFar = await countRecentFailedLogins(email, LOCK_MINUTES);
+    const failedSoFar = await countRecentFailedLogins(email);
     if (failedSoFar >= MAX_FAILED) {
       return res.status(429).json({ success: false, error: `ใส่รหัสผ่านผิดหลายครั้ง กรุณารอ ${LOCK_MINUTES} นาทีแล้วลองใหม่` });
     }
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
       if (failedSoFar + 1 === MAX_FAILED) {
         await logActivity({ userId: row?.id, email, event: 'account_locked', detail: `ใส่รหัสผิด ${MAX_FAILED} ครั้ง ล็อก ${LOCK_MINUTES} นาที`, ip });
         // แจ้ง LINE เฉพาะบัญชีที่มีอยู่จริง — อีเมลที่ไม่มีในระบบนับรวมในสรุปรายวัน (กันผู้โจมตีสุ่มอีเมลจนโควตา LINE หมด)
-        if (row) await notifyAccountLocked({ email, ip, exists: true, isAdmin: toUserPayload(row).isAdmin, attempts: MAX_FAILED, lockMinutes: LOCK_MINUTES });
+        if (row) await notifyAccountLocked({ email, ip, userId: row.id, exists: true, isAdmin: toUserPayload(row).isAdmin, attempts: MAX_FAILED, lockMinutes: LOCK_MINUTES });
       }
       return res.status(401).json({ success: false, error: INVALID_CREDENTIALS });
     }

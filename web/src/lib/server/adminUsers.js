@@ -1,5 +1,6 @@
 import { getAdminClient } from './supabaseAdmin';
 import { isAdminRow, rowTags, toUserPayload } from './auth';
+import { getLoginLockStatus } from './activity';
 
 // =============================================================================
 // รวมข้อมูลสรุปรายผู้ใช้สำหรับหน้าแอดมิน (ชั่วโมง, การเทรด, แผนที่ใช้, สถานะออนไลน์)
@@ -26,10 +27,11 @@ export async function enrichUsers(rows) {
   const emails = users.map((u) => u.email);
   const ids = users.map((u) => u.id);
 
-  const [summaryRes, statsRes, teleRes] = await Promise.all([
+  const [summaryRes, statsRes, teleRes, lockBy] = await Promise.all([
     supabase.from('admin_user_trade_summary').select('*').in('email', emails),
     supabase.from('user_plan_stats').select('user_id, plan_name, total_trades, win_trades, loss_trades, total_profit_usd').in('user_id', ids),
     supabase.from('bot_telemetry').select('id, status, last_heartbeat, balance, equity, open_positions').in('id', ids.map(Number)),
+    getLoginLockStatus(emails),
   ]);
 
   const summaryBy = Object.fromEntries((summaryRes.data || []).map((s) => [s.email, s]));
@@ -53,6 +55,7 @@ export async function enrichUsers(rows) {
     const lastBeat = t?.last_heartbeat ? new Date(t.last_heartbeat).getTime() : 0;
     return {
       ...u,
+      loginLock: lockBy[String(u.email || '').toLowerCase()] || { locked: false, failed: 0, unlockAt: null },
       trades: {
         opens: Number(s.opens) || 0,
         tp: Number(s.tp_hits) || 0,

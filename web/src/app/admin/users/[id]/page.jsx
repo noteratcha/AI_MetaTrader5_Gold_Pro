@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Ban, Clock, KeyRound, Pencil, ScrollText, Trash2, UserCheck } from 'lucide-react';
+import { ArrowLeft, Ban, Clock, KeyRound, LockOpen, Pencil, ScrollText, Trash2, UserCheck } from 'lucide-react';
 import AdminShell from '../../../../components/admin/AdminShell';
 import { Alert, EmptyState, Modal, Pager, Spinner } from '../../../../components/ui';
 import { useAuth } from '../../../../context/AuthContext';
@@ -49,6 +49,19 @@ export default function AdminUserDetailPage() {
   };
 
   const locked = user?.isAdmin;
+  const [unlocking, setUnlocking] = useState(false);
+  const unlockLogin = async () => {
+    setUnlocking(true);
+    try {
+      const res = await apiFetch(`/api/admin/users/${id}/unlock`, { method: 'POST' });
+      setUser(res.user);
+      setNotice({ type: 'success', message: res.message });
+    } catch (err) {
+      setNotice({ type: 'error', message: err.message });
+    } finally {
+      setUnlocking(false);
+    }
+  };
 
   return (
     <AdminShell
@@ -66,6 +79,17 @@ export default function AdminUserDetailPage() {
           <Alert type={notice.type}>{notice.message}</Alert>
         </div>
       )}
+      {user?.loginLock?.locked && (
+        <div style={{ marginBottom: 14 }}>
+          <Alert type="error">
+            <strong>บัญชีถูกล็อกการเข้าสู่ระบบ</strong> — ใส่รหัสผิด {user.loginLock.failed} ครั้งใน 15 นาที · ปลดล็อกเองอัตโนมัติ{' '}
+            {formatThaiDateTime(user.loginLock.unlockAt)}
+            <button className="btn btn-primary btn-sm" style={{ marginLeft: 10 }} onClick={unlockLogin} disabled={unlocking}>
+              {unlocking ? <Spinner /> : <LockOpen size={14} />} ปลดล็อกตอนนี้
+            </button>
+          </Alert>
+        </div>
+      )}
       {locked && (
         <div style={{ marginBottom: 14 }}>
           <Alert type="info">บัญชีผู้ดูแลระบบ — ดูข้อมูลได้อย่างเดียว ไม่สามารถแก้ไขหรือลบจากหน้านี้</Alert>
@@ -81,6 +105,10 @@ export default function AdminUserDetailPage() {
               <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
                 {user.isAdmin && <span className="badge badge-gold">Admin</span>}
                 {user.disabled ? <span className="badge badge-red">ถูกระงับ</span> : <span className="badge badge-green">ใช้งานได้</span>}
+                {user.loginLock?.locked && <span className="badge badge-red">🔒 ล็อกการเข้าสู่ระบบ</span>}
+                {!user.loginLock?.locked && user.loginLock?.failed > 0 && (
+                  <span className="badge badge-gold">รหัสผิด {user.loginLock.failed}/5 ครั้ง</span>
+                )}
                 {user.bot?.online ? (
                   <span className="badge badge-green">
                     <span className="dot dot-live" /> บอท{user.bot.paused ? 'พัก' : 'ออนไลน์'}
@@ -102,6 +130,14 @@ export default function AdminUserDetailPage() {
             <div className="card card-pad">
               <div style={{ fontWeight: 700, marginBottom: 12 }}>จัดการบัญชี</div>
               <div className="stack" style={{ gap: 8 }}>
+                <button
+                  className="btn btn-secondary btn-block"
+                  disabled={unlocking || !(user.loginLock?.locked || user.loginLock?.failed > 0)}
+                  onClick={unlockLogin}
+                  title="ล้างตัวนับรหัสผิด ให้ผู้ใช้เข้าสู่ระบบได้ทันที"
+                >
+                  {unlocking ? <Spinner /> : <LockOpen size={15} />} ปลดล็อกการเข้าสู่ระบบ
+                </button>
                 <button className="btn btn-primary btn-block" disabled={locked} onClick={() => setModal('hours')}>
                   <Clock size={15} /> เพิ่ม / ลด / ตั้งชั่วโมง
                 </button>

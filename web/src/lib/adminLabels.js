@@ -4,6 +4,7 @@ export const ACTIVITY_LABELS = {
   login_failed: { label: 'ล็อกอินผิด', badge: 'badge-red' },
   login_blocked: { label: 'ล็อกอินถูกบล็อก', badge: 'badge-red' },
   account_locked: { label: 'บัญชีถูกล็อก (รหัสผิด)', badge: 'badge-red' },
+  account_unlocked: { label: 'แอดมินปลดล็อก', badge: 'badge-green' },
   register: { label: 'สมัครสมาชิก', badge: 'badge-sky' },
   redeem: { label: 'เติมคีย์', badge: 'badge-gold' },
   purchase_paid: { label: 'ชำระเงิน', badge: 'badge-gold' },

@@ -126,6 +126,7 @@ export default function AdminUsersPage() {
                         <strong>{u.displayName}</strong>
                         {u.isAdmin && <span className="badge badge-gold">Admin</span>}
                         {u.disabled && <span className="badge badge-red">ระงับ</span>}
+                        {u.loginLock?.locked && <span className="badge badge-red">🔒 ถูกล็อก</span>}
                       </div>
                       <div className="tiny faint">{u.email}</div>
                     </td>

@@ -86,7 +86,7 @@ export function notifyPurchase({ email, amountThb, hours, orderId, productKey, m
   );
 }
 
-export function notifyAccountLocked({ email, ip, exists, isAdmin, attempts, lockMinutes }) {
+export function notifyAccountLocked({ email, ip, userId, exists, isAdmin, attempts, lockMinutes }) {
   return notifyAdmins(
     [
       '🔒 แจ้งเตือนความปลอดภัย',
@@ -96,6 +96,7 @@ export function notifyAccountLocked({ email, ip, exists, isAdmin, attempts, lock
       exists ? null : '⚠️ ไม่มีบัญชีนี้ในระบบ (อาจเป็นการสุ่มเดาอีเมล)',
       ip ? `IP: ${ip}` : null,
       `เวลา: ${bangkokTime()}`,
+      userId ? `ปลดล็อกได้ที่: ${process.env.SITE_URL || 'https://goldbot24.vercel.app'}/admin/users/${userId}` : null,
     ]
       .filter(Boolean)
       .join('\n')
