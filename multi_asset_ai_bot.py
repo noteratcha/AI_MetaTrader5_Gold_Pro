@@ -114,7 +114,7 @@ BOT_PAUSED_FLAG = False
 
 # ที่เก็บข้อมูลสัญญาณเรดาร์แบบ Real-time ให้ Background Thread ดึงไปสตรีมขึ้นเว็บ
 latest_radar_cache = {
-    "XAUUSD": {"symbol": "XAUUSD", "status": "[WAIT OUTSIDE ZONE]", "up_prob": 0.50, "price": 0.0, "is_in_zone": False, "h4_trend": "ANALYZING...", "h4_diff_pct": 0.0}
+    "XAUUSD": {"symbol": "XAUUSD", "status": "[WAIT OUTSIDE ZONE]", "up_prob": 0.50, "price": 0.0, "is_in_zone": False, "h4_trend": "ANALYZING...", "h4_diff_pct": 0.0, "h1_trend": "ANALYZING...", "h1_diff_pct": 0.0}
 }
 
 def telemetry_background_worker():
@@ -151,6 +151,8 @@ def telemetry_background_worker():
                     is_in = bool(cached.get("is_in_zone", False))
                     h4_tr = str(cached.get("h4_trend", "ANALYZING..."))
                     h4_df = float(cached.get("h4_diff_pct", 0.0))
+                    h1_tr = str(cached.get("h1_trend", "ANALYZING..."))
+                    h1_df = float(cached.get("h1_diff_pct", 0.0))
                     
                     current_radar.append({
                         "symbol": str(s),
@@ -159,7 +161,9 @@ def telemetry_background_worker():
                         "status": str(status_text),
                         "in_zone": is_in,
                         "h4_trend": h4_tr,
-                        "h4_diff_pct": round(h4_df, 2)
+                        "h4_diff_pct": round(h4_df, 2),
+                        "h1_trend": h1_tr,
+                        "h1_diff_pct": round(h1_df, 2)
                     })
 
                 # แยกแถว Telemetry ตามบัญชีผู้ใช้ GoldBot24 (id ใน bot_config) — ลูกค้าแต่ละคนเห็นเฉพาะพอร์ตตัวเอง
@@ -1006,6 +1010,9 @@ def main():
                 ma10 = df_h1['ma_fast_h1'].iloc[-1]
                 ma30 = df_h1['ma_slow_h1'].iloc[-1]
                 is_uptrend_h1 = ma10 > ma30
+                # ระยะห่าง MA10/MA30 บน H1 (%) — แสดงบน Dashboard คู่กับ H4
+                h1_diff_pct = float(((ma10 / ma30) - 1.0) * 100.0) if (pd.notna(ma30) and ma30 != 0) else 0.0
+                h1_cloud_status = f"UPTREND ({h1_diff_pct:+.2f}%)" if is_uptrend_h1 else f"DOWNTREND ({h1_diff_pct:+.2f}%)"
                 
                 # เช็คการเริ่มแท่ง H1 ใหม่ (แสดงเฉพาะคู่ที่เข้าเทรดจริง BTC/XAU)
                 current_h1_time = df_h1['time'].iloc[-1]
@@ -1391,7 +1398,9 @@ def main():
                     "price": float(close_price),
                     "is_in_zone": is_alert_zone,
                     "h4_trend": h4_cloud_status,
-                    "h4_diff_pct": round(h4_diff_pct, 2)
+                    "h4_diff_pct": round(h4_diff_pct, 2),
+                    "h1_trend": h1_cloud_status,
+                    "h1_diff_pct": round(h1_diff_pct, 2)
                 }
                 
                 # เก็บข้อมูลสินทรัพย์ที่น่าสนใจ (เข้าใกล้โซนเทรด)

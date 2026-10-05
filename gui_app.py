@@ -1100,7 +1100,16 @@ class MainTradingApp(ctk.CTk):
         self.card_mt5 = self._create_stat_card(grid_frame, 0, "🖥", "บัญชี MT5", "รอเชื่อมต่อ...", "Server: กำลังตรวจสอบ", COLOR_CYAN_ACCENT)
         self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "$0.00", "Equity $0.00 · Float $0.00", COLOR_SUCCESS_GREEN)
         self.card_gold = self._create_stat_card(grid_frame, 2, "🏆", "ราคาทองคำ XAUUSD", "0.00", "Spread 0 pts", COLOR_GOLD_PRIMARY)
-        self.card_trend = self._create_stat_card(grid_frame, 3, "📊", "สภาวะตลาด H4", "รอเริ่มบอท", "วิเคราะห์เมื่อบอททำงาน", COLOR_GOLD_WARM)
+        self.card_trend = self._create_stat_card(grid_frame, 3, "📊", "สภาวะตลาด H4 · H1", "รอเริ่มบอท", "", COLOR_GOLD_WARM)
+        # บรรทัดล่าง: เทรนด์ H1 (สีตามทิศ) + ระยะห่าง MA H4 — แทน sub label เดิม ความสูงการ์ดเท่าเดิม
+        trend_sub = self.card_trend["sub_lbl"].master
+        self.card_trend["sub_lbl"].pack_forget()
+        sub_row = ctk.CTkFrame(trend_sub, fg_color="transparent", height=18)
+        sub_row.pack(anchor="w")
+        self.card_trend["h1_lbl"] = ctk.CTkLabel(sub_row, text="H1 —", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, height=18)
+        self.card_trend["h1_lbl"].pack(side="left")
+        self.card_trend["sub_lbl"] = ctk.CTkLabel(sub_row, text="  ·  วิเคราะห์เมื่อบอททำงาน", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
+        self.card_trend["sub_lbl"].pack(side="left")
 
     def _create_stat_card(self, parent, col, icon, title, val_text, sub_text, accent_color):
         card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
@@ -1990,8 +1999,17 @@ class MainTradingApp(ctk.CTk):
                     elif "SIDEWAY" in h4_trend:
                         trend_color = COLOR_CYAN_ACCENT
 
-                    self.card_trend["val_lbl"].configure(text=h4_trend, text_color=trend_color)
-                    self.card_trend["sub_lbl"].configure(text=f"H4 MA10/30 {h4_pct:+.2f}% · Strict Pro-Trend")
+                    self.card_trend["val_lbl"].configure(text=f"H4 {h4_trend}" if h4_trend[:1].isupper() and "รอ" not in h4_trend else h4_trend, text_color=trend_color)
+
+                    h1_trend = str(radar.get("h1_trend", "ANALYZING..."))
+                    if h1_trend.startswith("UP"):
+                        h1_text, h1_color = f"H1 ▲ ขาขึ้น {radar.get('h1_diff_pct', 0.0):+.2f}%", COLOR_SUCCESS_GREEN
+                    elif h1_trend.startswith("DOWN"):
+                        h1_text, h1_color = f"H1 ▼ ขาลง {radar.get('h1_diff_pct', 0.0):+.2f}%", COLOR_DANGER_RED
+                    else:
+                        h1_text, h1_color = "H1 —", COLOR_TEXT_MUTED
+                    self.card_trend["h1_lbl"].configure(text=h1_text, text_color=h1_color)
+                    self.card_trend["sub_lbl"].configure(text=f"  ·  H4 MA10/30 {h4_pct:+.2f}%")
 
                 # อัปเดตสถิติ 5 แผน (ตาราง: ไม้ / WR / กำไร)
                 if hasattr(self, 'plan_stat_badges'):

@@ -209,6 +209,9 @@ function RadarCard({ radar, loading }) {
   const down = 100 - up;
   const h4 = String(radar?.h4_trend || '');
   const h4Tone = h4.startsWith('BULL') ? 'badge-green' : h4.startsWith('BEAR') ? 'badge-red' : 'badge-sky';
+  const h1 = String(radar?.h1_trend || '');
+  const h1Tone = h1.startsWith('UP') ? 'badge-green' : h1.startsWith('DOWN') ? 'badge-red' : 'badge-muted';
+  const h1Label = h1.startsWith('UP') ? h1.replace('UPTREND', '▲ ขาขึ้น') : h1.startsWith('DOWN') ? h1.replace('DOWNTREND', '▼ ขาลง') : '';
   const status = radar?.status || '[WAIT OUTSIDE ZONE]';
 
   return (
@@ -242,6 +245,10 @@ function RadarCard({ radar, loading }) {
             <div className="row-between">
               <span className="muted small">เทรนด์ H4</span>
               <span className={`badge ${h4Tone}`}>{h4 || 'กำลังวิเคราะห์'}</span>
+            </div>
+            <div className="row-between">
+              <span className="muted small">เทรนด์ H1</span>
+              <span className={`badge ${h1Tone}`}>{h1Label || 'กำลังวิเคราะห์'}</span>
             </div>
             <div className="radar-status mono small">{status}</div>
           </>
