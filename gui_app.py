@@ -2103,7 +2103,7 @@ class MainTradingApp(ctk.CTk):
                             rows[tf]["val"].configure(text="◆ ไซด์เวย์", text_color=COLOR_CYAN_ACCENT)
                         cpct = float(radar.get(f"{key}_pct", 0.0) or 0.0)  # ระยะ MA50 เทียบ MA150 (%)
                         rows[tf]["pct"].configure(text=f"{cpct:+.2f}%", text_color=pct_color(cpct))
-                    for tf, key, tag in (("H1", "h1_stack_dir", "MA100-200"), ("H4", "h4_stack_dir", "MA100-200")):
+                    for tf, key, tag in (("H1", "h1_stack_dir", "MA100-200"), ("H4", "h4_lt_dir", "MA200")):
                         lt_dir = int(radar.get(key, 0) or 0)
                         rows[tf]["lt"].configure(
                             text=f"{tag} ▲" if lt_dir > 0 else (f"{tag} ▼" if lt_dir < 0 else ""),

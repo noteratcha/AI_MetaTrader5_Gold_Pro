@@ -1185,7 +1185,6 @@ def main():
                 # Moving Average 5 & 10 บนแท่ง H1 สำหรับ Plan 2 (MA-Cross-H1-Trend)
                 df_h1['ma5_h1'] = df_h1['close'].rolling(5).mean()
                 df_h1['ma10_h1'] = df_h1['close'].rolling(10).mean()
-                df_h1['ma13_h1'] = df_h1['close'].rolling(13).mean()   # Plan 2: MA5 ตัด MA13 บน H1
                 ma5_h1_val = float(df_h1['ma5_h1'].iloc[-1])
                 ma10_h1_val = float(df_h1['ma10_h1'].iloc[-1])
                 # Fix repainting: check cross on closed candles (iloc[-2] and iloc[-3])
@@ -1194,11 +1193,9 @@ def main():
                 prev_closed_ma5_h1 = float(df_h1['ma5_h1'].iloc[-3]) if len(df_h1) >= 3 else closed_ma5_h1
                 prev_closed_ma10_h1 = float(df_h1['ma10_h1'].iloc[-3]) if len(df_h1) >= 3 else closed_ma10_h1
 
-                # Plan 2 (กำหนดโดยผู้ใช้): MA5 ตัด MA13 บน H1 — แท่งที่ปิดแล้ว
-                closed_ma13_h1 = float(df_h1['ma13_h1'].iloc[-2]) if len(df_h1) >= 2 else float('nan')
-                prev_closed_ma13_h1 = float(df_h1['ma13_h1'].iloc[-3]) if len(df_h1) >= 3 else closed_ma13_h1
-                ma_cross_h1_up = bool((prev_closed_ma5_h1 <= prev_closed_ma13_h1) and (closed_ma5_h1 > closed_ma13_h1))
-                ma_cross_h1_down = bool((prev_closed_ma5_h1 >= prev_closed_ma13_h1) and (closed_ma5_h1 < closed_ma13_h1))
+                # Plan 2: MA5 ตัด MA10 บน H1 — แท่งที่ปิดแล้ว
+                ma_cross_h1_up = bool((prev_closed_ma5_h1 <= prev_closed_ma10_h1) and (closed_ma5_h1 > closed_ma10_h1))
+                ma_cross_h1_down = bool((prev_closed_ma5_h1 >= prev_closed_ma10_h1) and (closed_ma5_h1 < closed_ma10_h1))
                 # เวลาแท่ง H1 ที่เกิด Cross (ใช้กันเข้าไม้ซ้ำบนสัญญาณ Cross เดิมตลอดทั้งชั่วโมง)
                 ma_cross_h1_bar_time = df_h1['time'].iloc[-2] if len(df_h1) >= 2 else df_h1['time'].iloc[-1]
 
@@ -1469,16 +1466,22 @@ def main():
                 #     ไซด์เวย์บูลลิช (MA10 > MA30) = BUY เท่านั้น · ไซด์เวย์แบร์ริช (MA10 < MA30) = SELL เท่านั้น
                 #     Backtest 2.5 ปี (P5): กำไรสุทธิ 386 → 757 จุด, Max DD 374 → 297
                 #     + MA10 H4 ต้องชันไปทางเดียวกัน (กันซื้อตอน MA10 H4 กำลังม้วนลง) — Backtest: PF 1.13 → 1.20
-                # ===== Plan 2 (กำหนดโดยผู้ใช้ 2026-10-05: หลักการเดียวกับ Plan 1 ย้ายขึ้น 1 Timeframe) =====
-                #   เทรนด์ H4: MA100 < MA150 < MA200 = ขาลง / MA100 > MA150 > MA200 = ขาขึ้น (แท่งที่ปิดแล้ว)
+                # ===== Plan 2 (MA H1) — Backtest 2.5 ปี ดีที่สุด: กำไร 1113 จุด, PF 1.59, Max DD 219 =====
+                #   H4 MA10/30 (Strict Pro-Trend, ไซด์เวย์ต้องเอียงตามฝั่ง) + ความชัน MA5 H4 (2 แท่ง) + ราคาปิด H4 เทียบ MA200
                 h4_c = df_h4['close']
                 if len(h4_c) >= 202:
                     m100, m150, m200 = (h4_c.rolling(k).mean().iloc[-2] for k in (100, 150, 200))
-                    h4_stack_dir = -1 if m100 < m150 < m200 else (1 if m100 > m150 > m200 else 0)
+                    h4_stack_dir = -1 if m100 < m150 < m200 else (1 if m100 > m150 > m200 else 0)  # แสดงผลบนการ์ด
                 else:
                     h4_stack_dir = 0
-                plan5_buy_ok = h4_stack_dir == 1
-                plan5_sell_ok = h4_stack_dir == -1
+                ma5_h4 = df_h4['close'].rolling(5).mean()
+                if len(ma5_h4) >= 5 and pd.notna(ma5_h4.iloc[-4]) and pd.notna(atr_h4_series.iloc[-2]) and atr_h4_series.iloc[-2] > 0:
+                    h4_ma5_slope = (ma5_h4.iloc[-2] - ma5_h4.iloc[-4]) / atr_h4_series.iloc[-2]
+                    h4_dir_p2 = 1 if (is_uptrend_h4 and h4_ma5_slope > 0) else (-1 if (not is_uptrend_h4 and h4_ma5_slope < 0) else 0)
+                else:
+                    h4_dir_p2 = 0
+                plan5_buy_ok = bool(h4_buy_ok and h4_dir_p2 == 1 and h4_lt_dir == 1)
+                plan5_sell_ok = bool(h4_sell_ok and h4_dir_p2 == -1 and h4_lt_dir == -1)
 
                 ma_status_str = f"{Colors.GREEN}MA5 > MA10 (+{(ma5_val - ma10_val):.2f}){Colors.RESET}" if ma5_val >= ma10_val else f"{Colors.RED}MA5 < MA10 ({(ma5_val - ma10_val):.2f}){Colors.RESET}"
                 
@@ -1510,10 +1513,10 @@ def main():
                     status_text = "[MA-CROSS SELL] MA5 < MA13 (M15) + H1 MA100<150<200"
                     status_color = Colors.RED
                 elif ma_cross_h1_up and plan5_buy_ok:
-                    status_text = "[MA-CROSS-H1 BUY] MA5 > MA13 (H1) + H4 MA100>150>200"
+                    status_text = "[MA-CROSS-H1 BUY] MA5 > MA10 (H1) + H4 Bullish + MA200"
                     status_color = Colors.GREEN
                 elif ma_cross_h1_down and plan5_sell_ok:
-                    status_text = "[MA-CROSS-H1 SELL] MA5 < MA13 (H1) + H4 MA100<150<200"
+                    status_text = "[MA-CROSS-H1 SELL] MA5 < MA10 (H1) + H4 Bearish + MA200"
                     status_color = Colors.RED
 
                 # แสดงผลแบบ Dashboard สวยงาม โดยปรับจุดทศนิยมอัตโนมัติ
@@ -1935,7 +1938,7 @@ def main():
                     # แผน 2: BUY MA-Cross-H1-Trend (MA 5 ตัดขึ้น MA 10 บนแท่ง H1 + เทรนด์ H4 Bullish - เข้าไม้ H1 กรองเทรนด์ H4)
                     elif ma_cross_h1_up and plan5_buy_ok:
                         p_label = "MA-Cross-H1-Trend"
-                        h4_ok, h4_msg = True, "H4 MA100/150/200 ขาขึ้น"  # Plan 2 ใช้เฉพาะกฎที่กำหนด
+                        h4_ok, h4_msg = True, "H4 ขาขึ้น + MA5 ชันขึ้น + เหนือ MA200"
                         if not h4_ok:
                             print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
                             log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
@@ -1943,7 +1946,7 @@ def main():
                             price = tick.ask
                             sl = round(price - sl_dist_h1, digits)
                             tp = 0.0  # Plan 2: ไม่ต้องตั้ง TP (รันตามเทรนด์ H1 ปิดทันทีเมื่อ MA5 ตัดลง MA10 บน H1)
-                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 on H1 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA5 Cross Below MA13){Colors.RESET}")
+                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA10 on H1 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA5 Cross Below MA10){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
                             _record_plan('BUY', p_label)
@@ -1951,7 +1954,7 @@ def main():
                     # แผน 2: SELL MA-Cross-H1-Trend (MA 5 ตัดลง MA 10 บนแท่ง H1 + เทรนด์ H4 Bearish - เข้าไม้ H1 กรองเทรนด์ H4)
                     elif ma_cross_h1_down and plan5_sell_ok:
                         p_label = "MA-Cross-H1-Trend"
-                        h4_ok, h4_msg = True, "H4 MA100/150/200 ขาลง"  # Plan 2 ใช้เฉพาะกฎที่กำหนด
+                        h4_ok, h4_msg = True, "H4 ขาลง + MA5 ชันลง + ใต้ MA200"
                         if not h4_ok:
                             print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
                             log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
@@ -1959,7 +1962,7 @@ def main():
                             price = tick.bid
                             sl = round(price + sl_dist_h1, digits)
                             tp = 0.0  # Plan 2: ไม่ต้องตั้ง TP (รันตามเทรนด์ H1 ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10 บน H1)
-                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 on H1 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA5 Cross Above MA13){Colors.RESET}")
+                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA10 on H1 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA5 Cross Above MA10){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
                             _record_plan('SELL', p_label)
@@ -1998,18 +2001,15 @@ def main():
                         if pos.comment == "MA-Cross-H1-Trend":
                             if pos.type == mt5.ORDER_TYPE_BUY and ma_cross_h1_down:
                                 p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
-                                print(f"{Colors.YELLOW}[PLAN 2 EXIT] {sym} MA5 Crossed Below MA13 on H1. Closing BUY position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                print(f"{Colors.YELLOW}[PLAN 2 EXIT] {sym} MA5 Crossed Below MA10 on H1. Closing BUY position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
                                 log_signal_event(sym, 'POSITION_MGMT', 'MA-Cross-H1-Trend', 'SELL', tick.bid, prob[1], prob[0], h4_cloud_status, div_name, 'MA_CROSS_H1_EXIT', f'H1 MA5 crossed below MA10 (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment="H1 MA5 Cross Down Exit")
                                 continue
                             elif pos.type == mt5.ORDER_TYPE_SELL and ma_cross_h1_up:
                                 p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
-                                print(f"{Colors.YELLOW}[PLAN 2 EXIT] {sym} MA5 Crossed Above MA13 on H1. Closing SELL position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                print(f"{Colors.YELLOW}[PLAN 2 EXIT] {sym} MA5 Crossed Above MA10 on H1. Closing SELL position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
                                 log_signal_event(sym, 'POSITION_MGMT', 'MA-Cross-H1-Trend', 'BUY', tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'MA_CROSS_H1_EXIT', f'H1 MA5 crossed above MA10 (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment="H1 MA5 Cross Up Exit")
-                                continue
-                            # Step Trailing แบบเดียวกับแผน MA M15 (ผู้ใช้เลือก — ทุกกำไร 5 จุด เลื่อน SL 40%)
-                            if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
                                 continue
 
                         # 1. เช็คเงื่อนไขการตัดขาดทุนเมื่อทิศทางเปลี่ยน (AI Dynamic Exit พร้อม Whipsaw Protection)
