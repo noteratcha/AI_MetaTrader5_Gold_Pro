@@ -3,9 +3,9 @@ name: ai-trading-bot
 description: Comprehensive knowledge, skills, technical indicators, execution styles, trading plans (SMC Sweep, Bounce, BB-H1, MA-Cross M15/H1), dynamic TP/SL, risk management, desktop GUI (positions, history, economic calendar, smart console), and GoldBot24 web/Supabase/payment integrations for the AI MetaTrader 5 Gold bot.
 ---
 
-# AI MetaTrader 5 Trading Bot v2026.1005.2146: XAUUSD Gold Specialist
+# AI MetaTrader 5 Trading Bot v2026.1005.2154: XAUUSD Gold Specialist
 
-คู่มือมาตรฐานสำหรับระบบเทรดอัตโนมัติ **AI MetaTrader 5 Gold Pro v2026.1005.2146** ที่มุ่งเน้นการดัน **Win Rate และผลตอบแทนสุทธิสูงสุด** ในสินทรัพย์ทองคำ (**XAUUSD Only 100%**) ด้วยสถาปัตยกรรม **Pure Gold Specialization**, **RRR 1:1.50**, **Breathing Room SL 0.75 ATR**, **Plan 1: SMC Liquidity Hunt + H1 Trend Anchor**, **Plan 3: H1 Bollinger Bands Reversion**, **Plan 4: M15 MA(5, 10) Cross + H1 Trend Anchor**, **Plan 5: H1 MA(5, 10) Cross + H4 Trend Anchor** และ **Strict Pro-Trend Only**
+คู่มือมาตรฐานสำหรับระบบเทรดอัตโนมัติ **AI MetaTrader 5 Gold Pro v2026.1005.2154** ที่มุ่งเน้นการดัน **Win Rate และผลตอบแทนสุทธิสูงสุด** ในสินทรัพย์ทองคำ (**XAUUSD Only 100%**) ด้วยสถาปัตยกรรม **Pure Gold Specialization**, **RRR 1:1.50**, **Breathing Room SL 0.75 ATR**, **Plan 1: SMC Liquidity Hunt + H1 Trend Anchor**, **Plan 3: H1 Bollinger Bands Reversion**, **Plan 4: M15 MA(5, 10) Cross + H1 Trend Anchor**, **Plan 5: H1 MA(5, 10) Cross + H4 Trend Anchor** และ **Strict Pro-Trend Only**
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**: รูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)**
 

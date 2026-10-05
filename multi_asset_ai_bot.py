@@ -1112,6 +1112,14 @@ def main():
                 # สภาวะตลาด H4 จากแท่งที่ปิดแล้ว (ไม่ Repaint) + ทิศความชัน MA10
                 atr_h4_series = _atr_series(df_h4)
                 is_uptrend_h4, h4_diff_pct, h4_dir = closed_trend(df_h4['ma_fast_h4'], df_h4['ma_slow_h4'], atr=atr_h4_series)
+                # Plan 5: ใช้ความชันของ MA5 H4 (2 แท่ง) ยืนยันเทรนด์ — ตอบสนองเร็วกว่า MA10
+                # Backtest 2.5 ปี: กำไรเท่าเดิม 1107 จุด, PF 1.38 → 1.58, Max DD 255 → 219
+                ma5_h4 = df_h4['close'].rolling(5).mean()
+                if len(ma5_h4) >= 5 and pd.notna(ma5_h4.iloc[-4]) and pd.notna(atr_h4_series.iloc[-2]) and atr_h4_series.iloc[-2] > 0:
+                    h4_ma5_slope = (ma5_h4.iloc[-2] - ma5_h4.iloc[-4]) / atr_h4_series.iloc[-2]
+                    h4_dir_p5 = 1 if (is_uptrend_h4 and h4_ma5_slope > 0) else (-1 if (not is_uptrend_h4 and h4_ma5_slope < 0) else 0)
+                else:
+                    h4_dir_p5 = 0
                 is_sideway_h4 = bool(abs(h4_diff_pct) < 0.20)
 
                 if is_sideway_h4:
@@ -1316,8 +1324,8 @@ def main():
                 #     ไซด์เวย์บูลลิช (MA10 > MA30) = BUY เท่านั้น · ไซด์เวย์แบร์ริช (MA10 < MA30) = SELL เท่านั้น
                 #     Backtest 2.5 ปี (P5): กำไรสุทธิ 386 → 757 จุด, Max DD 374 → 297
                 #     + MA10 H4 ต้องชันไปทางเดียวกัน (กันซื้อตอน MA10 H4 กำลังม้วนลง) — Backtest: PF 1.13 → 1.20
-                plan5_buy_ok = bool(h4_buy_ok and h4_dir == 1)
-                plan5_sell_ok = bool(h4_sell_ok and h4_dir == -1)
+                plan5_buy_ok = bool(h4_buy_ok and h4_dir_p5 == 1)
+                plan5_sell_ok = bool(h4_sell_ok and h4_dir_p5 == -1)
                 plan5_buy_ok = plan5_buy_ok and h4_lt_dir == 1
                 plan5_sell_ok = plan5_sell_ok and h4_lt_dir == -1
 
