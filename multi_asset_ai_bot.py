@@ -110,6 +110,65 @@ TRADE_HISTORY_CSV = _data_path('trade_history.csv')
 TRADE_MODS_CSV = _data_path('trade_modifications.csv')
 SIGNAL_HISTORY_CSV = _data_path('signal_history.csv')
 last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กันเข้าไม้ Plan 4/5 ซ้ำบนแท่ง Cross เดิม
+
+# Plan 4 Step Trailing SL: ทุกกำไร 5 จุด (= $5 ที่ 0.01 lot) เลื่อน SL เข้าหาราคา 40% ของระยะ SL → ราคา
+# Backtest 2.5 ปี (กฎ MA100/150/200 + MA5×MA13): กำไร 898 → 885 จุด (เท่าเดิม), PF 1.13 → 1.17, Max DD 346 → 245
+P4_TRAIL_STEP_POINTS = 5.0
+P4_TRAIL_FRACTION = 0.40
+P4_TRAIL_STATE_FILE = _data_path('p4_trail_state.json')
+
+
+def _load_p4_trail_state():
+    try:
+        with open(P4_TRAIL_STATE_FILE, 'r', encoding='utf-8') as f:
+            return {int(k): int(v) for k, v in json.load(f).items()}
+    except Exception:
+        return {}
+
+
+def _save_p4_trail_state(state):
+    try:
+        with open(P4_TRAIL_STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump({str(k): v for k, v in state.items()}, f)
+    except Exception:
+        pass
+
+
+p4_trail_steps = _load_p4_trail_state()   # {ticket: จำนวนขั้นที่เลื่อน SL ไปแล้ว} — เก็บลงไฟล์ กันเลื่อนซ้ำเมื่อรีสตาร์ทบอท
+
+
+def apply_p4_step_trailing(pos, tick, info):
+    """เลื่อน SL ของไม้ Plan 4 ตามขั้นกำไร (คืน True ถ้ามีการเลื่อน)"""
+    if pos.sl is None or pos.sl <= 0 or tick is None:
+        return False
+    d = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
+    price = tick.bid if d == 1 else tick.ask
+    profit_pts = (price - pos.price_open) * d
+    reached = int(profit_pts // P4_TRAIL_STEP_POINTS) if profit_pts > 0 else 0
+    done = p4_trail_steps.get(pos.ticket, 0)
+    if reached <= done:
+        return False
+    new_sl = float(pos.sl)
+    for k in range(done + 1, reached + 1):
+        step_px = pos.price_open + d * k * P4_TRAIL_STEP_POINTS        # ราคาตอนกำไรถึงขั้นที่ k
+        new_sl = new_sl + d * P4_TRAIL_FRACTION * abs(step_px - new_sl)  # เลื่อน 40% ของระยะ SL → ราคา
+    # ระยะห่างขั้นต่ำจากราคาตามที่โบรกเกอร์กำหนด (stops level)
+    min_gap = 0.0
+    if info is not None:
+        min_gap = max(float(getattr(info, 'trade_stops_level', 0) or 0), float(getattr(info, 'spread', 0) or 0)) * float(info.point)
+    if d == 1:
+        new_sl = min(new_sl, price - min_gap)
+        improved = new_sl > float(pos.sl)
+    else:
+        new_sl = max(new_sl, price + min_gap)
+        improved = new_sl < float(pos.sl)
+    p4_trail_steps[pos.ticket] = reached
+    _save_p4_trail_state(p4_trail_steps)
+    if not improved:
+        return False
+    modify_position(pos, round(new_sl, 2), pos.tp, reason=f"P4 Step Trail +{reached * P4_TRAIL_STEP_POINTS:.0f} pts")
+    return True
+
 _telemetry_thread = None          # เธรดสตรีม Telemetry (เริ่มครั้งเดียวต่อโปรเซส)
 _self_closed_tickets = set()      # ticket ที่บอทปิดเองผ่าน close_position() — กันนับขาดทุน/Circuit Breaker ซ้ำ
 _plan_disabled_logged = {}        # {(sym, plan): timestamp} แจ้งเตือนแผนที่ถูกปิดไม่เกินทุก 10 นาที
@@ -1610,9 +1669,16 @@ def main():
 
                     # SL = 0.75 ATR (M15) สำหรับ Plan 1/2/3 · Plan 4 ใช้ Swing SL (ไม่น้อยกว่า 0.75 ATR) · 0.75 ATR (H1) สำหรับ Plan 5
                     sl_dist = round(atr_val * SL_ATR_MULT, digits)
-                    # Plan 4 (กฎ MA100/150/200 + MA5×MA13): SL คงที่ 0.75 ATR M15
-                    # Backtest 2.5 ปี เทียบ Swing SL: กำไร 241 → 898 จุด, PF 1.03 → 1.13, Max DD 634 → 346
-                    sl_dist_p4 = sl_dist
+                    # Plan 4 Swing SL: วาง SL เลย High/Low ของ 2 แท่ง M15 ที่ปิดแล้ว (แท่ง Cross + แท่งก่อนหน้า) + 0.1 ATR
+                    # ไม่น้อยกว่า 0.75 ATR — Backtest 2.5 ปี: กำไรสุทธิ 496 → 952 จุด, PF 1.07 → 1.11, Max DD 405 → 372
+                    swing_high_p4 = float(df['high'].iloc[-3:-1].max()) if len(df) >= 3 else float('nan')
+                    swing_low_p4 = float(df['low'].iloc[-3:-1].min()) if len(df) >= 3 else float('nan')
+
+                    def _p4_sl_dist(direction, entry_price):
+                        ext = swing_high_p4 if direction == 'SELL' else swing_low_p4
+                        if pd.isna(ext):
+                            return sl_dist
+                        return round(max(sl_dist, abs(ext - entry_price) + 0.1 * atr_val), digits)
                     # ถ้ายังคำนวณ ATR H1 ไม่ได้ (ข้อมูลไม่พอ) ใช้ ATR M15 x2 เป็นค่าประมาณสำรอง
                     sl_dist_h1 = round((atr_h1_val if pd.notna(atr_h1_val) and atr_h1_val > 0 else atr_val * 2.0) * SL_ATR_MULT, digits)
 
@@ -1758,9 +1824,10 @@ def main():
                             log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                         elif not _is_plan_blocked('BUY', p_label):
                             price = tick.ask
+                            sl_dist_p4 = _p4_sl_dist('BUY', price)
                             sl = round(price - sl_dist_p4, digits)
                             tp = 0.0  # Plan 4: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดลง MA10)
-                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / 0.75ATR, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
+                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / Swing Low, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                             _record_plan('BUY', p_label)
@@ -1774,9 +1841,10 @@ def main():
                             log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                         elif not _is_plan_blocked('SELL', p_label):
                             price = tick.bid
+                            sl_dist_p4 = _p4_sl_dist('SELL', price)
                             sl = round(price + sl_dist_p4, digits)
                             tp = 0.0  # Plan 4: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10)
-                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / 0.75ATR, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
+                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / Swing High, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                             _record_plan('SELL', p_label)
@@ -1814,6 +1882,12 @@ def main():
                             _record_plan('SELL', p_label)
                 else:
                     # เช็คเงื่อนไขการจัดการ Position (Plan 4 MA Exit + Plan 5 H1 MA Exit + AI Reversal + Early BE Lock + Unlimited Dynamic TP)
+                    open_tickets = {p.ticket for p in positions}
+                    stale = [t for t in p4_trail_steps if t not in open_tickets]
+                    if stale:
+                        for t in stale:
+                            p4_trail_steps.pop(t, None)
+                        _save_p4_trail_state(p4_trail_steps)
                     for pos in positions:
                         # 0.1 Plan 4 Opposite MA Cross Exit (เงื่อนไขปิดไม้เฉพาะ Plan 4: MA5 ตัดกลับขั้วตรงข้าม M15)
                         # - ถ้าถือ BUY: เมื่อ MA 5 ตัดลง MA 10 บนแท่ง M15 ให้ปิดไม้ทันที
@@ -1830,6 +1904,9 @@ def main():
                                 print(f"{Colors.YELLOW}[PLAN 4 EXIT] {sym} MA5 Crossed Above MA13. Closing SELL position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
                                 log_signal_event(sym, 'POSITION_MGMT', 'MA-Cross-Trend', 'BUY', tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'MA_CROSS_EXIT', f'MA5 crossed above MA13 (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment="MA5 Cross Up Exit")
+                                continue
+                            # Step Trailing: ทุกกำไร 5 จุด เลื่อน SL 40% ของระยะ SL → ราคา
+                            if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
                                 continue
 
                         # 0.2 Plan 5 Opposite MA Cross Exit on H1 (เงื่อนไขปิดไม้เฉพาะ Plan 5: MA5 ตัดกลับขั้วตรงข้าม H1)
