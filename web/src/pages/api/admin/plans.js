@@ -4,11 +4,11 @@ import { logActivity } from '../../../lib/server/activity';
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 
 const PLAN_STAT_NAMES = {
-  'SMC-LiquidityHunt': 'Plan 1: SMC-LiquidityHunt',
-  'SR-SwingBounce': 'Plan 2: SR-SwingBounce',
-  'BB-H1-Reversion': 'Plan 3: BB-H1-Reversion',
-  'MA-Cross-Trend': 'Plan 4: MA-Cross-Trend',
-  'MA-Cross-H1-Trend': 'Plan 5: MA-Cross-H1-Trend',
+  'MA-Cross-Trend': 'Plan 1: MA-Cross-Trend',
+  'MA-Cross-H1-Trend': 'Plan 2: MA-Cross-H1-Trend',
+  'SMC-LiquidityHunt': 'Plan 3: SMC-LiquidityHunt',
+  'SR-SwingBounce': 'Plan 4: SR-SwingBounce',
+  'BB-H1-Reversion': 'Plan 5: BB-H1-Reversion',
 };
 
 // GET สถานะเปิด/ปิดแผนเทรด + ผลงานรวมรายแผน · PUT บันทึกการเปิด/ปิด (บอททุกเครื่องอ่านภายใน ~5 นาที)

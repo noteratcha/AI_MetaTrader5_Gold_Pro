@@ -1309,11 +1309,11 @@ class MainTradingApp(ctk.CTk):
         self.lbl_news_countdown.grid(row=2, column=1, sticky="e")
 
     PLAN_ROWS = [
-        ("⚡", "P1 · SMC Hunt", "Plan 1: SMC-LiquidityHunt"),
-        ("🎯", "P2 · SR Bounce", "Plan 2: SR-SwingBounce"),
-        ("🌊", "P3 · BB-H1", "Plan 3: BB-H1-Reversion"),
-        ("📈", "P4 · MA M15", "Plan 4: MA-Cross-Trend"),
-        ("👑", "P5 · MA H1", "Plan 5: MA-Cross-H1-Trend"),
+        ("📈", "P1 · MA M15", "Plan 1: MA-Cross-Trend"),
+        ("👑", "P2 · MA H1", "Plan 2: MA-Cross-H1-Trend"),
+        ("⚡", "P3 · SMC Hunt", "Plan 3: SMC-LiquidityHunt"),
+        ("🎯", "P4 · SR Bounce", "Plan 4: SR-SwingBounce"),
+        ("🌊", "P5 · BB-H1", "Plan 5: BB-H1-Reversion"),
     ]
 
     def _build_plans_card(self, parent):
@@ -2095,7 +2095,7 @@ class MainTradingApp(ctk.CTk):
                     if analyzed:
                         rows["H4"]["pct"].configure(text=f"{h4_pct:+.2f}%", text_color=pct_color(h4_pct))
 
-                    # H1 = เทรนด์ที่ Plan 4 ใช้: MA100/MA150/MA200 เรียงตัว
+                    # H1 = เทรนด์ที่ Plan 1 ใช้: MA100/MA150/MA200 เรียงตัว
                     stack = radar.get("h1_stack_dir")
                     if stack is None or not h1_trend[:2] in ("UP", "DO"):
                         rows["H1"]["val"].configure(text="—", text_color=COLOR_TEXT_MUTED)
@@ -2109,7 +2109,7 @@ class MainTradingApp(ctk.CTk):
                         text=f"{h1_pct:+.2f}%" if h1_trend[:2] in ("UP", "DO") else "",
                         text_color=pct_color(h1_pct),
                     )
-                    for tf, key, tag in (("H1", "h1_stack_dir", "MA100-200"), ("H4", "h4_lt_dir", "MA200")):
+                    for tf, key, tag in (("H1", "h1_stack_dir", "MA100-200"), ("H4", "h4_stack_dir", "MA100-200")):
                         lt_dir = int(radar.get(key, 0) or 0)
                         rows[tf]["lt"].configure(
                             text=f"{tag} ▲" if lt_dir > 0 else (f"{tag} ▼" if lt_dir < 0 else ""),
@@ -2129,7 +2129,7 @@ class MainTradingApp(ctk.CTk):
                             st.update(sup=sup, res=res, price=price)
                             self._draw_sr_bar(row["bar"], st)
 
-                    # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 1/2)
+                    # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 3/4)
                     h1_state = self.card_sr["rows"]["H1"]["state"]
                     pos = self._sr_position(h1_state["sup"], h1_state["res"], price)
                     if pos is None:

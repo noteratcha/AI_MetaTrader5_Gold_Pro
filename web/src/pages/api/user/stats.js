@@ -2,11 +2,11 @@ import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import { allowMethods, requireUser } from '../../../lib/server/auth';
 
 const PLAN_ORDER = [
-  'Plan 1: SMC-LiquidityHunt',
-  'Plan 2: SR-SwingBounce',
-  'Plan 3: BB-H1-Reversion',
-  'Plan 4: MA-Cross-Trend',
-  'Plan 5: MA-Cross-H1-Trend',
+  'Plan 1: MA-Cross-Trend',
+  'Plan 2: MA-Cross-H1-Trend',
+  'Plan 3: SMC-LiquidityHunt',
+  'Plan 4: SR-SwingBounce',
+  'Plan 5: BB-H1-Reversion',
 ];
 
 // สถิติการเทรดรายแผนของผู้ใช้ (ซิงค์จาก Desktop App → user_plan_stats)

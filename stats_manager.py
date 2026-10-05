@@ -1,6 +1,6 @@
 """
 AI MetaTrader 5 Gold Pro - User & Plan Performance Analytics Engine
-โมดูลเก็บและวิเคราะห์สถิติการเทรดแยกตาม User และแยกตาม Trading Plan (Plan 1–5)
+โมดูลเก็บและวิเคราะห์สถิติการเทรดแยกตาม User และแยกตาม Trading Plan (Plan 3–5)
 เก็บบันทึกทั้งแบบ Local JSON, CSV และซิงค์ขึ้น Supabase Cloud Real-time
 """
 
@@ -17,34 +17,34 @@ TRADE_CSV_FILE = os.path.join(BASE_DIR, "user_trade_history.csv")
 
 # รายชื่อแผนการเทรดมาตรฐาน 5 แผนเฉพาะทองคำ
 STANDARD_PLANS = [
-    "Plan 1: SMC-LiquidityHunt",
-    "Plan 2: SR-SwingBounce",
-    "Plan 3: BB-H1-Reversion",
-    "Plan 4: MA-Cross-Trend",
-    "Plan 5: MA-Cross-H1-Trend"
+    "Plan 1: MA-Cross-Trend",
+    "Plan 2: MA-Cross-H1-Trend",
+    "Plan 3: SMC-LiquidityHunt",
+    "Plan 4: SR-SwingBounce",
+    "Plan 5: BB-H1-Reversion"
 ]
 
 def clean_plan_name(raw_plan: str) -> str:
     """จัดกลุ่มชื่อแผนให้ตรงกับมาตรฐาน 5 แผนหลัก"""
     p = str(raw_plan).strip()
     # จับจากชื่อแผนก่อน (ชื่ออย่าง "BB-H1-Reversion" / "MA-Cross-H1-Trend" มีเลข 1 อยู่ในคำว่า H1
-    # ถ้าเช็คตัวเลขก่อนจะถูกจัดเป็น Plan 1 ผิด)
+    # ถ้าเช็คตัวเลขก่อนจะถูกจัดผิดแผน)
     if "SMC" in p or "Sweep" in p or "Hunt" in p:
-        return "Plan 1: SMC-LiquidityHunt"
+        return "Plan 3: SMC-LiquidityHunt"
     if "Bounce" in p or "Swing" in p:
-        return "Plan 2: SR-SwingBounce"
+        return "Plan 4: SR-SwingBounce"
     if "BB" in p or "Reversion" in p:
-        return "Plan 3: BB-H1-Reversion"
+        return "Plan 5: BB-H1-Reversion"
     if "Cross-H1" in p:
-        return "Plan 5: MA-Cross-H1-Trend"
+        return "Plan 2: MA-Cross-H1-Trend"
     if "Cross-Trend" in p or "MA-Cross" in p:
-        return "Plan 4: MA-Cross-Trend"
+        return "Plan 1: MA-Cross-Trend"
     if "Breakout" in p:
         return "Manual/Other"  # แผน Breakout เดิมถูกนำออกจากระบบแล้ว
-    # รูปแบบ "Plan N" เปล่า ๆ เป็นข้อมูลยุคเลขแผนเก่า (0 = SMC, 1 = Bounce)
-    for n, name in (("0", "Plan 2: SMC-LiquidityHunt"), ("1", "Plan 2: SR-SwingBounce"),
-                    ("3", "Plan 3: BB-H1-Reversion"), ("4", "Plan 4: MA-Cross-Trend"),
-                    ("5", "Plan 5: MA-Cross-H1-Trend")):
+    # รูปแบบ "Plan N" เปล่า ๆ เป็นข้อมูลยุคเลขแผนแรกสุด (0 = SMC, 1 = Bounce, 3 = BB, 4 = MA M15, 5 = MA H1)
+    for n, name in (("0", "Plan 3: SMC-LiquidityHunt"), ("1", "Plan 4: SR-SwingBounce"),
+                    ("3", "Plan 5: BB-H1-Reversion"), ("4", "Plan 1: MA-Cross-Trend"),
+                    ("5", "Plan 2: MA-Cross-H1-Trend")):
         if f"Plan {n}" in p:
             return name
     return p or "Manual/Other"
@@ -55,7 +55,7 @@ _SUM_FIELDS = ("total_trades", "win_trades", "loss_trades", "total_profit_usd", 
 
 def migrate_plan_keys(plans: dict) -> dict:
     """
-    ย้ายสถิติจากชื่อแผนเลขเก่า (Plan 1: SMC / Plan 2: Bounce) ไปชื่อใหม่ (Plan 2 / Plan 2)
+    ย้ายสถิติจากชื่อแผนเลขเก่า (Plan 3: SMC / Plan 4: Bounce) ไปชื่อใหม่ (Plan 4 / Plan 4)
     และตัดแผน Breakout ที่นำออกจากระบบแล้ว — รวมยอดถ้ามีทั้งชื่อเก่าและใหม่
     """
     out = {}
@@ -226,7 +226,7 @@ class StatsManager:
         )
 
     def record_close(self, ticket: int, profit: float, close_price: float = 0, reason: str = "",
-                     user_id: str = None, fallback_plan: str = "Plan 1: SMC-LiquidityHunt"):
+                     user_id: str = None, fallback_plan: str = "Plan 3: SMC-LiquidityHunt"):
         """
         บันทึกผลเมื่อปิดไม้ (Trade Exit / TP Hit / SL Hit):
         - คำนวณ กำไร/ขาดทุน สุทธิ

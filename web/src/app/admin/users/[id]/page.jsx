@@ -11,11 +11,11 @@ import { cleanText, formatHHMM, formatPrice, formatThaiDateTime, formatUsd, time
 import { ACTIVITY_LABELS, TRADE_ACTION_LABELS } from '../../../../lib/adminLabels';
 
 const PLAN_ROWS = [
-  'Plan 1: SMC-LiquidityHunt',
-  'Plan 2: SR-SwingBounce',
-  'Plan 3: BB-H1-Reversion',
-  'Plan 4: MA-Cross-Trend',
-  'Plan 5: MA-Cross-H1-Trend',
+  'Plan 1: MA-Cross-Trend',
+  'Plan 2: MA-Cross-H1-Trend',
+  'Plan 3: SMC-LiquidityHunt',
+  'Plan 4: SR-SwingBounce',
+  'Plan 5: BB-H1-Reversion',
 ];
 
 export default function AdminUserDetailPage() {

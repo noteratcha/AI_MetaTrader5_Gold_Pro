@@ -52,7 +52,7 @@ _RULES = [
     (re.compile(r"^\[TP HIT\]"), "profit", "key"),
     (re.compile(r"^\[SL HIT\]"), "loss", "key"),
     (re.compile(r"^\[ORDER CLOSED\]"), "close", "key"),
-    (re.compile(r"^\[(PLAN 4 EXIT|PLAN 5 EXIT|AI REVERSAL)\]"), "exit", "key"),
+    (re.compile(r"^\[(PLAN 1 EXIT|PLAN 2 EXIT|AI REVERSAL)\]"), "exit", "key"),
     (re.compile(r"^\[(PROFIT LOCK|DYNAMIC TP|SL/TP UPDATED)"), "lock", "key"),
     (re.compile(r"^\[CIRCUIT BREAKER\]"), "error", "key"),
     (re.compile(r"^\[LOSS BLOCK CLEARED\]"), "profit", "key"),

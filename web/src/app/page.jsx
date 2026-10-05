@@ -210,7 +210,7 @@ function RadarCard({ radar, loading }) {
   const h4 = String(radar?.h4_trend || '');
   const h4Tone = h4.startsWith('BULL') ? 'badge-green' : h4.startsWith('BEAR') ? 'badge-red' : 'badge-sky';
   const h1 = String(radar?.h1_trend || '');
-  // H1 = เทรนด์ที่ Plan 4 ใช้ (MA100/150/200 เรียงตัว) — โปรแกรมเวอร์ชันเก่ายังส่งแค่ h1_trend
+  // H1 = เทรนด์ที่ Plan 1 ใช้ (MA100/150/200 เรียงตัว) — โปรแกรมเวอร์ชันเก่ายังส่งแค่ h1_trend
   const stack = radar?.h1_stack_dir;
   const h1Tone =
     stack === undefined
