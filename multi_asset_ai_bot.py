@@ -110,6 +110,10 @@ TRADE_HISTORY_CSV = _data_path('trade_history.csv')
 TRADE_MODS_CSV = _data_path('trade_modifications.csv')
 SIGNAL_HISTORY_CSV = _data_path('signal_history.csv')
 last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กันเข้าไม้ Plan 4/5 ซ้ำบนแท่ง Cross เดิม
+# Plan 4 รอยืนยัน: หลัง MA5 ตัด MA10 (M15) ต้องมีแท่งปิดใต้ MA5 (SELL) / เหนือ MA5 (BUY) ภายใน 3 แท่งถัดไป
+# Backtest 2.5 ปี: กำไร 1463 → 1689 จุด, PF 1.34 → 1.50, Max DD 192 → 173
+P4_CONFIRM_BARS = 3
+p4_pending = {}                   # {sym: {"dir", "cross_time", "deadline", "confirmed_time"}}
 _telemetry_thread = None          # เธรดสตรีม Telemetry (เริ่มครั้งเดียวต่อโปรเซส)
 _self_closed_tickets = set()      # ticket ที่บอทปิดเองผ่าน close_position() — กันนับขาดทุน/Circuit Breaker ซ้ำ
 _plan_disabled_logged = {}        # {(sym, plan): timestamp} แจ้งเตือนแผนที่ถูกปิดไม่เกินทุก 10 นาที
@@ -1319,6 +1323,44 @@ def main():
                 h4_lt_dir, h4_ma200 = long_term_dir(df_h4['close'])
                 ma_cross_buy_confirm = ma_cross_buy_confirm and h1_lt_dir == 1
                 ma_cross_sell_confirm = ma_cross_sell_confirm and h1_lt_dir == -1
+
+                # ---- Plan 4: ไม่เข้าทันทีที่ MA ตัด — รอแท่งยืนยันปิดเลย MA5 ภายใน P4_CONFIRM_BARS แท่ง
+                closed_bar_time = df.iloc[-2]['time'] if len(df) >= 2 else df.iloc[-1]['time']
+                closed_close_m15 = float(df.iloc[-2]['close']) if len(df) >= 2 else float(close_price)
+                if ma_cross_buy_confirm or ma_cross_sell_confirm:
+                    new_dir = 1 if ma_cross_buy_confirm else -1
+                    cur = p4_pending.get(sym)
+                    if not cur or cur['cross_time'] != closed_bar_time:
+                        p4_pending[sym] = {
+                            "dir": new_dir,
+                            "cross_time": closed_bar_time,
+                            "deadline": closed_bar_time + pd.Timedelta(minutes=15 * P4_CONFIRM_BARS),
+                            "confirmed_time": None,
+                        }
+                        side_txt = "เหนือ" if new_dir == 1 else "ใต้"
+                        print(f"{Colors.CYAN}[P4 WAIT CONFIRM] {sym} MA-Cross {'BUY' if new_dir == 1 else 'SELL'} — รอแท่ง M15 ปิด{side_txt} MA5 ภายใน {P4_CONFIRM_BARS} แท่ง{Colors.RESET}")
+                ma_cross_buy_confirm = False
+                ma_cross_sell_confirm = False
+                pend = p4_pending.get(sym)
+                if pend:
+                    pdir = pend["dir"]
+                    if pend["confirmed_time"] is not None:
+                        if closed_bar_time == pend["confirmed_time"]:
+                            ma_cross_buy_confirm, ma_cross_sell_confirm = pdir == 1, pdir == -1
+                        else:
+                            p4_pending.pop(sym, None)  # สัญญาณยืนยันใช้ได้เฉพาะแท่งที่ยืนยัน
+                    elif (pdir == 1 and ma_cross_down) or (pdir == -1 and ma_cross_up) or closed_bar_time > pend["deadline"]:
+                        p4_pending.pop(sym, None)
+                        print(f"{Colors.YELLOW}[P4 CONFIRM EXPIRED] {sym} ไม่มีแท่งยืนยันภายใน {P4_CONFIRM_BARS} แท่ง — ยกเลิกสัญญาณ{Colors.RESET}")
+                    elif closed_bar_time > pend["cross_time"] and (
+                        (pdir == -1 and closed_close_m15 < closed_ma5) or (pdir == 1 and closed_close_m15 > closed_ma5)
+                    ):
+                        pend["confirmed_time"] = closed_bar_time
+                        ma_cross_buy_confirm, ma_cross_sell_confirm = pdir == 1, pdir == -1
+                        ma_cross_bar_time = closed_bar_time  # ใช้แท่งยืนยันเป็นตัวกันเข้าซ้ำ
+                        print(f"{Colors.GREEN if pdir == 1 else Colors.RED}[P4 CONFIRMED] {sym} แท่ง M15 ปิด{'เหนือ' if pdir == 1 else 'ใต้'} MA5 แล้ว → พร้อมเข้า {'BUY' if pdir == 1 else 'SELL'}{Colors.RESET}")
+                    if pend.get("confirmed_time") == closed_bar_time:
+                        ma_cross_bar_time = closed_bar_time
 
                 # (A) Plan 5: ช่วง H4 ไซด์เวย์ ต้องเทรดตามฝั่งที่ MA10/MA30 H4 เอียง
                 #     ไซด์เวย์บูลลิช (MA10 > MA30) = BUY เท่านั้น · ไซด์เวย์แบร์ริช (MA10 < MA30) = SELL เท่านั้น
