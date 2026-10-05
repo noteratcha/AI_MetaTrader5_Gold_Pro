@@ -7,7 +7,7 @@ import { ArrowLeft, Ban, Clock, KeyRound, LockOpen, Pencil, ScrollText, Trash2, 
 import AdminShell from '../../../../components/admin/AdminShell';
 import { Alert, EmptyState, Modal, Pager, Spinner } from '../../../../components/ui';
 import { useAuth } from '../../../../context/AuthContext';
-import { formatHHMM, formatPrice, formatThaiDateTime, formatUsd, timeAgo } from '../../../../lib/format';
+import { cleanText, formatHHMM, formatPrice, formatThaiDateTime, formatUsd, timeAgo } from '../../../../lib/format';
 import { ACTIVITY_LABELS, TRADE_ACTION_LABELS } from '../../../../lib/adminLabels';
 
 const PLAN_ROWS = [
@@ -366,14 +366,14 @@ function LogRow({ type, r }) {
           <span className={`badge ${r.signal_type === 'ENTRY_SIGNAL' ? 'badge-gold' : 'badge-muted'}`}>{r.signal_type}</span>
         </td>
         <td className="small">
-          {r.plan} · <span className={r.direction === 'BUY' ? 'text-green' : r.direction === 'SELL' ? 'text-red' : ''}>{r.direction}</span>
+          {cleanText(r.plan)} · <span className={r.direction === 'BUY' ? 'text-green' : r.direction === 'SELL' ? 'text-red' : ''}>{r.direction}</span>
         </td>
         <td className="num">{formatPrice(r.price)}</td>
         <td className="tiny">
           AI ↑{Number(r.ai_up).toFixed(0)}% ↓{Number(r.ai_down).toFixed(0)}%
         </td>
         <td className="tiny faint" style={{ whiteSpace: 'normal' }}>
-          {r.status} · {r.detail}
+          {cleanText(r.status)} · {cleanText(r.detail)}
         </td>
       </tr>
     );

@@ -6,7 +6,7 @@ import { Activity, Banknote, Clock, KeyRound, MessageCircle, RefreshCw, Target, 
 import AdminShell from '../../components/admin/AdminShell';
 import { Alert, Pager, StatCard } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
-import { formatThaiDateTime, formatThb, formatUsd } from '../../lib/format';
+import { cleanText, formatThaiDateTime, formatThb, formatUsd } from '../../lib/format';
 import { ACTIVITY_LABELS } from '../../lib/adminLabels';
 
 export default function AdminOverviewPage() {
@@ -187,7 +187,7 @@ export default function AdminOverviewPage() {
                     <span className="tiny faint">{formatThaiDateTime(a.created_at)}</span>
                   </div>
                   <div style={{ marginTop: 4 }}>{a.email || a.actor || '—'}</div>
-                  {a.detail && <div className="tiny muted">{a.detail}</div>}
+                  {a.detail && <div className="tiny muted">{cleanText(a.detail)}</div>}
                 </div>
               ))
             )}

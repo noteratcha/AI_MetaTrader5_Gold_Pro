@@ -3,6 +3,7 @@ import threading
 import json
 import MetaTrader5 as mt5
 import pandas as pd
+import re
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 import csv
@@ -431,6 +432,14 @@ def play_celebration_sound():
     except Exception:
         pass
 
+_ANSI_RE = re.compile(r"\[[0-9;]*m")
+
+
+def strip_ansi(text) -> str:
+    """ตัดรหัสสีของ Console (ANSI) ออก ก่อนส่งข้อความขึ้นเว็บ/ฐานข้อมูล"""
+    return _ANSI_RE.sub("", str(text or ""))
+
+
 def closed_trend(ma_fast, ma_slow, slope_bars=3):
     """
     เทรนด์จาก "แท่งที่ปิดแล้ว" (ไม่ Repaint ตามราคาที่วิ่งอยู่ในแท่ง)
@@ -495,6 +504,7 @@ def log_signal_event(symbol, signal_type, plan, direction, price, ai_up, ai_down
     - signal_type: 'ZONE_ALERT', 'ENTRY_SIGNAL', 'H4_FILTERED', 'RISK_BLOCKED', 'DIVERGENCE', 'POSITION_MGMT'
     - status: 'ORDER_SENT', 'WAIT_AI_CONFIRM', 'H4_BLOCKED', 'PLAN_BLOCKED', 'COOLDOWN_BLOCKED', 'CIRCUIT_BREAKER', 'MAX_POS_BLOCKED', 'REVERSAL_EXIT', 'LOCK_SL'
     """
+    plan, detail, status, divergence = strip_ansi(plan), strip_ansi(detail), strip_ansi(status), strip_ansi(divergence)
     global _last_logged_signals
     now = time.time()
     key = (symbol, signal_type, plan, direction)
@@ -1458,7 +1468,7 @@ def main():
                 is_alert_zone = bool(is_sweep_buy or is_sweep_sell or near_support or near_resistance or bb_buy_confirm or bb_sell_confirm or ma_cross_buy_confirm or ma_cross_sell_confirm or ma_cross_h1_up or ma_cross_h1_down or is_in_zone or bull_div_active or bear_div_active)
                 latest_radar_cache[sym] = {
                     "symbol": sym,
-                    "status": status_text if not div_tag else f"{status_text} {div_tag.strip()}",
+                    "status": strip_ansi(status_text if not div_tag else f"{status_text} {div_tag.strip()}"),
                     "up_prob": round(float(prob[1]), 4),
                     "price": float(close_price),
                     "is_in_zone": is_alert_zone,

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { EmptyState, PageHeader, PageLoading, StatCard } from '../components/ui';
-import { formatPrice, formatThaiDateTime, formatUsd, secondsSince, timeAgo } from '../lib/format';
+import { cleanText, formatPrice, formatThaiDateTime, formatUsd, secondsSince, timeAgo } from '../lib/format';
 import { PLAN_LIST } from '../lib/packages';
 import TradeHistory from '../components/TradeHistory';
 import { NextNewsCard, useCalendar } from '../components/EconCalendar';
@@ -212,7 +212,7 @@ function RadarCard({ radar, loading }) {
   const h1 = String(radar?.h1_trend || '');
   const h1Tone = h1.startsWith('UP') ? 'badge-green' : h1.startsWith('DOWN') ? 'badge-red' : 'badge-muted';
   const h1Label = h1.startsWith('UP') ? h1.replace('UPTREND', '▲ ขาขึ้น') : h1.startsWith('DOWN') ? h1.replace('DOWNTREND', '▼ ขาลง') : '';
-  const status = radar?.status || '[WAIT OUTSIDE ZONE]';
+  const status = cleanText(radar?.status) || '[WAIT OUTSIDE ZONE]';
 
   return (
     <div className="card">

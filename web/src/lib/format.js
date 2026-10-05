@@ -64,3 +64,12 @@ export function formatKeyInput(value) {
   const clean = String(value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 24);
   return clean.match(/.{1,4}/g)?.join('-') || '';
 }
+
+/** ตัดรหัสสี Console (ANSI เช่น \x1b[31m) ที่อาจติดมากับข้อความจากบอทเวอร์ชันเก่า */
+export function cleanText(value) {
+  // eslint-disable-next-line no-control-regex
+  return String(value ?? '')
+    .replace(/(?:\u001b|�)?\[[0-9;]*m/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
