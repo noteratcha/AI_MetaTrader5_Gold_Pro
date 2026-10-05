@@ -243,12 +243,12 @@ function RadarCard({ radar, loading }) {
               </div>
             </div>
             <div className="row-between">
-              <span className="muted small">เทรนด์ H4</span>
-              <span className={`badge ${h4Tone}`}>{h4 || 'กำลังวิเคราะห์'}</span>
-            </div>
-            <div className="row-between">
               <span className="muted small">เทรนด์ H1</span>
               <span className={`badge ${h1Tone}`}>{h1Label || 'กำลังวิเคราะห์'}</span>
+            </div>
+            <div className="row-between">
+              <span className="muted small">เทรนด์ H4</span>
+              <span className={`badge ${h4Tone}`}>{h4 || 'กำลังวิเคราะห์'}</span>
             </div>
             {[
               ['แนวรับ – ต้าน H1', radar?.h1_support, radar?.h1_resistance],
