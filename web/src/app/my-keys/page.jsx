@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Gift, Inbox, Key, Lock, ShoppingBag, Sparkles } from 'lucide-react';
+import { Gift, Inbox, Key, Lock, Receipt, ShoppingBag, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Alert, AuthGate, CopyButton, EmptyState, PageHeader, PageLoading, Spinner } from '../../components/ui';
 import { formatThaiDateTime, formatThb } from '../../lib/format';
@@ -77,9 +77,14 @@ function KeyVault() {
         title="คีย์ของฉัน"
         description="Product Key ที่คุณซื้อ ใช้เติมชั่วโมงได้ทั้งบนเว็บและในโปรแกรม Desktop"
         actions={
-          <Link href="/store" className="btn btn-primary btn-sm">
-            <ShoppingBag size={15} /> ซื้อชั่วโมงเพิ่ม
-          </Link>
+          <>
+            <Link href="/receipts" className="btn btn-secondary btn-sm">
+              <Receipt size={15} /> ใบเสร็จของฉัน
+            </Link>
+            <Link href="/store" className="btn btn-primary btn-sm">
+              <ShoppingBag size={15} /> ซื้อชั่วโมงเพิ่ม
+            </Link>
+          </>
         }
       />
 
@@ -141,6 +146,14 @@ function KeyVault() {
                     <div className="tiny faint">
                       {formatThaiDateTime(k.createdAt)}
                       {k.orderId ? ` · ${k.orderId}` : ''}
+                      {k.source === 'purchase' && k.orderId && (
+                        <>
+                          {' · '}
+                          <Link href={`/receipts/${encodeURIComponent(k.orderId)}`} className="text-sky">
+                            ใบเสร็จ
+                          </Link>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>

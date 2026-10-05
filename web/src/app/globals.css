@@ -1406,3 +1406,93 @@ select.input {
   justify-content: center;
   height: 36px;
 }
+
+/* ----------------------------------------------------------------------------
+   Receipt (ใบเสร็จรับเงิน) — ดูบนจอ + พิมพ์/บันทึก PDF
+   ---------------------------------------------------------------------------- */
+.receipt-paper {
+  padding: 28px;
+}
+.receipt-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.receipt-seller {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.receipt-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+.receipt-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 20px;
+  margin: 0 0 18px;
+}
+.receipt-meta dt {
+  font-size: 0.75rem;
+  color: var(--text-3, var(--text-2));
+  margin-bottom: 2px;
+}
+.receipt-meta dd {
+  margin: 0;
+  font-weight: 600;
+}
+.receipt-items tfoot td {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.receipt-total-label {
+  text-align: right;
+  font-weight: 700;
+}
+.receipt-total {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.receipt-pay {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+
+@media print {
+  .nav,
+  .footer,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .receipt-paper {
+    border: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .receipt-paper .muted,
+  .receipt-paper .faint,
+  .receipt-meta dt {
+    color: #555 !important;
+  }
+  .receipt-seller,
+  .receipt-total {
+    color: #8a6100 !important;
+  }
+  .receipt-paper .table th,
+  .receipt-paper .table td {
+    color: #111 !important;
+    border-color: #ddd !important;
+  }
+}

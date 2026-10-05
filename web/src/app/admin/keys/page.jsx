@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { KeyRound, Search, Sparkles } from 'lucide-react';
 import AdminShell from '../../../components/admin/AdminShell';
 import { Alert, CopyButton, EmptyState, Modal, Pager, Spinner } from '../../../components/ui';
@@ -126,6 +127,11 @@ export default function AdminKeysPage() {
                     <td className="tiny faint">
                       {formatThaiDateTime(o.createdAt)}
                       {o.paidAt && <div>ชำระ {formatThaiDateTime(o.paidAt)}</div>}
+                      {o.status === 'PAID' && (
+                        <Link href={`/receipts/${encodeURIComponent(o.orderId)}`} className="text-sky">
+                          ใบเสร็จ
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

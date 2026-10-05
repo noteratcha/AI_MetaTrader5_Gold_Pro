@@ -2,6 +2,7 @@ import { getAdminClient, insertTolerant } from './supabaseAdmin';
 import { generateProductKey } from './keys';
 import { logActivity } from './activity';
 import { notifyPurchase } from './lineNotify';
+import { issueReceipt } from './receipts';
 
 export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -101,6 +102,8 @@ export async function fulfillOrder(order, paymentRef) {
     event: 'purchase_paid',
     detail: `ชำระ ฿${Number(order.amount_thb)} (${order.order_id}) → คีย์ ${productKey} +${baseHours} ชม.`,
   });
+  // ใบเสร็จ: บันทึกลงตาราง receipts + ส่งอีเมลให้ผู้ซื้อ (ล้มเหลวได้โดยไม่กระทบการออกคีย์)
+  await issueReceipt({ ...order, payment_ref: paymentRef, generated_key_code: productKey }, { productKey, paymentRef });
   await notifyPurchase({
     email: order.owner_email,
     amountThb: order.amount_thb,

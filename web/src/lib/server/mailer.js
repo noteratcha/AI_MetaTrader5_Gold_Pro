@@ -92,3 +92,58 @@ export async function sendAlreadyRegisteredEmail(to, displayName, siteUrl) {
     html
   );
 }
+
+const SITE_URL = process.env.SITE_URL || 'https://goldbot24.vercel.app';
+const thb = (n) => `฿${Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const thaiDate = (v) => new Date(v || Date.now()).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long', timeStyle: 'short' });
+
+/** อีเมลใบเสร็จรับเงิน (receipt = toPublicReceipt จาก receipts.js) */
+export async function sendReceiptEmail(to, receipt) {
+  const r = receipt;
+  const s = r.seller || {};
+  const row = (label, value) =>
+    value ? `<tr><td style="padding:4px 0;color:#a3abba">${label}</td><td style="padding:4px 0;text-align:right;color:#eceef3">${escapeHtml(value)}</td></tr>` : '';
+  const url = `${SITE_URL}/receipts/${encodeURIComponent(r.receiptNo)}`;
+  const html = wrap(
+    'ใบเสร็จรับเงิน',
+    `<p style="margin:0 0 14px;color:#a3abba">ขอบคุณที่ซื้อชั่วโมงใช้งาน GoldBot24 คุณ ${escapeHtml(r.customerName || to.split('@')[0])}</p>
+    <div style="background:#14171e;border:1px solid #262b36;border-radius:12px;padding:16px">
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        ${row('เลขที่ใบเสร็จ', r.receiptNo)}
+        ${row('วันที่', thaiDate(r.issuedAt))}
+        ${row('เลขที่คำสั่งซื้อ', r.orderId)}
+        ${row('ผู้ซื้อ', `${r.customerName || ''} <${r.email}>`)}
+      </table>
+      <hr style="border:none;border-top:1px solid #262b36;margin:12px 0"/>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr><td style="padding:4px 0;color:#eceef3">${escapeHtml(r.itemName)}</td><td style="padding:4px 0;text-align:right;color:#eceef3">${thb(r.amountThb)}</td></tr>
+        <tr><td style="padding:10px 0 0;font-weight:700;color:#f2c14e">ยอดชำระทั้งสิ้น</td><td style="padding:10px 0 0;text-align:right;font-weight:700;font-size:18px;color:#f2c14e">${thb(r.amountThb)}</td></tr>
+      </table>
+      <hr style="border:none;border-top:1px solid #262b36;margin:12px 0"/>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        ${row('ช่องทางชำระ', r.paymentMethod)}
+        ${row('อ้างอิงการชำระ', r.paymentRef)}
+        ${row('Product Key', r.productKey)}
+      </table>
+    </div>
+    <p style="margin:16px 0 0;text-align:center"><a href="${url}" style="display:inline-block;padding:10px 18px;background:#f2c14e;color:#1a1406;border-radius:10px;font-weight:700;text-decoration:none">ดู / พิมพ์ใบเสร็จ</a></p>
+    <p style="margin:16px 0 0;color:#6b7385;font-size:12px">ผู้ขาย: ${escapeHtml(s.name || 'GoldBot24')}${s.taxId ? ` · เลขประจำตัวผู้เสียภาษี ${escapeHtml(s.taxId)}` : ''}${s.address ? `<br/>${escapeHtml(s.address)}` : ''}<br/>เติมคีย์ได้ที่หน้า "คีย์ของฉัน" หรือในโปรแกรม Desktop · เอกสารนี้ออกโดยระบบอัตโนมัติ</p>`
+  );
+  await send(
+    to,
+    `GoldBot24 ใบเสร็จรับเงิน ${r.receiptNo} (${thb(r.amountThb)})`,
+    [
+      `ใบเสร็จรับเงิน GoldBot24`,
+      `เลขที่: ${r.receiptNo}`,
+      `วันที่: ${thaiDate(r.issuedAt)}`,
+      `คำสั่งซื้อ: ${r.orderId}`,
+      `รายการ: ${r.itemName}`,
+      `ยอดชำระ: ${thb(r.amountThb)}`,
+      r.productKey ? `Product Key: ${r.productKey}` : '',
+      `ดู/พิมพ์ใบเสร็จ: ${url}`,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    html
+  );
+}

@@ -1,9 +1,9 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0723 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1005.0913 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0723): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1005.0913): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
-> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0723`  
+> โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.0913`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
 
 ---
@@ -170,7 +170,7 @@
 | **Hours Metering** | Desktop หักเวลาในเครื่องแล้วส่งยอดให้ `/api/auth/meter` หักจริงบน Server ทุก 5 นาที — ห้าม PATCH `bot_config.lot_size` ตรงจาก Client |
 | **Register** | ยืนยันอีเมลด้วยรหัส 6 หลักก่อนสร้างบัญชี (ตอบข้อความเดียวกันเสมอ ถ้ามีบัญชีอยู่แล้วส่งอีเมลแจ้งเจ้าของแทน — กันสุ่มหาอีเมล) · สมาชิกใหม่รับฟรี 48 ชม. รหัสผ่านเข้ารหัส PBKDF2-HMAC-SHA256 |
 | **Admin RBAC** | `Admin Analytics` (Navbar/Footer/หน้า `/admin/analytics`) แสดงเฉพาะ Admin เท่านั้น ห้ามเปิดเผยสถิติทุกลูกค้าและเครื่องผลิต Promo Key ต่อลูกค้าทั่วไป · แอดมินสลับ **โหมดการดู ผู้ใช้ ↔ แอดมิน** ได้ที่ Navbar (`viewMode` ใน `AuthContext`, จำไว้ใน `localStorage`) — โหมดผู้ใช้ซ่อนเมนูแอดมินทั้งหมด (`isAdminView`) แต่สิทธิ์จริงยังตรวจที่ Server เสมอ |
-| **Payment** | ราคา/ชั่วโมงคิดจาก `web/src/lib/packages.js` ฝั่ง Server เท่านั้น · Order ID สุ่มแบบเดาไม่ได้ · PromptPay QR → SlipOK ตรวจสลิป (`log: true` กันสลิปซ้ำ + `amount` ตรวจยอด) → ผลิต Product Key อัตโนมัติ · Webhook ต้องมี `x-webhook-secret` · ห้ามโหมดจำลองบน Production · **ถัดไป: Beam PromptPay + Webhook (ไม่ต้องแนบสลิป)** |
+| **Payment** | ราคา/ชั่วโมงคิดจาก `web/src/lib/packages.js` ฝั่ง Server เท่านั้น · Order ID สุ่มแบบเดาไม่ได้ · PromptPay QR → SlipOK ตรวจสลิป (`log: true` กันสลิปซ้ำ + `amount` ตรวจยอด) → ผลิต Product Key อัตโนมัติ · Webhook ต้องมี `x-webhook-secret` · ห้ามโหมดจำลองบน Production · **ถัดไป: Beam PromptPay + Webhook (ไม่ต้องแนบสลิป)** · **ใบเสร็จ**: ชำระสำเร็จ → `issueReceipt()` บันทึกตาราง `receipts` (เลขที่ `GB24-YYYYMM-000001`, 1 คำสั่งซื้อ = 1 ใบ) + ส่งอีเมลผู้ซื้อ · ดู/พิมพ์ที่ `/receipts` (`supabase_receipts_patch_04.sql`) |
 | **Database Security** | RLS เปิดทุกตาราง — anon key อ่านตารางผู้ใช้/คีย์/คำสั่งซื้อ/พอร์ตไม่ได้ · Desktop เขียน Telemetry/สถิติผ่าน RPC `bot_upsert_telemetry` / `bot_upsert_plan_stats` (SECURITY DEFINER, เขียนอย่างเดียว) · Migration: `supabase_security_rls.sql` + `supabase_security_rls_patch_01.sql` |
 | **Secrets** | ห้าม commit/ส่งคีย์ลับในแชท — ใส่ผ่าน `npx vercel env add <NAME> production --sensitive` · รหัส MT5 อยู่ในเครื่องเท่านั้น (`%APPDATA%\GoldBot24\credentials.json`) ไม่ซิงค์ขึ้น Cloud |
 | **Desktop Data Dir** | ไฟล์ผู้ใช้ทั้งหมดผ่าน `app_paths.data_path()` → `%APPDATA%\GoldBot24` (ห้ามเก็บข้างไฟล์ .exe เพราะถูกลบทุกครั้งที่ build) |
@@ -206,12 +206,13 @@
 | `POST /api/webhook/payment` | `x-webhook-secret` | แจ้งชำระจากผู้ให้บริการ |
 | `POST /api/webhook/line` | ลายเซ็น `x-line-signature` | LINE OA Webhook — พิมพ์ `id` เพื่อรับ userId/groupId สำหรับ `LINE_ADMIN_TO` |
 | `POST /api/admin/line-test` | Admin | ส่งข้อความทดสอบไป LINE OA |
+| `GET/POST /api/user/receipts` | Bearer (เจ้าของ/แอดมิน) | ใบเสร็จของฉัน · ใบเดียว `?id=` (เลขใบเสร็จหรือเลขคำสั่งซื้อ) · ส่งอีเมลซ้ำ (เว้น 60 วิ) |
 | `GET /api/user/telemetry` · `/trades` · `/stats` · `/keys` | Bearer | พอร์ตสด · ประวัติ (แบ่งหน้า) · สถิติรายแผน · คีย์ของฉัน |
 | `GET /api/admin/overview` · `POST /promo-key` | Admin | ภาพรวมระบบ · ผลิต Promo Key |
 | `GET /api/calendar` · `/api/release` | สาธารณะ (CDN cache) | ปฏิทินเศรษฐกิจ (30 นาที) · เวอร์ชันล่าสุด (10 นาที) |
 
 ### 8.2 Environment Variables (Vercel)
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `ADMIN_EMAILS`, `PROMPTPAY_ID`, `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`, `PAYMENT_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (ลืมรหัสผ่าน/ยืนยันสมัคร), `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_ADMIN_TO`, `LINE_CHANNEL_SECRET` (แจ้งเตือนแอดมินทาง LINE OA) · *(ถัดไป)* `PAYMENT_PROVIDER`, `BEAM_MERCHANT_ID`, `BEAM_API_KEY`, `BEAM_WEBHOOK_HMAC_KEY`, `BEAM_ENV`
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `ADMIN_EMAILS`, `PROMPTPAY_ID`, `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`, `PAYMENT_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (ลืมรหัสผ่าน/ยืนยันสมัคร), `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_ADMIN_TO`, `LINE_CHANNEL_SECRET` (แจ้งเตือนแอดมินทาง LINE OA) · `RECEIPT_SELLER_NAME`, `RECEIPT_SELLER_ADDRESS`, `RECEIPT_SELLER_TAX_ID`, `RECEIPT_SELLER_CONTACT` (หัวใบเสร็จ) · *(ถัดไป)* `PAYMENT_PROVIDER`, `BEAM_MERCHANT_ID`, `BEAM_API_KEY`, `BEAM_WEBHOOK_HMAC_KEY`, `BEAM_ENV`
 
 ### 8.3 ผู้ใช้และข้อมูลใน Supabase
 * ผู้ใช้อยู่ในตาราง `bot_config` (`mt5_server` = อีเมล, `mt5_password` = hash, `lot_size` = ชั่วโมงคงเหลือ, `symbols_trading` = tag เช่น `name:`, `role:admin`) — แถว `id = 1` เป็น config ระบบ
