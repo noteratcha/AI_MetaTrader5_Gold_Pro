@@ -250,6 +250,23 @@ function RadarCard({ radar, loading }) {
               <span className="muted small">เทรนด์ H1</span>
               <span className={`badge ${h1Tone}`}>{h1Label || 'กำลังวิเคราะห์'}</span>
             </div>
+            {[
+              ['แนวรับ – ต้าน H1', radar?.h1_support, radar?.h1_resistance],
+              ['แนวรับ – ต้าน H4', radar?.h4_support, radar?.h4_resistance],
+            ].map(([label, sup, res]) => (
+              <div className="row-between" key={label}>
+                <span className="muted small">{label}</span>
+                <span className="mono small">
+                  {Number(sup) > 0 && Number(res) > 0 ? (
+                    <>
+                      <span className="text-green">{formatPrice(sup)}</span> – <span className="text-red">{formatPrice(res)}</span>
+                    </>
+                  ) : (
+                    '—'
+                  )}
+                </span>
+              </div>
+            ))}
             <div className="radar-status mono small">{status}</div>
           </>
         )}

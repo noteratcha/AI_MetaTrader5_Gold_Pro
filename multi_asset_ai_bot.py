@@ -153,6 +153,7 @@ def telemetry_background_worker():
                     h4_df = float(cached.get("h4_diff_pct", 0.0))
                     h1_tr = str(cached.get("h1_trend", "ANALYZING..."))
                     h1_df = float(cached.get("h1_diff_pct", 0.0))
+                    sr_fields = {k: round(float(cached.get(k, 0.0) or 0.0), 2) for k in ("h1_support", "h1_resistance", "h4_support", "h4_resistance")}
                     
                     current_radar.append({
                         "symbol": str(s),
@@ -163,7 +164,8 @@ def telemetry_background_worker():
                         "h4_trend": h4_tr,
                         "h4_diff_pct": round(h4_df, 2),
                         "h1_trend": h1_tr,
-                        "h1_diff_pct": round(h1_df, 2)
+                        "h1_diff_pct": round(h1_df, 2),
+                        **sr_fields,
                     })
 
                 # แยกแถว Telemetry ตามบัญชีผู้ใช้ GoldBot24 (id ใน bot_config) — ลูกค้าแต่ละคนเห็นเฉพาะพอร์ตตัวเอง
@@ -1031,6 +1033,11 @@ def main():
                 df_h4['trend_h4'] = df_h4['ma_fast_h4'] / df_h4['ma_slow_h4']
                 
                 ma10_h4 = df_h4['ma_fast_h4'].iloc[-1]
+                # แนวรับ/ต้าน H4 = Low ต่ำสุด / High สูงสุด 20 แท่งก่อนหน้า (วิธีเดียวกับ H1) — ใช้แสดงผลบน Dashboard
+                h4_res_series = df_h4['high'].shift(1).rolling(20).max()
+                h4_sup_series = df_h4['low'].shift(1).rolling(20).min()
+                h4_resistance = float(h4_res_series.iloc[-1]) if pd.notna(h4_res_series.iloc[-1]) else 0.0
+                h4_support = float(h4_sup_series.iloc[-1]) if pd.notna(h4_sup_series.iloc[-1]) else 0.0
                 ma30_h4 = df_h4['ma_slow_h4'].iloc[-1]
                 is_uptrend_h4 = bool(ma10_h4 > ma30_h4)
                 h4_diff_pct = float(((ma10_h4 / ma30_h4) - 1.0) * 100.0) if (pd.notna(ma30_h4) and ma30_h4 != 0) else 0.0
@@ -1400,7 +1407,11 @@ def main():
                     "h4_trend": h4_cloud_status,
                     "h4_diff_pct": round(h4_diff_pct, 2),
                     "h1_trend": h1_cloud_status,
-                    "h1_diff_pct": round(h1_diff_pct, 2)
+                    "h1_diff_pct": round(h1_diff_pct, 2),
+                    "h1_support": round(float(support), 2) if pd.notna(support) else 0.0,
+                    "h1_resistance": round(float(resistance), 2) if pd.notna(resistance) else 0.0,
+                    "h4_support": round(h4_support, 2),
+                    "h4_resistance": round(h4_resistance, 2),
                 }
                 
                 # เก็บข้อมูลสินทรัพย์ที่น่าสนใจ (เข้าใกล้โซนเทรด)

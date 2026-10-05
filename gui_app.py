@@ -1095,7 +1095,7 @@ class MainTradingApp(ctk.CTk):
         """การ์ดสรุปสถานะพอร์ตและราคาทองคำ 4 กล่องแนวนอน"""
         grid_frame = ctk.CTkFrame(self.dashboard_view, fg_color="transparent")
         grid_frame.pack(fill="x", padx=14, pady=(0, 10))
-        grid_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="metric_cards")
+        grid_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="metric_cards")
 
         self.card_mt5 = self._create_stat_card(grid_frame, 0, "🖥", "บัญชี MT5", "รอเชื่อมต่อ...", "Server: กำลังตรวจสอบ", COLOR_CYAN_ACCENT)
         self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "$0.00", "Equity $0.00 · Float $0.00", COLOR_SUCCESS_GREEN)
@@ -1110,6 +1110,10 @@ class MainTradingApp(ctk.CTk):
         self.card_trend["h1_lbl"].pack(side="left")
         self.card_trend["sub_lbl"] = ctk.CTkLabel(sub_row, text="  ·  วิเคราะห์เมื่อบอททำงาน", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
         self.card_trend["sub_lbl"].pack(side="left")
+
+        # แนวรับ–แนวต้าน H1 (บรรทัดใหญ่) และ H4 (บรรทัดล่าง) — ช่วงราคา Low/High 20 แท่งก่อนหน้า
+        self.card_sr = self._create_stat_card(grid_frame, 4, "🧱", "แนวรับ – แนวต้าน", "H1 —", "H4 —", COLOR_CYAN_ACCENT)
+        self.card_sr["val_lbl"].configure(font=self._font(16, "bold"))
 
     def _create_stat_card(self, parent, col, icon, title, val_text, sub_text, accent_color):
         card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
@@ -2010,6 +2014,14 @@ class MainTradingApp(ctk.CTk):
                         h1_text, h1_color = "H1 —", COLOR_TEXT_MUTED
                     self.card_trend["h1_lbl"].configure(text=h1_text, text_color=h1_color)
                     self.card_trend["sub_lbl"].configure(text=f"  ·  H4 MA10/30 {h4_pct:+.2f}%")
+
+                if hasattr(self, 'card_sr'):
+                    def _sr_text(tf):
+                        sup = float(radar.get(f"{tf}_support", 0.0) or 0.0)
+                        res = float(radar.get(f"{tf}_resistance", 0.0) or 0.0)
+                        return f"{tf.upper()} {sup:,.2f} – {res:,.2f}" if sup > 0 and res > 0 else f"{tf.upper()} —"
+                    self.card_sr["val_lbl"].configure(text=_sr_text("h1"))
+                    self.card_sr["sub_lbl"].configure(text=_sr_text("h4"))
 
                 # อัปเดตสถิติ 5 แผน (ตาราง: ไม้ / WR / กำไร)
                 if hasattr(self, 'plan_stat_badges'):
