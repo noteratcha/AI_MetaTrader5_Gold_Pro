@@ -58,7 +58,7 @@
 ## 🚀 ลำดับการอัปเดตจากเวอร์ชันเก่า (สำคัญ)
 
 1. ตั้ง Environment Variables ด้านบนให้ครบ
-2. Deploy เว็บ: `cd web && npm run build` แล้ว `git push` (Vercel ตั้ง Root Directory = `web` จะ deploy อัตโนมัติ) หรือรัน `npx vercel --prod --yes` จาก root ของ repo
+2. Deploy เว็บ: `cd web && npm run build` แล้ว `git push` (Vercel ตั้ง Root Directory = `web` จะ deploy อัตโนมัติ) — เพิ่ม/แก้ env แล้วต้อง redeploy: `cd web && npx vercel redeploy <URL production ล่าสุด> --target production` (ใช้ `npx vercel env add` ในโฟลเดอร์ `web`)
 3. รัน [`supabase_security_rls.sql`](supabase_security_rls.sql) ใน Supabase SQL Editor (เพิ่มคอลัมน์เจ้าของข้อมูล + ล็อก RLS + ปิด Realtime ของ `bot_config`)
    แล้วรันต่อด้วย [`supabase_security_rls_patch_01.sql`](supabase_security_rls_patch_01.sql) (ฟังก์ชัน RPC ให้ Desktop เขียน Telemetry/สถิติได้โดยไม่ต้องเปิดสิทธิ์อ่าน)
 4. Build Desktop ใหม่: `python build_dist.py` แล้วแจกให้ลูกค้า — **Desktop รุ่นเก่าจะล็อกอินไม่ได้** เพราะ Token รูปแบบเดิมถูกยกเลิก (ลูกค้าต้องล็อกอินใหม่ 1 ครั้งหลังอัปเดต)
