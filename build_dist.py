@@ -78,6 +78,33 @@ def package_zip(source_dir, output_zip):
     zip_size_mb = os.path.getsize(output_zip) / (1024 * 1024)
     print(f"🎉 สร้างแพ็กเกจ ZIP สำเร็จ! ขนาด: {zip_size_mb:.2f} MB")
 
+def find_iscc():
+    """หา Inno Setup Compiler (ติดตั้งด้วย: winget install JRSoftware.InnoSetup --scope user)"""
+    candidates = [
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Inno Setup 6", "ISCC.exe"),
+        r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        r"C:\Program Files\Inno Setup 6\ISCC.exe",
+    ]
+    return next((c for c in candidates if c and os.path.exists(c)), shutil.which("ISCC"))
+
+
+def build_installer():
+    """สร้างตัวติดตั้ง GoldBot24_Setup_v<เวอร์ชัน>.exe (Icon บน Desktop + Start Menu + ถอนการติดตั้งได้)"""
+    iscc = find_iscc()
+    if not iscc:
+        print("⚠️ ไม่พบ Inno Setup — ข้ามการสร้างตัวติดตั้ง (winget install JRSoftware.InnoSetup --scope user)")
+        return None
+    iss = os.path.join(PROJECT_ROOT, "installer", "goldbot24.iss")
+    print("\n🧩 กำลังสร้างตัวติดตั้ง (Inno Setup)...")
+    result = subprocess.run([iscc, "/Q", f"/DAppVersion={APP_VERSION}", iss], cwd=PROJECT_ROOT)
+    setup_path = os.path.join(DIST_DIR, f"GoldBot24_Setup_v{APP_VERSION}.exe")
+    if result.returncode == 0 and os.path.exists(setup_path):
+        print(f"🎉 สร้างตัวติดตั้งสำเร็จ! ขนาด: {os.path.getsize(setup_path) / (1024 * 1024):.2f} MB")
+        return setup_path
+    print(f"❌ สร้างตัวติดตั้งไม่สำเร็จ (Code: {result.returncode})")
+    return None
+
+
 def build_gui_app(mode="pyinstaller"):
     """คอมไพล์หน้าต่าง Desktop GUI (gui_app.py)"""
     print(f"\n🚀 เริ่มต้นคอมไพล์ Desktop GUI ในโหมด: {mode.upper()}...")
@@ -143,10 +170,13 @@ def build_gui_app(mode="pyinstaller"):
         # สร้างไฟล์ ZIP สำหรับแจกจ่าย
         zip_output = os.path.join(DIST_DIR, f"{APP_NAME}_{VERSION_STR}.zip")
         package_zip(output_app_dir, zip_output)
+        setup_output = build_installer()
         
         print(f"\n🏆 การคอมไพล์และสร้างแพ็กเกจเสร็จสมบูรณ์ 100%!")
         print(f"• Executable: {os.path.join(output_app_dir, f'{APP_NAME}.exe')}")
         print(f"• Distribution ZIP: {zip_output}")
+        if setup_output:
+            print(f"• Installer: {setup_output}")
     else:
         print(f"❌ เกิดข้อผิดพลาดในการคอมไพล์ (Code: {result.returncode})")
 

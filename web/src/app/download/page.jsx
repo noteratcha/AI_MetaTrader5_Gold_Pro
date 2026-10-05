@@ -8,10 +8,13 @@ import { CopyButton, PageHeader } from '../../components/ui';
 import { formatThaiDateTime } from '../../lib/format';
 
 const STEPS = [
-  { title: 'ดาวน์โหลดไฟล์ ZIP', text: 'กดปุ่มดาวน์โหลดด้านบน (ประมาณ 80 MB)' },
-  { title: 'แตกไฟล์ ZIP', text: 'คลิกขวาที่ไฟล์ → Extract All… แล้วเลือกโฟลเดอร์ที่ต้องการ (ห้ามรันจากใน ZIP โดยตรง)' },
+  { title: 'ดาวน์โหลดตัวติดตั้ง', text: 'กดปุ่มดาวน์โหลดด้านบน จะได้ไฟล์ GoldBot24_Setup_v….exe (ประมาณ 57 MB)' },
+  {
+    title: 'ติดตั้งโปรแกรม',
+    text: 'ดับเบิลคลิกไฟล์ Setup → Next จนเสร็จ (ไม่ต้องใช้สิทธิ์ Admin) · ถ้า Windows ขึ้น “Windows protected your PC” ให้กด More info → Run anyway',
+  },
   { title: 'เปิด MetaTrader 5', text: 'ล็อกอินบัญชี FBS ใน MT5 ค้างไว้ และเปิด Algo Trading' },
-  { title: 'เปิดโปรแกรม', text: 'ดับเบิลคลิก AI_Gold_Commander_Pro.exe แล้วเข้าสู่ระบบด้วยบัญชีเดียวกับเว็บนี้' },
+  { title: 'เปิดโปรแกรม', text: 'ดับเบิลคลิกไอคอน “AI Gold Commander Pro” บน Desktop แล้วเข้าสู่ระบบด้วยบัญชีเดียวกับเว็บนี้' },
   { title: 'เริ่มบอท', text: 'กด “เริ่มการทำงานบอท” — ติดตามพอร์ตได้ที่หน้า “พอร์ตสด” บนเว็บ' },
 ];
 
@@ -67,8 +70,13 @@ export default function DownloadPage() {
                 </div>
                 <div className="row wrap" style={{ gap: 10 }}>
                   <a className="btn btn-primary btn-lg" href={release.download_url || release.releases_page} rel="noopener noreferrer">
-                    <Download size={18} /> ดาวน์โหลด {release.file_name ? '(.zip)' : ''}
+                    <Download size={18} /> ดาวน์โหลด {release.is_installer ? 'ตัวติดตั้ง (.exe)' : release.file_name ? '(.zip)' : ''}
                   </a>
+                  {release.zip_url && (
+                    <a className="btn btn-ghost btn-lg" href={release.zip_url} rel="noopener noreferrer" title="แบบไม่ต้องติดตั้ง: แตกไฟล์แล้วเปิด .exe">
+                      <FileArchive size={16} /> แบบ ZIP
+                    </a>
+                  )}
                   {release.releases_page && (
                     <a className="btn btn-secondary btn-lg" href={release.releases_page} target="_blank" rel="noopener noreferrer">
                       ทุกเวอร์ชัน <ExternalLink size={16} />

@@ -24,7 +24,10 @@ async function fromGitHub() {
   });
   if (!r.ok) throw new Error(`GitHub HTTP ${r.status}`);
   const d = await r.json();
-  const asset = (d.assets || []).find((a) => /\.zip$/i.test(a.name)) || (d.assets || [])[0];
+  // ตัวติดตั้ง (Setup .exe) เป็นไฟล์หลัก · ZIP เป็นทางเลือกแบบไม่ต้องติดตั้ง
+  const assets = d.assets || [];
+  const zip = assets.find((a) => /\.zip$/i.test(a.name));
+  const asset = assets.find((a) => /setup.*\.exe$/i.test(a.name)) || zip || assets[0];
   if (!asset) return null;
   const sha = /SHA-256:\s*`?([a-f0-9]{64})`?/i.exec(d.body || '');
   return {
@@ -32,6 +35,8 @@ async function fromGitHub() {
     download_url: asset.browser_download_url,
     file_name: asset.name,
     size_bytes: asset.size,
+    is_installer: /\.exe$/i.test(asset.name),
+    zip_url: zip && zip !== asset ? zip.browser_download_url : null,
     checksum_sha256: sha ? sha[1] : null,
     changelog: d.body || '',
     released_at: d.published_at,
