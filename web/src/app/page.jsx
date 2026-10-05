@@ -221,6 +221,10 @@ function RadarCard({ radar, loading }) {
       ? h1.startsWith('UP') ? h1.replace('UPTREND', '▲ ขาขึ้น') : h1.startsWith('DOWN') ? h1.replace('DOWNTREND', '▼ ขาลง') : ''
       : Number(stack) === 1 ? '▲ ขาขึ้น · MA100>150>200' : Number(stack) === -1 ? '▼ ขาลง · MA100<150<200' : '◆ ไม่เรียงตัว';
   const status = cleanText(radar?.status) || '[WAIT OUTSIDE ZONE]';
+  // สภาวะตลาด (MA50/100/150 เรียงตัว) — โปรแกรมเวอร์ชันใหม่ส่ง h1_cond / h4_cond มา
+  const condBadge = (c) => (Number(c) === 1 ? ['▲ ขาขึ้น', 'badge-green'] : Number(c) === -1 ? ['▼ ขาลง', 'badge-red'] : ['◆ ไซด์เวย์', 'badge-sky']);
+  const [h1CondLabel, h1CondTone] = radar?.h1_cond !== undefined ? condBadge(radar.h1_cond) : [h1Label, h1Tone];
+  const [h4CondLabel, h4CondTone] = radar?.h4_cond !== undefined ? condBadge(radar.h4_cond) : [h4, h4Tone];
 
   return (
     <div className="card">
@@ -252,11 +256,11 @@ function RadarCard({ radar, loading }) {
             </div>
             <div className="row-between">
               <span className="muted small">เทรนด์ H1</span>
-              <span className={`badge ${h1Tone}`}>{h1Label || 'กำลังวิเคราะห์'}</span>
+              <span className={`badge ${h1CondTone}`}>{h1CondLabel || 'กำลังวิเคราะห์'}</span>
             </div>
             <div className="row-between">
               <span className="muted small">เทรนด์ H4</span>
-              <span className={`badge ${h4Tone}`}>{h4 || 'กำลังวิเคราะห์'}</span>
+              <span className={`badge ${h4CondTone}`}>{h4CondLabel || 'กำลังวิเคราะห์'}</span>
             </div>
             {[
               ['แนวรับ – ต้าน H1', radar?.h1_support, radar?.h1_resistance],

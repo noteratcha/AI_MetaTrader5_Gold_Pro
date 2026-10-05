@@ -2077,38 +2077,32 @@ class MainTradingApp(ctk.CTk):
                 if hasattr(self, 'card_trend'):
                     rows = self.card_trend["rows"]
                     pct_color = lambda v: COLOR_SUCCESS_GREEN if v > 0 else COLOR_DANGER_RED if v < 0 else COLOR_TEXT_MUTED
+                    # ป้ายมุมขวา = ทิศที่ Plan 3–5 อนุญาต (กฎ Strict Pro-Trend จาก H4 MA10/30)
                     if not analyzed:
-                        rows["H4"]["val"].configure(text=h4_trend, text_color=COLOR_TEXT_MUTED)
-                        rows["H4"]["pct"].configure(text="")
                         self._set_badge(self.card_trend["badge"], "")
                     elif "BULL" in h4_trend:
-                        h4_ok = int(radar.get("h4_dir", 1) or 0) == 1
-                        rows["H4"]["val"].configure(text="▲ ขาขึ้น" if h4_ok else "▲ ขาขึ้น · ชะลอ", text_color=COLOR_SUCCESS_GREEN if h4_ok else COLOR_GOLD_PRIMARY)
                         self._set_badge(self.card_trend["badge"], "BUY เท่านั้น", "#0F2A20", COLOR_SUCCESS_GREEN)
                     elif "BEAR" in h4_trend:
-                        h4_ok = int(radar.get("h4_dir", -1) or 0) == -1
-                        rows["H4"]["val"].configure(text="▼ ขาลง" if h4_ok else "▼ ขาลง · ชะลอ", text_color=COLOR_DANGER_RED if h4_ok else COLOR_GOLD_PRIMARY)
                         self._set_badge(self.card_trend["badge"], "SELL เท่านั้น", "#2A1414", COLOR_DANGER_RED)
                     else:
-                        rows["H4"]["val"].configure(text="◆ ไซด์เวย์", text_color=COLOR_CYAN_ACCENT)
                         self._set_badge(self.card_trend["badge"], "BUY / SELL", "#132036", COLOR_CYAN_ACCENT)
-                    if analyzed:
-                        rows["H4"]["pct"].configure(text=f"{h4_pct:+.2f}%", text_color=pct_color(h4_pct))
 
-                    # H1 = เทรนด์ที่ Plan 1 ใช้: MA100/MA150/MA200 เรียงตัว
-                    stack = radar.get("h1_stack_dir")
-                    if stack is None or not h1_trend[:2] in ("UP", "DO"):
-                        rows["H1"]["val"].configure(text="—", text_color=COLOR_TEXT_MUTED)
-                    elif int(stack) == 1:
-                        rows["H1"]["val"].configure(text="▲ ขาขึ้น", text_color=COLOR_SUCCESS_GREEN)
-                    elif int(stack) == -1:
-                        rows["H1"]["val"].configure(text="▼ ขาลง", text_color=COLOR_DANGER_RED)
-                    else:
-                        rows["H1"]["val"].configure(text="◆ ไม่เรียงตัว", text_color=COLOR_GOLD_PRIMARY)
-                    rows["H1"]["pct"].configure(
-                        text=f"{h1_pct:+.2f}%" if h1_trend[:2] in ("UP", "DO") else "",
-                        text_color=pct_color(h1_pct),
-                    )
+                    # สภาวะตลาด H1/H4: MA50 < MA100 < MA150 = ขาลง · MA50 > MA100 > MA150 = ขาขึ้น · แบบอื่น = ไซด์เวย์
+                    for tf, key in (("H1", "h1_cond"), ("H4", "h4_cond")):
+                        cond = radar.get(key)
+                        if cond is None or not analyzed:
+                            rows[tf]["val"].configure(text="รอเริ่มบอท" if tf == "H4" and not analyzed else "—", text_color=COLOR_TEXT_MUTED)
+                            rows[tf]["pct"].configure(text="")
+                            continue
+                        cond = int(cond)
+                        if cond == 1:
+                            rows[tf]["val"].configure(text="▲ ขาขึ้น", text_color=COLOR_SUCCESS_GREEN)
+                        elif cond == -1:
+                            rows[tf]["val"].configure(text="▼ ขาลง", text_color=COLOR_DANGER_RED)
+                        else:
+                            rows[tf]["val"].configure(text="◆ ไซด์เวย์", text_color=COLOR_CYAN_ACCENT)
+                        cpct = float(radar.get(f"{key}_pct", 0.0) or 0.0)  # ระยะ MA50 เทียบ MA150 (%)
+                        rows[tf]["pct"].configure(text=f"{cpct:+.2f}%", text_color=pct_color(cpct))
                     for tf, key, tag in (("H1", "h1_stack_dir", "MA100-200"), ("H4", "h4_stack_dir", "MA100-200")):
                         lt_dir = int(radar.get(key, 0) or 0)
                         rows[tf]["lt"].configure(

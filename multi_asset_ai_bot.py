@@ -219,7 +219,8 @@ def telemetry_background_worker():
                     h1_tr = str(cached.get("h1_trend", "ANALYZING..."))
                     h1_df = float(cached.get("h1_diff_pct", 0.0))
                     sr_fields = {k: round(float(cached.get(k, 0.0) or 0.0), 2) for k in ("h1_support", "h1_resistance", "h4_support", "h4_resistance")}
-                    sr_fields.update({k: int(cached.get(k, 0) or 0) for k in ("h1_lt_dir", "h4_lt_dir", "h1_dir", "h4_dir", "h1_stack_dir", "h4_stack_dir")})
+                    sr_fields.update({k: int(cached.get(k, 0) or 0) for k in ("h1_lt_dir", "h4_lt_dir", "h1_dir", "h4_dir", "h1_stack_dir", "h4_stack_dir", "h1_cond", "h4_cond")})
+                    sr_fields.update({k: round(float(cached.get(k, 0.0) or 0.0), 2) for k in ("h1_cond_pct", "h4_cond_pct")})
                     
                     current_radar.append({
                         "symbol": str(s),
@@ -542,6 +543,70 @@ def long_term_dir(close, fast=None, slow=200):
     if pd.isna(ma_slow) or pd.isna(ref):
         return 0, float('nan')
     return (1 if ref > ma_slow else -1), float(ma_slow)
+
+
+SR_LOOKBACK_BARS = 500   # แนวรับ/ต้าน: ดูย้อนหลัง 500 แท่ง (H1 และ H4)
+SR_PIVOT_K = 3           # Swing High/Low = สูง/ต่ำสุดเมื่อเทียบ 3 แท่งซ้าย-ขวา
+SR_ZONE_ATR = 0.5        # รวมจุดกลับตัวที่ห่างกันไม่เกิน 0.5 ATR เป็นโซนเดียวกัน
+SR_MIN_TOUCHES = 2       # โซนที่ใช้ได้ต้องมีราคากลับตัวอย่างน้อย 2 ครั้ง
+
+
+def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
+    """
+    หาแนวรับ/แนวต้านจากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` แท่ง
+    คืน dict: support / resistance (ราคากลางโซนที่ใกล้ราคาปัจจุบันที่สุด) และจำนวนครั้งที่ราคาแตะ
+    - แนวรับ = โซนที่อยู่ใต้ราคา, แนวต้าน = โซนที่อยู่เหนือราคา (เลือกโซนที่แตะ >= 2 ครั้งก่อน)
+    - ถ้าไม่พบโซน ใช้ Low ต่ำสุด / High สูงสุดของช่วงแทน
+    """
+    out = {"support": float('nan'), "resistance": float('nan'), "sup_touches": 0, "res_touches": 0}
+    if df is None or len(df) < 2 * k + 10 or not price or pd.isna(price):
+        return out
+    d = df.iloc[-(lookback + 1):-1]  # เฉพาะแท่งที่ปิดแล้ว
+    atr = _atr_series(df).iloc[-2]
+    if pd.isna(atr) or atr <= 0:
+        atr = float((d['high'] - d['low']).mean() or 1.0)
+    win = 2 * k + 1
+    piv_hi = d['high'][d['high'] == d['high'].rolling(win, center=True).max()]
+    piv_lo = d['low'][d['low'] == d['low'].rolling(win, center=True).min()]
+    pts = sorted([float(x) for x in pd.concat([piv_hi, piv_lo]).dropna().values])
+    zones = []  # [ราคากลาง, จำนวนครั้ง, ราคาต่ำสุดของโซน] — ความกว้างโซนทั้งหมดไม่เกิน zone_atr × ATR
+    for x in pts:
+        if zones and x - zones[-1][2] <= zone_atr * atr:
+            z = zones[-1]
+            z[1] += 1
+            z[0] = z[0] + (x - z[0]) / z[1]
+        else:
+            zones.append([x, 1, x])
+    below = [z for z in zones if z[0] < price]
+    above = [z for z in zones if z[0] > price]
+    strong_below = [z for z in below if z[1] >= SR_MIN_TOUCHES] or below
+    strong_above = [z for z in above if z[1] >= SR_MIN_TOUCHES] or above
+    if strong_below:
+        z = max(strong_below, key=lambda z: z[0])
+        out["support"], out["sup_touches"] = round(z[0], 2), int(z[1])
+    else:
+        out["support"] = float(d['low'].min())
+    if strong_above:
+        z = min(strong_above, key=lambda z: z[0])
+        out["resistance"], out["res_touches"] = round(z[0], 2), int(z[1])
+    else:
+        out["resistance"] = float(d['high'].max())
+    return out
+
+
+def ma_condition(close, periods=(50, 100, 150)):
+    """สภาวะตลาด (แสดงผล): MA50 < MA100 < MA150 = ขาลง (-1) · MA50 > MA100 > MA150 = ขาขึ้น (+1) · แบบอื่น = ไซด์เวย์ (0)"""
+    if close is None or len(close) < max(periods) + 2:
+        return 0, 0.0
+    vals = [close.rolling(n).mean().iloc[-2] for n in periods]
+    if any(pd.isna(v) for v in vals):
+        return 0, 0.0
+    pct = float((vals[0] / vals[-1] - 1.0) * 100.0)
+    if vals[0] < vals[1] < vals[2]:
+        return -1, pct
+    if vals[0] > vals[1] > vals[2]:
+        return 1, pct
+    return 0, pct
 
 
 def check_h4_confluence(direction, is_uptrend_h4, prob_up, prob_down, bull_div, bear_div, hidden_bull=False, hidden_bear=False, is_sideway_h4=False, h4_diff_pct=0.0):
@@ -1093,8 +1158,8 @@ def main():
                 features = model_features[sym]
                 
                 df_m15 = get_data(sym, TIMEFRAME, 300)   # 300 แท่ง: พอสำหรับ Features AI (เช่น ATR เฉลี่ย 96 แท่ง)
-                df_h1 = get_data(sym, TIMEFRAME_H1, 300)   # 300 แท่ง: พอสำหรับ MA200 (เทรนด์ระยะยาว)
-                df_h4 = get_data(sym, TIMEFRAME_H4, 300)
+                df_h1 = get_data(sym, TIMEFRAME_H1, 600)   # 600 แท่ง: แนวรับ/ต้าน 500 แท่ง + MA200
+                df_h4 = get_data(sym, TIMEFRAME_H4, 600)
                 if df_m15 is None or df_h1 is None or df_h4 is None:
                     continue
                 
@@ -1289,8 +1354,17 @@ def main():
                     prob = model.predict_proba(ai_row)[0]
                 
                 # ข้อมูลราคาและตัวแปรทางเทคนิค
-                support = last_bar['support']
-                resistance = last_bar['resistance']
+                # แนวรับ/แนวต้านจากโซนกลับตัวย้อนหลัง 500 แท่ง (แทน Low/High 20 แท่งเดิม) — Plan 3 (SMC) / Plan 4 (SR-Bounce) ใช้ H1
+                sr_price = float(last_bar['close'])
+                sr_h1 = find_sr_levels(df_h1, sr_price)
+                sr_h4 = find_sr_levels(df_h4, sr_price)
+                support = sr_h1["support"] if pd.notna(sr_h1["support"]) else last_bar['support']
+                resistance = sr_h1["resistance"] if pd.notna(sr_h1["resistance"]) else last_bar['resistance']
+                h4_support = sr_h4["support"] if pd.notna(sr_h4["support"]) else h4_support
+                h4_resistance = sr_h4["resistance"] if pd.notna(sr_h4["resistance"]) else h4_resistance
+                # สภาวะตลาดสำหรับแสดงผล (MA50/100/150 เรียงตัว)
+                h1_cond, h1_cond_pct = ma_condition(df_h1['close'])
+                h4_cond, h4_cond_pct = ma_condition(df_h4['close'])
                 atr_val = last_bar['atr']
                 close_price = last_bar['close']
                 lower_wick_ratio = last_bar['lower_wick_ratio']
@@ -1578,6 +1652,12 @@ def main():
                     "h1_dir": int(h1_dir),
                     "h1_stack_dir": int(h1_stack_dir),
                     "h4_stack_dir": int(h4_stack_dir),
+                    "h1_cond": int(h1_cond),
+                    "h4_cond": int(h4_cond),
+                    "h1_cond_pct": round(h1_cond_pct, 2),
+                    "h4_cond_pct": round(h4_cond_pct, 2),
+                    "h1_sr_touches": [int(sr_h1["sup_touches"]), int(sr_h1["res_touches"])],
+                    "h4_sr_touches": [int(sr_h4["sup_touches"]), int(sr_h4["res_touches"])],
                     "h4_dir": int(h4_dir),
                     "h4_lt_dir": int(h4_lt_dir),
                     "h4_ma200": round(h4_ma200, 2) if pd.notna(h4_ma200) else 0.0,
