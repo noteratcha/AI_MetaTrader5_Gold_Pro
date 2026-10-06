@@ -347,8 +347,11 @@ class UpdateDialog(ctk.CTkToplevel):
         head.pack(fill="x")
         inner = ctk.CTkFrame(head, fg_color="transparent")
         inner.pack(fill="x", padx=22, pady=16)
-        ctk.CTkLabel(inner, text="⬆", font=f(24, "bold"), text_color=COLOR_GOLD_PRIMARY, width=46, height=46,
-                     fg_color="#3A2E14", corner_radius=23).pack(side="left")
+        # ไอคอนลูกศรวาดเอง (อักขระ ⬆ บางเครื่องไม่มีฟอนต์ → ขึ้นเป็นกล่อง □)
+        icon = tk.Canvas(inner, width=46, height=46, bg=COLOR_GOLD_BG, highlightthickness=0, bd=0)
+        icon.create_oval(1, 1, 45, 45, fill="#3A2E14", outline="")
+        icon.create_polygon(23, 10, 35, 24, 27, 24, 27, 35, 19, 35, 19, 24, 11, 24, fill=COLOR_GOLD_PRIMARY, outline="")
+        icon.pack(side="left")
         txt = ctk.CTkFrame(inner, fg_color="transparent")
         txt.pack(side="left", padx=14)
         ctk.CTkLabel(txt, text="มีเวอร์ชันใหม่พร้อมติดตั้ง", font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w")
@@ -391,7 +394,7 @@ class UpdateDialog(ctk.CTkToplevel):
         btns.pack(fill="x", padx=22, pady=(10, 18))
         ctk.CTkButton(btns, text="ภายหลัง", width=110, height=38, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
                       border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
-        ctk.CTkButton(btns, text="⬇  ดาวน์โหลดเวอร์ชันใหม่", height=38, font=f(13, "bold"), fg_color=COLOR_GOLD_PRIMARY,
+        ctk.CTkButton(btns, text="ดาวน์โหลดเวอร์ชันใหม่", height=38, font=f(13, "bold"), fg_color=COLOR_GOLD_PRIMARY,
                       hover_color=COLOR_GOLD_WARM, text_color="#1A1406", command=self._download
                       ).pack(side="right", fill="x", expand=True, padx=(0, 10))
 
@@ -592,7 +595,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.lbl_price.pack(side="left", padx=14)
         self.lbl_change = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family="Segoe UI", size=12))
         self.lbl_change.pack(side="left")
-        self.btn_full = ctk.CTkButton(top, text="⛶ เต็มจอ", width=84, height=26, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+        self.btn_full = ctk.CTkButton(top, text="ขยายเต็มจอ", width=96, height=26, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
                                       fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
                                       text_color=COLOR_GOLD_PRIMARY, command=self._toggle_full)
         self.btn_full.pack(side="right", padx=(10, 0))
@@ -633,10 +636,10 @@ class GoldCandleDialog(ctk.CTkToplevel):
         """ขยายเต็มจอ ↔ ขนาดปกติ (F11 / Esc)"""
         if self.state() == "zoomed":
             self.state("normal")
-            self.btn_full.configure(text="⛶ เต็มจอ")
+            self.btn_full.configure(text="ขยายเต็มจอ")
         else:
             self.state("zoomed")
-            self.btn_full.configure(text="🗗 ย่อ")
+            self.btn_full.configure(text="ย่อหน้าต่าง")
 
     def _close(self):
         if self._job:
@@ -1813,7 +1816,7 @@ class MainTradingApp(ctk.CTk):
         self._update_info = info
         if info.get("has_update"):
             latest = info.get("latest_version")
-            self.btn_update_status.configure(text=f"⬆ มีเวอร์ชันใหม่ v{latest} · ดาวน์โหลด", fg_color=COLOR_GOLD_WARM, text_color="#1A1406")
+            self.btn_update_status.configure(text=f"▲ มีเวอร์ชันใหม่ v{latest} · ดาวน์โหลด", fg_color=COLOR_GOLD_WARM, text_color="#1A1406")
             if manual or info.get("mandatory"):
                 self._prompt_update(info)
         else:
