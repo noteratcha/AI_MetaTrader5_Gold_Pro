@@ -1705,9 +1705,22 @@ class MainTradingApp(ctk.CTk):
     def _make_clickable(self, card_info, command, hint=""):
         """ทำให้ทั้งการ์ดกดได้ (เคอร์เซอร์มือ + ขอบสีทองเมื่อชี้)"""
         card = card_info["card"]
+        state = {"win": None}
+
+        def open_once(_e=None):
+            # คลิกโดนหลายวิดเจ็ตซ้อนกันจะยิงหลายครั้ง → เปิดหน้าต่างเดียว ถ้าเปิดอยู่แล้วให้ดึงขึ้นมาหน้าสุด
+            w = state["win"]
+            if w is not None:
+                try:
+                    if w.winfo_exists():
+                        w.deiconify(); w.lift(); w.focus_force()
+                        return
+                except Exception:
+                    pass
+            state["win"] = command()
 
         def bind_all(w):
-            w.bind("<Button-1>", lambda e: command(), add="+")
+            w.bind("<Button-1>", open_once, add="+")
             try:
                 w.configure(cursor="hand2")
             except Exception:
@@ -1936,6 +1949,7 @@ class MainTradingApp(ctk.CTk):
         # plan_stat_badges: {ชื่อแผนเต็ม: (label ไม้, label WR, label กำไร)}
         self.plan_stat_badges = {}
         self.plan_checks = {}
+        self.plan_live_badges = {}
         for r, (icon, short, full) in enumerate(self.PLAN_ROWS, start=1):
             last = r == len(self.PLAN_ROWS)
             pady = (0, 4) if last else 0
@@ -1948,6 +1962,10 @@ class MainTradingApp(ctk.CTk):
             )
             chk.grid(row=r, column=0, sticky="w", padx=(10, 4), pady=pady)
             self.plan_checks[full] = (chk, var)
+            # ป้ายไม้ที่เปิดอยู่ของแผนนี้ (เช่น "● SELL") — อัปเดตทุก 2 วินาที
+            live = ctk.CTkLabel(table, text="", font=self._font(10, "bold"), text_color=COLOR_GOLD_PRIMARY, corner_radius=6, height=16)
+            live.grid(row=r, column=0, sticky="e", padx=(4, 0), pady=pady)
+            self.plan_live_badges[full] = live
             cells = []
             for col in (1, 2, 3):
                 lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "$0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
@@ -1955,6 +1973,32 @@ class MainTradingApp(ctk.CTk):
                 cells.append(lbl)
             self.plan_stat_badges[full] = tuple(cells)
         self.after(300, self._plan_checks_tick)
+        self.after(1000, self._plan_live_tick)
+
+    def _plan_live_tick(self):
+        """แสดงป้าย ● BUY / ● SELL ที่แผนที่มีไม้เปิดอยู่ตอนนี้"""
+        try:
+            import MetaTrader5 as _mt5
+            open_by_plan = {}
+            for p in _mt5.positions_get(symbol="XAUUSD") or []:
+                base = plan_config.base_plan(p.comment)
+                open_by_plan.setdefault(base, []).append(("BUY" if p.type == 0 else "SELL", float(p.profit)))
+            for full, lbl in self.plan_live_badges.items():
+                items = open_by_plan.get(full.split(": ", 1)[-1], [])
+                chk, var = self.plan_checks[full]
+                admin_on = plan_config.admin_enabled(full.split(": ", 1)[-1])
+                chk.configure(text_color=COLOR_SUCCESS_GREEN if items else (COLOR_TEXT_PRIMARY if (admin_on and var.get()) else COLOR_TEXT_MUTED))
+                if items:
+                    side = items[0][0] if len({i[0] for i in items}) == 1 else "BUY/SELL"
+                    prof = sum(i[1] for i in items)
+                    lbl.configure(text=f" ● {side}{' ×' + str(len(items)) if len(items) > 1 else ''} ",
+                                  fg_color="#0F2A20" if side == "BUY" else "#2A1215" if side == "SELL" else COLOR_GOLD_BG,
+                                  text_color=COLOR_SUCCESS_GREEN if prof >= 0 else COLOR_DANGER_RED)
+                else:
+                    lbl.configure(text="", fg_color="transparent")
+        except Exception:
+            pass
+        self.after(2000, self._plan_live_tick)
 
     def _plan_checks_tick(self):
         """อัปเดตสถานะช่องติ๊กแผน (แอดมินอาจเปิด/ปิดแผนจากเว็บ) ทุก 30 วินาที"""
