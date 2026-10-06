@@ -30,7 +30,7 @@ export async function collectDailySummary({ completedDay = false, now = Date.now
   const activityCount = (event) =>
     supabase.from('user_activity').select('id', head).eq('event', event).gte('created_at', since).lt('created_at', until);
 
-  const [users, registers, paid, pending, onlineNow, activeToday, logins, failed, locked, redeems, trades] = await Promise.all([
+  const [users, registers, paid, pending, onlineNow, activeToday, logins, failed, locked, redeems, trades, downloads, appOpens] = await Promise.all([
     supabase.from('bot_config').select('id', head).gt('id', 1),
     activityCount('register'),
     supabase.from('orders').select('amount_thb, hours_to_add').eq('status', 'PAID').gte('paid_at', since).lt('paid_at', until).limit(5000),
@@ -42,6 +42,8 @@ export async function collectDailySummary({ completedDay = false, now = Date.now
     activityCount('account_locked'),
     activityCount('redeem'),
     supabase.from('trade_logs').select('action, profit').gte('time', since).lt('time', until).limit(20000),
+    activityCount('app_download'),
+    supabase.from('user_activity').select('email').eq('event', 'app_open').gte('created_at', since).lt('created_at', until).limit(5000),
   ]);
 
   const paidRows = paid.data || [];
@@ -63,6 +65,9 @@ export async function collectDailySummary({ completedDay = false, now = Date.now
     onlineBots: onlineNow.count || 0,
     activeBotsToday: activeToday.count || 0,
     uniqueLogins: new Set((logins.data || []).map((r) => r.email)).size,
+    downloads: downloads.count || 0,
+    appOpens: (appOpens.data || []).length,
+    appUsers: new Set((appOpens.data || []).map((r) => r.email)).size,
     failedLogins: failed.count || 0,
     lockedAccounts: locked.count || 0,
     tradesOpened: tradeRows.filter((t) => String(t.action || '').startsWith('OPEN')).length,
@@ -80,6 +85,7 @@ export function formatDailySummary(m) {
     `👥 สมาชิก`,
     `• สมัครใหม่: ${n(m.newMembers)} คน (รวม ${n(m.totalUsers)})`,
     `• เข้าสู่ระบบ: ${n(m.uniqueLogins)} คน`,
+    `• ดาวน์โหลดโปรแกรม: ${n(m.downloads)} ครั้ง · เปิดโปรแกรม ${n(m.appOpens)} ครั้ง (${n(m.appUsers)} คน)`,
     ``,
     `💰 ยอดขาย`,
     `• ชำระสำเร็จ: ${n(m.salesCount)} รายการ · ${thb(m.salesThb)}`,

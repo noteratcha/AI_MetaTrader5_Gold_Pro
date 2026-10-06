@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import re
+import threading
 import urllib.request
 import urllib.error
 
@@ -339,6 +340,29 @@ class LicenseManager:
         except Exception:
             pass  # เน็ตหลุด — เก็บยอดค้างไว้ส่งรอบถัดไป
 
+    def track_event(self, event: str, **extra):
+        """ส่งสถิติการใช้งาน (app_open / bot_start / bot_stop) ไปที่ /api/track แบบเบื้องหลัง — ล้มเหลวได้ไม่กระทบโปรแกรม"""
+        if not self.is_authenticated:
+            return
+        try:
+            from version import APP_VERSION
+        except Exception:
+            APP_VERSION = ""
+        body = {"event": event, "version": APP_VERSION, "machine": _machine_id(), **extra}
+        headers = self._auth_headers()
+
+        def _send():
+            try:
+                req = urllib.request.Request(
+                    f"{API_BASE_URL.rstrip('/')}/api/track",
+                    data=json.dumps(body).encode("utf-8"), headers=headers, method="POST",
+                )
+                urllib.request.urlopen(req, timeout=10).close()
+            except Exception:
+                pass
+
+        threading.Thread(target=_send, daemon=True).start()
+
     def check_app_version(self, current_version: str) -> dict:
         """ตรวจสอบว่ามีเวอร์ชันใหม่กว่าที่ใช้งานอยู่หรือไม่"""
         return fetch_app_version_info(current_version)
@@ -382,6 +406,15 @@ class LicenseManager:
                 return False, f"ไม่สามารถเติมคีย์ได้ (HTTP {he.code})", 0
         except Exception as e:
             return False, f"เกิดข้อผิดพลาดในการเชื่อมต่อ: {e}", 0
+
+
+def _machine_id() -> str:
+    """รหัสเครื่องแบบย่อ (แฮชทางเดียว ไม่ส่งข้อมูลเครื่องจริง) ใช้นับจำนวนเครื่องที่ใช้งาน"""
+    import hashlib
+    import platform
+    import uuid
+    raw = f"{platform.node()}|{uuid.getnode()}|GoldBot24"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:10]
 
 
 def _version_tuple(v: str) -> tuple:

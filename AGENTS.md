@@ -218,6 +218,8 @@
 | `GET /api/user/telemetry` · `/trades` · `/stats` · `/keys` | Bearer | พอร์ตสด · ประวัติ (แบ่งหน้า) · สถิติรายแผน · คีย์ของฉัน |
 | `GET /api/admin/overview` · `POST /promo-key` | Admin | ภาพรวมระบบ · ผลิต Promo Key |
 | `GET /api/calendar` · `/api/release` | สาธารณะ (CDN cache) | ปฏิทินเศรษฐกิจ (30 นาที) · เวอร์ชันล่าสุด (10 นาที) |
+| `POST /api/track` | `app_download` สาธารณะ · `app_open`/`bot_start`/`bot_stop` ต้อง Bearer | สถิติดาวน์โหลด/การใช้โปรแกรม → `user_activity` (ซ้ำใน 5 นาทีนับครั้งเดียว · Desktop ส่งเวอร์ชัน + รหัสเครื่องแบบแฮช 10 ตัว) |
+| `GET /api/admin/usage` | Admin | หน้า `/admin/usage`: ยอดดาวน์โหลดเว็บ + GitHub (ทุกช่องทาง/รายเวอร์ชัน) · เปิดโปรแกรม · ผู้ใช้รายวัน/7/30 วัน · จำนวนเครื่อง · เวอร์ชันที่ผู้ใช้เปิด · กราฟ 14 วัน (สรุปรายวันทาง LINE มียอดนี้ด้วย) |
 
 ### 8.2 Environment Variables (Vercel)
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `ADMIN_EMAILS`, `PROMPTPAY_ID`, `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`, `PAYMENT_WEBHOOK_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (ลืมรหัสผ่าน/ยืนยันสมัคร), `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_ADMIN_TO`, `LINE_CHANNEL_SECRET` (แจ้งเตือนแอดมินทาง LINE OA) · `CRON_SECRET` (Vercel Cron) · `RECEIPT_SELLER_NAME`, `RECEIPT_SELLER_ADDRESS`, `RECEIPT_SELLER_TAX_ID`, `RECEIPT_SELLER_CONTACT` (หัวใบเสร็จ) · *(ถัดไป)* `PAYMENT_PROVIDER`, `BEAM_MERCHANT_ID`, `BEAM_API_KEY`, `BEAM_WEBHOOK_HMAC_KEY`, `BEAM_ENV`

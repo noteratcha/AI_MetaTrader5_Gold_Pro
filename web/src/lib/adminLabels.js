@@ -19,6 +19,10 @@ export const ACTIVITY_LABELS = {
   admin_package_update: { label: 'แก้แพ็กเกจ', badge: 'badge-muted' },
   admin_package_delete: { label: 'ลบแพ็กเกจ', badge: 'badge-muted' },
   admin_package_disable: { label: 'ปิดขายแพ็กเกจ', badge: 'badge-muted' },
+  app_download: { label: 'ดาวน์โหลดโปรแกรม', badge: 'badge-sky' },
+  app_open: { label: 'เปิดโปรแกรม', badge: 'badge-green' },
+  bot_start: { label: 'เริ่มบอท', badge: 'badge-gold' },
+  bot_stop: { label: 'หยุดบอท', badge: 'badge-muted' },
 };
 
 export const TRADE_ACTION_LABELS = {

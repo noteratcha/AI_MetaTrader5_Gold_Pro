@@ -846,6 +846,7 @@ class MainTradingApp(ctk.CTk):
     def show_dashboard_view(self):
         """แสดงแดชบอร์ดควบคุมการเทรดและมอนิเตอร์สัญญาณ"""
         self.is_logged_in = True
+        license_mgr.track_event("app_open")  # สถิติการเข้าใช้โปรแกรม (ซ้ำใน 5 นาทีนับครั้งเดียว)
         if self.login_view:
             self.login_view.destroy()
             self.login_view = None
@@ -1933,7 +1934,9 @@ class MainTradingApp(ctk.CTk):
         if not bot_ctrl.is_active:
             # เริ่มต้นบอท
             success, msg = bot_ctrl.start_bot()
-            if not success:
+            if success:
+                license_mgr.track_event("bot_start")
+            else:
                 messagebox.showwarning("ไม่สามารถเริ่มบอทได้", msg)
         elif bot_ctrl.is_paused:
             # กลับมาทำงานต่อ
@@ -1943,6 +1946,7 @@ class MainTradingApp(ctk.CTk):
         else:
             # หยุดชั่วคราว
             bot_ctrl.pause_bot()
+            license_mgr.track_event("bot_stop")
 
     def _on_bot_status_changed(self, status: str):
         """อัปเดตปุ่มหลักและป้ายสถานะเมื่อสถานะบอทเปลี่ยน"""

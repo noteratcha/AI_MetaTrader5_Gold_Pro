@@ -28,7 +28,16 @@ function changelogLines(text) {
 }
 
 export default function DownloadPage() {
-  const { user, openAuthModal } = useAuth();
+  const { user, openAuthModal, apiFetch } = useAuth();
+
+  // นับยอดดาวน์โหลด (ไม่รอผล — keepalive ให้ส่งได้แม้หน้ากำลังเปลี่ยนไปดาวน์โหลด)
+  const trackDownload = (file) => {
+    apiFetch('/api/track', {
+      method: 'POST',
+      keepalive: true,
+      body: JSON.stringify({ event: 'app_download', version: release?.version, file }),
+    }).catch(() => {});
+  };
   const [release, setRelease] = useState(null);
 
   useEffect(() => {
@@ -69,11 +78,22 @@ export default function DownloadPage() {
                   {sizeMb ? ` · ขนาด ${sizeMb} MB` : ''} · Windows 10/11 (64-bit)
                 </div>
                 <div className="row wrap" style={{ gap: 10 }}>
-                  <a className="btn btn-primary btn-lg" href={release.download_url || release.releases_page} rel="noopener noreferrer">
+                  <a
+                    className="btn btn-primary btn-lg"
+                    href={release.download_url || release.releases_page}
+                    rel="noopener noreferrer"
+                    onClick={() => trackDownload(release.is_installer ? 'Setup.exe' : 'ZIP')}
+                  >
                     <Download size={18} /> ดาวน์โหลด {release.is_installer ? 'ตัวติดตั้ง (.exe)' : release.file_name ? '(.zip)' : ''}
                   </a>
                   {release.zip_url && (
-                    <a className="btn btn-ghost btn-lg" href={release.zip_url} rel="noopener noreferrer" title="แบบไม่ต้องติดตั้ง: แตกไฟล์แล้วเปิด .exe">
+                    <a
+                      className="btn btn-ghost btn-lg"
+                      href={release.zip_url}
+                      rel="noopener noreferrer"
+                      title="แบบไม่ต้องติดตั้ง: แตกไฟล์แล้วเปิด .exe"
+                      onClick={() => trackDownload('ZIP')}
+                    >
                       <FileArchive size={16} /> แบบ ZIP
                     </a>
                   )}
