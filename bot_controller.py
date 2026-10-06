@@ -381,7 +381,7 @@ class BotController:
             point = float(info.point) if info and info.point else 0.01
             positions = [{
                 "type": "BUY" if p.type == 0 else "SELL", "price": float(p.price_open), "sl": float(p.sl), "tp": float(p.tp),
-                "lot": float(p.volume), "profit": float(p.profit), "plan": p.comment or "",
+                "lot": float(p.volume), "profit": float(p.profit) + float(getattr(p, "swap", 0.0) or 0.0), "plan": p.comment or "",
             } for p in (mt5.positions_get(symbol=symbol) or [])]
             return {
                 "candles": candles,

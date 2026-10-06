@@ -367,6 +367,10 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.lbl_change.pack(side="left")
         self.lbl_clock = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_MUTED)
         self.lbl_clock.pack(side="right")
+        # กำไร/ขาดทุนรวมของไม้ที่เปิดอยู่ (รวม swap)
+        self.lbl_pnl = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+                                    corner_radius=8, height=26)
+        self.lbl_pnl.pack(side="right", padx=12)
 
         legend = ctk.CTkFrame(self, fg_color="transparent")
         legend.pack(fill="x", padx=18)
@@ -422,6 +426,15 @@ class GoldCandleDialog(ctk.CTkToplevel):
             self.lbl_price.configure(text=f"{data['bid']:,.2f}", text_color=COLOR_SUCCESS_GREEN if chg >= 0 else COLOR_DANGER_RED)
             self.lbl_change.configure(text=f"แท่งนี้ {chg:+.2f} · Ask {data['ask']:,.2f} · Spread {data.get('spread_pts', 0)} pts",
                                       text_color=COLOR_SUCCESS_GREEN if chg >= 0 else COLOR_DANGER_RED)
+            pos = data.get("positions", [])
+            if pos:
+                total = sum(p["profit"] for p in pos)
+                good = total >= 0
+                self.lbl_pnl.configure(
+                    text=f"  ไม้เปิด {len(pos)} · {'กำไร' if good else 'ขาดทุน'}รวม {'+' if good else '-'}${abs(total):,.2f}  ",
+                    text_color=COLOR_SUCCESS_GREEN if good else COLOR_DANGER_RED, fg_color="#0F2A20" if good else "#2A1215")
+            else:
+                self.lbl_pnl.configure(text="  ไม่มีไม้เปิด  ", text_color=COLOR_TEXT_MUTED, fg_color=COLOR_CARD_BG)
             remain = max(0, last["time"] + 900 - data["server_time"])
             self.lbl_clock.configure(text=f"แท่งปัจจุบันปิดในอีก {remain // 60:02d}:{remain % 60:02d}")
             self._draw()
