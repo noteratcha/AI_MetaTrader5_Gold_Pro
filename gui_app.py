@@ -426,7 +426,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.title("XAUUSD · M15 เรียลไทม์")
         w, h = 980, 600
         self.configure(fg_color=COLOR_BG_DARK)
-        self.transient(parent)
+        # ไม่ใช้ transient เพื่อให้มีปุ่มขยายเต็มจอ/ย่อ บนแถบหัวหน้าต่าง
+        self.after(10, self.lift)
         self.update_idletasks()
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
@@ -443,6 +444,12 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.lbl_price.pack(side="left", padx=14)
         self.lbl_change = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family="Segoe UI", size=12))
         self.lbl_change.pack(side="left")
+        self.btn_full = ctk.CTkButton(top, text="⛶ เต็มจอ", width=84, height=26, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+                                      fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
+                                      text_color=COLOR_GOLD_PRIMARY, command=self._toggle_full)
+        self.btn_full.pack(side="right", padx=(10, 0))
+        self.bind("<F11>", lambda e: self._toggle_full())
+        self.bind("<Escape>", lambda e: self.state() == "zoomed" and self._toggle_full())
         self.lbl_clock = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_MUTED)
         self.lbl_clock.pack(side="right")
         # กำไร/ขาดทุนรวมของไม้ที่เปิดอยู่ (รวม swap)
@@ -473,6 +480,15 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.lbl_tip.pack(pady=(0, 10))
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._tick()
+
+    def _toggle_full(self):
+        """ขยายเต็มจอ ↔ ขนาดปกติ (F11 / Esc)"""
+        if self.state() == "zoomed":
+            self.state("normal")
+            self.btn_full.configure(text="⛶ เต็มจอ")
+        else:
+            self.state("zoomed")
+            self.btn_full.configure(text="🗗 ย่อ")
 
     def _close(self):
         if self._job:
@@ -618,7 +634,8 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         self.title("ประวัติกำไร / ขาดทุนรายวัน")
         w, h = 900, 560
         self.configure(fg_color=COLOR_BG_DARK)
-        self.transient(parent)
+        # ไม่ใช้ transient เพื่อให้มีปุ่มขยายเต็มจอ/ย่อ บนแถบหัวหน้าต่าง
+        self.after(10, self.lift)
         self.update_idletasks()
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
