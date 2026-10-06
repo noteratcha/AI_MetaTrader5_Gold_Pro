@@ -1798,6 +1798,12 @@ class MainTradingApp(ctk.CTk):
             right_widget_factory(row).pack(side="right")
         return row
 
+    def _refresh_button(self, parent, command):
+        """ปุ่มรีเฟรชมาตรฐาน: ↻ + ข้อความ สีฟ้า มีขอบ"""
+        return ctk.CTkButton(parent, text="↻  รีเฟรช", font=self._font(11, "bold"), width=78, height=28, corner_radius=8,
+                             fg_color="#132036", hover_color="#1A2C4A", border_width=1, border_color="#2D4A75",
+                             text_color=COLOR_CYAN_ACCENT, command=command)
+
     def _small_button(self, parent, text, command, width=90, accent=False):
         return ctk.CTkButton(
             parent,
@@ -1899,7 +1905,7 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  🌐  เปิดเว็บ GoldBot24 (พอร์ตสด)", command=lambda: webbrowser.open(self.WEB_URL))
         menu.add_command(label="  🛒  ซื้อชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
         menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
-        menu.add_command(label="  🔄  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
+        menu.add_command(label="  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
         menu.add_separator()
         menu.add_command(label="  ⎋  ออกจากระบบ", foreground=COLOR_DANGER_RED, command=self._do_logout)
         x = self.btn_user_menu.winfo_rootx()
@@ -2827,7 +2833,7 @@ class MainTradingApp(ctk.CTk):
         top.pack(fill="x", padx=6, pady=(0, 8))
         self.lbl_history_summary = ctk.CTkLabel(top, text="กำลังโหลดประวัติจาก MT5...", font=self._font(12), text_color=COLOR_TEXT_MUTED)
         self.lbl_history_summary.pack(side="left")
-        self._small_button(top, "🔄 รีเฟรช", lambda: self._refresh_history_async(force=True), width=80).pack(side="right")
+        self._refresh_button(top, lambda: self._refresh_history_async(force=True)).pack(side="right")
 
         table = ctk.CTkFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
         table.pack(fill="x", padx=6)
@@ -2959,53 +2965,111 @@ class MainTradingApp(ctk.CTk):
         box = self.ai_box
         for w in box.winfo_children():
             w.destroy()
-        green, red, muted = COLOR_SUCCESS_GREEN, COLOR_DANGER_RED, COLOR_TEXT_MUTED
-        main_dir = r["horizons"][-1]["direction"]
-        ctk.CTkLabel(box, text=r["summary"], font=self._font(15, "bold"), anchor="w", justify="left", wraplength=640,
-                     text_color=green if main_dir > 0 else red if main_dir < 0 else COLOR_GOLD_PRIMARY
-                     ).grid(row=0, column=0, columnspan=3, sticky="w", padx=12, pady=(10, 0))
-        upd = econ_calendar.datetime.fromisoformat(r["updated_at"]).astimezone(econ_calendar.BANGKOK)
-        ctk.CTkLabel(box, text=f"ราคา {r['price']:,.2f} · อัปเดต {upd.strftime('%H:%M:%S')} น. (ทุก 1 นาที) · ทายจากแท่ง M15 ที่ปิดแล้ว",
-                     font=self._font(10), text_color=muted).grid(row=1, column=0, columnspan=3, sticky="w", padx=12, pady=(0, 8))
+        green, red, gold, muted = COLOR_SUCCESS_GREEN, COLOR_DANGER_RED, COLOR_GOLD_PRIMARY, COLOR_TEXT_MUTED
+        tone = lambda d: green if d > 0 else red if d < 0 else gold
+        dark = lambda d: "#0F2A20" if d > 0 else "#2A1215" if d < 0 else "#2A2210"
+        main = r["horizons"][-1]
+        md = main["direction"]
 
+        # ── 1) แถบสรุปหลัก (Hero)
+        hero = ctk.CTkFrame(box, fg_color=dark(md), corner_radius=14, border_width=1, border_color=tone(md))
+        hero.grid(row=0, column=0, columnspan=3, sticky="ew", padx=4, pady=(6, 8))
+        hero.grid_columnconfigure(1, weight=1)
+        badge = tk.Canvas(hero, width=56, height=56, bg=dark(md), highlightthickness=0, bd=0)
+        badge.grid(row=0, column=0, rowspan=2, padx=(16, 12), pady=14)
+        badge.create_oval(2, 2, 54, 54, fill=tone(md), outline="")
+        if md > 0:
+            badge.create_polygon(28, 13, 42, 33, 14, 33, fill="#0A0B0F", outline="")
+        elif md < 0:
+            badge.create_polygon(14, 22, 42, 22, 28, 42, fill="#0A0B0F", outline="")
+        else:
+            badge.create_rectangle(15, 25, 41, 31, fill="#0A0B0F", outline="")
+        head = "ทองมีแนวโน้มขึ้น" if md > 0 else "ทองมีแนวโน้มลง" if md < 0 else "ยังไม่มีทิศชัดเจน"
+        ctk.CTkLabel(hero, text=head, font=self._font(20, "bold"), text_color=tone(md), anchor="w").grid(row=0, column=1, sticky="sw", pady=(14, 0))
+        sub = f"มุมมอง 1 วัน · AI {main['confidence']:.0f}%" + (" · เทรนด์ยืนยัน" if main["trend_agree"] and md else "") + \
+              f" · แม่นในอดีต {main['hist_acc']:.0f}%"
+        ctk.CTkLabel(hero, text=sub, font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor="w").grid(row=1, column=1, sticky="nw", pady=(0, 14))
+        upd = econ_calendar.datetime.fromisoformat(r["updated_at"]).astimezone(econ_calendar.BANGKOK)
+        right = ctk.CTkFrame(hero, fg_color="transparent")
+        right.grid(row=0, column=2, rowspan=2, padx=16)
+        ctk.CTkLabel(right, text=f"{r['price']:,.2f}", font=self._font(20, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY).pack(anchor="e")
+        ctk.CTkLabel(right, text=f"อัปเดต {upd.strftime('%H:%M')} น. · ทุก 1 นาที", font=self._font(10), text_color=muted).pack(anchor="e")
+
+        # ── 2) การ์ด 3 ช่วงเวลา
         for col, h in enumerate(r["horizons"]):
             d = h["direction"]
-            color = green if d > 0 else red if d < 0 else COLOR_GOLD_PRIMARY
-            c = ctk.CTkFrame(box, fg_color=COLOR_CARD_BG, corner_radius=10, border_width=1, border_color=color if d else COLOR_CARD_BORDER)
-            c.grid(row=2, column=col, sticky="nsew", padx=5, pady=4)
-            ctk.CTkLabel(c, text=f"อีก {h['label']}", font=self._font(11), text_color=muted).pack(anchor="w", padx=12, pady=(8, 0))
-            word = "▲ ขึ้น" if d > 0 else "▼ ลง" if d < 0 else ("ไม่ชัด (เอียงขึ้น)" if h["lean"] > 0 else "ไม่ชัด (เอียงลง)")
-            ctk.CTkLabel(c, text=word, font=self._font(18, "bold"), text_color=color).pack(anchor="w", padx=12)
-            up = h["p_up"] * 100
-            ctk.CTkLabel(c, text=f"ขึ้น {up:.0f}% · ลง {100 - up:.0f}%", font=self._font(11), text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=12)
-            bar = ctk.CTkProgressBar(c, height=6, progress_color=green, fg_color=red)
-            bar.set(h["p_up"])
-            bar.pack(fill="x", padx=12, pady=(4, 2))
-            ctk.CTkLabel(c, text=f"แม่นในอดีต {h['hist_acc']:.0f}%" + (" · เทรนด์ยืนยัน" if h["trend_agree"] and d else ""),
-                         font=self._font(10), text_color=muted).pack(anchor="w", padx=12, pady=(0, 8))
+            lean = h["lean"]
+            c = ctk.CTkFrame(box, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1,
+                             border_color=tone(d) if d else COLOR_CARD_BORDER)
+            c.grid(row=1, column=col, sticky="nsew", padx=4, pady=4)
+            top = ctk.CTkFrame(c, fg_color="transparent")
+            top.pack(fill="x", padx=14, pady=(12, 0))
+            ctk.CTkLabel(top, text=f"อีก {h['label']}", font=self._font(12, "bold"), text_color=muted).pack(side="left")
+            ctk.CTkLabel(top, text=" ชัด " if d else " ไม่ชัด ", font=self._font(10, "bold"), corner_radius=6, height=18,
+                         fg_color=dark(d) if d else "#262B36", text_color=tone(d) if d else muted).pack(side="right")
+            pct = h["p_up"] * 100 if lean > 0 else (1 - h["p_up"]) * 100
+            ctk.CTkLabel(c, text=f"{'▲' if lean > 0 else '▼'} {pct:.0f}%", font=self._font(26, "bold"),
+                         text_color=tone(lean) if d else gold).pack(anchor="w", padx=14, pady=(2, 0))
+            ctk.CTkLabel(c, text=f"โอกาส{'ขึ้น' if lean > 0 else 'ลง'}" + ("" if d else " (ยังไม่ถึง 55%)"), font=self._font(11),
+                         text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=14)
+            bar = tk.Canvas(c, height=8, bg=COLOR_CARD_BG, highlightthickness=0, bd=0)
+            bar.pack(fill="x", padx=14, pady=(8, 2))
 
-        ctk.CTkLabel(box, text="ปัจจัยที่นำมาวิเคราะห์", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY
-                     ).grid(row=3, column=0, columnspan=3, sticky="w", padx=12, pady=(10, 2))
-        row = 4
-        for f in r["factors"]:
-            sym, col = ("▲", green) if f["dir"] > 0 else ("▼", red) if f["dir"] < 0 else ("•", muted)
-            fr = ctk.CTkFrame(box, fg_color="transparent")
-            fr.grid(row=row, column=0, columnspan=3, sticky="ew", padx=12)
-            ctk.CTkLabel(fr, text=sym, font=self._font(13, "bold"), text_color=col, width=20).pack(side="left")
-            ctk.CTkLabel(fr, text=f["name"], font=self._font(12), text_color=COLOR_TEXT_PRIMARY, width=230, anchor="w").pack(side="left")
-            ctk.CTkLabel(fr, text=f["detail"], font=self._font(11), text_color=muted, anchor="w").pack(side="left")
-            row += 1
+            def draw(e, b=bar, up=h["p_up"]):
+                b.delete("all")
+                w = max(e.width, 10)
+                x = 4 + up * (w - 8)
+                b.create_line(4, 4, w - 4, 4, fill=red, width=8, capstyle="round")
+                b.create_line(4, 4, x, 4, fill=green, width=8, capstyle="round")
+            bar.bind("<Configure>", draw)
+            leg = ctk.CTkFrame(c, fg_color="transparent")
+            leg.pack(fill="x", padx=14)
+            ctk.CTkLabel(leg, text=f"ขึ้น {h['p_up'] * 100:.0f}%", font=self._font(10), text_color=green).pack(side="left")
+            ctk.CTkLabel(leg, text=f"ลง {(1 - h['p_up']) * 100:.0f}%", font=self._font(10), text_color=red).pack(side="right")
+            foot = ctk.CTkFrame(c, fg_color="#101218", corner_radius=8)
+            foot.pack(fill="x", padx=10, pady=(8, 10))
+            ctk.CTkLabel(foot, text=f"แม่นในอดีต {h['hist_acc']:.0f}%", font=self._font(10, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left", padx=8, pady=4)
+            if h["trend_agree"] and d:
+                ctk.CTkLabel(foot, text="✓ เทรนด์ยืนยัน", font=self._font(10, "bold"), text_color=green).pack(side="right", padx=8)
+
+        # ── 3) ปัจจัยที่นำมาวิเคราะห์
+        fac = ctk.CTkFrame(box, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        fac.grid(row=2, column=0, columnspan=3, sticky="ew", padx=4, pady=(8, 4))
+        ups = sum(1 for f in r["factors"] if f["dir"] > 0)
+        dns = sum(1 for f in r["factors"] if f["dir"] < 0)
+        mids = len(r["factors"]) - ups - dns
+        fh = ctk.CTkFrame(fac, fg_color="transparent")
+        fh.pack(fill="x", padx=14, pady=(12, 6))
+        ctk.CTkLabel(fh, text="ปัจจัยที่นำมาวิเคราะห์", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        for txt, n, col_ in (("กลาง", mids, muted), ("กดลง", dns, red), ("หนุนขึ้น", ups, green)):  # pack ขวา → เรียงกลับ
+            ctk.CTkLabel(fh, text=f" {txt} {n} ", font=self._font(10, "bold"), corner_radius=6, height=20,
+                         fg_color="#101218", text_color=col_).pack(side="right", padx=(6, 0))
+        for i, f in enumerate(r["factors"]):
+            d = f["dir"]
+            rowf = ctk.CTkFrame(fac, fg_color="#171B23" if i % 2 == 0 else "transparent", corner_radius=8)
+            rowf.pack(fill="x", padx=10, pady=1)
+            ctk.CTkLabel(rowf, text=" ▲ ขึ้น " if d > 0 else " ▼ ลง " if d < 0 else " • กลาง ", font=self._font(10, "bold"),
+                         width=62, corner_radius=6, height=20, fg_color=dark(d) if d else "#262B36",
+                         text_color=tone(d) if d else muted).pack(side="left", padx=(6, 10), pady=5)
+            ctk.CTkLabel(rowf, text=f["name"], font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY, width=220, anchor="w").pack(side="left")
+            ctk.CTkLabel(rowf, text=f["detail"], font=self._font(11), text_color=muted, anchor="w").pack(side="left", padx=(6, 8))
+        ctk.CTkFrame(fac, height=8, fg_color="transparent").pack()
+
+        row = 3
         if r["news"]:
-            ctk.CTkLabel(box, text="ข่าว USD ผลกระทบสูงใน 24 ชม. (ราคาอาจสะบัดแรงทั้งสองทาง)", font=self._font(12, "bold"),
-                         text_color=COLOR_GOLD_PRIMARY).grid(row=row, column=0, columnspan=3, sticky="w", padx=12, pady=(10, 2))
-            row += 1
+            nf = ctk.CTkFrame(box, fg_color="#2A2210", corner_radius=12, border_width=1, border_color="#7A5A1C")
+            nf.grid(row=row, column=0, columnspan=3, sticky="ew", padx=4, pady=4)
+            ctk.CTkLabel(nf, text="ข่าว USD ผลกระทบสูงใน 24 ชม. — ราคาอาจสะบัดแรงทั้งสองทาง", font=self._font(12, "bold"),
+                         text_color=gold).pack(anchor="w", padx=14, pady=(10, 4))
             for n in r["news"]:
                 lean = " · ▲ แนวโน้มทองขึ้น" if n["lean"] > 0 else " · ▼ แนวโน้มทองลง" if n["lean"] < 0 else ""
-                ctk.CTkLabel(box, text=f"{n['time']} น.  {n['title']}{lean}", font=self._font(11), text_color=COLOR_TEXT_PRIMARY
-                             ).grid(row=row, column=0, columnspan=3, sticky="w", padx=24)
-                row += 1
+                th = f" ({n['title_th']})" if n.get("title_th") else ""
+                ctk.CTkLabel(nf, text=f"{n['time']} น.  {n['title']}{th}{lean}", font=self._font(11), text_color=COLOR_TEXT_PRIMARY,
+                             anchor="w", justify="left", wraplength=620).pack(anchor="w", padx=14)
+            ctk.CTkFrame(nf, height=8, fg_color="transparent").pack()
+            row += 1
         ctk.CTkLabel(box, text=r["note"], font=self._font(10), text_color=muted, wraplength=640, justify="left"
-                     ).grid(row=row, column=0, columnspan=3, sticky="w", padx=12, pady=(12, 8))
+                     ).grid(row=row, column=0, columnspan=3, sticky="w", padx=8, pady=(8, 8))
 
     # ---- ปฏิทินเศรษฐกิจ ----
     IMPACT_COLORS = {"High": "#F87171", "Medium": "#FB923C", "Low": "#A3ABBA", "Holiday": "#6E7687"}
@@ -3042,7 +3106,7 @@ class MainTradingApp(ctk.CTk):
         self.cal_impact.pack(side="left", padx=10)
 
         self._small_button(bar, "🌐 Investing.com", lambda: webbrowser.open(econ_calendar.INVESTING_URL), width=120).pack(side="right")
-        self._small_button(bar, "🔄", lambda: self._refresh_calendar_async(force=True), width=36).pack(side="right", padx=(0, 8))
+        self._refresh_button(bar, lambda: self._refresh_calendar_async(force=True)).pack(side="right", padx=(0, 8))
 
         self.cal_list = ctk.CTkScrollableFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
         self.cal_list.pack(fill="both", expand=True, padx=6, pady=(0, 4))
