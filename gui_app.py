@@ -58,6 +58,31 @@ COLOR_TEXT_PRIMARY = "#ECEEF3"     # ข้อความหลักสีข�
 COLOR_TEXT_MUTED = "#A3ABBA"       # ข้อความรองสีเทา
 
 
+def _app_icon_path():
+    base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "assets", "app_icon.ico")
+
+
+# หน้าต่างย่อยทุกอัน (CTkToplevel) ใช้โลโก้เดียวกับโปรแกรมหลัก
+# CustomTkinter ตั้งไอคอนเริ่มต้นของตัวเองหลังสร้าง ~200ms จึงต้องตั้งทับหลังจากนั้น
+_ctk_toplevel_init = ctk.CTkToplevel.__init__
+
+
+def _toplevel_init_with_icon(self, *args, **kwargs):
+    _ctk_toplevel_init(self, *args, **kwargs)
+    icon = _app_icon_path()
+    if os.path.exists(icon):
+        def _set():
+            try:
+                self.iconbitmap(icon)
+            except Exception:
+                pass
+        self.after(250, _set)
+
+
+ctk.CTkToplevel.__init__ = _toplevel_init_with_icon
+
+
 class RedeemKeyDialog(ctk.CTkToplevel):
     """
     หน้าต่างป๊อปอัปสำหรับเติมชั่วโมงด้วย Product Key
