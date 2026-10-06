@@ -23,6 +23,7 @@ import { useAuth } from '../context/AuthContext';
 import { EmptyState, PageHeader, PageLoading, StatCard } from '../components/ui';
 import { cleanText, formatPrice, formatThaiDateTime, formatUsd, secondsSince, timeAgo } from '../lib/format';
 import { PLAN_LIST } from '../lib/packages';
+import { planDisplay } from '../lib/plans';
 import TradeHistory from '../components/TradeHistory';
 import { NextNewsCard, useCalendar } from '../components/EconCalendar';
 
@@ -202,7 +203,7 @@ function PositionsCard({ positions, loading }) {
                   <td>
                     <span className={`badge ${p.type === 'BUY' ? 'badge-green' : 'badge-red'}`}>{p.type}</span>
                   </td>
-                  <td className="small">{p.plan || '—'}</td>
+                  <td className="small">{planDisplay(p.plan)}</td>
                   <td className="num">{Number(p.volume).toFixed(2)}</td>
                   <td className="num">{formatPrice(p.price_open)}</td>
                   <td className="num faint">{formatPrice(p.sl)}</td>

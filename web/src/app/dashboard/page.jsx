@@ -6,6 +6,7 @@ import { BarChart3, Clock, Key, Lock, RefreshCw, ShoppingBag, Sparkles, Target, 
 import { useAuth } from '../../context/AuthContext';
 import { Alert, AuthGate, PageHeader, PageLoading, Spinner, StatCard } from '../../components/ui';
 import { formatHHMM, formatKeyInput, formatUsd } from '../../lib/format';
+import { planDisplay } from '../../lib/plans';
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
@@ -134,7 +135,7 @@ function Dashboard() {
               <tbody>
                 {(stats?.plans || []).map((p) => (
                   <tr key={p.name}>
-                    <td style={{ fontWeight: 600 }}>{p.name}</td>
+                    <td style={{ fontWeight: 600 }}>{planDisplay(p.name)}</td>
                     <td className="num">{p.trades}</td>
                     <td className="num text-green">{p.win}</td>
                     <td className="num text-red">{p.loss}</td>

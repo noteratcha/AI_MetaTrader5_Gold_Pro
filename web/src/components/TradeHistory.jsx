@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, History, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { EmptyState } from './ui';
 import { formatPrice, formatThaiDateTime, formatUsd } from '../lib/format';
+import { planDisplay } from '../lib/plans';
 
 const PAGE_SIZE = 5;
 
@@ -110,7 +111,7 @@ export default function TradeHistory() {
                     <td>
                       <span className={`badge ${d.badge}`}>{d.label}</span>
                     </td>
-                    <td className="small">{t.plan || '—'}</td>
+                    <td className="small">{planDisplay(t.plan)}</td>
                     <td className="num">{formatPrice(t.price)}</td>
                     <td className="num">{t.lot ? t.lot.toFixed(2) : '—'}</td>
                     <td className="num faint small">{isOpen ? `${formatPrice(t.sl)} / ${t.tp > 0 ? formatPrice(t.tp) : 'รันเทรนด์'}` : '—'}</td>

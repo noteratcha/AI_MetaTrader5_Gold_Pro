@@ -49,9 +49,9 @@ export function findPackage(id) {
 }
 
 export const PLAN_LIST = [
-  { key: 'MA-Cross-Trend', label: 'Plan 1 · MA-Cross-Trend', tag: 'M15 · H1 Anchor' },
-  { key: 'MA-Cross-H1-Trend', label: 'Plan 2 · MA-Cross-H1-Trend', tag: 'H1 · H4 Anchor' },
-  { key: 'SMC-LiquidityHunt', label: 'Plan 3 · SMC-LiquidityHunt', tag: 'H1 S&R Sweep' },
-  { key: 'SR-SwingBounce', label: 'Plan 4 · SR-SwingBounce', tag: 'Divergence' },
-  { key: 'BB-H1-Reversion', label: 'Plan 5 · BB-H1-Reversion', tag: 'BB 2STD + MACD' },
+  { key: 'MA-Cross-Trend', label: 'P1 · MA M15', tag: 'M15 · H1 Anchor' },
+  { key: 'MA-Cross-H1-Trend', label: 'P2 · MA H1', tag: 'H1 · H4 Anchor' },
+  { key: 'SMC-LiquidityHunt', label: 'P3 · SMC Hunt', tag: 'H1 S&R Sweep' },
+  { key: 'SR-SwingBounce', label: 'P4 · SR Bounce', tag: 'Divergence' },
+  { key: 'BB-H1-Reversion', label: 'P5 · BB-H1', tag: 'BB 2STD + MACD' },
 ];

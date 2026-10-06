@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlaskConical, LineChart, ShieldAlert, Target, TrendingDown, TrendingUp } from 'lucide-react';
 import { Alert, EmptyState, PageHeader, PageLoading, StatCard } from '../../components/ui';
+import { planDisplay } from '../../lib/plans';
 
 const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa' };
 
@@ -149,7 +150,7 @@ export default function BacktestPage() {
             <div key={p.key} className="card card-pad" style={{ borderTop: `3px solid ${PLAN_COLORS[p.key]}` }}>
               <div className="row-between" style={{ marginBottom: 8, gap: 8 }}>
                 <strong>
-                  {p.label} · {p.name}
+                  {planDisplay(p.name)}
                 </strong>
                 <span className="badge badge-muted">{info.type}</span>
               </div>
@@ -196,7 +197,7 @@ export default function BacktestPage() {
                 onClick={() => setVisible((v) => ({ ...v, [p.key]: !v[p.key] }))}
                 style={{ borderColor: visible[p.key] ? PLAN_COLORS[p.key] : undefined }}
               >
-                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: PLAN_COLORS[p.key] }} /> {p.label}
+                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: PLAN_COLORS[p.key] }} /> {planDisplay(p.name)}
               </button>
             ))}
           </div>
@@ -234,7 +235,7 @@ export default function BacktestPage() {
                       <span style={{ width: 10, height: 10, borderRadius: 3, background: PLAN_COLORS[p.key], flexShrink: 0 }} />
                       <div>
                         <strong>
-                          {p.label} · {p.name}
+                          {planDisplay(p.name)}
                         </strong>
                         <div className="tiny faint">{p.rule}</div>
                       </div>
@@ -279,7 +280,7 @@ export default function BacktestPage() {
             <tbody>
               {data.plans.map((p) => (
                 <tr key={p.key}>
-                  <td>{p.label}</td>
+                  <td>{planDisplay(p.name)}</td>
                   {months.map((m) => {
                     const v = p.monthly?.[m];
                     return (

@@ -9,6 +9,7 @@ import { Alert, EmptyState, Modal, Pager, Spinner } from '../../../../components
 import { useAuth } from '../../../../context/AuthContext';
 import { cleanText, formatHHMM, formatPrice, formatThaiDateTime, formatUsd, timeAgo } from '../../../../lib/format';
 import { ACTIVITY_LABELS, TRADE_ACTION_LABELS } from '../../../../lib/adminLabels';
+import { planDisplay } from '../../../../lib/plans';
 
 const PLAN_ROWS = [
   'Plan 1: MA-Cross-Trend',
@@ -191,7 +192,7 @@ export default function AdminUserDetailPage() {
                     const share = totalTrades ? (p.trades / totalTrades) * 100 : 0;
                     return (
                       <tr key={name}>
-                        <td style={{ fontWeight: 600 }}>{name}</td>
+                        <td style={{ fontWeight: 600 }}>{planDisplay(name)}</td>
                         <td className="num">{p.trades}</td>
                         <td className="num text-green">{p.win}</td>
                         <td className="num text-red">{p.loss}</td>
@@ -348,7 +349,7 @@ function LogRow({ type, r }) {
         <td>
           <span className={`badge ${l.badge}`}>{l.label}</span>
         </td>
-        <td className="small">{r.plan || '—'}</td>
+        <td className="small">{planDisplay(r.plan)}</td>
         <td className="num">{formatPrice(r.price)}</td>
         <td className="num">{Number(r.lot) ? Number(r.lot).toFixed(2) : '—'}</td>
         <td className={`num ${profit > 0 ? 'text-green' : profit < 0 ? 'text-red' : 'faint'}`}>{r.action.startsWith('OPEN') ? '—' : formatUsd(profit, { sign: true })}</td>
@@ -366,7 +367,7 @@ function LogRow({ type, r }) {
           <span className={`badge ${r.signal_type === 'ENTRY_SIGNAL' ? 'badge-gold' : 'badge-muted'}`}>{r.signal_type}</span>
         </td>
         <td className="small">
-          {cleanText(r.plan)} · <span className={r.direction === 'BUY' ? 'text-green' : r.direction === 'SELL' ? 'text-red' : ''}>{r.direction}</span>
+          {planDisplay(cleanText(r.plan))} · <span className={r.direction === 'BUY' ? 'text-green' : r.direction === 'SELL' ? 'text-red' : ''}>{r.direction}</span>
         </td>
         <td className="num">{formatPrice(r.price)}</td>
         <td className="tiny">
