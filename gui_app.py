@@ -574,7 +574,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 total = sum(p["profit"] for p in pos)
                 good = total >= 0
                 self.lbl_pnl.configure(
-                    text=f"  ไม้เปิด {len(pos)} · {'กำไร' if good else 'ขาดทุน'}รวม {'+' if good else '-'}${abs(total):,.2f}  ",
+                    text=f"  ไม้เปิด {len(pos)} · {'กำไร' if good else 'ขาดทุน'}รวม {'+' if good else '-'}{abs(total):,.2f}  ",
                     text_color=COLOR_SUCCESS_GREEN if good else COLOR_DANGER_RED, fg_color="#0F2A20" if good else "#2A1215")
             else:
                 self.lbl_pnl.configure(text="  ไม่มีไม้เปิด  ", text_color=COLOR_TEXT_MUTED, fg_color=COLOR_CARD_BG)
@@ -642,7 +642,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             self.slots.append((cx - slot / 2, cx + slot / 2, c))
         # ไม้ที่เปิดอยู่: ราคาเข้า / TP / SL / Lot
         for p in self.data.get("positions", []):
-            for val, col, txt in ((p["price"], COLOR_CYAN_ACCENT, f"{p['type']} {p['lot']:.2f} lot @ {p['price']:,.2f} ({p['profit']:+.2f}$)"),
+            for val, col, txt in ((p["price"], COLOR_CYAN_ACCENT, f"{p['type']} {p['lot']:.2f} lot @ {p['price']:,.2f} ({p['profit']:+.2f})"),
                                   (p["tp"], COLOR_SUCCESS_GREEN, f"TP {p['tp']:,.2f}"), (p["sl"], COLOR_DANGER_RED, f"SL {p['sl']:,.2f}")):
                 if not val or val <= 0:
                     continue
@@ -749,10 +749,10 @@ class PnlHistoryDialog(ctk.CTkToplevel):
 
     @staticmethod
     def _money(v, dp=2):
-        """+$26.34 / -$22.46 / $0"""
+        """+26.34 / -22.46 / 0 (ไม่ใส่สัญลักษณ์ $ ตามสไตล์โปรแกรม)"""
         if abs(v) < 0.005:
-            return "$0"
-        return f"{'+' if v > 0 else '-'}${abs(v):,.{dp}f}"
+            return "0"
+        return f"{'+' if v > 0 else '-'}{abs(v):,.{dp}f}"
 
     def _fmt_date(self, d, year=False):
         return f"{d.day} {self.TH_MONTHS[d.month - 1]}" + (f" {d.year + 543}" if year else "")
@@ -955,7 +955,7 @@ class UserStatsDialog(ctk.CTkToplevel):
         cards = [
             ("เข้าไม้รวมทั้งหมด", f"{total_t} ไม้", f"ชนะ: {win_t} | แพ้: {loss_t}", COLOR_CYAN_ACCENT),
             ("อัตราการชนะ (Win Rate)", f"{wr:.1f}%", f"เกณฑ์เป้าหมาย: > 50%", COLOR_GOLD_PRIMARY if wr >= 50 else COLOR_TEXT_MUTED),
-            ("กำไรสุทธิรวม (Net Profit)", f"${tot_prof:+,.2f}", "คำนวณจากทุกไม้ที่ปิด", COLOR_SUCCESS_GREEN if tot_prof >= 0 else COLOR_DANGER_RED),
+            ("กำไรสุทธิรวม (Net Profit)", f"{tot_prof:+,.2f}", "คำนวณจากทุกไม้ที่ปิด", COLOR_SUCCESS_GREEN if tot_prof >= 0 else COLOR_DANGER_RED),
             ("อัตรากำไร (Profit Factor)", f"{pf:.2f}", "Gross Win / Gross Loss", COLOR_GOLD_WARM if pf >= 1.5 else COLOR_TEXT_MUTED)
         ]
 
@@ -1015,7 +1015,7 @@ class UserStatsDialog(ctk.CTkToplevel):
             ctk.CTkLabel(row_frame, text=f"{p_wr:.1f}%", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=wr_colr).grid(row=0, column=3, padx=8)
             # 5. Profit USD
             prof_colr = COLOR_SUCCESS_GREEN if p_profit > 0 else (COLOR_DANGER_RED if p_profit < 0 else COLOR_TEXT_MUTED)
-            ctk.CTkLabel(row_frame, text=f"${p_profit:+,.2f}", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=prof_colr).grid(row=0, column=4, padx=8)
+            ctk.CTkLabel(row_frame, text=f"{p_profit:+,.2f}", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=prof_colr).grid(row=0, column=4, padx=8)
             # 6. Profit Factor
             ctk.CTkLabel(row_frame, text=f"{p_pf:.2f}", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_GOLD_WARM if p_pf >= 1.5 else COLOR_TEXT_MUTED).grid(row=0, column=5, padx=8)
 
@@ -1746,7 +1746,7 @@ class MainTradingApp(ctk.CTk):
         grid_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="metric_cards")
 
         self.card_mt5 = self._create_stat_card(grid_frame, 0, "🖥", "บัญชี MT5", "รอเชื่อมต่อ...", "Server: กำลังตรวจสอบ", COLOR_CYAN_ACCENT)
-        self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "$0.00", "Equity $0.00 · Float $0.00", COLOR_SUCCESS_GREEN)
+        self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "0.00", "Equity 0.00 · Float 0.00", COLOR_SUCCESS_GREEN)
         self._make_clickable(self.card_balance, lambda: PnlHistoryDialog(self), hint="ดูกราฟ ›")
         self.card_gold = self._create_stat_card(grid_frame, 2, "🏆", "ราคาทองคำ XAUUSD", "0.00", "Spread 0 pts", COLOR_GOLD_PRIMARY)
         self._make_clickable(self.card_gold, lambda: GoldCandleDialog(self), hint="กราฟ M15 ›")
@@ -2007,7 +2007,6 @@ class MainTradingApp(ctk.CTk):
         ent.pack(side="right")
         ent.bind("<Return>", lambda e: self._save_tp_usd())
         ent.bind("<FocusOut>", lambda e: self._save_tp_usd())
-        ctk.CTkLabel(tp_row, text="$", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="right", padx=(0, 4))
         self.lbl_tp_hint = ctk.CTkLabel(tp_row, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED)
         self.lbl_tp_hint.pack(side="right", padx=(0, 6))
 
@@ -2016,7 +2015,7 @@ class MainTradingApp(ctk.CTk):
         stats.pack(fill="x", padx=14, pady=(6, 0))
         stats.grid_columnconfigure((0, 1, 2), weight=1, uniform="ctl_stats")
         self.ctl_stat_labels = {}
-        for col, (key, title, init) in enumerate((("open", "ออเดอร์", "0"), ("float", "กำไรลอยตัว", "$0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
+        for col, (key, title, init) in enumerate((("open", "ออเดอร์", "0"), ("float", "กำไรลอยตัว", "0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
             box = ctk.CTkFrame(stats, fg_color="transparent")
             box.grid(row=0, column=col, sticky="nsew", pady=5)
             ctk.CTkLabel(box, text=title, font=self._font(10), text_color=COLOR_TEXT_MUTED, height=16).pack()
@@ -2470,7 +2469,7 @@ class MainTradingApp(ctk.CTk):
                 sl_text,
                 f"{tp:,.2f}" if tp > 0 else "รันเทรนด์",
                 held,
-                f"{'+' if profit >= 0 else '-'}${abs(profit):,.2f}",
+                f"{'+' if profit >= 0 else '-'}{abs(profit):,.2f}",
             ]
             colors = [
                 COLOR_TEXT_MUTED,
@@ -2490,7 +2489,7 @@ class MainTradingApp(ctk.CTk):
 
         if positions:
             self.lbl_positions_summary.configure(
-                text=f"{len(positions)} ไม้ (BUY {buys} · SELL {sells}) · รวม {total_lot:.2f} Lot · กำไรลอยตัว {'+' if total_profit >= 0 else '-'}${abs(total_profit):,.2f}",
+                text=f"{len(positions)} ไม้ (BUY {buys} · SELL {sells}) · รวม {total_lot:.2f} Lot · กำไรลอยตัว {'+' if total_profit >= 0 else '-'}{abs(total_profit):,.2f}",
                 text_color=COLOR_SUCCESS_GREEN if total_profit > 0 else (COLOR_DANGER_RED if total_profit < 0 else COLOR_TEXT_PRIMARY),
             )
         else:
@@ -2625,7 +2624,7 @@ class MainTradingApp(ctk.CTk):
         open_count = total - len(closed)
         self.lbl_history_summary.configure(
             text=f"90 วันล่าสุด · ปิดแล้ว {len(closed)} ไม้ (ชนะ {wins} / แพ้ {len(closed) - wins})"
-            f" · เปิดอยู่ {open_count} · กำไรสุทธิ {'+' if net >= 0 else '-'}${abs(net):,.2f}",
+            f" · เปิดอยู่ {open_count} · กำไรสุทธิ {'+' if net >= 0 else '-'}{abs(net):,.2f}",
             text_color=COLOR_SUCCESS_GREEN if net > 0 else (COLOR_DANGER_RED if net < 0 else COLOR_TEXT_MUTED),
         )
 
@@ -2645,7 +2644,7 @@ class MainTradingApp(ctk.CTk):
                 f"{r.get('open_price', 0):,.2f}",
                 "—" if is_open else f"{r.get('close_price', 0):,.2f}",
                 "● เปิดอยู่" if is_open else self._close_reason(r)[0],
-                f"{'+' if profit >= 0 else '-'}${abs(profit):,.2f}",
+                f"{'+' if profit >= 0 else '-'}{abs(profit):,.2f}",
             ]
             colors = [
                 COLOR_TEXT_MUTED,
@@ -3088,8 +3087,8 @@ class MainTradingApp(ctk.CTk):
                 flt = telemetry.get("floating_profit", 0.0)
                 if hasattr(self, 'card_balance'):
                     flt_sign = "+" if flt >= 0 else ""
-                    self.card_balance["val_lbl"].configure(text=f"${bal:,.2f}")
-                    self.card_balance["sub_lbl"].configure(text=f"Equity ${eq:,.2f} · Float {flt_sign}${flt:.2f}")
+                    self.card_balance["val_lbl"].configure(text=f"{bal:,.2f}")
+                    self.card_balance["sub_lbl"].configure(text=f"Equity {eq:,.2f} · Float {flt_sign}{flt:,.2f}")
 
                 # อัปเดตราคาทองคำ XAUUSD
                 bid = telemetry.get("xau_bid", 0.0)
@@ -3201,7 +3200,7 @@ class MainTradingApp(ctk.CTk):
                     n_open = len(telemetry.get("open_positions") or [])
                     self.ctl_stat_labels["open"].configure(text=str(n_open), text_color=COLOR_CYAN_ACCENT if n_open else COLOR_TEXT_PRIMARY)
                     self.ctl_stat_labels["float"].configure(
-                        text=f"{'+' if flt >= 0 else '-'}${abs(flt):,.2f}",
+                        text=f"{'+' if flt >= 0 else '-'}{abs(flt):,.2f}",
                         text_color=COLOR_SUCCESS_GREEN if flt > 0 else (COLOR_DANGER_RED if flt < 0 else COLOR_TEXT_PRIMARY),
                     )
                     if self._bot_started_at and bot_ctrl.is_active and not bot_ctrl.is_paused:
