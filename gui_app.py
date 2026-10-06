@@ -1713,25 +1713,22 @@ class MainTradingApp(ctk.CTk):
 
         # --- ขวา: เมนูผู้ใช้
         user_name = license_mgr.session_data.get("username") or "User"
-        self.btn_user_menu = ctk.CTkButton(
-            h_inner,
-            text=f"  {user_name}  ▾",
-            font=self._font(12, "bold"),
-            fg_color="#1A1E27",
-            hover_color="#262B36",
-            text_color=COLOR_TEXT_PRIMARY,
-            height=38,
-            width=40,
-            corner_radius=19,
-            command=self._open_user_menu,
-        )
+        # รูปย่อ + ชื่อ + ▾ รวมเป็นปุ่มเดียว (ทั้งก้อนคลิกเปิดเมนูได้)
+        self.btn_user_menu = ctk.CTkFrame(h_inner, fg_color="#1A1E27", corner_radius=21, height=42)
         self.btn_user_menu.pack(side="right")
         avatar = ctk.CTkLabel(
-            h_inner, text=user_name[:1].upper(), font=self._font(14, "bold"), width=34, height=34,
-            corner_radius=17, fg_color=COLOR_GOLD_WARM, text_color="#1A1406",
+            self.btn_user_menu, text=user_name[:1].upper(), font=self._font(14, "bold"), width=32, height=32,
+            corner_radius=16, fg_color=COLOR_GOLD_WARM, text_color="#1A1406",
         )
-        avatar.pack(side="right", padx=(0, 6))
-        avatar.bind("<Button-1>", lambda e: self._open_user_menu())
+        avatar.pack(side="left", padx=(5, 8), pady=5)
+        name_lbl = ctk.CTkLabel(self.btn_user_menu, text=f"{user_name}  ▾", font=self._font(12, "bold"),
+                                text_color=COLOR_TEXT_PRIMARY, height=32)
+        name_lbl.pack(side="left", padx=(0, 14))
+        for w in (self.btn_user_menu, avatar, name_lbl):
+            w.bind("<Button-1>", lambda e: self._open_user_menu())
+            w.configure(cursor="hand2")
+            w.bind("<Enter>", lambda e: self.btn_user_menu.configure(fg_color="#262B36"))
+            w.bind("<Leave>", lambda e: self.btn_user_menu.configure(fg_color="#1A1E27"))
 
         # --- ขวา: กระเป๋าเวลา (เวลาคงเหลือ + เติมคีย์ + ซื้อชั่วโมง)
         self.time_pill_frame = ctk.CTkFrame(h_inner, fg_color=COLOR_GOLD_BG, corner_radius=12, border_width=1, border_color="#5A4519")
@@ -3238,12 +3235,7 @@ class MainTradingApp(ctk.CTk):
                             rows[tf]["val"].configure(text="◆ Sideway", text_color=COLOR_CYAN_ACCENT)
                         cpct = float(radar.get(f"{key}_pct", 0.0) or 0.0)  # ระยะ MA50 เทียบ MA150 (%)
                         rows[tf]["pct"].configure(text=f"{cpct:+.2f}%", text_color=pct_color(cpct))
-                    for tf, key, tag in (("H1", "h1_stack_dir", "MA100-200"), ("H4", "h4_lt_dir", "MA200")):
-                        lt_dir = int(radar.get(key, 0) or 0)
-                        rows[tf]["lt"].configure(
-                            text=f"{tag} ▲" if lt_dir > 0 else (f"{tag} ▼" if lt_dir < 0 else ""),
-                            text_color=COLOR_SUCCESS_GREEN if lt_dir > 0 else COLOR_DANGER_RED,
-                        )
+                    # ป้าย MA100-200 / MA200 ถูกเอาออกจากการ์ด (ดูรายละเอียดได้ในหน้าต่างอธิบายเมื่อคลิกการ์ด)
 
                 if hasattr(self, 'card_sr'):
                     price = float(bid or radar.get("price", 0.0) or 0.0)
