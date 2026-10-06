@@ -2401,7 +2401,8 @@ class MainTradingApp(ctk.CTk):
                 items = open_by_plan.get(full.split(": ", 1)[-1], [])
                 chk, var = self.plan_checks[full]
                 admin_on = plan_config.admin_enabled(full.split(": ", 1)[-1])
-                chk.configure(text_color=COLOR_SUCCESS_GREEN if items else (COLOR_TEXT_PRIMARY if (admin_on and var.get()) else COLOR_TEXT_MUTED))
+                if admin_on:
+                    chk.configure(text_color=COLOR_SUCCESS_GREEN if items else (COLOR_TEXT_PRIMARY if var.get() else COLOR_TEXT_MUTED))
                 if items:
                     side = items[0][0] if len({i[0] for i in items}) == 1 else "BUY/SELL"
                     prof = sum(i[1] for i in items)
@@ -2466,16 +2467,25 @@ class MainTradingApp(ctk.CTk):
         self._sync_plan_checks()
 
     def _sync_plan_checks(self):
-        """แผนที่แอดมินปิด: ติ๊กไม่ได้ + ขีดสีเทา · อัปเดตป้ายจำนวนแผนที่ใช้งาน"""
+        """แผนที่แอดมินปิด: เอาเครื่องหมายติ๊กออก + กดไม่ได้ + สีเทา + ป้าย "แอดมินปิด"
+        (ไม่แตะค่าที่ผู้ใช้เลือกไว้ — เมื่อแอดมินเปิดคืน ช่องติ๊กกลับเป็นค่าเดิมของผู้ใช้)"""
         if not getattr(self, "plan_checks", None):
             return
         active = 0
         for full, (chk, var) in self.plan_checks.items():
             base = full.split(": ", 1)[-1]
             admin_on = plan_config.admin_enabled(base)
-            chk.configure(state="normal" if admin_on else "disabled",
-                          text_color=COLOR_TEXT_PRIMARY if (admin_on and var.get()) else COLOR_TEXT_MUTED)
-            active += 1 if (admin_on and var.get()) else 0
+            label = next((f"{ic}  {sh}" for ic, sh, fl in self.PLAN_ROWS if fl == full), base)
+            if admin_on:
+                if chk.cget("state") == "disabled":          # แอดมินเพิ่งเปิดคืน → คืนค่าที่ผู้ใช้เลือก
+                    var.set(plan_config.user_enabled(base))
+                chk.configure(state="normal", text=label, fg_color=COLOR_GOLD_WARM, border_color="#949A9F",
+                              text_color=COLOR_TEXT_PRIMARY if var.get() else COLOR_TEXT_MUTED)
+                active += 1 if var.get() else 0
+            else:
+                var.set(False)                                  # แสดงเป็นไม่ได้เลือก (ไม่บันทึกทับค่าผู้ใช้)
+                chk.configure(state="disabled", text=f"{label}  · แอดมินปิด", fg_color="#3A3F4A",
+                              border_color="#3A3F4A", text_color="#5A6070", text_color_disabled="#5A6070")
         if hasattr(self, "lbl_plans_title"):
             self.lbl_plans_title.configure(text=f"⚡ แผนเทรด (ใช้ {active}/{len(self.plan_checks)})")
 
