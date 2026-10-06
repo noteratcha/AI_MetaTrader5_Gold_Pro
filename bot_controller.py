@@ -377,8 +377,16 @@ class BotController:
                     "high": max(float(r["high"]), c), "low": min(float(r["low"]), c), "close": c,
                     "ma5": ma(5, i), "ma13": ma(13, i),
                 })
+            info = mt5.symbol_info(symbol)
+            point = float(info.point) if info and info.point else 0.01
+            positions = [{
+                "type": "BUY" if p.type == 0 else "SELL", "price": float(p.price_open), "sl": float(p.sl), "tp": float(p.tp),
+                "lot": float(p.volume), "profit": float(p.profit), "plan": p.comment or "",
+            } for p in (mt5.positions_get(symbol=symbol) or [])]
             return {
                 "candles": candles,
+                "positions": positions,
+                "spread_pts": int(round((float(tick.ask) - float(tick.bid)) / point)) if tick else 0,
                 "bid": float(tick.bid) if tick else candles[-1]["close"],
                 "ask": float(tick.ask) if tick else candles[-1]["close"],
                 "server_time": int(tick.time) if tick else candles[-1]["time"],

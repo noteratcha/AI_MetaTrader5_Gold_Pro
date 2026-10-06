@@ -339,13 +339,14 @@ class NewsImpactDialog(ctk.CTkToplevel):
 class GoldCandleDialog(ctk.CTkToplevel):
     """กราฟแท่งเทียน XAUUSD M15 แบบเรียลไทม์: แท่งปัจจุบัน + ย้อนหลัง 15 แท่ง พร้อม MA5 / MA13 (เส้นที่ Plan 1 ใช้)"""
 
-    BARS = 16
+    BARS = 50   # ค่าเริ่มต้น (ปรับได้ที่ตัวเลือก "แท่ง")
+    BAR_CHOICES = ("16", "30", "50", "80", "120")
     REFRESH_MS = 1000
 
     def __init__(self, parent):
         super().__init__(parent)
         self.title("XAUUSD · M15 เรียลไทม์")
-        w, h = 820, 520
+        w, h = 980, 600
         self.configure(fg_color=COLOR_BG_DARK)
         self.transient(parent)
         self.update_idletasks()
@@ -369,7 +370,13 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         legend = ctk.CTkFrame(self, fg_color="transparent")
         legend.pack(fill="x", padx=18)
-        for txt, col in (("━ MA5", COLOR_CYAN_ACCENT), ("━ MA13", COLOR_GOLD_WARM), ("┅ ราคาล่าสุด", COLOR_TEXT_MUTED)):
+        self.bars_var = tk.StringVar(value=str(self.BARS))
+        ctk.CTkSegmentedButton(legend, values=list(self.BAR_CHOICES), variable=self.bars_var, font=ctk.CTkFont(family="Segoe UI", size=11),
+                               selected_color=COLOR_GOLD_WARM, selected_hover_color=COLOR_GOLD_DARK,
+                               command=lambda v: self._tick(reschedule=False)).pack(side="right")
+        ctk.CTkLabel(legend, text="จำนวนแท่ง", font=ctk.CTkFont(family="Segoe UI", size=11), text_color=COLOR_TEXT_MUTED).pack(side="right", padx=6)
+        for txt, col in (("━ MA5", COLOR_CYAN_ACCENT), ("━ MA13", COLOR_GOLD_WARM), ("┅ Bid / Ask", COLOR_TEXT_MUTED),
+                         ("┅ ราคาเข้า", COLOR_CYAN_ACCENT), ("┅ TP", COLOR_SUCCESS_GREEN), ("┅ SL", COLOR_DANGER_RED)):
             ctk.CTkLabel(legend, text=txt, font=ctk.CTkFont(family="Segoe UI", size=11), text_color=col).pack(side="left", padx=(0, 14))
 
         box = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
@@ -398,8 +405,12 @@ class GoldCandleDialog(ctk.CTkToplevel):
         from datetime import datetime, timedelta, timezone
         return datetime.fromtimestamp(server_ts - offset, timezone(timedelta(hours=7))).strftime("%H:%M")
 
-    def _tick(self):
-        data = bot_ctrl.get_live_candles(self.BARS)
+    def _tick(self, reschedule=True):
+        try:
+            n = int(self.bars_var.get())
+        except Exception:
+            n = self.BARS
+        data = bot_ctrl.get_live_candles(n)
         if data:
             self.data = data
             # เวลาเซิร์ฟเวอร์ MT5 → เวลาไทย (ปัดส่วนต่างเป็นชั่วโมง)
@@ -409,14 +420,15 @@ class GoldCandleDialog(ctk.CTkToplevel):
             last = c[-1]
             chg = last["close"] - last["open"]
             self.lbl_price.configure(text=f"{data['bid']:,.2f}", text_color=COLOR_SUCCESS_GREEN if chg >= 0 else COLOR_DANGER_RED)
-            self.lbl_change.configure(text=f"แท่งนี้ {chg:+.2f} · Ask {data['ask']:,.2f}",
+            self.lbl_change.configure(text=f"แท่งนี้ {chg:+.2f} · Ask {data['ask']:,.2f} · Spread {data.get('spread_pts', 0)} pts",
                                       text_color=COLOR_SUCCESS_GREEN if chg >= 0 else COLOR_DANGER_RED)
             remain = max(0, last["time"] + 900 - data["server_time"])
             self.lbl_clock.configure(text=f"แท่งปัจจุบันปิดในอีก {remain // 60:02d}:{remain % 60:02d}")
             self._draw()
         else:
             self.lbl_tip.configure(text="เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
-        self._job = self.after(self.REFRESH_MS, self._tick)
+        if reschedule:
+            self._job = self.after(self.REFRESH_MS, self._tick)
 
     def _draw(self):
         cv = self.canvas
@@ -430,6 +442,9 @@ class GoldCandleDialog(ctk.CTkToplevel):
         candles = self.data["candles"]
         left, right, top, bottom = 10, 70, 16, 28
         vals = [v for c in candles for v in (c["high"], c["low"], c["ma5"], c["ma13"]) if v is not None]
+        vals.append(self.data["ask"])
+        for p in self.data.get("positions", []):  # ให้เห็นเส้นราคาเข้า/TP/SL ในกรอบเสมอ
+            vals += [v for v in (p["price"], p["sl"], p["tp"]) if v and v > 0]
         hi, lo = max(vals), min(vals)
         pad = max((hi - lo) * 0.08, 0.5)
         hi, lo = hi + pad, lo - pad
@@ -464,10 +479,23 @@ class GoldCandleDialog(ctk.CTkToplevel):
             live = i == n - 1
             cv.create_rectangle(cx - bw / 2, min(y1, y2), cx + bw / 2, max(y1, y2), fill=col,
                                 outline=COLOR_GOLD_PRIMARY if live else col, width=2 if live else 1)
-            if i % max(1, int(round(n / max(1, (W - left - right) / 52)))) == 0 or live:
+            if (i % max(1, int(round(n / max(1, (W - left - right) / 52)))) == 0 and i < n - 2) or live:
                 cv.create_text(cx, H - bottom + 13, text="ตอนนี้" if live else self._hhmm(c["time"], self.offset),
                                fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=("Segoe UI", 9, "bold" if live else "normal"))
             self.slots.append((cx - slot / 2, cx + slot / 2, c))
+        # ไม้ที่เปิดอยู่: ราคาเข้า / TP / SL / Lot
+        for p in self.data.get("positions", []):
+            for val, col, txt in ((p["price"], COLOR_CYAN_ACCENT, f"{p['type']} {p['lot']:.2f} lot @ {p['price']:,.2f} ({p['profit']:+.2f}$)"),
+                                  (p["tp"], COLOR_SUCCESS_GREEN, f"TP {p['tp']:,.2f}"), (p["sl"], COLOR_DANGER_RED, f"SL {p['sl']:,.2f}")):
+                if not val or val <= 0:
+                    continue
+                yy = y_of(val)
+                cv.create_line(left, yy, W - right, yy, fill=col, dash=(6, 3))
+                cv.create_text(left + 4, yy - 7, text=txt, anchor="w", fill=col, font=("Segoe UI", 9, "bold"))
+        # เส้น Ask
+        ya = y_of(self.data["ask"])
+        cv.create_line(left, ya, W - right, ya, fill="#5B6270", dash=(2, 4))
+        cv.create_text(W - right + 6, ya - 12 if abs(ya - y_of(self.data["bid"])) < 18 else ya, text=f"A {self.data['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 8))
         # เส้นราคาล่าสุด
         yb = y_of(self.data["bid"])
         cv.create_line(left, yb, W - right, yb, fill=COLOR_TEXT_MUTED, dash=(3, 3))
