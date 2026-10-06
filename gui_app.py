@@ -1985,6 +1985,7 @@ class MainTradingApp(ctk.CTk):
         self.card_trend = self._create_dual_card(grid_frame, 3, "📊", "สภาวะตลาด")
         self.card_trend["rows"] = {tf: self._create_trend_row(self.card_trend["body"], tf) for tf in ("H1", "H4")}
         self._make_clickable(self.card_trend, lambda: MarketExplainDialog(self))
+        self.after(1500, self._ma_order_tick)
 
         # แนวรับ–แนวต้าน: 2 แถว H1 / H4 พร้อมแถบตำแหน่งราคาปัจจุบันในกรอบ
         self.card_sr = self._create_dual_card(grid_frame, 4, "🧱", "แนวรับ – แนวต้าน")
@@ -2030,13 +2031,13 @@ class MainTradingApp(ctk.CTk):
         row = ctk.CTkFrame(parent, fg_color="transparent", height=24)
         row.pack(fill="x", pady=1)
         self._tf_tag(row, tf)
-        val = ctk.CTkLabel(row, text="—", font=self._font(14, "bold"), text_color=COLOR_TEXT_MUTED, height=22)
+        val = ctk.CTkLabel(row, text="—", font=self._font(13, "bold"), text_color=COLOR_TEXT_MUTED, height=22)
         val.pack(side="left")
-        pct = ctk.CTkLabel(row, text="", font=self._font(12, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=22)
+        pct = ctk.CTkLabel(row, text="", font=self._font(11, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=22)
         pct.pack(side="right")
-        # เทรนด์ระยะยาว 200 แท่ง (H1: MA50 vs MA200 · H4: ราคา vs MA200)
-        lt = ctk.CTkLabel(row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, height=22)
-        lt.pack(side="right", padx=(0, 8))
+        # ลำดับเส้น MA50 / MA100 / MA150 (แท่งปิด) เช่น 50<100<150 = ขาลง — อัปเดตทุก 30 วินาที (_ma_order_tick)
+        lt = ctk.CTkLabel(row, text="", font=self._font(10, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=22)
+        lt.pack(side="right", padx=(0, 6))
         return {"val": val, "pct": pct, "lt": lt}
 
     def _create_sr_row(self, parent, tf, col=0):
@@ -2404,6 +2405,38 @@ class MainTradingApp(ctk.CTk):
         except Exception:
             pass
         self.after(2000, self._plan_live_tick)
+
+    def _ma_order_tick(self):
+        """อ่านลำดับ MA50/100/150 ของ H1/H4 จาก MT5 ในเธรดเบื้องหลังทุก 30 วิ — เธรดหลักตรวจผลทุก 1 วิแล้วแสดงบนการ์ด
+        (Tk ห้ามเรียกจากเธรดอื่น จึงส่งผลผ่านตัวแปรแทน self.after)"""
+        st = self.__dict__.setdefault("_ma_state", {"data": None, "busy": False, "next": 0.0})
+        if st["data"] is not None:
+            self._apply_ma_order(st["data"])
+            st["data"] = None
+        if not st["busy"] and time.time() >= st["next"]:
+            st["busy"], st["next"] = True, time.time() + 30
+
+            def work():
+                try:
+                    st["data"] = bot_ctrl.get_market_explain()
+                finally:
+                    st["busy"] = False
+            threading.Thread(target=work, daemon=True).start()
+        self.after(1000, self._ma_order_tick)
+
+    def _apply_ma_order(self, data):
+        if not data:
+            return
+        rows = getattr(self, "card_trend", {}).get("rows", {})
+        for tf, row in rows.items():
+            d = data.get(tf)
+            if not d:
+                continue
+            m = d["ma"]
+            op1 = "<" if m[50] < m[100] else ">"
+            op2 = "<" if m[100] < m[150] else ">"
+            color = COLOR_DANGER_RED if op1 == op2 == "<" else COLOR_SUCCESS_GREEN if op1 == op2 == ">" else COLOR_CYAN_ACCENT
+            row["lt"].configure(text=f"50{op1}100{op2}150", text_color=color)
 
     def _plan_checks_tick(self):
         """อัปเดตสถานะช่องติ๊กแผน (แอดมินอาจเปิด/ปิดแผนจากเว็บ) ทุก 30 วินาที"""
