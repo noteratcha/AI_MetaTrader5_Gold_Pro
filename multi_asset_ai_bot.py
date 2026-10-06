@@ -103,6 +103,7 @@ MARGIN_PER_TRADE = 400            # Max Positions: มาจินทุก $400
 # State variables สำหรับระบบ Risk Management
 consecutive_loss = {}             # {sym: int} นับขาดทุนติดต่อกัน
 last_lock_time = {}               # {ticket: timestamp} ป้องกัน Lock SL ซ้ำใน 60 วินาที
+_p1_filter_logged = {}           # {sym: bar_key} พิมพ์เหตุผลตัวกรองสัญญาณหลอก Plan 1 ครั้งเดียวต่อแท่ง
 last_loss_plan = {}               # {sym: {direction: (plan_name, timestamp)}} บันทึกเฉพาะไม้ขาดทุน — block 60 นาที
 from app_paths import data_path as _data_path
 # ไฟล์ประวัติทั้งหมดเก็บใน %APPDATA%\GoldBot24 (ไม่ขึ้นกับโฟลเดอร์ที่เปิดโปรแกรม และไม่หายเมื่ออัปเดต/ถอนการติดตั้ง)
@@ -1486,6 +1487,28 @@ def main():
                 p4_cross_down = bool((prev_closed_ma5 >= prev_closed_ma13) and (closed_ma5 < closed_ma13))
                 ma_cross_buy_confirm = p4_cross_up and h1_stack_dir == 1
                 ma_cross_sell_confirm = p4_cross_down and h1_stack_dir == -1
+
+                # ตัวกรองสัญญาณหลอก Plan 1 (แท่ง M15 ที่ปิดแล้ว): โมเมนตัม RSI ต้องหนุนทิศ แต่ยังไม่ Overbought/Oversold
+                # และราคาปิดต้องอยู่ฝั่งเดียวกับ MA50 M15 — Backtest 2.5 ปี: ไม้ 2027 → 739, PF 1.16 → 1.37,
+                # Max DD 245 → 92 จุด, กำไร 850 → 690 จุด (กำไรทุกไตรมาส จากเดิมกระจุกช่วงท้าย)
+                if ma_cross_buy_confirm or ma_cross_sell_confirm:
+                    p1_dir = 1 if ma_cross_buy_confirm else -1
+                    p1_rsi = float(df['rsi'].iloc[-2]) if len(df) >= 2 else float('nan')
+                    p1_ma50 = float(df['close'].rolling(50).mean().iloc[-2]) if len(df) >= 51 else float('nan')
+                    p1_close = float(df['close'].iloc[-2])
+                    rsi_ok = (50 < p1_rsi < 70) if p1_dir == 1 else (30 < p1_rsi < 50)
+                    ma50_ok = pd.notna(p1_ma50) and (p1_close - p1_ma50) * p1_dir > 0
+                    if not (rsi_ok and ma50_ok):
+                        ma_cross_buy_confirm = ma_cross_sell_confirm = False
+                        bar_key = (sym, str(df['time'].iloc[-2]) if 'time' in df else p1_close)
+                        if _p1_filter_logged.get(sym) != bar_key:
+                            _p1_filter_logged[sym] = bar_key
+                            why = []
+                            if not rsi_ok:
+                                why.append(f"RSI {p1_rsi:.1f} (ต้อง {'50–70' if p1_dir == 1 else '30–50'})")
+                            if not ma50_ok:
+                                why.append(f"ราคา {'ต่ำกว่า' if p1_dir == 1 else 'สูงกว่า'} MA50 M15 ({p1_ma50:.2f})")
+                            print(f"{Colors.YELLOW}[FAKE SIGNAL FILTER] {sym} Plan 1 {'BUY' if p1_dir == 1 else 'SELL'} ข้าม — {' · '.join(why)}{Colors.RESET}")
 
                 # เทรนด์ระยะยาว 200 แท่ง สำหรับ Plan 2 + Dashboard
                 #   Plan 2: ราคาปิด H4 เทียบ MA200 ต้องตรงทิศ — กำไร 767 → 991 จุด, PF 1.20 → 1.37, Max DD 315 → 268

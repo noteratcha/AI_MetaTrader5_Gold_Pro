@@ -66,7 +66,7 @@ _RULES = [
     (re.compile(r"^\[(AI TRAINING|AI QUALITY|OK|AI READY|ACCOUNT|SUCCESS|LICENSE|STOP|\*)\]"), "system", "key"),
     (re.compile(r"^\[(AI BOT|ASSET FOCUS|ACTIVE PLANS|RISK/RRR|DATA RETENTION)\]"), "system", "detail"),
     (re.compile(r"^\[REQUOTE RETRY"), "warn", "detail"),
-    (re.compile(r"^\[(COOLDOWN|PLAN BLOCK|H4 CONFLUENCE FILTER|MAX POSITIONS|SIDEWAY GUARD)\]"), "warn", "detail"),
+    (re.compile(r"^\[(COOLDOWN|PLAN BLOCK|FAKE SIGNAL FILTER|H4 CONFLUENCE FILTER|MAX POSITIONS|SIDEWAY GUARD)\]"), "warn", "detail"),
     (re.compile(r"^\[NEW H[14] BAR\]"), "scan", "detail"),
     (re.compile(r"^\[POSITION\]"), "position", "detail"),
 ]
