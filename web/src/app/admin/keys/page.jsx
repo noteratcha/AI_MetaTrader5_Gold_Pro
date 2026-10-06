@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { KeyRound, Search, Sparkles } from 'lucide-react';
+import { KeyRound, Printer, Search, Sparkles } from 'lucide-react';
 import AdminShell from '../../../components/admin/AdminShell';
 import { Alert, CopyButton, EmptyState, Modal, Pager, Spinner } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
 import { formatThaiDateTime, formatThb } from '../../../lib/format';
+import { printKeys } from '../../../lib/printKeys';
 
 const FILTERS = [
   ['unused', 'ยังไม่ใช้งาน'],
@@ -46,15 +47,26 @@ export default function AdminKeysPage() {
 
   const isOrders = filter === 'pending' || filter === 'paid';
   const items = data?.items || [];
+  const rowNo = (i) => ((data?.page || 1) - 1) * 20 + i + 1; // ลำดับต่อเนื่องข้ามหน้า (หน้าละ 20)
+  const doPrint = (list) => {
+    if (!printKeys(list)) setError('เปิดหน้าต่างพิมพ์ไม่ได้ — อนุญาต Pop-up ให้เว็บนี้แล้วลองใหม่');
+  };
 
   return (
     <AdminShell
       title="คีย์ & คำสั่งซื้อ"
       description="Product Key จากการซื้อ, Promo Key ที่แอดมินสร้าง และคำสั่งซื้อทั้งหมด"
       actions={
-        <button className="btn btn-primary btn-sm" onClick={() => setShowPromo(true)}>
-          <Sparkles size={15} /> สร้าง Promo Key
-        </button>
+        <>
+          {!isOrders && items.length > 0 && (
+            <button className="btn btn-secondary btn-sm" onClick={() => doPrint(items)} title="พิมพ์ / บันทึกเป็น PDF ทุกคีย์ในหน้านี้ (หน้าละ 1 ใบ)">
+              <Printer size={15} /> พิมพ์ / PDF ทั้งหน้า ({items.length})
+            </button>
+          )}
+          <button className="btn btn-primary btn-sm" onClick={() => setShowPromo(true)}>
+            <Sparkles size={15} /> สร้าง Promo Key
+          </button>
+        </>
       }
     >
       <div className="toolbar">
@@ -102,6 +114,7 @@ export default function AdminKeysPage() {
             <table className="table">
               <thead>
                 <tr>
+                  <th className="num">#</th>
                   <th>คำสั่งซื้อ</th>
                   <th>ผู้ซื้อ</th>
                   <th className="num">ยอด</th>
@@ -112,8 +125,9 @@ export default function AdminKeysPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((o) => (
+                {items.map((o, i) => (
                   <tr key={o.orderId}>
+                    <td className="num faint">{rowNo(i)}</td>
                     <td className="mono tiny">{o.orderId}</td>
                     <td className="small">{o.owner || '—'}</td>
                     <td className="num text-gold">{formatThb(o.amount)}</td>
@@ -145,6 +159,7 @@ export default function AdminKeysPage() {
             <table className="table">
               <thead>
                 <tr>
+                  <th className="num">#</th>
                   <th>คีย์</th>
                   <th>ประเภท</th>
                   <th className="num">ชั่วโมง</th>
@@ -155,12 +170,16 @@ export default function AdminKeysPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((k) => (
+                {items.map((k, i) => (
                   <tr key={`${k.source}-${k.keyCode}`}>
+                    <td className="num faint">{rowNo(i)}</td>
                     <td>
                       <div className="row" style={{ gap: 6 }}>
                         <span className="key-code tiny">{k.keyCode}</span>
                         <CopyButton text={k.keyCode} label="" className="btn btn-ghost btn-icon" />
+                        <button className="btn btn-ghost btn-icon" onClick={() => doPrint([k])} title="พิมพ์ / บันทึกเป็น PDF" aria-label="พิมพ์คีย์">
+                          <Printer size={14} />
+                        </button>
                       </div>
                     </td>
                     <td>{k.source === 'promo' ? <span className="badge badge-sky">Promo</span> : <span className="badge badge-gold">ซื้อ {formatThb(k.price)}</span>}</td>
