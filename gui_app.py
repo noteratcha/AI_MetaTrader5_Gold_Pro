@@ -264,6 +264,84 @@ class RedeemKeyDialog(ctk.CTkToplevel):
             self.lbl_result.configure(text=f"❌ {msg}", text_color=COLOR_DANGER_RED)
 
 
+class UpdateDialog(ctk.CTkToplevel):
+    """แจ้งเวอร์ชันใหม่: เวอร์ชันเดิม → ใหม่ · สิ่งที่เปลี่ยนแยกหัวข้อ · ปุ่มดาวน์โหลด"""
+
+    def __init__(self, parent, info, download_url):
+        super().__init__(parent)
+        import re
+        self.title("มีเวอร์ชันใหม่ - AI Gold Commander Pro")
+        w, h = 560, 560
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.transient(parent)
+        self.resizable(False, False)
+        self.update_idletasks()
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
+        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.url = download_url
+
+        def f(size, weight="normal"):
+            return ctk.CTkFont(family="Segoe UI", size=size, weight=weight)
+
+        # ส่วนหัว: ไอคอน + เวอร์ชันเดิม → ใหม่
+        head = ctk.CTkFrame(self, fg_color=COLOR_GOLD_BG, corner_radius=0)
+        head.pack(fill="x")
+        inner = ctk.CTkFrame(head, fg_color="transparent")
+        inner.pack(fill="x", padx=22, pady=16)
+        ctk.CTkLabel(inner, text="⬆", font=f(24, "bold"), text_color=COLOR_GOLD_PRIMARY, width=46, height=46,
+                     fg_color="#3A2E14", corner_radius=23).pack(side="left")
+        txt = ctk.CTkFrame(inner, fg_color="transparent")
+        txt.pack(side="left", padx=14)
+        ctk.CTkLabel(txt, text="มีเวอร์ชันใหม่พร้อมติดตั้ง", font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w")
+        chips = ctk.CTkFrame(txt, fg_color="transparent")
+        chips.pack(anchor="w", pady=(4, 0))
+        ctk.CTkLabel(chips, text=f"  ใช้งานอยู่ v{APP_VERSION}  ", font=f(11), text_color=COLOR_TEXT_MUTED,
+                     fg_color=COLOR_CARD_BG, corner_radius=6, height=22).pack(side="left")
+        ctk.CTkLabel(chips, text="→", font=f(13, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(side="left", padx=6)
+        ctk.CTkLabel(chips, text=f"  ใหม่ v{info.get('latest_version')}  ", font=f(11, "bold"), text_color="#1A1406",
+                     fg_color=COLOR_GOLD_PRIMARY, corner_radius=6, height=22).pack(side="left")
+
+        # มีอะไรใหม่ — แยกตามหัวข้อ ### ใน Release notes
+        ctk.CTkLabel(self, text="มีอะไรใหม่", font=f(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=22, pady=(14, 6))
+        box = ctk.CTkScrollableFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        box.pack(fill="both", expand=True, padx=22)
+        sections, cur = [], None
+        for ln in (info.get("changelog") or "").splitlines():
+            t = ln.strip()
+            if t.startswith("#"):
+                title = t.lstrip("#").strip()
+                cur = None if ("sha" in title.lower() or "ติดตั้ง" in title or "ดาวน์โหลด" in title) else [title, []]
+                if cur:
+                    sections.append(cur)
+            elif t.startswith("- ") and cur is not None:
+                cur[1].append(re.sub(r"[`*]", "", t[2:]))
+        sections = [x for x in sections if x[1]][:6] or [["ปรับปรุง", ["ปรับปรุงประสิทธิภาพและแก้ไขข้อผิดพลาด"]]]
+        for i, (title, items) in enumerate(sections):
+            ctk.CTkLabel(box, text=title, font=f(12, "bold"), text_color=COLOR_GOLD_PRIMARY, anchor="w", justify="left",
+                         wraplength=470).pack(anchor="w", padx=12, pady=(12 if i == 0 else 12, 4))
+            for it in items[:6]:
+                row = ctk.CTkFrame(box, fg_color="transparent")
+                row.pack(fill="x", padx=12, pady=1)
+                ctk.CTkLabel(row, text="•", font=f(12, "bold"), text_color=COLOR_SUCCESS_GREEN, width=14).pack(side="left", anchor="n")
+                ctk.CTkLabel(row, text=it, font=f(12), text_color=COLOR_TEXT_PRIMARY, anchor="w", justify="left",
+                             wraplength=450).pack(side="left", fill="x")
+
+        ctk.CTkLabel(self, text="ปิดโปรแกรมก่อนติดตั้งทับ · การตั้งค่าและบัญชีของคุณจะยังอยู่ครบ",
+                     font=f(11), text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=22, pady=(10, 0))
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", padx=22, pady=(10, 18))
+        ctk.CTkButton(btns, text="ภายหลัง", width=110, height=38, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
+                      border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
+        ctk.CTkButton(btns, text="⬇  ดาวน์โหลดเวอร์ชันใหม่", height=38, font=f(13, "bold"), fg_color=COLOR_GOLD_PRIMARY,
+                      hover_color=COLOR_GOLD_WARM, text_color="#1A1406", command=self._download
+                      ).pack(side="right", fill="x", expand=True, padx=(0, 10))
+
+    def _download(self):
+        webbrowser.open(self.url)
+        self.destroy()
+
+
 class NewsImpactDialog(ctk.CTkToplevel):
     """รายละเอียดการวิเคราะห์ผลกระทบของข่าว 1 รายการต่อราคาทอง"""
 
@@ -1585,15 +1663,14 @@ class MainTradingApp(ctk.CTk):
             self._start_update_check(manual=True)
 
     def _prompt_update(self, info):
-        notes = (info.get("changelog") or "").strip()
-        bullets = [ln.strip()[2:] for ln in notes.splitlines() if ln.strip().startswith("- ")][:6]
-        summary = "\n".join(f"• {b}" for b in bullets) or "ปรับปรุงประสิทธิภาพและแก้ไขข้อผิดพลาด"
-        msg = (
-            f"มีเวอร์ชันใหม่ v{info.get('latest_version')} (ใช้งานอยู่ v{APP_VERSION})\n\n"
-            f"{summary}\n\nเปิดหน้าดาวน์โหลดตอนนี้หรือไม่?"
-        )
-        if messagebox.askyesno("มีเวอร์ชันใหม่ - AI Gold Commander Pro", msg):
-            webbrowser.open(info.get("download_url") or self.DOWNLOAD_URL)
+        dlg = getattr(self, "_update_dialog", None)
+        try:
+            if dlg is not None and dlg.winfo_exists():
+                dlg.lift()
+                return
+        except Exception:
+            pass
+        self._update_dialog = UpdateDialog(self, info, info.get("download_url") or self.DOWNLOAD_URL)
 
     def _build_metric_cards(self):
         """การ์ดสรุปสถานะพอร์ตและราคาทองคำ 4 กล่องแนวนอน"""
