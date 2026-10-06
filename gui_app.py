@@ -2430,6 +2430,37 @@ class MainTradingApp(ctk.CTk):
 
     # ---- ประวัติการเทรด (5 รายการต่อหน้า) ----
     HISTORY_PAGE_SIZE = 10
+    @staticmethod
+    def _close_reason(r):
+        """ไม้ปิดด้วยอะไร → (ข้อความ, สี) จาก reason ของ Deal ปิดใน MT5 + คอมเมนต์ที่บอทใส่"""
+        code = r.get("close_code", -1)
+        cm = str(r.get("close_reason") or "")
+        profit = r.get("profit", 0.0)
+        if code == 5 or cm.startswith("[tp"):
+            return "🎯 ชน TP", COLOR_SUCCESS_GREEN
+        if code == 4 or cm.startswith("[sl"):
+            # SL ที่ถูกเลื่อนมาล็อกกำไรแล้ว = ปิดกำไร
+            return ("🔒 ชน SL (ล็อกกำไร)", COLOR_SUCCESS_GREEN) if profit > 0 else ("⛔ ชน SL", COLOR_DANGER_RED)
+        if code == 6 or cm.startswith("[so"):
+            return "⚠ Stop Out", COLOR_DANGER_RED
+        if code == 3 or cm:
+            low = cm.lower()
+            if "take profit $" in low:
+                return "💰 ถึงเป้ากำไร $", COLOR_SUCCESS_GREEN
+            if "cross" in low:
+                return "🤖 บอทปิด · MA ตัดกลับ", COLOR_GOLD_PRIMARY
+            if "reversal" in low:
+                return "🤖 บอทปิด · AI กลับทิศ", COLOR_GOLD_PRIMARY
+            if "manual" in low:
+                return "✋ ปิดเอง (ในโปรแกรม)", COLOR_CYAN_ACCENT
+            if "emergency" in low or "close all" in low:
+                return "✋ ปิดทุกออเดอร์", COLOR_CYAN_ACCENT
+            if code == 3:
+                return "🤖 บอทปิด", COLOR_GOLD_PRIMARY
+        if code in (0, 1, 2):
+            return "✋ ปิดเอง (MT5)", COLOR_CYAN_ACCENT
+        return "ปิดแล้ว", COLOR_TEXT_MUTED
+
     HISTORY_COLUMNS = [
         ("เวลาเปิด (MT5)", 96, "w"),
         ("ฝั่ง", 40, "center"),
@@ -2437,7 +2468,7 @@ class MainTradingApp(ctk.CTk):
         ("Lot", 36, "e"),
         ("ราคาเข้า", 72, "e"),
         ("ราคาออก", 72, "e"),
-        ("สถานะ", 64, "center"),
+        ("ปิดโดย", 116, "w"),
         ("กำไร", 76, "e"),
     ]
 
@@ -2539,7 +2570,7 @@ class MainTradingApp(ctk.CTk):
                 f"{r.get('volume', 0):.2f}",
                 f"{r.get('open_price', 0):,.2f}",
                 "—" if is_open else f"{r.get('close_price', 0):,.2f}",
-                "เปิดอยู่" if is_open else "ปิดแล้ว",
+                "● เปิดอยู่" if is_open else self._close_reason(r)[0],
                 f"{'+' if profit >= 0 else '-'}${abs(profit):,.2f}",
             ]
             colors = [
@@ -2549,7 +2580,7 @@ class MainTradingApp(ctk.CTk):
                 COLOR_TEXT_PRIMARY,
                 COLOR_TEXT_PRIMARY,
                 COLOR_TEXT_PRIMARY,
-                COLOR_CYAN_ACCENT if is_open else COLOR_TEXT_MUTED,
+                COLOR_CYAN_ACCENT if is_open else self._close_reason(r)[1],
                 COLOR_SUCCESS_GREEN if profit > 0 else (COLOR_DANGER_RED if profit < 0 else COLOR_TEXT_MUTED),
             ]
             for c, v, color in zip(cells, values, colors):

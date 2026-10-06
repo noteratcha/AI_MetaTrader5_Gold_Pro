@@ -331,6 +331,7 @@ class BotController:
                     t["close_time"] = int(d.time)
                     t["close_price"] = float(d.price)
                     t["close_reason"] = d.comment or ""
+                    t["close_code"] = int(getattr(d, "reason", -1))  # 0-2 ปิดเอง · 3 บอท · 4 SL · 5 TP · 6 Stop Out
                     t["status"] = "CLOSED"
 
             # ไม้ที่ยังเปิดอยู่: ใช้กำไรลอยตัวปัจจุบัน
