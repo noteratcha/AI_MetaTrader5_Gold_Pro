@@ -124,6 +124,36 @@ def set_user_enabled(plan_name: str, enabled: bool, email: str = None):
         json.dump(data, f)
 
 
+DEFAULT_MARGIN_PER_TRADE = 400.0   # มาร์จิ้นว่างทุก 400 เปิดได้ 1 ไม้ (ที่ Lot 0.01)
+
+
+def get_margin_per_trade(email: str = None) -> float:
+    """มาร์จิ้นที่ต้องมีต่อ 1 ไม้ (ที่ Lot 0.01) ของผู้ใช้คนนี้ — ค่าเริ่มต้น 400 · บันทึกใน bot_settings.json คีย์ margin_per_trade[email]"""
+    try:
+        v = float((_settings().get("margin_per_trade") or {}).get((email or _current_email()) or "_local", DEFAULT_MARGIN_PER_TRADE))
+        return v if v >= 10 else DEFAULT_MARGIN_PER_TRADE
+    except Exception:
+        return DEFAULT_MARGIN_PER_TRADE
+
+
+def set_margin_per_trade(value: float, email: str = None):
+    key = (email or _current_email()) or "_local"
+    try:
+        with open(SETTINGS_FILE, encoding="utf-8") as f:
+            data = json.load(f) or {}
+    except Exception:
+        data = {}
+    data.setdefault("margin_per_trade", {})[key] = round(float(value), 2)
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def max_positions(free_margin: float, lot: float, email: str = None) -> int:
+    """จำนวนไม้สูงสุดที่เปิดได้ = มาร์จิ้นว่าง ÷ (มาร์จิ้นต่อไม้ × Lot/0.01) — อย่างน้อย 1 ไม้"""
+    per = get_margin_per_trade(email) * max(float(lot or 0.01), 0.01) / 0.01
+    return max(1, int(float(free_margin or 0) // per)) if per > 0 else 1
+
+
 def disabled_reason(plan_name: str):
     """None = ใช้งานได้ · 'admin' = แอดมินปิด · 'user' = ผู้ใช้ปิดเอง"""
     if not admin_enabled(plan_name):

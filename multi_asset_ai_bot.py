@@ -99,7 +99,7 @@ LOCK_SL_THROTTLE_SECS = 60       # [Priority 2] ห้าม modify position ซ
 SAME_PLAN_COOLDOWN_MINUTES = 60  # [Priority 4] ห้ามเข้าแผนเดิม + สกุลเดิม (ทิศเดิม) ภายใน 60 นาที
 MAX_CONSECUTIVE_LOSS = 2          # [Priority 1] Circuit Breaker: ขาดทุนติดกันกี่ไม้ถึงหยุด
 CIRCUIT_BREAKER_MINUTES = 60     # [Priority 1] Circuit Breaker: หยุดกี่นาทีหลังโดน Circuit Breaker
-MARGIN_PER_TRADE = 400            # Max Positions: มาจินทุก $400 เปิดได้ 1 ไม้ (free margin based)
+MARGIN_PER_TRADE = 400            # (ค่าเริ่มต้นเดิม) ตอนนี้ใช้ plan_config.get_margin_per_trade() — ผู้ใช้ตั้งเองได้ จำแยกตามบัญชี
 
 # State variables สำหรับระบบ Risk Management
 consecutive_loss = {}             # {sym: int} นับขาดทุนติดต่อกัน
@@ -1801,8 +1801,8 @@ def main():
                     all_open_pos = mt5.positions_get()
                     total_open_pos = len(all_open_pos) if all_open_pos else 0
                     free_margin = float(acc_info.margin_free) if acc_info else 0.0
-                    # มาร์จิ้นต่อไม้ปรับตามขนาดไม้ ($400 ต่อ 0.01 lot)
-                    max_allowed = max(1, int(free_margin / (MARGIN_PER_TRADE * max(current_lot(), 0.01) / 0.01)))  # อย่างน้อย 1 ไม้
+                    # มาร์จิ้นต่อไม้: ผู้ใช้ตั้งเองได้ (ค่าเริ่มต้น 400 ที่ Lot 0.01 · จำแยกตามบัญชี) ปรับตามขนาดไม้
+                    max_allowed = plan_config.max_positions(free_margin, current_lot())  # อย่างน้อย 1 ไม้
                     if total_open_pos >= max_allowed:
                         if is_in_zone:
                             print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} มาจิน ${free_margin:.0f} → เปิดได้สูงสุด {max_allowed} ไม้ (เปิดอยู่แล้ว {total_open_pos} ไม้) — รอเปิดมาจินเพิ่มหรือปิดไม้เดิมก่อน{Colors.RESET}")

@@ -577,6 +577,112 @@ class _StyledMessagebox:
 messagebox = _StyledMessagebox()
 
 
+class MarginSettingDialog(ctk.CTkToplevel):
+    """ตั้งมาร์จิ้นต่อ 1 ไม้ (จำแยกตามบัญชี) — ยิ่งตั้งสูง บอทยิ่งเปิดไม้พร้อมกันได้น้อยลง (ปลอดภัยขึ้น)"""
+
+    PRESETS = (200, 300, 400, 500, 800)
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("มาร์จิ้นต่อไม้")
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.transient(parent)
+        self.resizable(False, False)
+
+        def f(size, weight="normal", family="Segoe UI"):
+            return ctk.CTkFont(family=family, size=size, weight=weight)
+        self.f = f
+        t = bot_ctrl.get_telemetry()
+        self.free = float(t.get("free_margin", 0.0) or 0.0)
+        self.lot = float(parent._load_lot())
+        self.n_open = len(t.get("open_positions") or [])
+
+        ctk.CTkLabel(self, text="มาร์จิ้นต่อ 1 ไม้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
+        ctk.CTkLabel(self, text="จำนวนไม้สูงสุดที่บอทเปิดพร้อมกัน = มาร์จิ้นว่าง ÷ มาร์จิ้นต่อไม้\n"
+                                "ตั้งสูง = เปิดได้น้อยไม้ (ปลอดภัยขึ้น) · ตั้งต่ำ = เปิดได้หลายไม้ (เสี่ยงขึ้น)",
+                     font=f(11), text_color=COLOR_TEXT_MUTED, justify="left", wraplength=420).pack(anchor="w", padx=20, pady=(2, 10))
+
+        card = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        card.pack(fill="x", padx=18)
+        top = ctk.CTkFrame(card, fg_color="transparent")
+        top.pack(fill="x", padx=14, pady=(12, 6))
+        ctk.CTkLabel(top, text="มาร์จิ้นว่างตอนนี้", font=f(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        ctk.CTkLabel(top, text=f"{self.free:,.2f}", font=f(15, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY).pack(side="right")
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=14, pady=(2, 4))
+        ctk.CTkLabel(row, text="มาร์จิ้นต่อ 1 ไม้ (ที่ Lot 0.01)", font=f(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        self.var = tk.StringVar(value=f"{plan_config.get_margin_per_trade():g}")
+        ent = ctk.CTkEntry(row, textvariable=self.var, width=100, height=32, justify="center", font=f(14, "bold", "Consolas"))
+        ent.pack(side="right")
+        chips = ctk.CTkFrame(card, fg_color="transparent")
+        chips.pack(fill="x", padx=14, pady=(4, 12))
+        for v in self.PRESETS:
+            ctk.CTkButton(chips, text=f"{v:,}" + (" (ค่าเริ่มต้น)" if v == 400 else ""), height=26,
+                          width=112 if v == 400 else 58, font=f(11, "bold"), corner_radius=13,
+                          fg_color="#1A1E27", hover_color="#262B36", border_width=1, border_color=COLOR_CARD_BORDER,
+                          text_color=COLOR_GOLD_PRIMARY if v == 400 else COLOR_TEXT_PRIMARY,
+                          command=lambda x=v: self.var.set(str(x))).pack(side="left", padx=2)
+
+        self.lbl_calc = ctk.CTkLabel(self, text="", font=f(13, "bold"), text_color=COLOR_SUCCESS_GREEN, justify="left")
+        self.lbl_calc.pack(anchor="w", padx=20, pady=(10, 0))
+        self.lbl_note = ctk.CTkLabel(self, text="", font=f(10), text_color=COLOR_TEXT_MUTED, justify="left")
+        self.lbl_note.pack(anchor="w", padx=20)
+        self.var.trace_add("write", lambda *_: self._refresh())
+
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", padx=18, pady=(12, 18))
+        ctk.CTkButton(btns, text="ยกเลิก", width=100, height=40, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
+                      border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
+        self.btn_ok = ctk.CTkButton(btns, text="บันทึก", height=40, font=f(14, "bold"), fg_color=COLOR_GOLD_PRIMARY,
+                                    hover_color=COLOR_GOLD_WARM, text_color="#1A1406", command=self._save)
+        self.btn_ok.pack(side="right", fill="x", expand=True, padx=(0, 10))
+        self.bind("<Return>", lambda e: self._save())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self._refresh()
+        self.update_idletasks()
+        w, h = 460, self.winfo_reqheight()
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
+        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.grab_set()
+        ent.focus_set()
+
+    def _value(self):
+        try:
+            v = float(str(self.var.get()).replace(",", "").strip())
+            return v if 10 <= v <= 1000000 else None
+        except ValueError:
+            return None
+
+    def _refresh(self):
+        v = self._value()
+        if v is None:
+            self.lbl_calc.configure(text="ใส่ตัวเลข 10 ขึ้นไป", text_color=COLOR_DANGER_RED)
+            self.lbl_note.configure(text="")
+            self.btn_ok.configure(state="disabled")
+            return
+        per = v * max(self.lot, 0.01) / 0.01
+        n = max(1, int(self.free // per)) if per > 0 else 1
+        self.lbl_calc.configure(text=f"มาร์จิ้นว่าง {self.free:,.2f} ÷ {per:,.0f} → เปิดได้สูงสุด {n} ไม้ (เปิดอยู่ {self.n_open})",
+                                text_color=COLOR_SUCCESS_GREEN)
+        lot_note = f"Lot ตอนนี้ {self.lot:.2f} → ใช้ {per:,.0f} ต่อไม้" if abs(self.lot - 0.01) > 1e-9 else "Lot 0.01 → ใช้ตามค่าที่ตั้ง"
+        self.lbl_note.configure(text=f"{lot_note} · อย่างน้อยเปิดได้ 1 ไม้เสมอ · จำค่าแยกตามบัญชี")
+        self.btn_ok.configure(state="normal")
+
+    def _save(self):
+        v = self._value()
+        if v is None:
+            return
+        try:
+            plan_config.set_margin_per_trade(v)
+            print(f"[MARGIN SETTING] มาร์จิ้นต่อไม้ = {v:,.0f} (ที่ Lot 0.01)")
+        except Exception as e:
+            self.lbl_calc.configure(text=f"บันทึกไม่สำเร็จ: {e}", text_color=COLOR_DANGER_RED)
+            return
+        self.destroy()
+
+
 class QuickOrderDialog(ctk.CTkToplevel):
     """ยืนยันการเข้าไม้ทันที (BUY/SELL) — ราคาสด · ตั้ง SL/TP ด้วยปุ่ม −/+ หรือปุ่มลัด ATR · สรุปเสี่ยง/เป้า/RRR ก่อนส่งคำสั่งจริง"""
 
@@ -2426,19 +2532,26 @@ class MainTradingApp(ctk.CTk):
         # สถิติย่อ 3 ช่อง: ออเดอร์เปิดอยู่ / กำไรลอยตัว / เวลาทำงาน
         stats = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)
         stats.pack(fill="x", padx=14, pady=(6, 0))
-        stats.grid_columnconfigure((0, 1, 2), weight=1, uniform="ctl_stats")
+        stats.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="ctl_stats")
         self.ctl_stat_labels = {}
-        for col, (key, title, init) in enumerate((("open", "ออเดอร์", "0"), ("float", "กำไรลอยตัว", "0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
+        for col, (key, title, init) in enumerate((("open", "ออเดอร์ / สูงสุด", "0 / 0"), ("float", "กำไรลอยตัว", "0.00"),
+                                                  ("margin", "มาร์จิ้นว่าง ›", "0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
             box = ctk.CTkFrame(stats, fg_color="transparent")
             box.grid(row=0, column=col, sticky="nsew", pady=5)
-            ctk.CTkLabel(box, text=title, font=self._font(10), text_color=COLOR_TEXT_MUTED, height=16).pack()
+            ttl = ctk.CTkLabel(box, text=title, font=self._font(10), height=16,
+                               text_color=COLOR_GOLD_WARM if key == "margin" else COLOR_TEXT_MUTED)
+            ttl.pack()
             val = ctk.CTkLabel(box, text=init, font=self._font(14, "bold"), text_color=COLOR_TEXT_PRIMARY, height=22)
             val.pack()
             self.ctl_stat_labels[key] = val
             if key == "open":  # กดจำนวนออเดอร์ → ไปแท็บออเดอร์ที่เปิดอยู่
-                for w in (box, val):
+                for w in (box, val, ttl):
                     w.configure(cursor="hand2")
                     w.bind("<Button-1>", lambda e: self.main_tabs.set(self.TAB_POSITIONS))
+            if key == "margin":  # กดมาร์จิ้น → ตั้งมาร์จิ้นต่อไม้
+                for w in (box, val, ttl):
+                    w.configure(cursor="hand2")
+                    w.bind("<Button-1>", lambda e: self._open_margin_setting())
 
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(8, 12))
@@ -2476,7 +2589,7 @@ class MainTradingApp(ctk.CTk):
     def _build_next_news_card(self, parent):
         card = self._card(parent, fill="x", pady=(0, 8))
         body = ctk.CTkFrame(card, fg_color="transparent")
-        body.pack(fill="x", padx=14, pady=(8, 10))
+        body.pack(fill="x", padx=14, pady=(6, 6))
         body.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(body, text="📅 ข่าวสำคัญถัดไป · USD", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor="w", height=20).grid(row=0, column=0, sticky="w")
@@ -2530,12 +2643,12 @@ class MainTradingApp(ctk.CTk):
         self.plan_live_badges = {}
         for r, (icon, short, full) in enumerate(self.PLAN_ROWS, start=1):
             last = r == len(self.PLAN_ROWS)
-            pady = (0, 4) if last else 0
+            pady = 0
             # ติ๊กเลือกใช้แผนนี้ (จำแยกตามบัญชีผู้ใช้) — แผนที่แอดมินปิดจะติ๊กไม่ได้
             var = tk.BooleanVar(value=plan_config.user_enabled(full.split(": ", 1)[-1]))
             chk = ctk.CTkCheckBox(
                 table, text=f"{icon}  {short}", variable=var, font=self._font(11, "bold"), text_color=COLOR_TEXT_PRIMARY,
-                fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=14, checkbox_height=14, height=18,
+                fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=14, checkbox_height=14, height=17,
                 command=lambda f=full, v=var: self._toggle_user_plan(f, v),
             )
             chk.grid(row=r, column=0, sticky="w", padx=(10, 4), pady=pady)
@@ -2546,20 +2659,35 @@ class MainTradingApp(ctk.CTk):
             self.plan_live_badges[full] = live
             cells = []
             for col in (1, 2, 3):
-                lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
+                lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=17, width=40 if col < 3 else 64)
                 lbl.grid(row=r, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=pady)
                 cells.append(lbl)
             self.plan_stat_badges[full] = tuple(cells)
-        # แถวผลรวมทุกแผน
-        n = len(self.PLAN_ROWS)
-        ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=n + 1, column=0, columnspan=4, sticky="ew", padx=10, pady=(3, 2))
+        # แถวไม้ที่เข้าเอง (ปุ่ม BUY/SELL ในแผงควบคุม → comment "Manual-Quick") — ไม่มีช่องติ๊ก
+        n = len(self.PLAN_ROWS) + 1
+        mkey = bot_ctrl.QUICK_PLAN
+        self.manual_plan_label = ctk.CTkLabel(table, text="✋  เข้าไม้เอง", font=self._font(11, "bold"), text_color=COLOR_TEXT_PRIMARY,
+                                              anchor="w", height=18)
+        self.manual_plan_label.grid(row=n, column=0, sticky="w", padx=(31, 4), pady=(0, 2))
+        live = ctk.CTkLabel(table, text="", font=self._font(10, "bold"), text_color=COLOR_GOLD_PRIMARY, corner_radius=6, height=16)
+        live.grid(row=n, column=0, sticky="e", padx=(4, 0), pady=(0, 4))
+        self.plan_live_badges[mkey] = live
+        cells = []
+        for col in (1, 2, 3):
+            lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11),
+                               text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
+            lbl.grid(row=n, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=(0, 4))
+            cells.append(lbl)
+        self.plan_stat_badges[mkey] = tuple(cells)
+        # แถวผลรวมทุกแผน (รวมไม้ที่เข้าเอง)
+        ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=n + 1, column=0, columnspan=4, sticky="ew", padx=10, pady=(1, 1))
         ctk.CTkLabel(table, text="รวมทุกแผน", font=self._font(11, "bold"), text_color=COLOR_GOLD_PRIMARY, anchor="w", height=18).grid(
-            row=n + 2, column=0, sticky="ew", padx=(12, 4), pady=(0, 5))
+            row=n + 2, column=0, sticky="ew", padx=(12, 4), pady=(0, 3))
         self.plan_total_labels = []
         for col in (1, 2, 3):
             lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11, "bold"),
                                text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
-            lbl.grid(row=n + 2, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=(0, 5))
+            lbl.grid(row=n + 2, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=(0, 3))
             self.plan_total_labels.append(lbl)
         self.after(300, self._plan_checks_tick)
         self.after(1000, self._plan_live_tick)
@@ -2574,10 +2702,12 @@ class MainTradingApp(ctk.CTk):
                 open_by_plan.setdefault(base, []).append(("BUY" if p.type == 0 else "SELL", float(p.profit)))
             for full, lbl in self.plan_live_badges.items():
                 items = open_by_plan.get(full.split(": ", 1)[-1], [])
-                chk, var = self.plan_checks[full]
-                admin_on = plan_config.admin_enabled(full.split(": ", 1)[-1])
-                if admin_on:
-                    chk.configure(text_color=COLOR_SUCCESS_GREEN if items else (COLOR_TEXT_PRIMARY if var.get() else COLOR_TEXT_MUTED))
+                if full in self.plan_checks:
+                    chk, var = self.plan_checks[full]
+                    if plan_config.admin_enabled(full.split(": ", 1)[-1]):
+                        chk.configure(text_color=COLOR_SUCCESS_GREEN if items else (COLOR_TEXT_PRIMARY if var.get() else COLOR_TEXT_MUTED))
+                elif getattr(self, "manual_plan_label", None) is not None:   # แถวเข้าไม้เอง
+                    self.manual_plan_label.configure(text_color=COLOR_SUCCESS_GREEN if items else COLOR_TEXT_PRIMARY)
                 if items:
                     side = items[0][0] if len({i[0] for i in items}) == 1 else "BUY/SELL"
                     prof = sum(i[1] for i in items)
@@ -3494,6 +3624,16 @@ class MainTradingApp(ctk.CTk):
             pass
         self._quick_dialog = QuickOrderDialog(self, side)
 
+    def _open_margin_setting(self):
+        dlg = getattr(self, "_margin_dialog", None)
+        try:
+            if dlg is not None and dlg.winfo_exists():
+                dlg.lift()
+                return
+        except Exception:
+            pass
+        self._margin_dialog = MarginSettingDialog(self)
+
     def _on_click_close_all(self):
         """กดปุ่ม Emergency ปิดทุกออเดอร์ทันที"""
         n = len(bot_ctrl.get_telemetry().get("open_positions") or [])
@@ -3752,7 +3892,12 @@ class MainTradingApp(ctk.CTk):
                 # สถิติย่อในแผงควบคุม
                 if hasattr(self, 'ctl_stat_labels'):
                     n_open = len(telemetry.get("open_positions") or [])
-                    self.ctl_stat_labels["open"].configure(text=str(n_open), text_color=COLOR_CYAN_ACCENT if n_open else COLOR_TEXT_PRIMARY)
+                    free_m = float(telemetry.get("free_margin", 0.0) or 0.0)
+                    n_max = plan_config.max_positions(free_m, self._load_lot()) if telemetry.get("is_connected") else 0
+                    self.ctl_stat_labels["open"].configure(
+                        text=f"{n_open} / {n_max}",
+                        text_color=COLOR_DANGER_RED if n_max and n_open >= n_max else (COLOR_CYAN_ACCENT if n_open else COLOR_TEXT_PRIMARY))
+                    self.ctl_stat_labels["margin"].configure(text=f"{free_m:,.2f}", text_color=COLOR_TEXT_PRIMARY)
                     self.ctl_stat_labels["float"].configure(
                         text=f"{'+' if flt >= 0 else '-'}{abs(flt):,.2f}",
                         text_color=COLOR_SUCCESS_GREEN if flt > 0 else (COLOR_DANGER_RED if flt < 0 else COLOR_TEXT_PRIMARY),
