@@ -417,8 +417,8 @@ class NewsImpactDialog(ctk.CTkToplevel):
 class GoldCandleDialog(ctk.CTkToplevel):
     """กราฟแท่งเทียน XAUUSD M15 แบบเรียลไทม์: แท่งปัจจุบัน + ย้อนหลัง 15 แท่ง พร้อม MA5 / MA13 (เส้นที่ Plan 1 ใช้)"""
 
-    BARS = 50   # ค่าเริ่มต้น (ปรับได้ที่ตัวเลือก "แท่ง")
-    BAR_CHOICES = ("16", "30", "50", "80", "120")
+    BARS = 120   # ค่าเริ่มต้น (ปรับได้ที่ตัวเลือก "จำนวนแท่ง")
+    BAR_CHOICES = ("16", "30", "50", "80", "120", "200", "300", "500")
     REFRESH_MS = 1000
 
     def __init__(self, parent):
@@ -570,7 +570,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
             live = i == n - 1
             cv.create_rectangle(cx - bw / 2, min(y1, y2), cx + bw / 2, max(y1, y2), fill=col,
                                 outline=COLOR_GOLD_PRIMARY if live else col, width=2 if live else 1)
-            if (i % max(1, int(round(n / max(1, (W - left - right) / 52)))) == 0 and i < n - 2) or live:
+            every = max(1, int(round(n / max(1, (W - left - right) / 52))))
+            if (i % every == 0 and i < n - max(2, int(every * 0.8))) or live:
                 cv.create_text(cx, H - bottom + 13, text="ตอนนี้" if live else self._hhmm(c["time"], self.offset),
                                fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=("Segoe UI", 9, "bold" if live else "normal"))
             self.slots.append((cx - slot / 2, cx + slot / 2, c))
