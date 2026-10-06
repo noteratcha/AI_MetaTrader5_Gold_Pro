@@ -92,6 +92,7 @@ COOLDOWN_MINUTES_XAU = 10      # Cooldown พักหลังปิดไม�
 last_exit_time = {}            # บันทึกเวลาปิดไม้ล่าสุดเพื่อคำนวณ Cooldown {sym: timestamp}
 
 # ==================== แผนการปรับปรุงความแม่นยำสูง (v2026.1002.2225) ====================
+P1_SL_ATR_MULT = 1.0              # Plan 1 (MA M15): SL 1.0 ATR — ไส้เทียนสะบัดชน SL น้อยลง (Backtest ดีที่สุด)
 SL_ATR_MULT = 0.75                # ขยายพื้นที่หายใจ SL = 0.75 ATR (ป้องกัน Market Noise ในแท่ง M15)
 BE_LOCK_BUFFER_ATR = 0.4          # Break-Even Lock ต้องมี buffer ≥ 0.4 ATR จากราคาตลาดก่อน lock
 LOCK_SL_THROTTLE_SECS = 60       # [Priority 2] ห้าม modify position ซ้ำภายใน 60 วินาที (ป้องกัน double-lock)
@@ -1809,9 +1810,9 @@ def main():
 
                     # SL = 0.75 ATR (M15) สำหรับ Plan 3/4/5 · 0.75 ATR (H1) สำหรับ Plan 2
                     sl_dist = round(atr_val * SL_ATR_MULT, digits)
-                    # Plan 1 (H1 MA100/150/200 + MA5×MA13 M15): SL คงที่ 0.75 ATR M15
-                    # Backtest 2.5 ปี เทียบ Swing SL: กำไร 241 → 898 จุด, PF 1.03 → 1.13, Max DD 634 → 346
-                    sl_dist_p4 = sl_dist
+                    # Plan 1 (H1 MA100/150/200 + MA5×MA13 M15 + ตัวกรอง RSI/MA50): SL คงที่ 1.0 ATR M15
+                    # Backtest 2.5 ปี 0.75 → 1.0 ATR: กำไร 690 → 931 จุด, PF 1.37 → 1.44, ชนะ 32% → 35%, Max DD 92 → 131
+                    sl_dist_p4 = round(atr_val * P1_SL_ATR_MULT, digits)
                     # ถ้ายังคำนวณ ATR H1 ไม่ได้ (ข้อมูลไม่พอ) ใช้ ATR M15 x2 เป็นค่าประมาณสำรอง
                     sl_dist_h1 = round((atr_h1_val if pd.notna(atr_h1_val) and atr_h1_val > 0 else atr_val * 2.0) * SL_ATR_MULT, digits)
 
@@ -1959,7 +1960,7 @@ def main():
                             price = tick.ask
                             sl = round(price - sl_dist_p4, digits)
                             tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดลง MA10)
-                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / 0.75ATR, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
+                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                             _record_plan('BUY', p_label)
@@ -1975,7 +1976,7 @@ def main():
                             price = tick.bid
                             sl = round(price + sl_dist_p4, digits)
                             tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10)
-                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / 0.75ATR, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
+                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                             _record_plan('SELL', p_label)

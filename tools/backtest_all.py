@@ -109,7 +109,7 @@ def stats(name, trades):
                 last100_net=round(last.sum(), 1), last100_win=round((last > 0).mean() * 100, 1))
 
 
-def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entry_ok=None):
+def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entry_ok=None, sl_mult=0.75):
     """step=None → ไม่เลื่อน SL · entry_ok(i, d) = ตัวกรองเพิ่มเติมก่อนเข้าไม้"""
     o, h, l, a, t = frame.open.values, frame.high.values, frame.low.values, frame[atr_col].values, frame.time.values
     mf, ms, td = frame[fast].values, frame[slow].values, frame[trend_col].values
@@ -132,7 +132,7 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
             d = 1 if up else -1
             if td[i] == d and (entry_ok is None or entry_ok(i, d)):
                 e = o[i + 1]
-                pos = (d, e, e - d * 0.75 * a[i], 1, t[i + 1])
+                pos = (d, e, e - d * sl_mult * a[i], 1, t[i + 1])
     return out
 
 
@@ -222,7 +222,7 @@ b["ma50"] = b.close.rolling(50).mean()
 _rsi, _c, _m50 = b.rsi.values, b.close.values, b.ma50.values
 def p1_filter(i, d):  # ตัวกรองสัญญาณหลอก: RSI 50–70 (BUY) / 30–50 (SELL) + ราคาปิดฝั่งเดียวกับ MA50 M15
     return ((50 < _rsi[i] < 70) if d == 1 else (30 < _rsi[i] < 50)) and (_c[i] - _m50[i]) * d > 0
-rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "h1_stack", entry_ok=p1_filter))))
+rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "h1_stack", entry_ok=p1_filter, sl_mult=1.0))))
 f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
 f["atr"] = A(f); f["ma5"], f["ma10"] = f.close.rolling(5).mean(), f.close.rolling(10).mean()
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
