@@ -2366,6 +2366,17 @@ class MainTradingApp(ctk.CTk):
                 lbl.grid(row=r, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=pady)
                 cells.append(lbl)
             self.plan_stat_badges[full] = tuple(cells)
+        # แถวผลรวมทุกแผน
+        n = len(self.PLAN_ROWS)
+        ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=n + 1, column=0, columnspan=4, sticky="ew", padx=10, pady=(3, 2))
+        ctk.CTkLabel(table, text="รวมทุกแผน", font=self._font(11, "bold"), text_color=COLOR_GOLD_PRIMARY, anchor="w", height=18).grid(
+            row=n + 2, column=0, sticky="ew", padx=(12, 4), pady=(0, 5))
+        self.plan_total_labels = []
+        for col in (1, 2, 3):
+            lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11, "bold"),
+                               text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
+            lbl.grid(row=n + 2, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=(0, 5))
+            self.plan_total_labels.append(lbl)
         self.after(300, self._plan_checks_tick)
         self.after(1000, self._plan_live_tick)
 
@@ -3422,8 +3433,13 @@ class MainTradingApp(ctk.CTk):
                 if hasattr(self, 'plan_stat_badges'):
                     cur_u = license_mgr.get_current_user()
                     u_plans = stats_mgr.get_user_stats(cur_u.get("user_id")).get("plans", {})
+                    tot_tr = tot_win = 0
+                    tot_prof = 0.0
                     for full_pname, (lbl_tr, lbl_wr, lbl_pf) in self.plan_stat_badges.items():
                         ps = u_plans.get(full_pname, {})
+                        tot_tr += int(ps.get("total_trades", 0) or 0)
+                        tot_win += int(ps.get("win_trades", 0) or 0)
+                        tot_prof += float(ps.get("total_profit_usd", 0.0) or 0.0)
                         tr = ps.get("total_trades", 0)
                         wr = ps.get("win_rate_pct", 0.0)
                         prof = ps.get("total_profit_usd", 0.0)
@@ -3436,6 +3452,12 @@ class MainTradingApp(ctk.CTk):
                             text=f"{'+' if prof >= 0 else '-'}{abs(prof):,.2f}",
                             text_color=COLOR_SUCCESS_GREEN if prof > 0 else (COLOR_DANGER_RED if prof < 0 else COLOR_TEXT_MUTED),
                         )
+                    if getattr(self, "plan_total_labels", None):
+                        t_tr, t_wr, t_pf = self.plan_total_labels
+                        t_tr.configure(text=str(tot_tr), text_color=COLOR_TEXT_PRIMARY if tot_tr else COLOR_TEXT_MUTED)
+                        t_wr.configure(text=f"{tot_win / tot_tr * 100:.0f}%" if tot_tr else "—", text_color=COLOR_GOLD_PRIMARY if tot_tr else COLOR_TEXT_MUTED)
+                        t_pf.configure(text=f"{'+' if tot_prof >= 0 else '-'}{abs(tot_prof):,.2f}",
+                                       text_color=COLOR_SUCCESS_GREEN if tot_prof > 0 else (COLOR_DANGER_RED if tot_prof < 0 else COLOR_TEXT_MUTED))
 
                 # ออเดอร์ที่เปิดอยู่ (อัปเดตทุก ~1 วินาที)
                 if hasattr(self, 'positions_body') and self._ui_tick % 2 == 0:
