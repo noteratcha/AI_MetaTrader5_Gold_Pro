@@ -395,6 +395,25 @@ class BotController:
         except Exception:
             return None
 
+    def get_market_explain(self, symbol: str = "XAUUSD"):
+        """ค่าที่ใช้ตัดสินสภาวะตลาด H1/H4 จากแท่งที่ปิดแล้ว (สำหรับหน้าต่างอธิบาย) — None ถ้าเชื่อม MT5 ไม่ได้"""
+        try:
+            import pandas as pd
+            if mt5.terminal_info() is None and not mt5.initialize():
+                return None
+            out = {}
+            for tf_name, tf in (("H1", mt5.TIMEFRAME_H1), ("H4", mt5.TIMEFRAME_H4)):
+                rates = mt5.copy_rates_from_pos(symbol, tf, 0, 260)
+                if rates is None or len(rates) < 210:
+                    continue
+                c = pd.Series([float(r["close"]) for r in rates])
+                ma = {n: float(c.rolling(n).mean().iloc[-2]) for n in (10, 30, 50, 100, 150, 200)}
+                out[tf_name] = {"close": float(c.iloc[-2]), "ma": ma,
+                                "diff_pct": (ma[10] / ma[30] - 1.0) * 100.0}
+            return out or None
+        except Exception:
+            return None
+
     def get_daily_pnl(self, start_date, end_date) -> list[dict]:
         """
         กำไร/ขาดทุนสุทธิรายวันของทั้งบัญชี (profit + commission + swap ของทุก Deal เทรด) ตามวันเวลาไทย

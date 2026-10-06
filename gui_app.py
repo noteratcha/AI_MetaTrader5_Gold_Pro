@@ -59,6 +59,19 @@ COLOR_TEXT_PRIMARY = "#ECEEF3"     # ข้อความหลักสีข�
 COLOR_TEXT_MUTED = "#A3ABBA"       # ข้อความรองสีเทา
 
 
+class _HintProxy:
+    """ป้ายแจ้ง "บันทึกแล้ว ✓" แบบไม่เพิ่มพื้นที่ — ต่อท้ายข้อความของวิดเจ็ตเดิมชั่วคราว (รองรับ .configure(text=, text_color=))"""
+
+    def __init__(self, widget, base_text):
+        self.widget, self.base = widget, base_text
+        self.base_color = widget.cget("text_color")
+
+    def configure(self, text="", text_color=None):
+        short = {"บันทึกแล้ว ✓": "✓", "ปิดใช้งาน": "(ปิด)"}.get(text, "✗" if text else "")
+        self.widget.configure(text=f"{self.base} {short}".strip() if short else self.base,
+                              text_color=(text_color or self.base_color) if short else self.base_color)
+
+
 class HoverTip:
     """กล่องข้อความลอยเมื่อชี้เมาส์ (เช่น คำแปลชื่อข่าวภาษาไทย)"""
 
@@ -461,6 +474,92 @@ class NewsImpactDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text="เป็นการประเมินจากกฎเศรษฐกิจและสถิติในอดีต ไม่ใช่การรับประกันทิศทางราคา",
                      font=f(10), text_color=COLOR_TEXT_MUTED).pack(pady=(6, 10))
+
+
+class MarketExplainDialog(ctk.CTkToplevel):
+    """อธิบายว่าทำไมสภาวะตลาด H1/H4 เป็น Uptrend / Downtrend / Sideway และแต่ละแผนใช้ค่าไหน"""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("สภาวะตลาด — ทำไมถึงเป็นแบบนี้")
+        w, h = 640, 600
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.transient(parent)
+        self.update_idletasks()
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
+        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+
+        def f(size, weight="normal", family="Segoe UI"):
+            return ctk.CTkFont(family=family, size=size, weight=weight)
+
+        ctk.CTkLabel(self, text="สภาวะตลาด — ทำไมถึงเป็นแบบนี้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
+        ctk.CTkLabel(self, text="คำนวณจากแท่งที่ปิดแล้ว · ตัวเลขเป็นค่าเฉลี่ยเคลื่อนที่ (MA) ของราคาปิด", font=f(11),
+                     text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=20, pady=(0, 8))
+        box = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        box.pack(fill="both", expand=True, padx=14, pady=(0, 12))
+        data = bot_ctrl.get_market_explain()
+        if not data:
+            ctk.CTkLabel(box, text="เชื่อมต่อ MT5 ไม่ได้ — เปิด MetaTrader 5 ค้างไว้แล้วลองใหม่", font=f(12), text_color=COLOR_DANGER_RED).pack(pady=30)
+            return
+        green, red, cyan, muted = COLOR_SUCCESS_GREEN, COLOR_DANGER_RED, COLOR_CYAN_ACCENT, COLOR_TEXT_MUTED
+
+        def card(title):
+            c = ctk.CTkFrame(box, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+            c.pack(fill="x", pady=5, padx=4)
+            ctk.CTkLabel(c, text=title, font=f(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=14, pady=(10, 2))
+            return c
+
+        def line(parent, text, color=COLOR_TEXT_PRIMARY, size=12, mono=False):
+            ctk.CTkLabel(parent, text=text, font=f(size, "normal", "Consolas" if mono else "Segoe UI"), text_color=color,
+                         anchor="w", justify="left", wraplength=570).pack(anchor="w", padx=14)
+
+        # 1) ป้ายบนการ์ด: MA50 / MA100 / MA150
+        for tf in ("H1", "H4"):
+            d = data.get(tf)
+            if not d:
+                continue
+            m = d["ma"]
+            up = m[50] > m[100] > m[150]
+            dn = m[50] < m[100] < m[150]
+            word, col = ("▲ Uptrend", green) if up else ("▼ Downtrend", red) if dn else ("◆ Sideway", cyan)
+            c = card(f"{tf} : {word}")
+            c.winfo_children()[0].configure(text_color=col)
+            line(c, f"MA50  {m[50]:,.2f}   {'>' if m[50] > m[100] else '<'}   MA100  {m[100]:,.2f}   {'>' if m[100] > m[150] else '<'}   MA150  {m[150]:,.2f}", mono=True)
+            if up:
+                why = "MA50 > MA100 > MA150 เรียงจากเร็วไปช้าครบ = ราคาเฉลี่ยระยะสั้นสูงกว่าระยะยาวทุกช่วง → ขาขึ้น"
+            elif dn:
+                why = "MA50 < MA100 < MA150 เรียงลงครบ = ราคาเฉลี่ยระยะสั้นต่ำกว่าระยะยาวทุกช่วง → ขาลง"
+            else:
+                why = "เส้น MA ยังไม่เรียงตัวทางเดียวกันครบ (สลับกัน) = ตลาดยังไม่มีทิศชัด → ไซด์เวย์"
+            line(c, why, muted, 11)
+            line(c, f"% บนการ์ด = MA50 ห่างจาก MA150 {(m[50] / m[150] - 1) * 100:+.2f}% (ยิ่งห่าง เทรนด์ยิ่งแรง)", muted, 11)
+            ctk.CTkFrame(c, height=8, fg_color="transparent").pack()
+
+        # 2) สิ่งที่แต่ละแผนใช้จริง
+        c = card("แต่ละแผนใช้เทรนด์อะไรตัดสินใจ")
+        h1, h4 = data.get("H1"), data.get("H4")
+        if h1:
+            m = h1["ma"]
+            st = 1 if m[100] > m[150] > m[200] else (-1 if m[100] < m[150] < m[200] else 0)
+            line(c, f"Plan 1 (MA M15) — H1 MA100 {m[100]:,.2f} · MA150 {m[150]:,.2f} · MA200 {m[200]:,.2f}", COLOR_TEXT_PRIMARY, 12)
+            line(c, ("→ เรียงขาขึ้น: เข้าได้เฉพาะ BUY" if st > 0 else "→ เรียงขาลง: เข้าได้เฉพาะ SELL" if st < 0
+                     else "→ ยังไม่เรียงตัว: Plan 1 ยังไม่เข้าไม้"), green if st > 0 else red if st < 0 else muted, 11)
+        if h4:
+            m = h4["ma"]
+            dp = h4["diff_pct"]
+            line(c, f"Plan 3–5 (ป้ายมุมขวาของการ์ด) — H4 MA10 {m[10]:,.2f} เทียบ MA30 {m[30]:,.2f} ห่าง {dp:+.2f}%", COLOR_TEXT_PRIMARY, 12)
+            if abs(dp) < 0.20:
+                line(c, "→ ห่างไม่ถึง ±0.20% = ไซด์เวย์ เทรดได้ทั้ง BUY / SELL", cyan, 11)
+            else:
+                line(c, f"→ ห่างเกิน ±0.20% = {'ขาขึ้น: BUY เท่านั้น' if dp > 0 else 'ขาลง: SELL เท่านั้น'} (Strict Pro-Trend ห้ามสวนเทรนด์)",
+                     green if dp > 0 else red, 11)
+            above = h4["close"] > m[200]
+            line(c, f"Plan 2 (MA H1) / ป้าย MA200 — ราคาปิด H4 {h4['close']:,.2f} {'เหนือ' if above else 'ใต้'} MA200 {m[200]:,.2f}", COLOR_TEXT_PRIMARY, 12)
+            line(c, "→ Plan 2 BUY ได้เมื่อราคาอยู่เหนือ MA200 และ SELL ได้เมื่ออยู่ใต้ MA200 (ร่วมกับ MA10/30 และความชัน MA5 H4)", muted, 11)
+        ctk.CTkFrame(c, height=8, fg_color="transparent").pack()
+        ctk.CTkLabel(box, text="ป้าย Uptrend / Downtrend / Sideway บนการ์ดใช้แสดงภาพรวมเท่านั้น — การเข้าไม้ใช้กฎของแต่ละแผนด้านบน",
+                     font=f(10), text_color=muted, wraplength=580, justify="left").pack(anchor="w", padx=8, pady=(6, 0))
 
 
 class GoldCandleDialog(ctk.CTkToplevel):
@@ -1753,6 +1852,7 @@ class MainTradingApp(ctk.CTk):
         # สภาวะตลาด: 2 แถว H1 / H4 + ป้ายทิศที่อนุญาตให้เทรด (Strict Pro-Trend)
         self.card_trend = self._create_dual_card(grid_frame, 3, "📊", "สภาวะตลาด")
         self.card_trend["rows"] = {tf: self._create_trend_row(self.card_trend["body"], tf) for tf in ("H1", "H4")}
+        self._make_clickable(self.card_trend, lambda: MarketExplainDialog(self))
 
         # แนวรับ–แนวต้าน: 2 แถว H1 / H4 พร้อมแถบตำแหน่งราคาปัจจุบันในกรอบ
         self.card_sr = self._create_dual_card(grid_frame, 4, "🧱", "แนวรับ – แนวต้าน")
@@ -1779,7 +1879,7 @@ class MainTradingApp(ctk.CTk):
 
         body = ctk.CTkFrame(inner, fg_color="transparent")
         body.pack(fill="x", pady=(3, 0))
-        return {"badge": badge, "body": body}
+        return {"card": card, "badge": badge, "body": body}
 
     @staticmethod
     def _set_badge(badge, text, fg="#1F2430", color=COLOR_TEXT_MUTED):
@@ -1977,38 +2077,37 @@ class MainTradingApp(ctk.CTk):
         )
         self.btn_master_toggle.pack(fill="x", padx=14)
 
-        # ขนาดไม้ (Lot) ที่บอทใช้เปิดออเดอร์ — บันทึกใน %APPDATA%\GoldBot24\bot_settings.json (ค่าเริ่มต้น 0.01)
-        lot_row = ctk.CTkFrame(card, fg_color="transparent")
-        lot_row.pack(fill="x", padx=14, pady=(6, 0))
-        ctk.CTkLabel(lot_row, text="ขนาดไม้ (Lot)", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        # แถวเดียว (ประหยัดความสูงให้พอดีจอ 1366×768): Lot [▾] | ☐ ปิดเมื่อกำไรถึง [x.xx]
+        #   Lot บันทึกใน %APPDATA%\GoldBot24\bot_settings.json (ค่าเริ่มต้น 0.01) · เป้ากำไรค่าเริ่มต้นปิด
+        opt_row = ctk.CTkFrame(card, fg_color="transparent")
+        opt_row.pack(fill="x", padx=14, pady=(6, 0))
+        lbl_lot = ctk.CTkLabel(opt_row, text="Lot", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED)
+        lbl_lot.pack(side="left", padx=(0, 6))
         self.lot_var = tk.StringVar(value=f"{self._load_lot():.2f}")
         self.cmb_lot = ctk.CTkComboBox(
-            lot_row, width=96, height=28, variable=self.lot_var,
+            opt_row, width=78, height=28, variable=self.lot_var,
             values=["0.01", "0.02", "0.03", "0.05", "0.10", "0.20", "0.50", "1.00"],
             command=lambda v: self._save_lot(v), font=self._font(12, "bold"),
         )
-        self.cmb_lot.pack(side="right")
+        self.cmb_lot.pack(side="left")
         self.cmb_lot.bind("<Return>", lambda e: self._save_lot(self.lot_var.get()))
         self.cmb_lot.bind("<FocusOut>", lambda e: self._save_lot(self.lot_var.get()))
-        self.lbl_lot_hint = ctk.CTkLabel(lot_row, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED)
-        self.lbl_lot_hint.pack(side="right", padx=(0, 8))
+        self.lbl_lot_hint = _HintProxy(lbl_lot, "Lot")
 
-        # ปิดไม้อัตโนมัติเมื่อกำไรถึง $X (เลือกเปิด/ปิดได้ · ค่าเริ่มต้นปิด) — บอทอ่านค่าใหม่ทุกรอบสแกน
-        tp_row = ctk.CTkFrame(card, fg_color="transparent")
-        tp_row.pack(fill="x", padx=14, pady=(4, 0))
+        self.tp_usd_var = tk.StringVar(value=f"{float(self._load_setting('tp_usd', 5.0)):.2f}")
+        ent = ctk.CTkEntry(opt_row, width=70, height=28, textvariable=self.tp_usd_var, font=self._font(12, "bold"), justify="right")
+        ent.pack(side="right")
         self.tp_usd_enabled_var = tk.BooleanVar(value=bool(self._load_setting("tp_usd_enabled", False)))
-        ctk.CTkCheckBox(
-            tp_row, text="ปิดไม้เมื่อกำไรถึง", variable=self.tp_usd_enabled_var, font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED,
+        chk_tp = ctk.CTkCheckBox(
+            opt_row, text="ปิดเมื่อกำไรถึง", variable=self.tp_usd_enabled_var, font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED,
             fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=18, checkbox_height=18,
             command=self._save_tp_usd,
-        ).pack(side="left")
-        self.tp_usd_var = tk.StringVar(value=f"{float(self._load_setting('tp_usd', 5.0)):.2f}")
-        ent = ctk.CTkEntry(tp_row, width=96, height=28, textvariable=self.tp_usd_var, font=self._font(12, "bold"), justify="right")
-        ent.pack(side="right")
+        )
+        chk_tp.pack(side="right", padx=(0, 6))
+        self.lbl_tp_hint = _HintProxy(chk_tp, "ปิดเมื่อกำไรถึง")
         ent.bind("<Return>", lambda e: self._save_tp_usd())
         ent.bind("<FocusOut>", lambda e: self._save_tp_usd())
-        self.lbl_tp_hint = ctk.CTkLabel(tp_row, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED)
-        self.lbl_tp_hint.pack(side="right", padx=(0, 6))
+
 
         # สถิติย่อ 3 ช่อง: ออเดอร์เปิดอยู่ / กำไรลอยตัว / เวลาทำงาน
         stats = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)
