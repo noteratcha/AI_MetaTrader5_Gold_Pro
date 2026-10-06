@@ -395,6 +395,59 @@ class BotController:
         except Exception:
             return None
 
+    QUICK_PLAN = "Manual-Quick"   # comment ของไม้ที่กดเข้าเอง (แยกในประวัติ/สถิติ)
+
+    def quick_order_defaults(self, symbol: str = "XAUUSD"):
+        """ค่าเริ่มต้นสำหรับหน้าต่างเข้าไม้ทันที: ATR(14) M15 แท่งปิด · SL 1.0 ATR · TP 1.5 เท่าของ SL"""
+        try:
+            import pandas as pd
+            if mt5.terminal_info() is None and not mt5.initialize():
+                return None
+            rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, 40)
+            tick = mt5.symbol_info_tick(symbol)
+            if rates is None or tick is None:
+                return None
+            d = pd.DataFrame(rates)
+            atr = float(bot_core._atr_series(d).iloc[-2])
+            return {"bid": float(tick.bid), "ask": float(tick.ask), "atr": atr,
+                    "sl_pts": round(atr * 1.0, 2), "tp_pts": round(atr * 1.5, 2), "lot": float(bot_core.current_lot())}
+        except Exception:
+            return None
+
+    def quick_order(self, side: str, sl_pts: float, tp_pts: float, symbol: str = "XAUUSD") -> tuple[bool, str]:
+        """เปิดออเดอร์ทันทีจากปุ่มในโปรแกรม (ใช้ send_order ตัวเดียวกับบอท: Lot ที่ตั้งไว้, เช็กมาร์จิ้น, บันทึกประวัติ)
+        sl_pts / tp_pts = ระยะเป็นจุดราคา (tp_pts <= 0 = ไม่ตั้ง TP)"""
+        if not license_mgr.is_authenticated:
+            return False, "กรุณาเข้าสู่ระบบก่อน"
+        if not license_mgr.has_active_hours():
+            return False, "ชั่วโมงใช้งานหมดแล้ว — เติมชั่วโมงก่อนเข้าไม้"
+        try:
+            if mt5.terminal_info() is None and not mt5.initialize():
+                return False, "เชื่อมต่อ MT5 ไม่ได้ — เปิด MetaTrader 5 ค้างไว้"
+            tick = mt5.symbol_info_tick(symbol)
+            info = mt5.symbol_info(symbol)
+            if tick is None or info is None:
+                return False, "อ่านราคาไม่ได้ (ตลาดอาจปิด)"
+            if sl_pts <= 0:
+                return False, "ต้องตั้ง SL มากกว่า 0"
+            digits = int(info.digits)
+            if side == "BUY":
+                price, otype = float(tick.ask), mt5.ORDER_TYPE_BUY
+                sl = round(price - sl_pts, digits)
+                tp = round(price + tp_pts, digits) if tp_pts > 0 else 0.0
+            else:
+                price, otype = float(tick.bid), mt5.ORDER_TYPE_SELL
+                sl = round(price + sl_pts, digits)
+                tp = round(price - tp_pts, digits) if tp_pts > 0 else 0.0
+            print(f"[MANUAL ORDER] {side} {symbol} @ {price:.2f} SL {sl:.2f} TP {tp:.2f} (กดเข้าไม้ทันทีจากโปรแกรม)")
+            ok = bot_core.send_order(symbol, otype, price, sl, tp, plan_name=self.QUICK_PLAN)
+            if ok:
+                return True, f"เปิด {side} สำเร็จ @ {price:,.2f} · SL {sl:,.2f}" + (f" · TP {tp:,.2f}" if tp else " · ไม่ตั้ง TP")
+            err = mt5.last_error()
+            return False, f"ส่งคำสั่งไม่สำเร็จ ({err[1] if err else 'ไม่ทราบสาเหตุ'}) — ดูรายละเอียดใน Console"
+        except Exception as e:
+            return False, f"เกิดข้อผิดพลาด: {e}"
+
     def get_market_explain(self, symbol: str = "XAUUSD"):
         """ค่าที่ใช้ตัดสินสภาวะตลาด H1/H4 จากแท่งที่ปิดแล้ว (สำหรับหน้าต่างอธิบาย) — None ถ้าเชื่อม MT5 ไม่ได้"""
         try:

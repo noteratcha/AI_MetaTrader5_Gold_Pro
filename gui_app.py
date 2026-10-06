@@ -479,6 +479,140 @@ class NewsImpactDialog(ctk.CTkToplevel):
                      font=f(10), text_color=COLOR_TEXT_MUTED).pack(pady=(6, 10))
 
 
+class QuickOrderDialog(ctk.CTkToplevel):
+    """ยืนยันการเข้าไม้ทันที (BUY/SELL) — แก้ SL/TP ได้ก่อนส่งคำสั่งจริง"""
+
+    def __init__(self, parent, side):
+        super().__init__(parent)
+        self.parent, self.side = parent, side
+        buy = side == "BUY"
+        self.color = COLOR_SUCCESS_GREEN if buy else COLOR_DANGER_RED
+        self.title(f"เข้าไม้ทันที — {side}")
+        w, h = 430, 440
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.transient(parent)
+        self.resizable(False, False)
+        self.update_idletasks()
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
+        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+
+        def f(size, weight="normal", family="Segoe UI"):
+            return ctk.CTkFont(family=family, size=size, weight=weight)
+        self.f = f
+
+        d = bot_ctrl.quick_order_defaults()
+        head = ctk.CTkFrame(self, fg_color="#0F2A20" if buy else "#2A1215", corner_radius=0)
+        head.pack(fill="x")
+        ctk.CTkLabel(head, text=f"{'▲' if buy else '▼'} เปิด {side} XAUUSD ทันที", font=f(18, "bold"),
+                     text_color=self.color).pack(anchor="w", padx=20, pady=(14, 0))
+        self.lbl_price = ctk.CTkLabel(head, text="", font=f(12), text_color=COLOR_TEXT_MUTED)
+        self.lbl_price.pack(anchor="w", padx=20, pady=(0, 12))
+        if not d:
+            ctk.CTkLabel(self, text="เชื่อมต่อ MT5 ไม่ได้ — เปิด MetaTrader 5 ค้างไว้แล้วลองใหม่", font=f(12),
+                         text_color=COLOR_DANGER_RED).pack(pady=30)
+            return
+        self.d = d
+
+        body = ctk.CTkFrame(self, fg_color="transparent")
+        body.pack(fill="x", padx=20, pady=(12, 0))
+        body.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(body, text="ขนาดไม้ (Lot)", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(body, text=f"{d['lot']:.2f}  (ตั้งที่แผงควบคุม)", font=f(13, "bold"), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=1, sticky="e")
+        ctk.CTkLabel(body, text="SL ห่าง (จุด)", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=4)
+        self.sl_var = tk.StringVar(value=f"{d['sl_pts']:.2f}")
+        ctk.CTkEntry(body, textvariable=self.sl_var, width=110, justify="right", font=f(13, "bold")).grid(row=1, column=1, sticky="e")
+        ctk.CTkLabel(body, text="TP ห่าง (จุด)", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=4)
+        self.tp_var = tk.StringVar(value=f"{d['tp_pts']:.2f}")
+        self.ent_tp = ctk.CTkEntry(body, textvariable=self.tp_var, width=110, justify="right", font=f(13, "bold"))
+        self.ent_tp.grid(row=2, column=1, sticky="e")
+        self.no_tp = tk.BooleanVar(value=False)
+        ctk.CTkCheckBox(body, text="ไม่ตั้ง TP (ปล่อยกำไรวิ่ง)", variable=self.no_tp, font=f(12), text_color=COLOR_TEXT_MUTED,
+                        fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=18, checkbox_height=18,
+                        command=self._refresh).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        for v in (self.sl_var, self.tp_var):
+            v.trace_add("write", lambda *_: self._refresh())
+
+        self.lbl_preview = ctk.CTkLabel(self, text="", font=f(12, "normal", "Consolas"), text_color=COLOR_TEXT_PRIMARY,
+                                        justify="left", anchor="w")
+        self.lbl_preview.pack(fill="x", padx=20, pady=(12, 0))
+        ctk.CTkLabel(self, text=f"ค่าเริ่มต้น: SL 1.0 ATR (ATR M15 = {d['atr']:.2f}) · TP 1.5 เท่าของ SL\n"
+                                "ไม้นี้บอทดูแลต่อด้วยล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึง $ ตามปกติ",
+                     font=f(10), text_color=COLOR_TEXT_MUTED, justify="left").pack(anchor="w", padx=20, pady=(6, 0))
+        self.lbl_status = ctk.CTkLabel(self, text="", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED, wraplength=390)
+        self.lbl_status.pack(padx=20, pady=(6, 0))
+
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", side="bottom", padx=20, pady=16)
+        ctk.CTkButton(btns, text="ยกเลิก", width=100, height=40, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
+                      border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
+        self.btn_ok = ctk.CTkButton(btns, text=f"ยืนยันเปิด {side}", height=40, font=f(14, "bold"),
+                                    fg_color=self.color, hover_color="#2BB383" if buy else "#E05A5A", text_color="#0A0B0F",
+                                    command=self._confirm)
+        self.btn_ok.pack(side="right", fill="x", expand=True, padx=(0, 10))
+        self.grab_set()
+        self._refresh()
+        self._tick()
+
+    def _vals(self):
+        try:
+            sl = float(self.sl_var.get())
+        except ValueError:
+            sl = -1
+        try:
+            tp = 0.0 if self.no_tp.get() else float(self.tp_var.get())
+        except ValueError:
+            tp = -1
+        return sl, tp
+
+    def _tick(self):
+        """อัปเดตราคา Bid/Ask ทุก 1 วินาที"""
+        try:
+            import MetaTrader5 as _mt5
+            t = _mt5.symbol_info_tick("XAUUSD")
+            if t:
+                self.d["bid"], self.d["ask"] = float(t.bid), float(t.ask)
+                self.lbl_price.configure(text=f"Bid {t.bid:,.2f} · Ask {t.ask:,.2f} · Spread {round((t.ask - t.bid) * 100)} pts")
+                self._refresh()
+            self.after(1000, self._tick)
+        except Exception:
+            pass
+
+    def _refresh(self):
+        if not hasattr(self, "lbl_preview"):
+            return
+        self.ent_tp.configure(state="disabled" if self.no_tp.get() else "normal")
+        sl, tp = self._vals()
+        buy = self.side == "BUY"
+        price = self.d["ask"] if buy else self.d["bid"]
+        if sl <= 0 or tp < 0:
+            self.lbl_preview.configure(text="ใส่ระยะ SL / TP เป็นตัวเลขมากกว่า 0", text_color=COLOR_DANGER_RED)
+            self.btn_ok.configure(state="disabled")
+            return
+        lot = self.d["lot"]
+        sl_px = price - sl if buy else price + sl
+        tp_px = (price + tp if buy else price - tp) if tp > 0 else 0
+        risk = sl * lot * 100   # XAUUSD: 1 จุด × 0.01 lot ≈ 1 หน่วยเงิน
+        reward = tp * lot * 100
+        lines = [f"ราคาเข้า (ประมาณ)  {price:,.2f}",
+                 f"SL                {sl_px:,.2f}   เสี่ยง ≈ -{risk:,.2f}",
+                 f"TP                {tp_px:,.2f}   เป้า  ≈ +{reward:,.2f}" if tp > 0 else "TP                ไม่ตั้ง"]
+        self.lbl_preview.configure(text="\n".join(lines), text_color=COLOR_TEXT_PRIMARY)
+        self.btn_ok.configure(state="normal")
+
+    def _confirm(self):
+        sl, tp = self._vals()
+        self.btn_ok.configure(state="disabled", text="กำลังส่งคำสั่ง...")
+        self.update_idletasks()
+        ok, msg = bot_ctrl.quick_order(self.side, sl, tp)
+        if ok:
+            self.lbl_status.configure(text=f"✓ {msg}", text_color=COLOR_SUCCESS_GREEN)
+            self.after(1500, self.destroy)
+        else:
+            self.lbl_status.configure(text=f"✗ {msg}", text_color=COLOR_DANGER_RED)
+            self.btn_ok.configure(state="normal", text=f"ยืนยันเปิด {self.side}")
+
+
 class MarketExplainDialog(ctk.CTkToplevel):
     """อธิบายว่าทำไมสภาวะตลาด H1/H4 เป็น Uptrend / Downtrend / Sideway และแต่ละแผนใช้ค่าไหน"""
 
@@ -1714,21 +1848,19 @@ class MainTradingApp(ctk.CTk):
         # --- ขวา: เมนูผู้ใช้
         user_name = license_mgr.session_data.get("username") or "User"
         # รูปย่อ + ชื่อ + ▾ รวมเป็นปุ่มเดียว (ทั้งก้อนคลิกเปิดเมนูได้)
-        self.btn_user_menu = ctk.CTkFrame(h_inner, fg_color="#1A1E27", corner_radius=21, height=42)
+        self.btn_user_menu = ctk.CTkFrame(h_inner, fg_color="transparent", corner_radius=21, height=42)
         self.btn_user_menu.pack(side="right")
+        # ป้ายสีทองแสดงชื่อเต็ม (คลิกเปิดเมนู) — ไม่มีป้ายชื่อแยกอีกอัน
         avatar = ctk.CTkLabel(
-            self.btn_user_menu, text=user_name[:1].upper(), font=self._font(14, "bold"), width=32, height=32,
-            corner_radius=16, fg_color=COLOR_GOLD_WARM, text_color="#1A1406",
+            self.btn_user_menu, text=f"  {user_name}  ▾  ", font=self._font(13, "bold"), height=34,
+            corner_radius=17, fg_color=COLOR_GOLD_WARM, text_color="#1A1406",
         )
-        avatar.pack(side="left", padx=(5, 8), pady=5)
-        name_lbl = ctk.CTkLabel(self.btn_user_menu, text=f"{user_name}  ▾", font=self._font(12, "bold"),
-                                text_color=COLOR_TEXT_PRIMARY, height=32)
-        name_lbl.pack(side="left", padx=(0, 14))
-        for w in (self.btn_user_menu, avatar, name_lbl):
+        avatar.pack(side="left", padx=4, pady=4)
+        for w in (self.btn_user_menu, avatar):
             w.bind("<Button-1>", lambda e: self._open_user_menu())
             w.configure(cursor="hand2")
-            w.bind("<Enter>", lambda e: self.btn_user_menu.configure(fg_color="#262B36"))
-            w.bind("<Leave>", lambda e: self.btn_user_menu.configure(fg_color="#1A1E27"))
+            w.bind("<Enter>", lambda e: avatar.configure(fg_color=COLOR_GOLD_PRIMARY))
+            w.bind("<Leave>", lambda e: avatar.configure(fg_color=COLOR_GOLD_WARM))
 
         # --- ขวา: กระเป๋าเวลา (เวลาคงเหลือ + เติมคีย์ + ซื้อชั่วโมง)
         self.time_pill_frame = ctk.CTkFrame(h_inner, fg_color=COLOR_GOLD_BG, corner_radius=12, border_width=1, border_color="#5A4519")
@@ -2128,10 +2260,15 @@ class MainTradingApp(ctk.CTk):
 
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(8, 12))
-        row.grid_columnconfigure(0, weight=1)
+        row.grid_columnconfigure(2, weight=1)
+        # เข้าไม้ทันที (เปิดหน้าต่างยืนยัน SL/TP ก่อนส่งคำสั่งจริง)
+        for col, (side, fg, hv, tx) in enumerate((("BUY", "#0F2A20", "#143826", COLOR_SUCCESS_GREEN), ("SELL", "#2A1215", "#38181C", COLOR_DANGER_RED))):
+            ctk.CTkButton(row, text=f"{'▲' if side == 'BUY' else '▼'} {side}", font=self._font(12, "bold"), width=70, height=32,
+                          corner_radius=8, fg_color=fg, hover_color=hv, border_width=1, border_color=tx, text_color=tx,
+                          command=lambda s=side: self._open_quick_order(s)).grid(row=0, column=col, padx=(0, 6))
         self.btn_close_all = ctk.CTkButton(
             row,
-            text="⚠ ปิดทุกออเดอร์",
+            text="⚠ ปิดทั้งหมด",
             font=self._font(12, "bold"),
             fg_color="#3A2226",
             hover_color="#4A2A2F",
@@ -2142,14 +2279,14 @@ class MainTradingApp(ctk.CTk):
             state="disabled",
             command=self._on_click_close_all,
         )
-        self.btn_close_all.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        self.btn_close_all.grid(row=0, column=2, sticky="ew", padx=(0, 6))
         # ปุ่มเสียงแบบข้อความ + สีสถานะ (เห็นชัดกว่าอีโมจีเล็ก ๆ)
         self.btn_sound_toggle = ctk.CTkButton(
             row, text="", font=self._font(11, "bold"), width=86, height=32, corner_radius=8, border_width=1,
             command=self._on_toggle_sound,
         )
         self._style_sound_button()
-        self.btn_sound_toggle.grid(row=0, column=1)
+        self.btn_sound_toggle.grid(row=0, column=3)
         self._bot_started_at = None
 
     def _build_next_news_card(self, parent):
@@ -3049,6 +3186,18 @@ class MainTradingApp(ctk.CTk):
             "กรุณาเติมชั่วโมงด้วย Product Key เพื่อกลับมาเทรดต่อ"
         )
         self._open_redeem_modal()
+
+    def _open_quick_order(self, side):
+        if not license_mgr.is_authenticated:
+            messagebox.showwarning("ยังไม่ได้เข้าสู่ระบบ", "กรุณาเข้าสู่ระบบก่อนเข้าไม้")
+            return
+        dlg = getattr(self, "_quick_dialog", None)
+        try:
+            if dlg is not None and dlg.winfo_exists():
+                dlg.destroy()
+        except Exception:
+            pass
+        self._quick_dialog = QuickOrderDialog(self, side)
 
     def _on_click_close_all(self):
         """กดปุ่ม Emergency ปิดทุกออเดอร์ทันที"""
