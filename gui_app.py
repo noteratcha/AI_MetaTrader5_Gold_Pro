@@ -479,80 +479,249 @@ class NewsImpactDialog(ctk.CTkToplevel):
                      font=f(10), text_color=COLOR_TEXT_MUTED).pack(pady=(6, 10))
 
 
+class StyledMessage(ctk.CTkToplevel):
+    """กล่องข้อความ/ยืนยันในธีมโปรแกรม (แทน messagebox ของ Windows) — kind: confirm / info / success / warning / error"""
+
+    KINDS = {
+        "confirm": ("?", COLOR_GOLD_PRIMARY, "#2A2210"),
+        "danger": ("!", COLOR_DANGER_RED, "#2A1215"),
+        "info": ("i", COLOR_CYAN_ACCENT, "#132036"),
+        "success": ("✓", COLOR_SUCCESS_GREEN, "#0F2A20"),
+        "warning": ("!", COLOR_GOLD_PRIMARY, "#2A2210"),
+        "error": ("✗", COLOR_DANGER_RED, "#2A1215"),
+    }
+
+    def __init__(self, parent, title, message, kind="info", ok_text="ตกลง", cancel_text=None):
+        super().__init__(parent)
+        self.result = False
+        sym, color, bg = self.KINDS.get(kind, self.KINDS["info"])
+        self.title(title)
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.resizable(False, False)
+        self.transient(parent)
+
+        def f(size, weight="normal"):
+            return ctk.CTkFont(family="Segoe UI", size=size, weight=weight)
+
+        msg = str(message or "").replace("⚠️", "").replace("⚠", "").strip()
+        head, _, detail = msg.partition("\n")
+        body = ctk.CTkFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=22, pady=(20, 8))
+        icon = tk.Canvas(body, width=48, height=48, bg=COLOR_BG_DARK, highlightthickness=0, bd=0)
+        icon.grid(row=0, column=0, rowspan=2, sticky="n", padx=(0, 14))
+        icon.create_oval(2, 2, 46, 46, fill=bg, outline=color, width=2)
+        icon.create_text(24, 24, text=sym, fill=color, font=("Segoe UI", 18, "bold"))
+        ctk.CTkLabel(body, text=title, font=f(15, "bold"), text_color=color, anchor="w", justify="left").grid(row=0, column=1, sticky="w")
+        ctk.CTkLabel(body, text=head.strip(), font=f(13), text_color=COLOR_TEXT_PRIMARY, anchor="w", justify="left",
+                     wraplength=360).grid(row=1, column=1, sticky="w", pady=(4, 0))
+        if detail.strip():
+            ctk.CTkLabel(body, text=detail.strip().strip("()"), font=f(11), text_color=COLOR_TEXT_MUTED, anchor="w", justify="left",
+                         wraplength=360).grid(row=2, column=1, sticky="w", pady=(4, 0))
+
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", padx=22, pady=(10, 18))
+        ok_fg = COLOR_DANGER_RED if kind in ("danger", "error") else COLOR_SUCCESS_GREEN if kind == "success" else COLOR_GOLD_PRIMARY
+        ok_hv = "#E05A5A" if kind in ("danger", "error") else "#2BB383" if kind == "success" else COLOR_GOLD_WARM
+        ok = ctk.CTkButton(btns, text=ok_text, height=38, width=140, font=f(13, "bold"), fg_color=ok_fg, hover_color=ok_hv,
+                           text_color="#0A0B0F", command=self._ok)
+        ok.pack(side="right")
+        if cancel_text:
+            ctk.CTkButton(btns, text=cancel_text, height=38, width=110, font=f(13), fg_color=COLOR_CARD_BG,
+                          hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
+                          text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right", padx=(0, 10))
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.update_idletasks()
+        w, h = max(self.winfo_reqwidth(), 460), self.winfo_reqheight()
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
+        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.grab_set()
+        ok.focus_set()
+
+    def _ok(self):
+        self.result = True
+        self.destroy()
+
+
+class _StyledMessagebox:
+    """แทน tkinter.messagebox ทั้งไฟล์: askyesno / showinfo / showwarning / showerror → StyledMessage (ทำงานแบบรอผลเหมือนเดิม)"""
+
+    @staticmethod
+    def _root():
+        return tk._default_root
+
+    def _run(self, title, message, kind, ok_text="ตกลง", cancel_text=None):
+        root = self._root()
+        if root is None:
+            return False
+        dlg = StyledMessage(root, title, message, kind, ok_text, cancel_text)
+        root.wait_window(dlg)
+        return dlg.result
+
+    def askyesno(self, title, message, **_kw):
+        danger = any(k in f"{title} {message}" for k in ("ปิด", "หยุด", "ลบ", "ยกเลิกไม่ได้", "ไม่สามารถยกเลิก"))
+        return self._run(title, message, "danger" if danger else "confirm", ok_text="ยืนยัน", cancel_text="ยกเลิก")
+
+    def showinfo(self, title, message, **_kw):
+        ok = any(k in str(message) for k in ("สำเร็จ", "เรียบร้อย", "ล่าสุดแล้ว"))
+        return self._run(title, message, "success" if ok else "info")
+
+    def showwarning(self, title, message, **_kw):
+        return self._run(title, message, "warning")
+
+    def showerror(self, title, message, **_kw):
+        return self._run(title, message, "error")
+
+
+messagebox = _StyledMessagebox()
+
+
 class QuickOrderDialog(ctk.CTkToplevel):
-    """ยืนยันการเข้าไม้ทันที (BUY/SELL) — แก้ SL/TP ได้ก่อนส่งคำสั่งจริง"""
+    """ยืนยันการเข้าไม้ทันที (BUY/SELL) — ราคาสด · ตั้ง SL/TP ด้วยปุ่ม −/+ หรือปุ่มลัด ATR · สรุปเสี่ยง/เป้า/RRR ก่อนส่งคำสั่งจริง"""
 
     def __init__(self, parent, side):
         super().__init__(parent)
         self.parent, self.side = parent, side
         buy = side == "BUY"
+        self.buy = buy
         self.color = COLOR_SUCCESS_GREEN if buy else COLOR_DANGER_RED
+        self.dark = "#0F2A20" if buy else "#2A1215"
         self.title(f"เข้าไม้ทันที — {side}")
-        w, h = 430, 440
         self.configure(fg_color=COLOR_BG_DARK)
         self.transient(parent)
         self.resizable(False, False)
-        self.update_idletasks()
-        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
-        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
-        self.geometry(f"{w}x{h}+{x}+{y}")
 
         def f(size, weight="normal", family="Segoe UI"):
             return ctk.CTkFont(family=family, size=size, weight=weight)
         self.f = f
 
         d = bot_ctrl.quick_order_defaults()
-        head = ctk.CTkFrame(self, fg_color="#0F2A20" if buy else "#2A1215", corner_radius=0)
+        # ── หัว: ทิศ + ราคาสด
+        head = ctk.CTkFrame(self, fg_color=self.dark, corner_radius=0)
         head.pack(fill="x")
-        ctk.CTkLabel(head, text=f"{'▲' if buy else '▼'} เปิด {side} XAUUSD ทันที", font=f(18, "bold"),
-                     text_color=self.color).pack(anchor="w", padx=20, pady=(14, 0))
-        self.lbl_price = ctk.CTkLabel(head, text="", font=f(12), text_color=COLOR_TEXT_MUTED)
-        self.lbl_price.pack(anchor="w", padx=20, pady=(0, 12))
+        hrow = ctk.CTkFrame(head, fg_color="transparent")
+        hrow.pack(fill="x", padx=20, pady=14)
+        icon = tk.Canvas(hrow, width=40, height=40, bg=self.dark, highlightthickness=0, bd=0)
+        icon.pack(side="left", padx=(0, 12))
+        icon.create_oval(1, 1, 39, 39, fill=self.color, outline="")
+        if buy:
+            icon.create_polygon(20, 10, 30, 25, 10, 25, fill="#0A0B0F", outline="")
+        else:
+            icon.create_polygon(10, 15, 30, 15, 20, 30, fill="#0A0B0F", outline="")
+        tbox = ctk.CTkFrame(hrow, fg_color="transparent")
+        tbox.pack(side="left")
+        ctk.CTkLabel(tbox, text=f"เปิด {side} XAUUSD ทันที", font=f(18, "bold"), text_color=self.color).pack(anchor="w")
+        ctk.CTkLabel(tbox, text=f"Lot {d['lot']:.2f} (ตั้งที่แผงควบคุม)" if d else "", font=f(11), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
+        pbox = ctk.CTkFrame(hrow, fg_color="transparent")
+        pbox.pack(side="right")
+        self.lbl_px = ctk.CTkLabel(pbox, text="—", font=f(20, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY)
+        self.lbl_px.pack(anchor="e")
+        self.lbl_spread = ctk.CTkLabel(pbox, text="", font=f(10), text_color=COLOR_TEXT_MUTED)
+        self.lbl_spread.pack(anchor="e")
         if not d:
             ctk.CTkLabel(self, text="เชื่อมต่อ MT5 ไม่ได้ — เปิด MetaTrader 5 ค้างไว้แล้วลองใหม่", font=f(12),
-                         text_color=COLOR_DANGER_RED).pack(pady=30)
+                         text_color=COLOR_DANGER_RED).pack(padx=30, pady=30)
+            self._place(460)
             return
         self.d = d
 
-        body = ctk.CTkFrame(self, fg_color="transparent")
-        body.pack(fill="x", padx=20, pady=(12, 0))
-        body.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(body, text="ขนาดไม้ (Lot)", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=4)
-        ctk.CTkLabel(body, text=f"{d['lot']:.2f}  (ตั้งที่แผงควบคุม)", font=f(13, "bold"), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=1, sticky="e")
-        ctk.CTkLabel(body, text="SL ห่าง (จุด)", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=4)
+        # ── ตั้ง SL / TP
+        card = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        card.pack(fill="x", padx=18, pady=(14, 0))
+        card.grid_columnconfigure(1, weight=1)
         self.sl_var = tk.StringVar(value=f"{d['sl_pts']:.2f}")
-        ctk.CTkEntry(body, textvariable=self.sl_var, width=110, justify="right", font=f(13, "bold")).grid(row=1, column=1, sticky="e")
-        ctk.CTkLabel(body, text="TP ห่าง (จุด)", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=4)
         self.tp_var = tk.StringVar(value=f"{d['tp_pts']:.2f}")
-        self.ent_tp = ctk.CTkEntry(body, textvariable=self.tp_var, width=110, justify="right", font=f(13, "bold"))
-        self.ent_tp.grid(row=2, column=1, sticky="e")
+        self._stepper(card, 0, "Stop Loss", "ระยะ (จุด)", self.sl_var, COLOR_DANGER_RED)
+        self.tp_row = self._stepper(card, 1, "Take Profit", "ระยะ (จุด)", self.tp_var, COLOR_SUCCESS_GREEN)
+        chips = ctk.CTkFrame(card, fg_color="transparent")
+        chips.grid(row=2, column=0, columnspan=3, sticky="w", padx=14, pady=(2, 4))
+        ctk.CTkLabel(chips, text="SL ด่วน:", font=f(11), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(0, 6))
+        for mult in (0.5, 1.0, 1.5):
+            ctk.CTkButton(chips, text=f"{mult:g} ATR", width=62, height=24, font=f(11, "bold"), corner_radius=12,
+                          fg_color="#1A1E27", hover_color="#262B36", border_width=1, border_color=COLOR_CARD_BORDER,
+                          text_color=COLOR_TEXT_PRIMARY, command=lambda m=mult: self._preset(m)).pack(side="left", padx=2)
         self.no_tp = tk.BooleanVar(value=False)
-        ctk.CTkCheckBox(body, text="ไม่ตั้ง TP (ปล่อยกำไรวิ่ง)", variable=self.no_tp, font=f(12), text_color=COLOR_TEXT_MUTED,
-                        fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=18, checkbox_height=18,
-                        command=self._refresh).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ctk.CTkCheckBox(card, text="ไม่ตั้ง TP — ปล่อยกำไรวิ่ง (ปิดเองหรือให้บอทดูแล)", variable=self.no_tp, font=f(11),
+                        text_color=COLOR_TEXT_MUTED, fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK,
+                        checkbox_width=17, checkbox_height=17, command=self._refresh
+                        ).grid(row=3, column=0, columnspan=3, sticky="w", padx=14, pady=(2, 12))
         for v in (self.sl_var, self.tp_var):
             v.trace_add("write", lambda *_: self._refresh())
 
-        self.lbl_preview = ctk.CTkLabel(self, text="", font=f(12, "normal", "Consolas"), text_color=COLOR_TEXT_PRIMARY,
-                                        justify="left", anchor="w")
-        self.lbl_preview.pack(fill="x", padx=20, pady=(12, 0))
-        ctk.CTkLabel(self, text=f"ค่าเริ่มต้น: SL 1.0 ATR (ATR M15 = {d['atr']:.2f}) · TP 1.5 เท่าของ SL\n"
-                                "ไม้นี้บอทดูแลต่อด้วยล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึง $ ตามปกติ",
-                     font=f(10), text_color=COLOR_TEXT_MUTED, justify="left").pack(anchor="w", padx=20, pady=(6, 0))
-        self.lbl_status = ctk.CTkLabel(self, text="", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED, wraplength=390)
-        self.lbl_status.pack(padx=20, pady=(6, 0))
+        # ── สรุปก่อนยืนยัน
+        summ = ctk.CTkFrame(self, fg_color="#101218", corner_radius=12)
+        summ.pack(fill="x", padx=18, pady=(10, 0))
+        summ.grid_columnconfigure((0, 1, 2), weight=1, uniform="q_sum")
+        self.sum_cells = {}
+        for col, (key, title, color) in enumerate((("sl", "SL", COLOR_DANGER_RED), ("entry", "ราคาเข้า", COLOR_TEXT_PRIMARY),
+                                                   ("tp", "TP", COLOR_SUCCESS_GREEN))):
+            box = ctk.CTkFrame(summ, fg_color="transparent")
+            box.grid(row=0, column=col, sticky="nsew", pady=10)
+            ctk.CTkLabel(box, text=title, font=f(10), text_color=COLOR_TEXT_MUTED).pack()
+            v = ctk.CTkLabel(box, text="—", font=f(14, "bold", "Consolas"), text_color=color)
+            v.pack()
+            sub = ctk.CTkLabel(box, text="", font=f(10, "bold"), text_color=color)
+            sub.pack()
+            self.sum_cells[key] = (v, sub)
+        self.lbl_rrr = ctk.CTkLabel(self, text="", font=f(11, "bold"), text_color=COLOR_GOLD_PRIMARY)
+        self.lbl_rrr.pack(pady=(8, 0))
+        ctk.CTkLabel(self, text="บอทดูแลไม้นี้ต่อด้วยล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึง $ ตามปกติ",
+                     font=f(10), text_color=COLOR_TEXT_MUTED).pack(pady=(2, 0))
+        self.lbl_status = ctk.CTkLabel(self, text="", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED, wraplength=420)
+        self.lbl_status.pack(pady=(4, 0))
 
         btns = ctk.CTkFrame(self, fg_color="transparent")
-        btns.pack(fill="x", side="bottom", padx=20, pady=16)
-        ctk.CTkButton(btns, text="ยกเลิก", width=100, height=40, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
+        btns.pack(fill="x", padx=18, pady=(10, 18))
+        ctk.CTkButton(btns, text="ยกเลิก", width=100, height=42, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
                       border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
-        self.btn_ok = ctk.CTkButton(btns, text=f"ยืนยันเปิด {side}", height=40, font=f(14, "bold"),
+        self.btn_ok = ctk.CTkButton(btns, text=f"ยืนยันเปิด {side}", height=42, font=f(14, "bold"),
                                     fg_color=self.color, hover_color="#2BB383" if buy else "#E05A5A", text_color="#0A0B0F",
                                     command=self._confirm)
         self.btn_ok.pack(side="right", fill="x", expand=True, padx=(0, 10))
+        self.bind("<Escape>", lambda e: self.destroy())
+        self._place(470)
         self.grab_set()
         self._refresh()
         self._tick()
+
+    def _place(self, w):
+        self.update_idletasks()
+        h = self.winfo_reqheight()
+        x = self.parent.winfo_rootx() + max(0, (self.parent.winfo_width() - w) // 2)
+        y = self.parent.winfo_rooty() + max(0, (self.parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _stepper(self, parent, row, title, sub, var, color):
+        f = self.f
+        lab = ctk.CTkFrame(parent, fg_color="transparent")
+        lab.grid(row=row, column=0, sticky="w", padx=14, pady=(12 if row == 0 else 6, 0))
+        ctk.CTkLabel(lab, text=title, font=f(13, "bold"), text_color=color).pack(anchor="w")
+        ctk.CTkLabel(lab, text=sub, font=f(10), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
+        box = ctk.CTkFrame(parent, fg_color="transparent")
+        box.grid(row=row, column=2, sticky="e", padx=14, pady=(12 if row == 0 else 6, 0))
+
+        def step(delta):
+            try:
+                v = max(0.1, float(var.get()) + delta)
+            except ValueError:
+                v = 1.0
+            var.set(f"{v:.2f}")
+        btn = dict(width=32, height=32, font=f(16, "bold"), fg_color="#1A1E27", hover_color="#262B36",
+                   border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_PRIMARY)
+        b1 = ctk.CTkButton(box, text="−", command=lambda: step(-0.5), **btn)
+        b1.pack(side="left")
+        ent = ctk.CTkEntry(box, textvariable=var, width=86, height=32, justify="center", font=f(14, "bold", "Consolas"))
+        ent.pack(side="left", padx=4)
+        b2 = ctk.CTkButton(box, text="+", command=lambda: step(0.5), **btn)
+        b2.pack(side="left")
+        return (b1, ent, b2)
+
+    def _preset(self, mult):
+        sl = self.d["atr"] * mult
+        self.sl_var.set(f"{sl:.2f}")
+        if not self.no_tp.get():
+            self.tp_var.set(f"{sl * 1.5:.2f}")
 
     def _vals(self):
         try:
@@ -572,32 +741,37 @@ class QuickOrderDialog(ctk.CTkToplevel):
             t = _mt5.symbol_info_tick("XAUUSD")
             if t:
                 self.d["bid"], self.d["ask"] = float(t.bid), float(t.ask)
-                self.lbl_price.configure(text=f"Bid {t.bid:,.2f} · Ask {t.ask:,.2f} · Spread {round((t.ask - t.bid) * 100)} pts")
                 self._refresh()
             self.after(1000, self._tick)
         except Exception:
             pass
 
     def _refresh(self):
-        if not hasattr(self, "lbl_preview"):
+        if not hasattr(self, "sum_cells"):
             return
-        self.ent_tp.configure(state="disabled" if self.no_tp.get() else "normal")
+        state = "disabled" if self.no_tp.get() else "normal"
+        for w in self.tp_row:
+            w.configure(state=state)
+        price = self.d["ask"] if self.buy else self.d["bid"]
+        self.lbl_px.configure(text=f"{price:,.2f}")
+        self.lbl_spread.configure(text=f"{'Ask' if self.buy else 'Bid'} · Spread {round((self.d['ask'] - self.d['bid']) * 100)} pts")
         sl, tp = self._vals()
-        buy = self.side == "BUY"
-        price = self.d["ask"] if buy else self.d["bid"]
         if sl <= 0 or tp < 0:
-            self.lbl_preview.configure(text="ใส่ระยะ SL / TP เป็นตัวเลขมากกว่า 0", text_color=COLOR_DANGER_RED)
+            self.lbl_rrr.configure(text="ใส่ระยะ SL / TP เป็นตัวเลขมากกว่า 0", text_color=COLOR_DANGER_RED)
             self.btn_ok.configure(state="disabled")
             return
         lot = self.d["lot"]
-        sl_px = price - sl if buy else price + sl
-        tp_px = (price + tp if buy else price - tp) if tp > 0 else 0
-        risk = sl * lot * 100   # XAUUSD: 1 จุด × 0.01 lot ≈ 1 หน่วยเงิน
-        reward = tp * lot * 100
-        lines = [f"ราคาเข้า (ประมาณ)  {price:,.2f}",
-                 f"SL                {sl_px:,.2f}   เสี่ยง ≈ -{risk:,.2f}",
-                 f"TP                {tp_px:,.2f}   เป้า  ≈ +{reward:,.2f}" if tp > 0 else "TP                ไม่ตั้ง"]
-        self.lbl_preview.configure(text="\n".join(lines), text_color=COLOR_TEXT_PRIMARY)
+        d = 1 if self.buy else -1
+        sl_px, tp_px = price - d * sl, (price + d * tp) if tp > 0 else 0
+        risk, reward = sl * lot * 100, tp * lot * 100   # XAUUSD: 1 จุด × 0.01 lot ≈ 1 หน่วยเงิน
+        self.sum_cells["sl"][0].configure(text=f"{sl_px:,.2f}")
+        self.sum_cells["sl"][1].configure(text=f"เสี่ยง -{risk:,.2f}")
+        self.sum_cells["entry"][0].configure(text=f"{price:,.2f}")
+        self.sum_cells["entry"][1].configure(text=self.side, text_color=self.color)
+        self.sum_cells["tp"][0].configure(text=f"{tp_px:,.2f}" if tp > 0 else "ไม่ตั้ง")
+        self.sum_cells["tp"][1].configure(text=f"เป้า +{reward:,.2f}" if tp > 0 else "ปล่อยกำไรวิ่ง")
+        self.lbl_rrr.configure(text=(f"Risk : Reward = 1 : {tp / sl:.2f}" if tp > 0 else "Risk : Reward = ไม่จำกัด (ไม่ตั้ง TP)") +
+                               f"  ·  ATR M15 = {self.d['atr']:.2f}", text_color=COLOR_GOLD_PRIMARY)
         self.btn_ok.configure(state="normal")
 
     def _confirm(self):
@@ -611,6 +785,7 @@ class QuickOrderDialog(ctk.CTkToplevel):
         else:
             self.lbl_status.configure(text=f"✗ {msg}", text_color=COLOR_DANGER_RED)
             self.btn_ok.configure(state="normal", text=f"ยืนยันเปิด {self.side}")
+            self._place(470)
 
 
 class MarketExplainDialog(ctk.CTkToplevel):
@@ -3321,13 +3496,15 @@ class MainTradingApp(ctk.CTk):
 
     def _on_click_close_all(self):
         """กดปุ่ม Emergency ปิดทุกออเดอร์ทันที"""
+        n = len(bot_ctrl.get_telemetry().get("open_positions") or [])
         confirm = messagebox.askyesno(
-            "ยืนยันการปิดออเดอร์ทั้งหมด",
-            "⚠️ ท่านต้องการสั่งปิดทุกออเดอร์ของทองคำ XAUUSD ทันทีหรือไม่?\n(คำสั่งนี้ไม่สามารถยกเลิกได้)"
+            "ปิดออเดอร์ทั้งหมด",
+            f"ต้องการปิดออเดอร์ทองคำ XAUUSD ทั้งหมด{f' {n} ไม้' if n else ''} ทันทีหรือไม่?\n"
+            "ปิดที่ราคาตลาดตอนนี้ · คำสั่งนี้ยกเลิกไม่ได้"
         )
         if confirm:
             count, msg = bot_ctrl.close_all_positions()
-            messagebox.showinfo("ผลการดำเนินการ", msg)
+            (messagebox.showinfo if count else messagebox.showwarning)("ปิดออเดอร์ทั้งหมด", msg)
 
     def _on_toggle_sound(self):
         """เปิดหรือปิดเสียงแจ้งเตือน"""
