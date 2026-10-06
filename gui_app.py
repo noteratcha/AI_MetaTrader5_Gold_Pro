@@ -577,6 +577,59 @@ class _StyledMessagebox:
 messagebox = _StyledMessagebox()
 
 
+class ContactDialog(ctk.CTkToplevel):
+    """ติดต่อแอดมินทาง LINE OA — QR + ปุ่มเปิด LINE + คัดลอกไอดี"""
+    LINE_ID = "@887aczyq"
+    LINE_URL = "https://line.me/R/ti/p/@887aczyq"
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("ติดต่อแอดมิน")
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.transient(parent)
+        self.resizable(False, False)
+
+        def f(size, weight="normal", family="Segoe UI"):
+            return ctk.CTkFont(family=family, size=size, weight=weight)
+
+        ctk.CTkLabel(self, text="ติดต่อแอดมิน", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
+        ctk.CTkLabel(self, text="สแกน QR ด้วยแอป LINE ในมือถือ หรือกดปุ่มเปิด LINE", font=f(11),
+                     text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=20, pady=(2, 10))
+        try:
+            from PIL import Image
+            img = Image.open(os.path.join(os.path.dirname(_app_icon_path()), "line_qr.png"))
+            self._qr = ctk.CTkImage(light_image=img, dark_image=img, size=(200, 200))
+            ctk.CTkLabel(self, text="", image=self._qr).pack(pady=(4, 8))
+        except Exception:
+            pass
+        idrow = ctk.CTkFrame(self, fg_color="transparent")
+        idrow.pack(pady=(0, 4))
+        ctk.CTkLabel(idrow, text=self.LINE_ID, font=f(18, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY).pack(side="left", padx=(0, 10))
+        self.btn_copy = ctk.CTkButton(idrow, text="คัดลอก", width=70, height=28, font=f(11), fg_color=COLOR_CARD_BG,
+                                      hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
+                                      text_color=COLOR_TEXT_PRIMARY, command=self._copy)
+        self.btn_copy.pack(side="left")
+        ctk.CTkLabel(self, text="แจ้งอีเมลที่ใช้สมัคร + ภาพหน้าจอ/สลิป · แอดมินไม่ขอรหัสผ่านหรือรหัส MT5 ทุกกรณี",
+                     font=f(10), text_color=COLOR_TEXT_MUTED).pack(padx=20, pady=(6, 0))
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", padx=18, pady=(12, 18))
+        ctk.CTkButton(btns, text="ปิด", width=90, height=40, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
+                      border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
+        ctk.CTkButton(btns, text="เปิด LINE ทักแชท", height=40, font=f(14, "bold"), fg_color="#06C755", hover_color="#05A647",
+                      text_color="#FFFFFF", command=lambda: webbrowser.open(self.LINE_URL)).pack(side="right", fill="x", expand=True, padx=(0, 10))
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.update_idletasks()
+        w, h = 440, self.winfo_reqheight()
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
+        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _copy(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.LINE_ID)
+        self.btn_copy.configure(text="✓ แล้ว", text_color=COLOR_SUCCESS_GREEN)
+
+
 class MarginSettingDialog(ctk.CTkToplevel):
     """ตั้งมาร์จิ้นต่อ 1 ไม้ (จำแยกตามบัญชี) — ยิ่งตั้งสูง บอทยิ่งเปิดไม้พร้อมกันได้น้อยลง (ปลอดภัยขึ้น)"""
 
@@ -2187,6 +2240,7 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  🌐  เปิดเว็บ GoldBot24 (พอร์ตสด)", command=lambda: webbrowser.open(self.WEB_URL))
         menu.add_command(label="  🛒  ซื้อชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
         menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
+        menu.add_command(label="  💬  ติดต่อแอดมิน (LINE)", command=lambda: ContactDialog(self))
         menu.add_command(label="  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
         menu.add_separator()
         menu.add_command(label="  ⎋  ออกจากระบบ", foreground=COLOR_DANGER_RED, command=self._do_logout)

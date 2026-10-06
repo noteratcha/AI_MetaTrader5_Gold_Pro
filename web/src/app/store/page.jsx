@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Alert, CopyButton, PageHeader, Spinner } from '../../components/ui';
 import { PACKAGES } from '../../lib/packages';
 import { formatThb } from '../../lib/format';
+import { LINE_ID, LINE_URL } from '../../lib/contact';
 import { markLocalKeyRedeemed, rememberLocalKey } from '../../lib/localKeys';
 
 const ACCENTS = {
@@ -539,6 +540,11 @@ function CheckoutModal({ pkg, onClose }) {
                 <Alert type={slipError.type === 'wait' ? 'gold' : 'error'}>
                   <strong>{slipError.message}</strong>
                   {slipError.hint && <div className="small" style={{ marginTop: 4 }}>{slipError.hint}</div>}
+                  {slipError.type !== 'wait' && (
+                    <div className="small" style={{ marginTop: 6 }}>
+                      ยังไม่ได้? <a href={LINE_URL} target="_blank" rel="noopener noreferrer" className="text-gold">ติดต่อแอดมินทาง LINE {LINE_ID}</a>
+                    </div>
+                  )}
                 </Alert>
               )}
 

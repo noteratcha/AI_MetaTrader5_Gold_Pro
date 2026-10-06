@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PLAN_LIST } from '../lib/packages';
+import { LINE_ID, LINE_URL } from '../lib/contact';
 
 export default function Footer() {
   const { isAdminView } = useAuth();
@@ -33,6 +34,9 @@ export default function Footer() {
             <p className="small muted" style={{ maxWidth: 320 }}>
               บอทเทรดทองคำ (XAUUSD) ด้วย AI เชื่อมต่อ MetaTrader 5 · คิดค่าบริการตามจริง 1 บาท/ชั่วโมง เฉพาะเวลาที่บอททำงาน
             </p>
+            <a href={LINE_URL} target="_blank" rel="noopener noreferrer" className="small" style={{ color: '#06C755', fontWeight: 600 }}>
+              ติดต่อแอดมิน LINE {LINE_ID}
+            </a>
           </div>
 
           <div>
@@ -44,6 +48,7 @@ export default function Footer() {
               <li><Link href="/backtest">แผนเทรด &amp; ผลทดสอบย้อนหลัง</Link></li>
               <li><Link href="/store">ซื้อชั่วโมง</Link></li>
               <li><Link href="/my-keys">คีย์ของฉัน</Link></li>
+              <li><Link href="/contact">ติดต่อแอดมิน</Link></li>
               {isAdminView && <li><Link href="/admin">Admin</Link></li>}
             </ul>
           </div>
