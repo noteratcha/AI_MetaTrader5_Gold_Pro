@@ -2275,12 +2275,14 @@ class MainTradingApp(ctk.CTk):
                           command=lambda s=side: self._open_quick_order(s)).grid(row=0, column=col, padx=(0, 6))
         self.btn_close_all = ctk.CTkButton(
             row,
-            text="⚠ ปิดทั้งหมด",
+            text="ไม่มีออเดอร์",
             font=self._font(12, "bold"),
-            fg_color="#3A2226",
+            fg_color="#1A1E27",
             hover_color="#4A2A2F",
             text_color=COLOR_DANGER_RED,
-            text_color_disabled="#6E5458",
+            text_color_disabled="#5A6070",
+            border_width=1,
+            border_color="#2A303C",
             height=32,
             corner_radius=8,
             state="disabled",
@@ -3573,10 +3575,12 @@ class MainTradingApp(ctk.CTk):
                         self.ctl_stat_labels["uptime"].configure(text=f"{el // 3600:02d}:{el % 3600 // 60:02d}:{el % 60:02d}", text_color=COLOR_SUCCESS_GREEN)
                     elif not bot_ctrl.is_active:
                         self.ctl_stat_labels["uptime"].configure(text="--:--:--", text_color=COLOR_TEXT_MUTED)
-                    self.btn_close_all.configure(
-                        state="normal" if n_open else "disabled",
-                        text=f"⚠ ปิดทุกออเดอร์ ({n_open})" if n_open else "⚠ ปิดทุกออเดอร์",
-                    )
+                    # มีไม้: ปุ่มแดงเด่น (เตือนว่ากดแล้วปิดทุกไม้) · ไม่มีไม้: ปุ่มเทาเรียบ
+                    if n_open:
+                        self.btn_close_all.configure(state="normal", text=f"ปิดทั้งหมด ({n_open})", fg_color="#3A1418",
+                                                     hover_color="#52191F", border_color=COLOR_DANGER_RED, text_color=COLOR_DANGER_RED)
+                    else:
+                        self.btn_close_all.configure(state="disabled", text="ไม่มีออเดอร์", fg_color="#1A1E27", border_color="#2A303C")
 
                 # ประวัติการเทรด / ปฏิทินข่าว (โหลดในเธรดเบื้องหลัง แล้ววาดบน UI thread)
                 self._ui_tick += 1
