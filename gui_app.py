@@ -599,9 +599,10 @@ class MarginSettingDialog(ctk.CTkToplevel):
         self.n_open = len(t.get("open_positions") or [])
 
         ctk.CTkLabel(self, text="มาร์จิ้นต่อ 1 ไม้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
-        ctk.CTkLabel(self, text="จำนวนไม้สูงสุดที่บอทเปิดพร้อมกัน = มาร์จิ้นว่าง ÷ มาร์จิ้นต่อไม้\n"
-                                "ตั้งสูง = เปิดได้น้อยไม้ (ปลอดภัยขึ้น) · ตั้งต่ำ = เปิดได้หลายไม้ (เสี่ยงขึ้น)",
-                     font=f(11), text_color=COLOR_TEXT_MUTED, justify="left", wraplength=420).pack(anchor="w", padx=20, pady=(2, 10))
+        for txt, color, pad in (("จำนวนไม้สูงสุด = มาร์จิ้นว่าง ÷ มาร์จิ้นต่อไม้ (เศษปัดขึ้น)", COLOR_TEXT_MUTED, (2, 0)),
+                                ("เช่น ตั้ง 400: ไม่เกิน 400 = 1 ไม้ · 401–800 = 2 ไม้ · 960 = 3 ไม้", COLOR_GOLD_PRIMARY, (0, 0)),
+                                ("ตั้งสูง = เปิดได้น้อยไม้ (ปลอดภัยขึ้น) · ตั้งต่ำ = เปิดได้หลายไม้ (เสี่ยงขึ้น)", COLOR_TEXT_MUTED, (0, 10))):
+            ctk.CTkLabel(self, text=txt, font=f(11), text_color=color, justify="left", height=20).pack(anchor="w", padx=20, pady=pad)
 
         card = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
         card.pack(fill="x", padx=18)
@@ -663,8 +664,8 @@ class MarginSettingDialog(ctk.CTkToplevel):
             self.btn_ok.configure(state="disabled")
             return
         per = v * max(self.lot, 0.01) / 0.01
-        n = max(1, int(self.free // per)) if per > 0 else 1
-        self.lbl_calc.configure(text=f"มาร์จิ้นว่าง {self.free:,.2f} ÷ {per:,.0f} → เปิดได้สูงสุด {n} ไม้ (เปิดอยู่ {self.n_open})",
+        n = plan_config.max_positions(self.free, self.lot, margin=v)
+        self.lbl_calc.configure(text=f"มาร์จิ้นว่าง {self.free:,.2f} ÷ {per:,.0f} (ปัดขึ้น) → เปิดได้สูงสุด {n} ไม้ (เปิดอยู่ {self.n_open})",
                                 text_color=COLOR_SUCCESS_GREEN)
         lot_note = f"Lot ตอนนี้ {self.lot:.2f} → ใช้ {per:,.0f} ต่อไม้" if abs(self.lot - 0.01) > 1e-9 else "Lot 0.01 → ใช้ตามค่าที่ตั้ง"
         self.lbl_note.configure(text=f"{lot_note} · อย่างน้อยเปิดได้ 1 ไม้เสมอ · จำค่าแยกตามบัญชี")

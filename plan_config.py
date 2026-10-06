@@ -5,6 +5,7 @@
 - ยังไม่เคยโหลดได้เลย = เปิดทุกแผน (ไม่ให้บอทหยุดทำงานเพราะเน็ต)
 """
 import json
+import math
 import threading
 import time
 import urllib.request
@@ -148,10 +149,11 @@ def set_margin_per_trade(value: float, email: str = None):
         json.dump(data, f)
 
 
-def max_positions(free_margin: float, lot: float, email: str = None) -> int:
-    """จำนวนไม้สูงสุดที่เปิดได้ = มาร์จิ้นว่าง ÷ (มาร์จิ้นต่อไม้ × Lot/0.01) — อย่างน้อย 1 ไม้"""
-    per = get_margin_per_trade(email) * max(float(lot or 0.01), 0.01) / 0.01
-    return max(1, int(float(free_margin or 0) // per)) if per > 0 else 1
+def max_positions(free_margin: float, lot: float, email: str = None, margin: float = None) -> int:
+    """จำนวนไม้สูงสุดที่เปิดได้ = มาร์จิ้นว่าง ÷ (มาร์จิ้นต่อไม้ × Lot/0.01) ปัดเศษขึ้น — อย่างน้อย 1 ไม้"""
+    per = (margin or get_margin_per_trade(email)) * max(float(lot or 0.01), 0.01) / 0.01
+    # ทุก `per` ปัดเศษขึ้น: ไม่เกิน 400 = 1 ไม้, 401–800 = 2 ไม้, 960 = 3 ไม้
+    return max(1, math.ceil(float(free_margin or 0) / per - 1e-9)) if per > 0 else 1
 
 
 def disabled_reason(plan_name: str):
