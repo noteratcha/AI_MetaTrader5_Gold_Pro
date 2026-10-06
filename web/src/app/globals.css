@@ -1686,3 +1686,14 @@ select.input {
   gap: 6px;
   font-weight: 700;
 }
+
+/* ราคาต่อชั่วโมงบนการ์ดแพ็กเกจ */
+.pkg-rate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding-top: 8px;
+  margin-bottom: 14px;
+  border-top: 1px dashed var(--border);
+}

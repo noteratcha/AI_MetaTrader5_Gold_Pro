@@ -27,6 +27,15 @@ const PAY_WINDOW_SEC = 15 * 60;
 // หลัง QR หมดเวลา ให้เวลาแนบสลิปต่ออีก 10 นาที (เผื่อโอนแล้วแต่ยังไม่ได้แนบ) ก่อนยกเลิกรายการ
 const SLIP_GRACE_SEC = 10 * 60;
 
+/** ช่วงราคาต่อชั่วโมงจากแพ็กเกจจริง เช่น "ชั่วโมงละ ฿0.76 – ฿1.30 (ยิ่งซื้อมากยิ่งถูก) · " */
+function rateRange(packages) {
+  const rates = (packages || []).filter((p) => p.hours + p.bonus > 0).map((p) => p.price / (p.hours + p.bonus));
+  if (!rates.length) return '';
+  const lo = Math.min(...rates).toFixed(2);
+  const hi = Math.max(...rates).toFixed(2);
+  return lo === hi ? `ชั่วโมงละ ฿${lo} · ` : `ชั่วโมงละ ฿${lo} – ฿${hi} (ยิ่งซื้อมากยิ่งถูก) · `;
+}
+
 export default function StorePage() {
   const { user, openAuthModal } = useAuth();
   const [checkoutPkg, setCheckoutPkg] = useState(null);
@@ -54,7 +63,7 @@ export default function StorePage() {
         eyebrow="Store"
         icon={ShoppingBag}
         title="เติมชั่วโมงใช้งาน"
-        description="1 บาท ต่อ 1 ชั่วโมง · ไม่มีรายเดือน · ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ"
+        description={`${rateRange(packages)}ไม่มีรายเดือน · ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ`}
       />
 
       <div className="grid grid-3" style={{ marginBottom: 28 }}>
@@ -78,10 +87,14 @@ export default function StorePage() {
       <div className="grid grid-4">
         {!packages &&
           Array.from({ length: 8 }, (_, i) => <div key={i} className="card skeleton" style={{ height: 260 }} aria-hidden="true" />)}
-        {(packages || []).map((pkg) => {
+        {(packages || []).map((pkg, _i, all) => {
           const accent = ACCENTS[pkg.accent] || ACCENTS.gold;
           const Icon = accent.icon;
           const total = pkg.hours + pkg.bonus;
+          // ราคาต่อชั่วโมง = ราคา ÷ ชั่วโมงทั้งหมด (รวมโบนัส) · เทียบกับแพ็กเกจที่แพงสุดต่อชั่วโมง
+          const perHour = total > 0 ? pkg.price / total : 0;
+          const maxPerHour = Math.max(...all.map((p) => (p.hours + p.bonus > 0 ? p.price / (p.hours + p.bonus) : 0)));
+          const savePct = maxPerHour > 0 ? Math.round((1 - perHour / maxPerHour) * 100) : 0;
           return (
             <div key={pkg.id} className={`card card-pad card-interactive pkg ${pkg.featured ? 'card-gold pkg-featured' : ''}`}>
               {pkg.badge && <span className="badge badge-gold pkg-badge">{pkg.badge}</span>}
@@ -103,10 +116,19 @@ export default function StorePage() {
               <p className="small muted" style={{ margin: '10px 0 22px', minHeight: 44 }}>
                 {pkg.desc}
               </p>
-              <div className="row-between" style={{ marginTop: 'auto', marginBottom: 14 }}>
+              <div className="row-between" style={{ marginTop: 'auto', marginBottom: 6 }}>
                 <span className="faint small">ราคา</span>
                 <span className="mono text-gold" style={{ fontSize: '1.35rem', fontWeight: 700 }}>
                   {formatThb(pkg.price)}
+                </span>
+              </div>
+              <div className="pkg-rate">
+                <span className="tiny faint mono">
+                  ฿{Number(pkg.price).toLocaleString('en-US')} ÷ {Number(total).toLocaleString('en-US')} ชม.
+                </span>
+                <span className="small">
+                  ตกชั่วโมงละ <strong className="mono">฿{perHour.toFixed(2)}</strong>
+                  {savePct > 0 && <span className="badge badge-green" style={{ marginLeft: 6 }}>ถูกลง {savePct}%</span>}
                 </span>
               </div>
               <button className={`btn btn-block ${pkg.featured ? 'btn-primary' : 'btn-secondary'}`} onClick={() => buy(pkg)}>
