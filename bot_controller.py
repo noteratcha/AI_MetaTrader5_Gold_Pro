@@ -352,5 +352,74 @@ class BotController:
         rows.sort(key=lambda t: t["close_time"] or t["open_time"], reverse=True)
         return rows
 
+    def get_live_candles(self, count: int = 16, symbol: str = "XAUUSD", extra: int = 13):
+        """แท่ง M15 ล่าสุด count แท่ง (แท่งสุดท้าย = แท่งที่กำลังวิ่ง) + MA5/MA13 + Bid/Ask ปัจจุบัน — None ถ้าเชื่อม MT5 ไม่ได้"""
+        try:
+            if mt5.terminal_info() is None and not mt5.initialize():
+                return None
+            rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, count + extra)
+            tick = mt5.symbol_info_tick(symbol)
+            if rates is None or len(rates) == 0:
+                return None
+            closes = [float(r["close"]) for r in rates]
+            if tick and tick.bid:
+                closes[-1] = float(tick.bid)  # แท่งปัจจุบันใช้ราคาล่าสุด
+
+            def ma(n, i):
+                return sum(closes[i - n + 1:i + 1]) / n if i - n + 1 >= 0 else None
+
+            candles = []
+            for i in range(max(0, len(rates) - count), len(rates)):
+                r = rates[i]
+                c = closes[i]
+                candles.append({
+                    "time": int(r["time"]), "open": float(r["open"]),
+                    "high": max(float(r["high"]), c), "low": min(float(r["low"]), c), "close": c,
+                    "ma5": ma(5, i), "ma13": ma(13, i),
+                })
+            return {
+                "candles": candles,
+                "bid": float(tick.bid) if tick else candles[-1]["close"],
+                "ask": float(tick.ask) if tick else candles[-1]["close"],
+                "server_time": int(tick.time) if tick else candles[-1]["time"],
+            }
+        except Exception:
+            return None
+
+    def get_daily_pnl(self, start_date, end_date) -> list[dict]:
+        """
+        กำไร/ขาดทุนสุทธิรายวันของทั้งบัญชี (profit + commission + swap ของทุก Deal เทรด) ตามวันเวลาไทย
+        start_date / end_date = datetime.date (รวมทั้งสองวัน) · คืน [{"date", "profit", "closed"}] ครบทุกวันในช่วง
+        """
+        from datetime import datetime, timedelta, timezone
+        days = {}
+        d = start_date
+        while d <= end_date:
+            days[d] = {"date": d, "profit": 0.0, "closed": 0}
+            d += timedelta(days=1)
+        try:
+            if mt5.terminal_info() is None and not mt5.initialize():
+                return list(days.values())
+            # เวลา Deal ของ MT5 = เวลาเซิร์ฟเวอร์ → หาส่วนต่างกับ UTC จาก tick ล่าสุด (ปัดเป็นชั่วโมง)
+            tick = mt5.symbol_info_tick("XAUUSD")
+            offset = round((tick.time - time.time()) / 3600) * 3600 if tick and tick.time else 0
+            if abs(offset) > 14 * 3600:
+                offset = 0  # ตลาดปิดนาน (tick เก่า) — ถือว่าเป็น UTC
+            th = timezone(timedelta(hours=7))
+            deals = mt5.history_deals_get(datetime.combine(start_date, datetime.min.time()) - timedelta(days=1),
+                                          datetime.combine(end_date, datetime.min.time()) + timedelta(days=2)) or []
+            for dl in deals:
+                if dl.type not in (0, 1):  # เฉพาะ Deal ซื้อ/ขาย (ไม่นับฝาก-ถอน/โบนัส)
+                    continue
+                day = datetime.fromtimestamp(int(dl.time) - offset, th).date()
+                if day not in days:
+                    continue
+                days[day]["profit"] += float(dl.profit) + float(getattr(dl, "commission", 0.0)) + float(getattr(dl, "swap", 0.0))
+                if dl.entry in (1, 2):
+                    days[day]["closed"] += 1
+        except Exception:
+            pass
+        return list(days.values())
+
 # Singleton Controller Instance
 bot_ctrl = BotController()
