@@ -186,7 +186,9 @@ export function EconCalendarList({ events, error, updatedAt, onReload, impacts =
                     <span className="mono cal-time">{timeLabel(e.at)}</span>
                     <span className="cal-cur">{e.currency}</span>
                     <span className={imp.className}>{imp.label}</span>
-                    <span className="cal-title">{e.title}</span>
+                    <span className="cal-title" title={n?.title_th || undefined}>
+                      {e.title}
+                    </span>
                     <span className="cal-num">
                       <span className="faint">คาด</span> {e.forecast || '—'}
                     </span>
@@ -201,6 +203,7 @@ export function EconCalendarList({ events, error, updatedAt, onReload, impacts =
                   </div>
                   {n && openKey === rowKey && (
                     <div className="cal-impact-detail tiny muted">
+                      {n.title_th && <div style={{ color: 'var(--text)', fontWeight: 600 }}>🇹🇭 {n.title_th}</div>}
                       {newsImpactDetail(n).map((p) => (
                         <div key={p}>• {p}</div>
                       ))}

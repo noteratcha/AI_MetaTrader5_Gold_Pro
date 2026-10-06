@@ -241,6 +241,14 @@ def analyze(ev: dict) -> dict:
 _published = {"items": []}
 
 
+def _th(title):
+    try:
+        import news_th
+        return news_th.translate(title)
+    except Exception:
+        return ""
+
+
 def publish(events: list, analyses: dict):
     """เก็บผลวิเคราะห์ข่าวแบบ JSON ให้ Telemetry ส่งขึ้นเว็บ (เรียกจากโปรแกรมหลังคำนวณเสร็จ)"""
     items = []
@@ -250,7 +258,7 @@ def publish(events: list, analyses: dict):
             continue
         st = a.get("stats") or {}
         items.append({
-            "title": ev["title"], "time": ev["time"].isoformat(), "impact": ev["impact"],
+            "title": ev["title"], "title_th": _th(ev["title"]), "time": ev["time"].isoformat(), "impact": ev["impact"],
             "forecast": ev.get("forecast", ""), "previous": ev.get("previous", ""),
             "kind": a["kind"], "rule": a["rule"], "lean": a["lean"],
             "actual": round(a["actual"], 3) if a.get("actual") is not None else None,

@@ -113,7 +113,9 @@ def _news(now_utc):
         for ev in econ_calendar.fetch_events():
             t = ev["time"].astimezone(timezone.utc)
             if ev["currency"] == "USD" and ev["impact"] == "High" and now_utc <= t <= now_utc + timedelta(hours=24):
-                items.append({"title": ev["title"], "time": ev["time"].strftime("%d/%m %H:%M"), "lean": news_impact.pre_release_lean(ev)})
+                import news_th
+                items.append({"title": ev["title"], "title_th": news_th.translate(ev["title"]),
+                              "time": ev["time"].strftime("%d/%m %H:%M"), "lean": news_impact.pre_release_lean(ev)})
         return items
     except Exception:
         return []

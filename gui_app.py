@@ -27,6 +27,7 @@ from bot_controller import bot_ctrl
 import sound_manager
 import econ_calendar
 import news_impact
+import news_th
 import ai_outlook
 from version import APP_VERSION
 import secure_store
@@ -56,6 +57,50 @@ COLOR_DANGER_RED = "#F87171"       # สีแดงแจ้งเตือน
 COLOR_CYAN_ACCENT = "#60A5FA"      # สีฟ้าไฮไลท์
 COLOR_TEXT_PRIMARY = "#ECEEF3"     # ข้อความหลักสีขาวนวล
 COLOR_TEXT_MUTED = "#A3ABBA"       # ข้อความรองสีเทา
+
+
+class HoverTip:
+    """กล่องข้อความลอยเมื่อชี้เมาส์ (เช่น คำแปลชื่อข่าวภาษาไทย)"""
+
+    def __init__(self, widget, text_fn, delay=350):
+        self.widget, self.text_fn, self.delay = widget, text_fn, delay
+        self.tip, self.job = None, None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _schedule(self, _e=None):
+        self._cancel()
+        self.job = self.widget.after(self.delay, self._show)
+
+    def _cancel(self):
+        if self.job:
+            try:
+                self.widget.after_cancel(self.job)
+            except Exception:
+                pass
+            self.job = None
+
+    def _show(self):
+        text = self.text_fn() if callable(self.text_fn) else self.text_fn
+        if not text or self.tip:
+            return
+        x = self.widget.winfo_pointerx() + 14
+        y = self.widget.winfo_pointery() + 18
+        self.tip = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.attributes("-topmost", True)
+        frame = tk.Frame(tw, bg=COLOR_GOLD_DARK, bd=0)
+        frame.pack()
+        tk.Label(frame, text=text, justify="left", bg="#1A1E27", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 10),
+                 padx=10, pady=6, wraplength=420).pack(padx=1, pady=1)
+        tw.wm_geometry(f"+{x}+{y}")
+
+    def _hide(self, _e=None):
+        self._cancel()
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
 
 
 def _app_icon_path():
@@ -361,7 +406,11 @@ class NewsImpactDialog(ctk.CTkToplevel):
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", padx=20, pady=(16, 4))
         ctk.CTkLabel(head, text=ev["title"], font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY, anchor="w",
-                     wraplength=480, justify="left").pack(anchor="w")
+                     wraplength=500, justify="left").pack(anchor="w")
+        th = news_th.translate(ev["title"])
+        if th:
+            ctk.CTkLabel(head, text=th, font=f(13), text_color=COLOR_TEXT_PRIMARY, anchor="w",
+                         wraplength=500, justify="left").pack(anchor="w")
         ctk.CTkLabel(head, text=f"{econ_calendar.format_day(ev['time'])} · {ev['time'].strftime('%H:%M')} น. · {ev['currency']} · "
                                 f"ผลกระทบ{'สูง' if ev['impact'] == 'High' else 'กลาง' if ev['impact'] == 'Medium' else 'ต่ำ'}"
                                 f" · คาด {ev['forecast'] or '—'} · ครั้งก่อน {ev['previous'] or '—'}",
@@ -2799,6 +2848,9 @@ class MainTradingApp(ctk.CTk):
             a = getattr(self, "_news_analysis", {}).get((ev["title"], ev["time"]))
             title_lbl = ctk.CTkLabel(self.cal_list, text=ev["title"], font=self._font(12), text_color=fg, anchor="w")
             title_lbl.grid(row=row, column=3, sticky="ew", padx=6)
+            th = news_th.translate(ev["title"])
+            if th:
+                HoverTip(title_lbl, th)
             if a:
                 txt, tone = news_impact.short_text(a)
                 col = {"up": COLOR_SUCCESS_GREEN, "down": COLOR_DANGER_RED}.get(tone, COLOR_TEXT_MUTED)

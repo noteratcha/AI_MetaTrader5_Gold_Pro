@@ -319,7 +319,7 @@ export function NewsImpactCard({ news }) {
                   className="row-between small"
                   style={{ width: '100%', background: 'none', border: 0, color: 'inherit', cursor: 'pointer', padding: 0, textAlign: 'left', gap: 8 }}
                 >
-                  <span style={{ opacity: past ? 0.65 : 1 }}>
+                  <span style={{ opacity: past ? 0.65 : 1 }} title={n.title_th || undefined}>
                     <span className="mono tiny faint">{thTime(n.time)}</span>{' '}
                     <span className={`badge ${n.impact === 'High' ? 'badge-red' : 'badge-gold'}`} style={{ fontSize: '0.65rem' }}>
                       {n.impact === 'High' ? 'สูง' : 'กลาง'}
@@ -332,6 +332,7 @@ export function NewsImpactCard({ news }) {
                 </button>
                 {open === key && (
                   <div className="tiny muted stack" style={{ gap: 4, marginTop: 6 }}>
+                    {n.title_th && <div style={{ color: 'var(--text)', fontWeight: 600 }}>🇹🇭 {n.title_th}</div>}
                     {newsImpactDetail(n).map((p) => (
                       <div key={p}>• {p}</div>
                     ))}
