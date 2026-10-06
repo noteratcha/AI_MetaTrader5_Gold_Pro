@@ -1784,18 +1784,11 @@ def main():
                     if tick is None:
                         continue
 
-                    # SL = 0.75 ATR (M15) สำหรับ Plan 3/4/5 · Plan 1 ใช้ Swing SL (ไม่น้อยกว่า 0.75 ATR) · 0.75 ATR (H1) สำหรับ Plan 2
+                    # SL = 0.75 ATR (M15) สำหรับ Plan 3/4/5 · 0.75 ATR (H1) สำหรับ Plan 2
                     sl_dist = round(atr_val * SL_ATR_MULT, digits)
-                    # Plan 1 Swing SL: วาง SL เลย High/Low ของ 2 แท่ง M15 ที่ปิดแล้ว (แท่ง Cross + แท่งก่อนหน้า) + 0.1 ATR
-                    # ไม่น้อยกว่า 0.75 ATR — Backtest 2.5 ปี: กำไรสุทธิ 496 → 952 จุด, PF 1.07 → 1.11, Max DD 405 → 372
-                    swing_high_p4 = float(df['high'].iloc[-3:-1].max()) if len(df) >= 3 else float('nan')
-                    swing_low_p4 = float(df['low'].iloc[-3:-1].min()) if len(df) >= 3 else float('nan')
-
-                    def _p4_sl_dist(direction, entry_price):
-                        ext = swing_high_p4 if direction == 'SELL' else swing_low_p4
-                        if pd.isna(ext):
-                            return sl_dist
-                        return round(max(sl_dist, abs(ext - entry_price) + 0.1 * atr_val), digits)
+                    # Plan 1 (H1 MA100/150/200 + MA5×MA13 M15): SL คงที่ 0.75 ATR M15
+                    # Backtest 2.5 ปี เทียบ Swing SL: กำไร 241 → 898 จุด, PF 1.03 → 1.13, Max DD 634 → 346
+                    sl_dist_p4 = sl_dist
                     # ถ้ายังคำนวณ ATR H1 ไม่ได้ (ข้อมูลไม่พอ) ใช้ ATR M15 x2 เป็นค่าประมาณสำรอง
                     sl_dist_h1 = round((atr_h1_val if pd.notna(atr_h1_val) and atr_h1_val > 0 else atr_val * 2.0) * SL_ATR_MULT, digits)
 
@@ -1941,10 +1934,9 @@ def main():
                             log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                         elif not _is_plan_blocked('BUY', p_label):
                             price = tick.ask
-                            sl_dist_p4 = _p4_sl_dist('BUY', price)
                             sl = round(price - sl_dist_p4, digits)
                             tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดลง MA10)
-                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / Swing Low, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
+                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / 0.75ATR, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                             _record_plan('BUY', p_label)
@@ -1958,10 +1950,9 @@ def main():
                             log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                         elif not _is_plan_blocked('SELL', p_label):
                             price = tick.bid
-                            sl_dist_p4 = _p4_sl_dist('SELL', price)
                             sl = round(price + sl_dist_p4, digits)
                             tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10)
-                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / Swing High, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
+                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / 0.75ATR, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
                             send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                             log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                             _record_plan('SELL', p_label)
