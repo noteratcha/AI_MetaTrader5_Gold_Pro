@@ -2066,7 +2066,7 @@ class MainTradingApp(ctk.CTk):
             self.plan_live_badges[full] = live
             cells = []
             for col in (1, 2, 3):
-                lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "$0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
+                lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
                 lbl.grid(row=r, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=pady)
                 cells.append(lbl)
             self.plan_stat_badges[full] = tuple(cells)
@@ -3128,7 +3128,7 @@ class MainTradingApp(ctk.CTk):
                         else:
                             lbl_wr.configure(text=f"{wr:.0f}%" if tr else "—", text_color=COLOR_GOLD_PRIMARY if tr else COLOR_TEXT_MUTED)
                         lbl_pf.configure(
-                            text=f"{'+' if prof >= 0 else '-'}${abs(prof):.2f}",
+                            text=f"{'+' if prof >= 0 else '-'}{abs(prof):,.2f}",
                             text_color=COLOR_SUCCESS_GREEN if prof > 0 else (COLOR_DANGER_RED if prof < 0 else COLOR_TEXT_MUTED),
                         )
 
