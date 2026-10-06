@@ -2143,17 +2143,12 @@ class MainTradingApp(ctk.CTk):
             command=self._on_click_close_all,
         )
         self.btn_close_all.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        # ปุ่มเสียงแบบข้อความ + สีสถานะ (เห็นชัดกว่าอีโมจีเล็ก ๆ)
         self.btn_sound_toggle = ctk.CTkButton(
-            row,
-            text="🔊",
-            font=ctk.CTkFont(size=15),
-            fg_color="#262B36",
-            hover_color="#323846",
-            width=42,
-            height=32,
-            corner_radius=8,
+            row, text="", font=self._font(11, "bold"), width=86, height=32, corner_radius=8, border_width=1,
             command=self._on_toggle_sound,
         )
+        self._style_sound_button()
         self.btn_sound_toggle.grid(row=0, column=1)
         self._bot_started_at = None
 
@@ -2344,7 +2339,9 @@ class MainTradingApp(ctk.CTk):
         for text, tag in (("● เปิด BUY", "buy"), ("● เปิด SELL", "sell"), ("● ปิด/TP", "close"), ("● ล็อกกำไร", "lock"), ("● ผิดพลาด", "error")):
             ctk.CTkLabel(legend, text=text, font=self._font(11), text_color=TAG_COLORS[tag]).pack(side="left", padx=(0, 10))
 
-        self._small_button(bar, "ล้าง", self._clear_console, width=48).pack(side="right")
+        ctk.CTkButton(bar, text="ล้าง", font=self._font(11, "bold"), width=56, height=26, corner_radius=8,
+                      fg_color="#2E2410", hover_color="#3A2E14", border_width=1, border_color="#7A5A1C",
+                      text_color=COLOR_GOLD_PRIMARY, command=self._clear_console).pack(side="right")
         # ล้างคอนโซลอัตโนมัติทุก 1 ชม. (ค่าเริ่มต้น: เปิด · จำค่าไว้ใน bot_settings.json)
         self.console_autoclear_var = tk.BooleanVar(value=bool(self._load_setting("console_autoclear", True)))
         ctk.CTkCheckBox(
@@ -3066,11 +3063,17 @@ class MainTradingApp(ctk.CTk):
     def _on_toggle_sound(self):
         """เปิดหรือปิดเสียงแจ้งเตือน"""
         bot_ctrl.sound_enabled = not bot_ctrl.sound_enabled
+        self._style_sound_button()
         if bot_ctrl.sound_enabled:
-            self.btn_sound_toggle.configure(text="🔊", fg_color="#262B36")
             sound_manager.play_tp_hit()
+
+    def _style_sound_button(self):
+        if bot_ctrl.sound_enabled:
+            self.btn_sound_toggle.configure(text="● เสียง: เปิด", fg_color="#0F2A20", hover_color="#143826",
+                                            border_color="#2F7A55", text_color=COLOR_SUCCESS_GREEN)
         else:
-            self.btn_sound_toggle.configure(text="🔇", fg_color="#3A2226")
+            self.btn_sound_toggle.configure(text="● เสียง: ปิด", fg_color="#2A1215", hover_color="#38181C",
+                                            border_color="#7A2F36", text_color=COLOR_DANGER_RED)
 
     def _on_toggle_autoscroll(self):
         self.auto_scroll_logs = self.chk_autoscroll.get()
