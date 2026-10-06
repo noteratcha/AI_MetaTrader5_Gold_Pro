@@ -1739,18 +1739,26 @@ class MainTradingApp(ctk.CTk):
         return {"val": val, "pct": pct, "lt": lt}
 
     def _create_sr_row(self, parent, tf):
-        row = ctk.CTkFrame(parent, fg_color="transparent", height=24)
-        row.pack(fill="x", pady=1)
-        self._tf_tag(row, tf)
-        sup = ctk.CTkLabel(row, text="—", font=self._font(11, "bold", "Consolas"), text_color=COLOR_SUCCESS_GREEN, height=22)
-        sup.pack(side="left")
-        res = ctk.CTkLabel(row, text="—", font=self._font(11, "bold", "Consolas"), text_color=COLOR_DANGER_RED, height=22)
-        res.pack(side="right")
-        bar = tk.Canvas(row, height=12, bg=COLOR_CARD_BG, highlightthickness=0, bd=0)
-        bar.pack(side="left", fill="x", expand=True, padx=6)
-        state = {"sup": 0.0, "res": 0.0, "price": 0.0}
-        bar.bind("<Configure>", lambda e, b=bar, st=state: self._draw_sr_bar(b, st))
-        return {"sup": sup, "res": res, "bar": bar, "state": state}
+        """2 บรรทัดต่อ Timeframe: ▲ ต้าน ราคา · ห่าง +x / ▼ รับ ราคา · ห่าง -x (ระยะจากราคาปัจจุบัน)"""
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", pady=(0, 2))
+        tag = ctk.CTkLabel(row, text=tf, width=30, height=30, corner_radius=6, fg_color="#1F2430",
+                           font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED)
+        tag.pack(side="left", padx=(0, 8))
+        lines = ctk.CTkFrame(row, fg_color="transparent")
+        lines.pack(side="left", fill="x", expand=True)
+        out = {}
+        for key, word, color in (("res", "▲ ต้าน", COLOR_DANGER_RED), ("sup", "▼ รับ", COLOR_SUCCESS_GREEN)):
+            ln = ctk.CTkFrame(lines, fg_color="transparent", height=15)
+            ln.pack(fill="x")
+            ctk.CTkLabel(ln, text=word, font=self._font(10, "bold"), text_color=color, width=40, anchor="w", height=15).pack(side="left")
+            val = ctk.CTkLabel(ln, text="—", font=self._font(11, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY, height=15)
+            val.pack(side="left")
+            dist = ctk.CTkLabel(ln, text="", font=self._font(10, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=15)
+            dist.pack(side="right")
+            out[key], out[key + "_dist"] = val, dist
+        out["state"] = {"sup": 0.0, "res": 0.0, "price": 0.0}
+        return out
 
     @staticmethod
     def _sr_position(sup, res, price):
@@ -3053,11 +3061,11 @@ class MainTradingApp(ctk.CTk):
                             continue
                         cond = int(cond)
                         if cond == 1:
-                            rows[tf]["val"].configure(text="▲ ขาขึ้น", text_color=COLOR_SUCCESS_GREEN)
+                            rows[tf]["val"].configure(text="▲ Uptrend", text_color=COLOR_SUCCESS_GREEN)
                         elif cond == -1:
-                            rows[tf]["val"].configure(text="▼ ขาลง", text_color=COLOR_DANGER_RED)
+                            rows[tf]["val"].configure(text="▼ Downtrend", text_color=COLOR_DANGER_RED)
                         else:
-                            rows[tf]["val"].configure(text="◆ ไซด์เวย์", text_color=COLOR_CYAN_ACCENT)
+                            rows[tf]["val"].configure(text="◆ Sideway", text_color=COLOR_CYAN_ACCENT)
                         cpct = float(radar.get(f"{key}_pct", 0.0) or 0.0)  # ระยะ MA50 เทียบ MA150 (%)
                         rows[tf]["pct"].configure(text=f"{cpct:+.2f}%", text_color=pct_color(cpct))
                     for tf, key, tag in (("H1", "h1_stack_dir", "MA100-200"), ("H4", "h4_lt_dir", "MA200")):
@@ -3075,10 +3083,19 @@ class MainTradingApp(ctk.CTk):
                         ok = sup > 0 and res > 0
                         row["sup"].configure(text=f"{sup:,.2f}" if ok else "—")
                         row["res"].configure(text=f"{res:,.2f}" if ok else "—")
-                        st = row["state"]
-                        if (st["sup"], st["res"], st["price"]) != (sup, res, price):
-                            st.update(sup=sup, res=res, price=price)
-                            self._draw_sr_bar(row["bar"], st)
+                        if ok and price > 0:
+                            near = max((res - sup) * 0.25, 0.01)
+                            d_res, d_sup = res - price, price - sup
+                            row["res_dist"].configure(
+                                text=(f"ห่าง {d_res:,.1f}" if d_res >= 0 else f"ทะลุ {-d_res:,.1f}"),
+                                text_color=COLOR_GOLD_PRIMARY if 0 <= d_res <= near else (COLOR_SUCCESS_GREEN if d_res < 0 else COLOR_TEXT_MUTED))
+                            row["sup_dist"].configure(
+                                text=(f"ห่าง {d_sup:,.1f}" if d_sup >= 0 else f"หลุด {-d_sup:,.1f}"),
+                                text_color=COLOR_GOLD_PRIMARY if 0 <= d_sup <= near else (COLOR_DANGER_RED if d_sup < 0 else COLOR_TEXT_MUTED))
+                        else:
+                            row["res_dist"].configure(text="")
+                            row["sup_dist"].configure(text="")
+                        row["state"].update(sup=sup, res=res, price=price)
 
                     # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 3/4)
                     h1_state = self.card_sr["rows"]["H1"]["state"]
