@@ -1707,7 +1707,9 @@ class MainTradingApp(ctk.CTk):
 
         # แนวรับ–แนวต้าน: 2 แถว H1 / H4 พร้อมแถบตำแหน่งราคาปัจจุบันในกรอบ
         self.card_sr = self._create_dual_card(grid_frame, 4, "🧱", "แนวรับ – แนวต้าน")
-        self.card_sr["rows"] = {tf: self._create_sr_row(self.card_sr["body"], tf) for tf in ("H1", "H4")}
+        sr_body = self.card_sr["body"]
+        sr_body.grid_columnconfigure((0, 1), weight=1, uniform="sr_cols")
+        self.card_sr["rows"] = {tf: self._create_sr_row(sr_body, tf, col) for col, tf in enumerate(("H1", "H4"))}
 
     # ---------------------------------------------------------------------
     # การ์ด 2 แถว (สภาวะตลาด / แนวรับ–แนวต้าน)
@@ -1756,27 +1758,24 @@ class MainTradingApp(ctk.CTk):
         lt.pack(side="right", padx=(0, 8))
         return {"val": val, "pct": pct, "lt": lt}
 
-    def _create_sr_row(self, parent, tf):
-        """2 บรรทัดต่อ Timeframe: ▲ ต้าน ราคา · ห่าง +x / ▼ รับ ราคา · ห่าง -x (ระยะจากราคาปัจจุบัน)"""
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", pady=(0, 2))
-        tag = ctk.CTkLabel(row, text=tf, width=30, height=30, corner_radius=6, fg_color="#1F2430",
-                           font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED)
-        tag.pack(side="left", padx=(0, 8))
-        lines = ctk.CTkFrame(row, fg_color="transparent")
-        lines.pack(side="left", fill="x", expand=True)
-        out = {}
-        for key, word, color in (("res", "▲ ต้าน", COLOR_DANGER_RED), ("sup", "▼ รับ", COLOR_SUCCESS_GREEN)):
-            ln = ctk.CTkFrame(lines, fg_color="transparent", height=15)
-            ln.pack(fill="x")
-            ctk.CTkLabel(ln, text=word, font=self._font(10, "bold"), text_color=color, width=40, anchor="w", height=15).pack(side="left")
-            val = ctk.CTkLabel(ln, text="—", font=self._font(11, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY, height=15)
-            val.pack(side="left")
-            dist = ctk.CTkLabel(ln, text="", font=self._font(10, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=15)
-            dist.pack(side="right")
-            out[key], out[key + "_dist"] = val, dist
-        out["state"] = {"sup": 0.0, "res": 0.0, "price": 0.0}
-        return out
+    def _create_sr_row(self, parent, tf, col=0):
+        """คอลัมน์ต่อ Timeframe (H1 ซ้าย · H4 ขวา): ▲ ต้าน / บาร์ระยะห่าง / ▼ รับ
+        บาร์: ช่วงเขียว = ระยะจากแนวรับถึงราคา · ช่วงแดง = ระยะจากราคาถึงแนวต้าน · จุดทอง = ราคาปัจจุบัน"""
+        box = ctk.CTkFrame(parent, fg_color="transparent")
+        box.grid(row=0, column=col, sticky="nsew", padx=(0, 6) if col == 0 else (6, 0))
+        head = ctk.CTkFrame(box, fg_color="transparent")
+        head.pack(fill="x")
+        ctk.CTkLabel(head, text=tf, width=28, height=16, corner_radius=5, fg_color="#1F2430",
+                     font=self._font(9, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(0, 6))
+        res = ctk.CTkLabel(head, text="▲ —", font=self._font(11, "bold", "Consolas"), text_color=COLOR_DANGER_RED, height=16)
+        res.pack(side="left")
+        bar = tk.Canvas(box, height=10, bg=COLOR_CARD_BG, highlightthickness=0, bd=0)
+        bar.pack(fill="x", pady=(3, 3))
+        sup = ctk.CTkLabel(box, text="▼ —", font=self._font(11, "bold", "Consolas"), text_color=COLOR_SUCCESS_GREEN, height=16, anchor="w")
+        sup.pack(anchor="w", padx=(34, 0))
+        state = {"sup": 0.0, "res": 0.0, "price": 0.0}
+        bar.bind("<Configure>", lambda e, b=bar, st=state: self._draw_sr_bar(b, st))
+        return {"sup": sup, "res": res, "bar": bar, "state": state}
 
     @staticmethod
     def _sr_position(sup, res, price):
@@ -1788,18 +1787,18 @@ class MainTradingApp(ctk.CTk):
     def _draw_sr_bar(self, bar, st):
         bar.delete("all")
         w = max(bar.winfo_width(), 20)
-        y = 6
-        bar.create_line(5, y, w - 5, y, fill="#2A303C", width=4, capstyle="round")
+        y, x0, x1 = 5, 4, w - 4
         pos = self._sr_position(st["sup"], st["res"], st["price"])
         if pos is None:
+            bar.create_line(x0, y, x1, y, fill="#2A303C", width=6, capstyle="round")
             return
         clamped = min(max(pos, 0.0), 1.0)
-        x = 5 + clamped * (w - 10)
-        # แถบสีจากแนวรับถึงราคา: เขียวเมื่อยังใกล้แนวรับ / แดงเมื่อเข้าใกล้แนวต้าน
-        fill = COLOR_SUCCESS_GREEN if clamped < 0.5 else COLOR_DANGER_RED
-        bar.create_line(5, y, x, y, fill=fill, width=4, capstyle="round")
-        color = COLOR_DANGER_RED if pos > 1 else COLOR_SUCCESS_GREEN if pos < 0 else COLOR_GOLD_PRIMARY
-        bar.create_oval(x - 5, y - 5, x + 5, y + 5, fill=color, outline=COLOR_CARD_BG, width=2)
+        x = x0 + clamped * (x1 - x0)
+        bar.create_line(x0, y, x1, y, fill=COLOR_DANGER_RED, width=6, capstyle="round")   # ราคา → แนวต้าน
+        if x > x0:
+            bar.create_line(x0, y, x, y, fill=COLOR_SUCCESS_GREEN, width=6, capstyle="round")  # แนวรับ → ราคา
+        dot = COLOR_DANGER_RED if pos > 1 else COLOR_SUCCESS_GREEN if pos < 0 else COLOR_GOLD_PRIMARY
+        bar.create_oval(x - 5, y - 5, x + 5, y + 5, fill=dot, outline=COLOR_CARD_BG, width=2)
 
     def _create_stat_card(self, parent, col, icon, title, val_text, sub_text, accent_color):
         card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
@@ -1929,7 +1928,7 @@ class MainTradingApp(ctk.CTk):
         )
         self.btn_master_toggle.pack(fill="x", padx=14)
 
-        # ขนาดไม้ (Lot) ที่บอทใช้เปิดออเดอร์ — บันทึกใน %APPDATA%\GoldBot24ot_settings.json (ค่าเริ่มต้น 0.01)
+        # ขนาดไม้ (Lot) ที่บอทใช้เปิดออเดอร์ — บันทึกใน %APPDATA%\GoldBot24\bot_settings.json (ค่าเริ่มต้น 0.01)
         lot_row = ctk.CTkFrame(card, fg_color="transparent")
         lot_row.pack(fill="x", padx=14, pady=(6, 0))
         ctk.CTkLabel(lot_row, text="ขนาดไม้ (Lot)", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left")
@@ -3099,21 +3098,12 @@ class MainTradingApp(ctk.CTk):
                         sup = float(radar.get(f"{tf.lower()}_support", 0.0) or 0.0)
                         res = float(radar.get(f"{tf.lower()}_resistance", 0.0) or 0.0)
                         ok = sup > 0 and res > 0
-                        row["sup"].configure(text=f"{sup:,.2f}" if ok else "—")
-                        row["res"].configure(text=f"{res:,.2f}" if ok else "—")
-                        if ok and price > 0:
-                            near = max((res - sup) * 0.25, 0.01)
-                            d_res, d_sup = res - price, price - sup
-                            row["res_dist"].configure(
-                                text=(f"ห่าง {d_res:,.1f}" if d_res >= 0 else f"ทะลุ {-d_res:,.1f}"),
-                                text_color=COLOR_GOLD_PRIMARY if 0 <= d_res <= near else (COLOR_SUCCESS_GREEN if d_res < 0 else COLOR_TEXT_MUTED))
-                            row["sup_dist"].configure(
-                                text=(f"ห่าง {d_sup:,.1f}" if d_sup >= 0 else f"หลุด {-d_sup:,.1f}"),
-                                text_color=COLOR_GOLD_PRIMARY if 0 <= d_sup <= near else (COLOR_DANGER_RED if d_sup < 0 else COLOR_TEXT_MUTED))
-                        else:
-                            row["res_dist"].configure(text="")
-                            row["sup_dist"].configure(text="")
-                        row["state"].update(sup=sup, res=res, price=price)
+                        row["res"].configure(text=f"▲ {res:,.2f}" if ok else "▲ —")
+                        row["sup"].configure(text=f"▼ {sup:,.2f}" if ok else "▼ —")
+                        st = row["state"]
+                        if (st["sup"], st["res"], st["price"]) != (sup, res, price):
+                            st.update(sup=sup, res=res, price=price)
+                            self._draw_sr_bar(row["bar"], st)
 
                     # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 3/4)
                     h1_state = self.card_sr["rows"]["H1"]["state"]
