@@ -113,7 +113,7 @@ TRADE_MODS_CSV = _data_path('trade_modifications.csv')
 SIGNAL_HISTORY_CSV = _data_path('signal_history.csv')
 last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กันเข้าไม้ Plan 1/2 ซ้ำบนแท่ง Cross เดิม
 
-# Step Trailing SL (แผน MA M15 + MA H1): ทุกกำไร 5 จุด (= $5 ที่ 0.01 lot) เลื่อน SL เข้าหาราคา 40% ของระยะ SL → ราคา
+# Step Trailing SL (Plan 1 MA M15 + Plan 5 BB-H1): ทุกกำไร 5 จุด (= $5 ที่ 0.01 lot) เลื่อน SL เข้าหาราคา 40% ของระยะ SL → ราคา
 # Backtest 2.5 ปี (กฎ MA100/150/200 + MA5×MA13): กำไร 898 → 885 จุด (เท่าเดิม), PF 1.13 → 1.17, Max DD 346 → 245
 P4_TRAIL_STEP_POINTS = 5.0
 P4_TRAIL_FRACTION = 0.40
@@ -140,7 +140,7 @@ p4_trail_steps = _load_p4_trail_state()   # {ticket: จำนวนขั้น
 
 
 def apply_p4_step_trailing(pos, tick, info):
-    """เลื่อน SL ของไม้ Plan 1 ตามขั้นกำไร (คืน True ถ้ามีการเลื่อน)"""
+    """เลื่อน SL ของไม้ Plan 1 และ Plan 5 (BB-H1) ตามขั้นกำไร (คืน True ถ้ามีการเลื่อน)"""
     if pos.sl is None or pos.sl <= 0 or tick is None:
         return False
     d = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
@@ -168,7 +168,7 @@ def apply_p4_step_trailing(pos, tick, info):
     _save_p4_trail_state(p4_trail_steps)
     if not improved:
         return False
-    modify_position(pos, round(new_sl, 2), pos.tp, reason=f"P4 Step Trail +{reached * P4_TRAIL_STEP_POINTS:.0f} pts")
+    modify_position(pos, round(new_sl, 2), pos.tp, reason=f"Step Trail +{reached * P4_TRAIL_STEP_POINTS:.0f} pts ({pos.comment})")
     return True
 
 _telemetry_thread = None          # เธรดสตรีม Telemetry (เริ่มครั้งเดียวต่อโปรเซส)
@@ -2038,6 +2038,12 @@ def main():
                                 close_position(pos, comment="MA5 Cross Up Exit")
                                 continue
                             # Step Trailing: ทุกกำไร 5 จุด เลื่อน SL 40% ของระยะ SL → ราคา
+                            if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
+                                continue
+
+                        # 0.15 Plan 5 (BB-H1): เลื่อน SL ทุกกำไร 5 จุด ครั้งละ 40% แบบเดียวกับ Plan 1 (ผู้ใช้เลือก 6 ต.ค. 2026)
+                        #      ยังใช้ล็อกกำไร 70% / Dynamic TP 80% ตามเดิม — SL ขยับเฉพาะทิศที่ดีขึ้นเท่านั้น
+                        if pos.comment.startswith("BB-H1"):
                             if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
                                 continue
 

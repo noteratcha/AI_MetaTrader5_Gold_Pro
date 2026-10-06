@@ -136,14 +136,14 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
     return out
 
 
-def sim_ai_plan(signal_fn):
+def sim_ai_plan(signal_fn, step=None, frac=0.4):
     """Plan 3–5: SL 0.75 ATR · TP 1.125 ATR · ล็อกกำไร +0.35 ATR ที่ 70% · ขยาย TP +1 ATR ที่ 80% เมื่อ AI ≥54% · AI กลับทิศ ≥60% และติดลบ → ปิด"""
     o, h, l, c, a, p = b.open.values, b.high.values, b.low.values, b.close.values, b.atr.values, b.p_up.values
     t = b.time.values
     out, pos = [], None
     for i in range(30, len(b) - 1):
         if pos:
-            d, e, sl, tp, at, locked, te = pos
+            d, e, sl, tp, at, locked, te, k = pos
             if (d == 1 and l[i] <= sl) or (d == -1 and h[i] >= sl):
                 out.append(dict(time=te, pnl=(sl - e) * d - SPREAD)); pos = None
             elif (d == 1 and h[i] >= tp) or (d == -1 and l[i] <= tp):
@@ -154,6 +154,11 @@ def sim_ai_plan(signal_fn):
                 if not np.isnan(pu) and (1 - pd_same) >= 0.60 and (c[i] - e) * d < 0:
                     out.append(dict(time=te, pnl=(o[i + 1] - e) * d - SPREAD)); pos = None
                 else:
+                    if step:  # Step Trailing (Plan 5): ทุกกำไร step จุด เลื่อน SL frac ของระยะ SL → ราคา
+                        best = (h[i] - e) if d == 1 else (e - l[i])
+                        while best >= k * step:
+                            ns = sl + d * frac * abs(e + d * k * step - sl)
+                            sl = max(sl, ns) if d == 1 else min(sl, ns); k += 1
                     target = abs(tp - e)
                     prog = ((h[i] - e) if d == 1 else (e - l[i])) / target if target else 0
                     if prog >= 0.80 and not np.isnan(pu) and pd_same >= 0.54:
@@ -162,13 +167,13 @@ def sim_ai_plan(signal_fn):
                         new_sl = e + d * 0.35 * at
                         if abs(c[i] - new_sl) >= 0.4 * at:
                             sl = max(sl, new_sl) if d == 1 else min(sl, new_sl); locked = True
-                    pos = (d, e, sl, tp, at, locked, te)
+                    pos = (d, e, sl, tp, at, locked, te, k)
         if pos or np.isnan(a[i]) or np.isnan(p[i]):
             continue
         d = signal_fn(i)
         if d and h4_ok(i, d):
             e = o[i + 1]; at = a[i]
-            pos = (d, e, e - d * 0.75 * at, e + d * 1.125 * at, at, False, t[i + 1])
+            pos = (d, e, e - d * 0.75 * at, e + d * 1.125 * at, at, False, t[i + 1], 1)
     return out
 
 
@@ -229,7 +234,7 @@ f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir"]], left_on=
 rows.append(stats("P2 MA H1", keep(2, sim_ma(f, "ma5", "ma10", "p2_dir", step=None))))
 rows.append(stats("P3 SMC", keep(3, sim_ai_plan(sig_smc))))
 rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce))))
-rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb))))
+rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4))))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
 print(pd.DataFrame(rows).to_string(index=False))

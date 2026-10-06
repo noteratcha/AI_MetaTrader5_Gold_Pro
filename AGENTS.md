@@ -101,6 +101,7 @@
 * **เงื่อนไข BUY**: `Low < Lower Band H1` และ `Close >= Lower Band H1` พร้อมไส้ล่าง `lower_wick_ratio >= 0.20` + **RSI Divergence Confluence** + **MACD Histogram H1 เริ่มยกตัวขึ้น (Exhaustion)** + AI UP $\ge 50\%$
 * **เงื่อนไข SELL**: `High > Upper Band H1` และ `Close <= Upper Band H1` พร้อมไส้บน `upper_wick_ratio >= 0.20` + **RSI Divergence Confluence** + **MACD Histogram H1 เริ่มกดตัวลง (Exhaustion)** + AI DOWN $\ge 50\%$
 * **ความเสี่ยง/เป้าหมาย**: SL = 0.75 ATR | TP = RRR 1:1.50 (1.125 ATR)
+* **เลื่อน SL ทุก $5 (6 ต.ค. 2026 — ผู้ใช้เลือก)**: ใช้ `apply_p4_step_trailing` เหมือน Plan 1 — ทุกกำไร 5 จุด เลื่อน SL เข้าหาราคา 40% (ทำงานร่วมกับ Early Profit Lock 70% / Dynamic TP 80% — SL ขยับเฉพาะทิศที่ดีขึ้น) · Backtest มีเพียง ~32 ไม้ใน 2.5 ปี: ไม่เลื่อน +31 จุด PF 1.32 vs เลื่อน $5/40% +17 จุด PF 1.20 (ต่างกัน 2–3 ไม้ สรุปไม่ได้), ขาดทุนเฉลี่ยต่อไม้ลด $5.94 → $4.57
 
 ---
 
