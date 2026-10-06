@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { BarChart3, BrainCircuit, CandlestickChart, Newspaper } from 'lucide-react';
 import { formatThaiDateTime } from '../lib/format';
 
-// ข้อมูลทั้งหมดในไฟล์นี้มาจากโปรแกรม Desktop (Telemetry) — ชุดเดียวกับที่โปรแกรมแสดง
+// ข้อมูลทั้งหมดในไฟล์นี้มาจากโปรแกรม AI Gold Commander Pro (Telemetry) — ชุดเดียวกับที่โปรแกรมแสดง
 
 const GREEN = 'var(--green)';
 const RED = 'var(--red)';
@@ -20,7 +20,7 @@ const thDate = (iso) => {
 const thTime = (iso) =>
   new Date(iso).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
-function Waiting({ text = 'รอข้อมูลจากโปรแกรม Desktop' }) {
+function Waiting({ text = 'รอข้อมูลจากโปรแกรม AI Gold Commander Pro' }) {
   return <p className="small muted" style={{ padding: '24px 0', textAlign: 'center' }}>{text}</p>;
 }
 
@@ -39,7 +39,7 @@ export function OutlookCard({ outlook }) {
       </div>
       <div className="card-body">
         {!o ? (
-          <Waiting text="รอข้อมูลจากโปรแกรม Desktop (เปิดแท็บ AI คาดการณ์ในโปรแกรม)" />
+          <Waiting text="รอข้อมูลจากโปรแกรม AI Gold Commander Pro (เปิดแท็บ AI คาดการณ์ในโปรแกรม)" />
         ) : (
           <>
             <div style={{ fontWeight: 700, color: tone, marginBottom: 12 }}>{o.summary}</div>
@@ -305,7 +305,7 @@ export function NewsImpactCard({ news }) {
       </div>
       <div className="card-body stack" style={{ gap: 8 }}>
         {items.length === 0 ? (
-          <Waiting text="รอข้อมูลจากโปรแกรม Desktop (เปิดแท็บปฏิทินเศรษฐกิจในโปรแกรม)" />
+          <Waiting text="รอข้อมูลจากโปรแกรม AI Gold Commander Pro (เปิดแท็บปฏิทินเศรษฐกิจในโปรแกรม)" />
         ) : (
           items.map((n) => {
             const t = newsImpactText(n);

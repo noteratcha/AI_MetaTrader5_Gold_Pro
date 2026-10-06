@@ -128,7 +128,7 @@ export async function sendReceiptEmail(to, receipt) {
       </table>
     </div>
     <p style="margin:16px 0 0;text-align:center"><a href="${url}" style="display:inline-block;padding:10px 18px;background:#f2c14e;color:#1a1406;border-radius:10px;font-weight:700;text-decoration:none">ดู / พิมพ์ใบเสร็จ</a></p>
-    <p style="margin:16px 0 0;color:#6b7385;font-size:12px">ผู้ขาย: ${escapeHtml(s.name || 'GoldBot24')}${s.taxId ? ` · เลขประจำตัวผู้เสียภาษี ${escapeHtml(s.taxId)}` : ''}${s.address ? `<br/>${escapeHtml(s.address)}` : ''}<br/>เติมคีย์ได้ที่หน้า "คีย์ของฉัน" หรือในโปรแกรม Desktop · เอกสารนี้ออกโดยระบบอัตโนมัติ</p>`
+    <p style="margin:16px 0 0;color:#6b7385;font-size:12px">ผู้ขาย: ${escapeHtml(s.name || 'GoldBot24')}${s.taxId ? ` · เลขประจำตัวผู้เสียภาษี ${escapeHtml(s.taxId)}` : ''}${s.address ? `<br/>${escapeHtml(s.address)}` : ''}<br/>เติมคีย์ได้ที่หน้า "คีย์ของฉัน" หรือในโปรแกรม AI Gold Commander Pro · เอกสารนี้ออกโดยระบบอัตโนมัติ</p>`
   );
   await send(
     to,

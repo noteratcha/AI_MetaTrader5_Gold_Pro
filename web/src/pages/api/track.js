@@ -8,7 +8,7 @@ const DEDUPE_MS = 5 * 60 * 1000; // กดดาวน์โหลด/เปิ�
 
 /**
  * บันทึกสถิติการใช้งาน: app_download (หน้า /download, ไม่ต้องล็อกอิน) ·
- * app_open / bot_start / bot_stop (โปรแกรม Desktop, ต้องมี Bearer)
+ * app_open / bot_start / bot_stop (โปรแกรม AI Gold Commander Pro, ต้องมี Bearer)
  */
 export default async function handler(req, res) {
   if (!allowMethods(req, res, ['POST'])) return;

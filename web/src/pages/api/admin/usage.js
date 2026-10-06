@@ -5,7 +5,7 @@ import { githubDownloadStats, USAGE_EVENTS } from '../../../lib/server/usage';
 const DAY_MS = 86400000;
 const bkkDay = (iso) => new Date(new Date(iso).getTime() + 7 * 3600000).toISOString().slice(0, 10);
 
-// สถิติดาวน์โหลด + การเข้าใช้โปรแกรม Desktop ย้อนหลัง 30 วัน (แอดมินเท่านั้น)
+// สถิติดาวน์โหลด + การเข้าใช้โปรแกรม AI Gold Commander Pro ย้อนหลัง 30 วัน (แอดมินเท่านั้น)
 export default async function handler(req, res) {
   if (!allowMethods(req, res, ['GET'])) return;
   const auth = await requireAdmin(req, res);

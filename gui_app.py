@@ -1436,11 +1436,7 @@ class MainTradingApp(ctk.CTk):
         self.lbl_metering_status = ctk.CTkLabel(hours_box, text="⏸ หยุดนับเวลา", font=self._font(10), text_color=COLOR_TEXT_MUTED, height=14)
         self.lbl_metering_status.pack(anchor="w")
 
-        ctk.CTkButton(
-            wallet, text="🔑 เติมคีย์", font=self._font(12, "bold"), fg_color="#2E2410", hover_color="#3A2E14",
-            text_color=COLOR_GOLD_PRIMARY, border_width=1, border_color="#5A4519", height=32, width=86, corner_radius=8,
-            command=self._open_redeem_modal,
-        ).pack(side="left", padx=(0, 6))
+        # ปุ่ม "เติมคีย์" ซ่อนไว้ (ผู้ใช้ซื้อชั่วโมงผ่านเว็บ — ระบบเติมเข้าบัญชีอัตโนมัติ)
         ctk.CTkButton(
             wallet, text="🛒 ซื้อชั่วโมง", font=self._font(12, "bold"), fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK,
             text_color="#1A1406", height=32, width=104, corner_radius=8,
@@ -1683,6 +1679,28 @@ class MainTradingApp(ctk.CTk):
         except Exception:
             return 0.01
 
+    def _save_tp_usd(self):
+        """บันทึกเป้าปิดไม้ตามกำไร $ (ทุกไม้ของบอท ทุกแผน)"""
+        try:
+            amount = round(float(str(self.tp_usd_var.get()).replace("$", "").replace(",", "").strip()), 2)
+            if not (0.1 <= amount <= 100000):
+                raise ValueError
+        except ValueError:
+            self.tp_usd_var.set(f"{float(self._load_setting('tp_usd', 5.0)):.2f}")
+            self.lbl_tp_hint.configure(text="0.10 ขึ้นไป", text_color=COLOR_DANGER_RED)
+            return
+        self.tp_usd_var.set(f"{amount:.2f}")
+        enabled = bool(self.tp_usd_enabled_var.get())
+        if amount == float(self._load_setting("tp_usd", -1)) and enabled == bool(self._load_setting("tp_usd_enabled", False)):
+            return
+        try:
+            self._save_setting("tp_usd", amount)
+            self._save_setting("tp_usd_enabled", enabled)
+            self.lbl_tp_hint.configure(text="บันทึกแล้ว ✓" if enabled else "ปิดใช้งาน", text_color=COLOR_SUCCESS_GREEN if enabled else COLOR_TEXT_MUTED)
+            self.after(2500, lambda: self.lbl_tp_hint.configure(text=""))
+        except Exception:
+            self.lbl_tp_hint.configure(text="บันทึกไม่สำเร็จ", text_color=COLOR_DANGER_RED)
+
     def _save_lot(self, value):
         """ตรวจและบันทึกขนาดไม้ — บอทอ่านค่าใหม่ทันทีตอนเปิดออเดอร์ถัดไป"""
         try:
@@ -1731,7 +1749,7 @@ class MainTradingApp(ctk.CTk):
 
         # ขนาดไม้ (Lot) ที่บอทใช้เปิดออเดอร์ — บันทึกใน %APPDATA%\GoldBot24ot_settings.json (ค่าเริ่มต้น 0.01)
         lot_row = ctk.CTkFrame(card, fg_color="transparent")
-        lot_row.pack(fill="x", padx=14, pady=(8, 0))
+        lot_row.pack(fill="x", padx=14, pady=(6, 0))
         ctk.CTkLabel(lot_row, text="ขนาดไม้ (Lot)", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left")
         self.lot_var = tk.StringVar(value=f"{self._load_lot():.2f}")
         self.cmb_lot = ctk.CTkComboBox(
@@ -1745,9 +1763,27 @@ class MainTradingApp(ctk.CTk):
         self.lbl_lot_hint = ctk.CTkLabel(lot_row, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED)
         self.lbl_lot_hint.pack(side="right", padx=(0, 8))
 
+        # ปิดไม้อัตโนมัติเมื่อกำไรถึง $X (เลือกเปิด/ปิดได้ · ค่าเริ่มต้นปิด) — บอทอ่านค่าใหม่ทุกรอบสแกน
+        tp_row = ctk.CTkFrame(card, fg_color="transparent")
+        tp_row.pack(fill="x", padx=14, pady=(4, 0))
+        self.tp_usd_enabled_var = tk.BooleanVar(value=bool(self._load_setting("tp_usd_enabled", False)))
+        ctk.CTkCheckBox(
+            tp_row, text="ปิดไม้เมื่อกำไรถึง", variable=self.tp_usd_enabled_var, font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED,
+            fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=18, checkbox_height=18,
+            command=self._save_tp_usd,
+        ).pack(side="left")
+        self.tp_usd_var = tk.StringVar(value=f"{float(self._load_setting('tp_usd', 5.0)):.2f}")
+        ent = ctk.CTkEntry(tp_row, width=96, height=28, textvariable=self.tp_usd_var, font=self._font(12, "bold"), justify="right")
+        ent.pack(side="right")
+        ent.bind("<Return>", lambda e: self._save_tp_usd())
+        ent.bind("<FocusOut>", lambda e: self._save_tp_usd())
+        ctk.CTkLabel(tp_row, text="$", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="right", padx=(0, 4))
+        self.lbl_tp_hint = ctk.CTkLabel(tp_row, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED)
+        self.lbl_tp_hint.pack(side="right", padx=(0, 6))
+
         # สถิติย่อ 3 ช่อง: ออเดอร์เปิดอยู่ / กำไรลอยตัว / เวลาทำงาน
         stats = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)
-        stats.pack(fill="x", padx=14, pady=(8, 0))
+        stats.pack(fill="x", padx=14, pady=(6, 0))
         stats.grid_columnconfigure((0, 1, 2), weight=1, uniform="ctl_stats")
         self.ctl_stat_labels = {}
         for col, (key, title, init) in enumerate((("open", "ออเดอร์", "0"), ("float", "กำไรลอยตัว", "$0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
@@ -1827,15 +1863,17 @@ class MainTradingApp(ctk.CTk):
     def _build_plans_card(self, parent):
         card = self._card(parent, fill="both", expand=True)
         head = ctk.CTkFrame(card, fg_color="transparent")
-        head.pack(fill="x", padx=14, pady=(8, 4))
-        ctk.CTkLabel(head, text="⚡ ผลงาน 5 แผนเทรด", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        head.pack(fill="x", padx=14, pady=(4, 2))
+        self.lbl_plans_title = ctk.CTkLabel(head, text="⚡ แผนเทรด", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY)
+        self.lbl_plans_title.pack(side="left")
+        ctk.CTkLabel(head, text="ติ๊กเลือกแผนที่ใช้", font=self._font(10), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=8)
         ctk.CTkButton(
             head, text="ละเอียด ›", font=self._font(11, "bold"), fg_color="transparent", hover_color="#1F2430",
             text_color=COLOR_CYAN_ACCENT, width=64, height=24, corner_radius=6, command=self._open_user_stats_modal,
         ).pack(side="right")
 
         table = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)
-        table.pack(fill="x", padx=14, pady=(0, 10))
+        table.pack(fill="x", padx=14, pady=(0, 6))
         table.grid_columnconfigure(0, weight=1)
         for col, (title, anchor) in enumerate((("แผน", "w"), ("ไม้", "e"), ("WR", "e"), ("กำไร", "e"))):
             ctk.CTkLabel(table, text=title, font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor, height=18).grid(
@@ -1844,18 +1882,59 @@ class MainTradingApp(ctk.CTk):
 
         # plan_stat_badges: {ชื่อแผนเต็ม: (label ไม้, label WR, label กำไร)}
         self.plan_stat_badges = {}
+        self.plan_checks = {}
         for r, (icon, short, full) in enumerate(self.PLAN_ROWS, start=1):
             last = r == len(self.PLAN_ROWS)
             pady = (0, 4) if last else 0
-            ctk.CTkLabel(table, text=f"{icon}  {short}", font=self._font(11, "bold"), text_color=COLOR_TEXT_PRIMARY, anchor="w", height=21).grid(
-                row=r, column=0, sticky="ew", padx=(12, 4), pady=pady
+            # ติ๊กเลือกใช้แผนนี้ (จำแยกตามบัญชีผู้ใช้) — แผนที่แอดมินปิดจะติ๊กไม่ได้
+            var = tk.BooleanVar(value=plan_config.user_enabled(full.split(": ", 1)[-1]))
+            chk = ctk.CTkCheckBox(
+                table, text=f"{icon}  {short}", variable=var, font=self._font(11, "bold"), text_color=COLOR_TEXT_PRIMARY,
+                fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=14, checkbox_height=14, height=18,
+                command=lambda f=full, v=var: self._toggle_user_plan(f, v),
             )
+            chk.grid(row=r, column=0, sticky="w", padx=(10, 4), pady=pady)
+            self.plan_checks[full] = (chk, var)
             cells = []
             for col in (1, 2, 3):
-                lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "$0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=21, width=40 if col < 3 else 64)
+                lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "$0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
                 lbl.grid(row=r, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=pady)
                 cells.append(lbl)
             self.plan_stat_badges[full] = tuple(cells)
+        self.after(300, self._plan_checks_tick)
+
+    def _plan_checks_tick(self):
+        """อัปเดตสถานะช่องติ๊กแผน (แอดมินอาจเปิด/ปิดแผนจากเว็บ) ทุก 30 วินาที"""
+        try:
+            self._sync_plan_checks()
+        except Exception:
+            pass
+        self.after(30000, self._plan_checks_tick)
+
+    def _toggle_user_plan(self, full_name, var):
+        base = full_name.split(": ", 1)[-1]
+        try:
+            plan_config.set_user_enabled(base, bool(var.get()))
+        except Exception:
+            var.set(not var.get())
+            return
+        enabled = sum(1 for _c, v in self.plan_checks.values() if v.get())
+        print(f"[PLAN SELECT] {'เปิดใช้' if var.get() else 'ปิด'}แผน {base} — ใช้งาน {enabled}/{len(self.plan_checks)} แผน")
+        self._sync_plan_checks()
+
+    def _sync_plan_checks(self):
+        """แผนที่แอดมินปิด: ติ๊กไม่ได้ + ขีดสีเทา · อัปเดตป้ายจำนวนแผนที่ใช้งาน"""
+        if not getattr(self, "plan_checks", None):
+            return
+        active = 0
+        for full, (chk, var) in self.plan_checks.items():
+            base = full.split(": ", 1)[-1]
+            admin_on = plan_config.admin_enabled(base)
+            chk.configure(state="normal" if admin_on else "disabled",
+                          text_color=COLOR_TEXT_PRIMARY if (admin_on and var.get()) else COLOR_TEXT_MUTED)
+            active += 1 if (admin_on and var.get()) else 0
+        if hasattr(self, "lbl_plans_title"):
+            self.lbl_plans_title.configure(text=f"⚡ แผนเทรด (ใช้ {active}/{len(self.plan_checks)})")
 
     # ---------------------------------------------------------------------
     # คอลัมน์ซ้าย: แท็บ Console / ประวัติเทรด / ปฏิทินข่าว

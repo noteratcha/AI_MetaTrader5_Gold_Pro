@@ -102,7 +102,7 @@ function Dashboard() {
         <div className="section-title">
           <div>
             <h2>ผลการเทรดของคุณ</h2>
-            <p>ซิงค์จากโปรแกรม Desktop เมื่อออเดอร์ปิด</p>
+            <p>ซิงค์จากโปรแกรม AI Gold Commander Pro เมื่อออเดอร์ปิด</p>
           </div>
         </div>
         <div className="grid grid-4">

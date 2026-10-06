@@ -1,4 +1,4 @@
-// สถิติการดาวน์โหลดและการใช้งานโปรแกรม Desktop (เก็บใน user_activity)
+// สถิติการดาวน์โหลดและการใช้งานโปรแกรม AI Gold Commander Pro (เก็บใน user_activity)
 export const USAGE_EVENTS = ['app_download', 'app_open', 'bot_start', 'bot_stop'];
 export const PUBLIC_USAGE_EVENTS = ['app_download']; // ไม่ต้องเข้าสู่ระบบ
 

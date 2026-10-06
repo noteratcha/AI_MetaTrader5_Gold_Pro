@@ -12,7 +12,7 @@ export default function CalendarPage() {
   const { user, apiFetch } = useAuth();
   const [news, setNews] = useState(null);
 
-  // ผลวิเคราะห์ข่าวต่อทองจากโปรแกรม Desktop ของผู้ใช้ (ชุดเดียวกับในโปรแกรม)
+  // ผลวิเคราะห์ข่าวต่อทองจากโปรแกรม AI Gold Commander Pro ของผู้ใช้ (ชุดเดียวกับในโปรแกรม)
   useEffect(() => {
     if (!user) return;
     apiFetch('/api/user/telemetry')
@@ -48,7 +48,7 @@ export default function CalendarPage() {
           <div className="stack" style={{ gap: 8 }}>
             <EconCalendarList events={events} error={error} updatedAt={updatedAt} onReload={reload} impacts={impacts} />
             {user && !impacts && (
-              <div className="tiny faint">คอลัมน์ “ผลต่อทอง” จะแสดงเมื่อโปรแกรม Desktop เปิดอยู่และส่งข้อมูลขึ้นเว็บ</div>
+              <div className="tiny faint">คอลัมน์ “ผลต่อทอง” จะแสดงเมื่อโปรแกรม AI Gold Commander Pro เปิดอยู่และส่งข้อมูลขึ้นเว็บ</div>
             )}
             {!user && <div className="tiny faint">เข้าสู่ระบบเพื่อดูการวิเคราะห์ผลกระทบของข่าวต่อราคาทอง</div>}
           </div>

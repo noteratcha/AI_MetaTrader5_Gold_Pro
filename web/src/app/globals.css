@@ -1698,7 +1698,7 @@ select.input {
   border-top: 1px dashed var(--border);
 }
 
-/* ปฏิทินข่าว: คอลัมน์ผลต่อทอง (ข้อมูลจากโปรแกรม Desktop) */
+/* ปฏิทินข่าว: คอลัมน์ผลต่อทอง (ข้อมูลจากโปรแกรม AI Gold Commander Pro) */
 .cal-row.has-impact {
   grid-template-columns: 56px 44px 64px minmax(0, 1fr) 96px 96px 150px;
 }

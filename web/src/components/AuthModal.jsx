@@ -116,7 +116,7 @@ export default function AuthModal() {
             <h2 id="auth-title" style={{ fontSize: '1.3rem', fontWeight: 700 }}>
               {isRegister ? 'สร้างบัญชี GoldBot24' : 'ยินดีต้อนรับกลับมา'}
             </h2>
-            <p className="small muted">{isRegister ? 'ใช้บัญชีเดียวกันทั้งเว็บและโปรแกรม Desktop' : 'เข้าสู่ระบบเพื่อดูพอร์ตและจัดการชั่วโมงใช้งาน'}</p>
+            <p className="small muted">{isRegister ? 'ใช้บัญชีเดียวกันทั้งเว็บและโปรแกรม AI Gold Commander Pro' : 'เข้าสู่ระบบเพื่อดูพอร์ตและจัดการชั่วโมงใช้งาน'}</p>
           </div>
 
           <div className="segmented" role="tablist">

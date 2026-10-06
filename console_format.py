@@ -55,6 +55,7 @@ _RULES = [
     (re.compile(r"^\[(PLAN 1 EXIT|PLAN 2 EXIT|AI REVERSAL)\]"), "exit", "key"),
     (re.compile(r"^\[(PROFIT LOCK|DYNAMIC TP|SL/TP UPDATED)"), "lock", "key"),
     (re.compile(r"^\[CIRCUIT BREAKER\]"), "error", "key"),
+    (re.compile(r"^\[TAKE PROFIT \$\]"), "profit", "key"),
     (re.compile(r"^\[LOSS BLOCK CLEARED\]"), "profit", "key"),
     (re.compile(r"^\[LOSS BLOCK\]"), "warn", "key"),
     (re.compile(r"^\[PLAN DISABLED\]"), "warn", "key"),

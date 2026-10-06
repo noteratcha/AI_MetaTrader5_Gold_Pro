@@ -514,6 +514,18 @@ BOT_SETTINGS_FILE = _data_path('bot_settings.json')   # {"lot": 0.01} — ตั
 _lot_cache = {"mtime": None, "lot": LOT}
 
 
+def take_profit_usd():
+    """ปิดไม้เมื่อกำไรถึง $X (ตั้งที่แผงควบคุม) → จำนวนเงิน หรือ None ถ้าไม่ได้เปิดใช้"""
+    try:
+        with open(BOT_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            s = json.load(f)
+        if s.get("tp_usd_enabled") and float(s.get("tp_usd", 0)) > 0:
+            return float(s["tp_usd"])
+    except Exception:
+        pass
+    return None
+
+
 def current_lot():
     """ขนาดไม้ที่ผู้ใช้ตั้งไว้ (ค่าเริ่มต้น 0.01) — อ่านใหม่เมื่อไฟล์ตั้งค่าเปลี่ยน"""
     try:
@@ -1805,7 +1817,8 @@ def main():
                             key = (sym, plan_config.base_plan(plan_name))
                             if time.time() - _plan_disabled_logged.get(key, 0) > 600:
                                 _plan_disabled_logged[key] = time.time()
-                                print(f"{Colors.YELLOW}[PLAN DISABLED] {sym} {plan_config.base_plan(plan_name)} ถูกปิดโดยผู้ดูแลระบบ — ข้ามสัญญาณ {direction}{Colors.RESET}")
+                                who = "ผู้ดูแลระบบ" if plan_config.disabled_reason(plan_name) == "admin" else "คุณ (เลือกไม่ใช้แผนนี้)"
+                                print(f"{Colors.YELLOW}[PLAN DISABLED] {sym} {plan_config.base_plan(plan_name)} ถูกปิดโดย{who} — ข้ามสัญญาณ {direction}{Colors.RESET}")
                             return True
                         sym_plans = last_loss_plan.get(sym, {})
                         if direction in sym_plans:
@@ -2052,7 +2065,18 @@ def main():
                         for t in stale:
                             p4_trail_steps.pop(t, None)
                         _save_p4_trail_state(p4_trail_steps)
+                    tp_usd = take_profit_usd()
                     for pos in positions:
+                        # 0.0 ปิดไม้เมื่อกำไรถึงเป้าเงิน $ ที่ผู้ใช้ตั้ง (ทุกแผน · เฉพาะไม้ของบอท)
+                        if tp_usd and pos.magic == 888999:
+                            net = float(pos.profit) + float(getattr(pos, 'swap', 0.0) or 0.0)
+                            if net >= tp_usd:
+                                print(f"{Colors.GREEN}[TAKE PROFIT $] {sym} {pos.comment} กำไร ${net:.2f} ถึงเป้า ${tp_usd:.2f} — ปิดไม้ทันที{Colors.RESET}")
+                                log_signal_event(sym, 'POSITION_MGMT', pos.comment or 'Manual', 'SELL' if pos.type == mt5.ORDER_TYPE_BUY else 'BUY',
+                                                 tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask, prob[1], prob[0], h4_cloud_status, div_name,
+                                                 'TAKE_PROFIT_USD', f'Profit ${net:.2f} >= target ${tp_usd:.2f}')
+                                close_position(pos, comment=f"Take Profit ${tp_usd:g}")
+                                continue
                         # 0.1 Plan 1 Opposite MA Cross Exit (เงื่อนไขปิดไม้เฉพาะ Plan 1: MA5 ตัดกลับขั้วตรงข้าม M15)
                         # - ถ้าถือ BUY: เมื่อ MA 5 ตัดลง MA 10 บนแท่ง M15 ให้ปิดไม้ทันที
                         # - ถ้าถือ SELL: เมื่อ MA 5 ตัดขึ้น MA 10 บนแท่ง M15 ให้ปิดไม้ทันที

@@ -111,7 +111,7 @@ export function AuthProvider({ children }) {
     setIsLoading(false);
   }, [refreshUser]);
 
-  // ดึงชั่วโมงคงเหลือใหม่ทุก 60 วินาที (เฉพาะตอนแท็บเปิดอยู่) ให้ตรงกับโปรแกรม Desktop ที่กำลังหักเวลา
+  // ดึงชั่วโมงคงเหลือใหม่ทุก 60 วินาที (เฉพาะตอนแท็บเปิดอยู่) ให้ตรงกับโปรแกรม AI Gold Commander Pro ที่กำลังหักเวลา
   useEffect(() => {
     if (!user) return undefined;
     const id = setInterval(() => {

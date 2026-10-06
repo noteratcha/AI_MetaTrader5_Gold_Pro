@@ -70,12 +70,72 @@ def base_plan(plan_name: str) -> str:
     return str(plan_name or "").split("+")[0].strip()
 
 
-def is_enabled(plan_name: str) -> bool:
+def admin_enabled(plan_name: str) -> bool:
     base = base_plan(plan_name)
     if base not in BASE_PLANS:
-        return True  # แผนที่ไม่ได้อยู่ในรายการควบคุม 
+        return True  # แผนที่ไม่ได้อยู่ในรายการควบคุม
     with _lock:
         return _state["plans"].get(base, True)
+
+
+# ---- ผู้ใช้เลือกเปิด/ปิดแผนเอง (จำแยกตามอีเมลใน %APPDATA%\GoldBot24\bot_settings.json คีย์ user_plans) ----
+SETTINGS_FILE = data_path("bot_settings.json")
+_user_cache = {"mtime": None, "data": {}}
+
+
+def _settings() -> dict:
+    try:
+        import os
+        mtime = os.path.getmtime(SETTINGS_FILE)
+        if mtime != _user_cache["mtime"]:
+            with open(SETTINGS_FILE, encoding="utf-8") as f:
+                _user_cache.update(mtime=mtime, data=json.load(f) or {})
+    except Exception:
+        _user_cache.update(mtime=None, data={})
+    return _user_cache["data"]
+
+
+def _current_email() -> str:
+    try:
+        from license_manager import license_mgr
+        return str(license_mgr.get_current_user().get("email") or "").lower()
+    except Exception:
+        return ""
+
+
+def user_enabled(plan_name: str, email: str = None) -> bool:
+    base = base_plan(plan_name)
+    if base not in BASE_PLANS:
+        return True
+    prefs = (_settings().get("user_plans") or {}).get((email or _current_email()) or "_local", {})
+    return bool(prefs.get(base, True))  # ค่าเริ่มต้น: เปิดทุกแผน
+
+
+def set_user_enabled(plan_name: str, enabled: bool, email: str = None):
+    base = base_plan(plan_name)
+    key = (email or _current_email()) or "_local"
+    try:
+        with open(SETTINGS_FILE, encoding="utf-8") as f:
+            data = json.load(f) or {}
+    except Exception:
+        data = {}
+    data.setdefault("user_plans", {}).setdefault(key, {})[base] = bool(enabled)
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def disabled_reason(plan_name: str):
+    """None = ใช้งานได้ · 'admin' = แอดมินปิด · 'user' = ผู้ใช้ปิดเอง"""
+    if not admin_enabled(plan_name):
+        return "admin"
+    if not user_enabled(plan_name):
+        return "user"
+    return None
+
+
+def is_enabled(plan_name: str) -> bool:
+    """แผนนี้เข้าไม้ได้ไหม (แอดมินเปิด และ ผู้ใช้เลือกใช้)"""
+    return disabled_reason(plan_name) is None
 
 
 def disabled_plans() -> list:

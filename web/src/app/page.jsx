@@ -83,7 +83,7 @@ function LiveMonitor() {
         eyebrow="Live Portfolio"
         icon={Activity}
         title="พอร์ต MT5 แบบเรียลไทม์"
-        description="ข้อมูลส่งตรงจากโปรแกรม Desktop บนเครื่องของคุณทุก 5 วินาที"
+        description="ข้อมูลส่งตรงจากโปรแกรม AI Gold Commander Pro บนเครื่องของคุณทุก 5 วินาที"
         actions={
           <>
             <BotStatus online={isOnline} paused={isPaused} heartbeat={t?.last_heartbeat} hasData={Boolean(t)} />
@@ -116,7 +116,7 @@ function LiveMonitor() {
         <div className="card">
           <EmptyState
             icon={MonitorDown}
-            title="ยังไม่มีข้อมูลจากโปรแกรม Desktop"
+            title="ยังไม่มีข้อมูลจากโปรแกรม AI Gold Commander Pro"
             action={
               <Link href="/dashboard" className="btn btn-primary">
                 ไปที่กระเป๋าเวลา <ArrowRight size={16} />
@@ -147,7 +147,7 @@ function LiveMonitor() {
             <RadarCard radar={radar} loading={loading} />
           </div>
 
-          {/* ข้อมูลชุดเดียวกับโปรแกรม Desktop: AI คาดการณ์ · แท่งเทียน M15 · กำไรรายวัน · ข่าวพร้อมผลต่อทอง */}
+          {/* ข้อมูลชุดเดียวกับโปรแกรม AI Gold Commander Pro: AI คาดการณ์ · แท่งเทียน M15 · กำไรรายวัน · ข่าวพร้อมผลต่อทอง */}
           <div className="grid grid-2 section" style={{ alignItems: 'start' }}>
             <OutlookCard outlook={radar?.outlook} />
             <CandleCard candles={radar?.candles} price={radar?.price} />
