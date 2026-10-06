@@ -24,6 +24,7 @@ import { EmptyState, PageHeader, PageLoading, StatCard } from '../components/ui'
 import { cleanText, formatPrice, formatThaiDateTime, formatUsd, secondsSince, timeAgo } from '../lib/format';
 import { PLAN_LIST } from '../lib/packages';
 import { planDisplay } from '../lib/plans';
+import { CandleCard, DailyPnlCard, NewsImpactCard, OutlookCard } from '../components/LiveInsights';
 import TradeHistory from '../components/TradeHistory';
 import { NextNewsCard, useCalendar } from '../components/EconCalendar';
 
@@ -144,6 +145,16 @@ function LiveMonitor() {
           <div className="grid grid-main-side section">
             <PositionsCard positions={positions} loading={loading} />
             <RadarCard radar={radar} loading={loading} />
+          </div>
+
+          {/* ข้อมูลชุดเดียวกับโปรแกรม Desktop: AI คาดการณ์ · แท่งเทียน M15 · กำไรรายวัน · ข่าวพร้อมผลต่อทอง */}
+          <div className="grid grid-2 section" style={{ alignItems: 'start' }}>
+            <OutlookCard outlook={radar?.outlook} />
+            <CandleCard candles={radar?.candles} price={radar?.price} />
+          </div>
+          <div className="grid grid-2 section" style={{ alignItems: 'start' }}>
+            <DailyPnlCard rows={radar?.daily_pnl} />
+            <NewsImpactCard news={radar?.news} />
           </div>
 
           <div className="grid grid-main-side section" style={{ alignItems: 'start' }}>

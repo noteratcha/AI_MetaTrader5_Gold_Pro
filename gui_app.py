@@ -27,6 +27,7 @@ from bot_controller import bot_ctrl
 import sound_manager
 import econ_calendar
 import news_impact
+import ai_outlook
 from version import APP_VERSION
 import secure_store
 import plan_config
@@ -1696,8 +1697,7 @@ class MainTradingApp(ctk.CTk):
             self.lot_var.set(f"{lot:.2f}")
             return
         try:
-            with open(data_path("bot_settings.json"), "w", encoding="utf-8") as f:
-                json.dump({"lot": lot}, f)
+            self._save_setting("lot", lot)
             self.lot_var.set(f"{lot:.2f}")
             self.lbl_lot_hint.configure(text="บันทึกแล้ว ✓", text_color=COLOR_SUCCESS_GREEN)
             self.after(2500, lambda: self.lbl_lot_hint.configure(text=""))
@@ -1864,6 +1864,7 @@ class MainTradingApp(ctk.CTk):
     TAB_POSITIONS = "📌  ออเดอร์ที่เปิดอยู่"
     TAB_HISTORY = "📋  ประวัติการเทรด"
     TAB_CALENDAR = "📅  ปฏิทินเศรษฐกิจ"
+    TAB_AI = "🔮  AI คาดการณ์"
 
     def _build_main_tabs(self, parent):
         self.main_tabs = ctk.CTkTabview(
@@ -1882,13 +1883,14 @@ class MainTradingApp(ctk.CTk):
         )
         self.main_tabs.pack(fill="both", expand=True)
         self.main_tabs._segmented_button.configure(font=self._font(13, "bold"))
-        for name in (self.TAB_CONSOLE, self.TAB_POSITIONS, self.TAB_HISTORY, self.TAB_CALENDAR):
+        for name in (self.TAB_CONSOLE, self.TAB_POSITIONS, self.TAB_HISTORY, self.TAB_CALENDAR, self.TAB_AI):
             self.main_tabs.add(name)
 
         self._build_terminal_console(self.main_tabs.tab(self.TAB_CONSOLE))
         self._build_positions_tab(self.main_tabs.tab(self.TAB_POSITIONS))
         self._build_history_tab(self.main_tabs.tab(self.TAB_HISTORY))
         self._build_calendar_tab(self.main_tabs.tab(self.TAB_CALENDAR))
+        self._build_ai_tab(self.main_tabs.tab(self.TAB_AI))
         self.main_tabs.set(self.TAB_CONSOLE)
 
     def _build_terminal_console(self, parent):
@@ -1905,6 +1907,15 @@ class MainTradingApp(ctk.CTk):
             ctk.CTkLabel(legend, text=text, font=self._font(11), text_color=TAG_COLORS[tag]).pack(side="left", padx=(0, 10))
 
         self._small_button(bar, "ล้าง", self._clear_console, width=48).pack(side="right")
+        # ล้างคอนโซลอัตโนมัติทุก 1 ชม. (ค่าเริ่มต้น: เปิด · จำค่าไว้ใน bot_settings.json)
+        self.console_autoclear_var = tk.BooleanVar(value=bool(self._load_setting("console_autoclear", True)))
+        ctk.CTkCheckBox(
+            bar, text="ล้างอัตโนมัติทุก 1 ชม.", variable=self.console_autoclear_var, font=self._font(11), text_color=COLOR_TEXT_MUTED,
+            fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=16, checkbox_height=16,
+            command=lambda: self._save_setting("console_autoclear", bool(self.console_autoclear_var.get())),
+        ).pack(side="right", padx=(0, 10))
+        self._console_cleared_at = time.time()
+        self.after(60000, self._console_autoclear_tick)
         self.chk_autoscroll = ctk.CTkCheckBox(
             bar, text="เลื่อนอัตโนมัติ", font=self._font(11), text_color=COLOR_TEXT_MUTED,
             fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=16, checkbox_height=16,
@@ -1932,14 +1943,52 @@ class MainTradingApp(ctk.CTk):
         for tag, color in TAG_COLORS.items():
             self.txt_console.tag_config(tag, foreground=color)
 
-        for text, tag in (
-            (f"🏆 AI Gold Commander Pro v{APP_VERSION}\n", "close"),
-            ("XAUUSD · RRR 1:1.50 · SL 0.75 ATR · คิดเวลา 1 บาท/ชม. เฉพาะตอนบอททำงาน\n", "muted"),
-            ("กด ▶ เริ่มการทำงานบอท ด้านขวาเพื่อเริ่มสแกนตลาด — ที่นี่จะแสดงเฉพาะเหตุการณ์สำคัญ (เปิด/ปิดออเดอร์ ฯลฯ)\n\n", "muted"),
-        ):
+        self.txt_console.configure(state="disabled")
+        self._console_banner()
+
+    CONSOLE_BANNER = (
+        (f"🏆 AI Gold Commander Pro v{APP_VERSION}\n", "close"),
+        ("XAUUSD · P1 SL 1.0 ATR ไม่ตั้ง TP · P2 SL 0.75 ATR (H1) ไม่ตั้ง TP · P3–P5 SL 0.75 ATR · TP RRR 1:1.5\n", "muted"),
+        ("คิดเวลาเฉพาะตอนบอททำงาน\n", "muted"),
+        ("กด ▶ เริ่มการทำงานบอท ด้านขวาเพื่อเริ่มสแกนตลาด — ที่นี่จะแสดงเฉพาะเหตุการณ์สำคัญ (เปิด/ปิดออเดอร์ ฯลฯ)\n\n", "profit"),
+    )
+
+    def _console_banner(self, note=""):
+        self.txt_console.configure(state="normal")
+        for text, tag in self.CONSOLE_BANNER + (((note, "muted"),) if note else ()):
             self._console_entries.append((text, tag, "key"))
             self.txt_console.insert("end", text, tag)
         self.txt_console.configure(state="disabled")
+
+    def _console_autoclear_tick(self):
+        """ทุก 1 นาที: ถ้าเปิด 'ล้างอัตโนมัติ' และครบ 1 ชม. นับจากล้างครั้งล่าสุด → ล้างคอนโซล"""
+        try:
+            if self.console_autoclear_var.get() and time.time() - self._console_cleared_at >= 3600:
+                self._clear_console(note=f"ล้างประวัติอัตโนมัติเมื่อ {time.strftime('%H:%M')} น. (ปิดได้ที่ช่อง 'ล้างอัตโนมัติทุก 1 ชม.')\n\n")
+        except Exception:
+            pass
+        self.after(60000, self._console_autoclear_tick)
+
+    @staticmethod
+    def _load_setting(key, default):
+        try:
+            with open(data_path("bot_settings.json"), "r", encoding="utf-8") as f:
+                return json.load(f).get(key, default)
+        except Exception:
+            return default
+
+    @staticmethod
+    def _save_setting(key, value):
+        """บันทึกค่าตั้งลง bot_settings.json โดยไม่ทับค่าอื่น (เช่น lot)"""
+        path = data_path("bot_settings.json")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+        data[key] = value
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
 
     def _append_console(self, entries):
         """เพิ่มข้อความที่จัดรูปแบบแล้วลงคอนโซล (เคารพตัวเลือก 'รายละเอียดการสแกน')"""
@@ -2114,7 +2163,7 @@ class MainTradingApp(ctk.CTk):
         (messagebox.showinfo if ok else messagebox.showwarning)("ผลการปิดออเดอร์", msg)
 
     # ---- ประวัติการเทรด (5 รายการต่อหน้า) ----
-    HISTORY_PAGE_SIZE = 5
+    HISTORY_PAGE_SIZE = 10
     HISTORY_COLUMNS = [
         ("เวลาเปิด (MT5)", 96, "w"),
         ("ฝั่ง", 40, "center"),
@@ -2144,12 +2193,12 @@ class MainTradingApp(ctk.CTk):
             )
         ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=1, column=0, columnspan=len(self.HISTORY_COLUMNS), sticky="ew", padx=6)
 
-        # สร้างแถวไว้ล่วงหน้า 5 แถว แล้วอัปเดตข้อความแทนการสร้างใหม่ (ลื่นกว่า)
+        # สร้างแถวไว้ล่วงหน้า 10 แถว แล้วอัปเดตข้อความแทนการสร้างใหม่ (ลื่นกว่า) · สูงแถวละ 28 ให้พอดีจอ 1366×768
         self.history_cells = []
         for r in range(self.HISTORY_PAGE_SIZE):
             cells = []
             for col, (_, _, anchor) in enumerate(self.HISTORY_COLUMNS):
-                lbl = ctk.CTkLabel(table, text="", font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor=anchor, height=34)
+                lbl = ctk.CTkLabel(table, text="", font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor=anchor, height=28)
                 last = r == self.HISTORY_PAGE_SIZE - 1
                 lbl.grid(row=r + 2, column=col, sticky="ew", padx=6, pady=(0, 6) if last else 0)
                 cells.append(lbl)
@@ -2245,6 +2294,72 @@ class MainTradingApp(ctk.CTk):
         self.btn_history_prev.configure(state="normal" if self._history_page > 0 else "disabled")
         self.btn_history_next.configure(state="normal" if self._history_page < pages - 1 else "disabled")
 
+    # ---- AI คาดการณ์ทิศทางราคา ----
+    def _build_ai_tab(self, parent):
+        self._ai_shown_at = None
+        self.ai_box = ctk.CTkScrollableFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
+        self.ai_box.pack(fill="both", expand=True, padx=6, pady=(0, 4))
+        self.ai_box.grid_columnconfigure((0, 1, 2), weight=1, uniform="ai_h")
+        ctk.CTkLabel(self.ai_box, text="กำลังวิเคราะห์ข้อมูล... (ครั้งแรกประมาณ 15 วินาที)", font=self._font(12),
+                     text_color=COLOR_TEXT_MUTED).grid(row=0, column=0, columnspan=3, pady=30)
+        ai_outlook.start_background()
+
+    def _render_ai_outlook(self):
+        r = ai_outlook.latest()
+        if not r or r["updated_at"] == self._ai_shown_at:
+            return
+        self._ai_shown_at = r["updated_at"]
+        box = self.ai_box
+        for w in box.winfo_children():
+            w.destroy()
+        green, red, muted = COLOR_SUCCESS_GREEN, COLOR_DANGER_RED, COLOR_TEXT_MUTED
+        main_dir = r["horizons"][-1]["direction"]
+        ctk.CTkLabel(box, text=r["summary"], font=self._font(15, "bold"), anchor="w", justify="left", wraplength=640,
+                     text_color=green if main_dir > 0 else red if main_dir < 0 else COLOR_GOLD_PRIMARY
+                     ).grid(row=0, column=0, columnspan=3, sticky="w", padx=12, pady=(10, 0))
+        upd = econ_calendar.datetime.fromisoformat(r["updated_at"]).astimezone(econ_calendar.BANGKOK)
+        ctk.CTkLabel(box, text=f"ราคา {r['price']:,.2f} · อัปเดต {upd.strftime('%H:%M:%S')} น. (ทุก 1 นาที) · ทายจากแท่ง M15 ที่ปิดแล้ว",
+                     font=self._font(10), text_color=muted).grid(row=1, column=0, columnspan=3, sticky="w", padx=12, pady=(0, 8))
+
+        for col, h in enumerate(r["horizons"]):
+            d = h["direction"]
+            color = green if d > 0 else red if d < 0 else COLOR_GOLD_PRIMARY
+            c = ctk.CTkFrame(box, fg_color=COLOR_CARD_BG, corner_radius=10, border_width=1, border_color=color if d else COLOR_CARD_BORDER)
+            c.grid(row=2, column=col, sticky="nsew", padx=5, pady=4)
+            ctk.CTkLabel(c, text=f"อีก {h['label']}", font=self._font(11), text_color=muted).pack(anchor="w", padx=12, pady=(8, 0))
+            word = "▲ ขึ้น" if d > 0 else "▼ ลง" if d < 0 else ("ไม่ชัด (เอียงขึ้น)" if h["lean"] > 0 else "ไม่ชัด (เอียงลง)")
+            ctk.CTkLabel(c, text=word, font=self._font(18, "bold"), text_color=color).pack(anchor="w", padx=12)
+            up = h["p_up"] * 100
+            ctk.CTkLabel(c, text=f"ขึ้น {up:.0f}% · ลง {100 - up:.0f}%", font=self._font(11), text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=12)
+            bar = ctk.CTkProgressBar(c, height=6, progress_color=green, fg_color=red)
+            bar.set(h["p_up"])
+            bar.pack(fill="x", padx=12, pady=(4, 2))
+            ctk.CTkLabel(c, text=f"แม่นในอดีต {h['hist_acc']:.0f}%" + (" · เทรนด์ยืนยัน" if h["trend_agree"] and d else ""),
+                         font=self._font(10), text_color=muted).pack(anchor="w", padx=12, pady=(0, 8))
+
+        ctk.CTkLabel(box, text="ปัจจัยที่นำมาวิเคราะห์", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY
+                     ).grid(row=3, column=0, columnspan=3, sticky="w", padx=12, pady=(10, 2))
+        row = 4
+        for f in r["factors"]:
+            sym, col = ("▲", green) if f["dir"] > 0 else ("▼", red) if f["dir"] < 0 else ("•", muted)
+            fr = ctk.CTkFrame(box, fg_color="transparent")
+            fr.grid(row=row, column=0, columnspan=3, sticky="ew", padx=12)
+            ctk.CTkLabel(fr, text=sym, font=self._font(13, "bold"), text_color=col, width=20).pack(side="left")
+            ctk.CTkLabel(fr, text=f["name"], font=self._font(12), text_color=COLOR_TEXT_PRIMARY, width=230, anchor="w").pack(side="left")
+            ctk.CTkLabel(fr, text=f["detail"], font=self._font(11), text_color=muted, anchor="w").pack(side="left")
+            row += 1
+        if r["news"]:
+            ctk.CTkLabel(box, text="ข่าว USD ผลกระทบสูงใน 24 ชม. (ราคาอาจสะบัดแรงทั้งสองทาง)", font=self._font(12, "bold"),
+                         text_color=COLOR_GOLD_PRIMARY).grid(row=row, column=0, columnspan=3, sticky="w", padx=12, pady=(10, 2))
+            row += 1
+            for n in r["news"]:
+                lean = " · ▲ แนวโน้มทองขึ้น" if n["lean"] > 0 else " · ▼ แนวโน้มทองลง" if n["lean"] < 0 else ""
+                ctk.CTkLabel(box, text=f"{n['time']} น.  {n['title']}{lean}", font=self._font(11), text_color=COLOR_TEXT_PRIMARY
+                             ).grid(row=row, column=0, columnspan=3, sticky="w", padx=24)
+                row += 1
+        ctk.CTkLabel(box, text=r["note"], font=self._font(10), text_color=muted, wraplength=640, justify="left"
+                     ).grid(row=row, column=0, columnspan=3, sticky="w", padx=12, pady=(12, 8))
+
     # ---- ปฏิทินเศรษฐกิจ ----
     IMPACT_COLORS = {"High": "#F87171", "Medium": "#FB923C", "Low": "#A3ABBA", "Holiday": "#6E7687"}
     IMPACT_TH = {"High": "สูง", "Medium": "กลาง", "Low": "ต่ำ", "Holiday": "วันหยุด"}
@@ -2309,6 +2424,7 @@ class MainTradingApp(ctk.CTk):
                     except Exception:
                         pass
             self._news_analysis = analyses
+            news_impact.publish(self._calendar_events, analyses)  # ส่งชุดเดียวกันขึ้นเว็บผ่าน Telemetry
             self._calendar_dirty = True
             self._calendar_loading = False
 
@@ -2487,11 +2603,14 @@ class MainTradingApp(ctk.CTk):
     def _on_toggle_autoscroll(self):
         self.auto_scroll_logs = self.chk_autoscroll.get()
 
-    def _clear_console(self):
+    def _clear_console(self, note=""):
         self._console_entries.clear()
         self.txt_console.configure(state="normal")
         self.txt_console.delete("1.0", "end")
         self.txt_console.configure(state="disabled")
+        self._console_cleared_at = time.time()
+        if note:
+            self._console_banner(note)
 
     def _open_redeem_modal(self):
         """เปิดหน้าต่างเติมชั่วโมง Product Key"""
@@ -2539,6 +2658,8 @@ class MainTradingApp(ctk.CTk):
 
             # 2. ถ้าล็อกอินอยู่ ให้อัปเดตสถานะ Telemetry
             if self.is_logged_in and self.dashboard_view:
+                if hasattr(self, "ai_box"):
+                    self._render_ai_outlook()
                 telemetry = bot_ctrl.get_telemetry()
 
                 # อัปเดตชั่วโมงคงเหลือ (ชั่วโมง.นาที)

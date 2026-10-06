@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, ExternalLink, RefreshCw, Timer } from 'lucide-react';
 import { EmptyState } from './ui';
+import { newsImpactDetail, newsImpactText } from './LiveInsights';
 
 const IMPACT = {
   High: { label: 'สูง', className: 'impact impact-high', rank: 3 },
@@ -102,7 +103,8 @@ export function NextNewsCard({ events }) {
 }
 
 /** รายการปฏิทินเศรษฐกิจแบบเต็ม พร้อมตัวกรอง */
-export function EconCalendarList({ events, error, updatedAt, onReload }) {
+export function EconCalendarList({ events, error, updatedAt, onReload, impacts = null }) {
+  const [openKey, setOpenKey] = useState(null);
   const now = useNow(60000);
   const [usdOnly, setUsdOnly] = useState(true);
   const [minImpact, setMinImpact] = useState('Medium');
@@ -171,8 +173,16 @@ export function EconCalendarList({ events, error, updatedAt, onReload }) {
               {list.map((e, i) => {
                 const past = e.at.getTime() < now;
                 const imp = IMPACT[e.impact] || IMPACT.Low;
+                const n = impacts?.get(`${e.title}|${e.at.getTime()}`);
+                const rowKey = `${e.date}-${i}`;
+                const t = n ? newsImpactText(n) : null;
                 return (
-                  <div key={`${e.date}-${i}`} className={`cal-row ${past ? 'is-past' : ''}`}>
+                  <div key={rowKey}>
+                  <div
+                    className={`cal-row ${impacts ? 'has-impact' : ''} ${past ? 'is-past' : ''}`}
+                    onClick={n ? () => setOpenKey(openKey === rowKey ? null : rowKey) : undefined}
+                    style={n ? { cursor: 'pointer' } : undefined}
+                  >
                     <span className="mono cal-time">{timeLabel(e.at)}</span>
                     <span className="cal-cur">{e.currency}</span>
                     <span className={imp.className}>{imp.label}</span>
@@ -183,6 +193,19 @@ export function EconCalendarList({ events, error, updatedAt, onReload }) {
                     <span className="cal-num">
                       <span className="faint">ก่อน</span> {e.previous || '—'}
                     </span>
+                    {impacts && (
+                      <span className="cal-impact" style={{ color: t?.color }}>
+                        {t ? `${t.text} ›` : ''}
+                      </span>
+                    )}
+                  </div>
+                  {n && openKey === rowKey && (
+                    <div className="cal-impact-detail tiny muted">
+                      {newsImpactDetail(n).map((p) => (
+                        <div key={p}>• {p}</div>
+                      ))}
+                    </div>
+                  )}
                   </div>
                 );
               })}

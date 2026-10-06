@@ -27,6 +27,16 @@ function describe(action, profit) {
 }
 
 /** ประวัติการเข้าไม้/ปิดไม้ แบ่งหน้าละ 5 รายการ */
+/** 125 → "2 นาที" · 5400 → "1 ชม. 30 นาที" · 90000 → "1 วัน 1 ชม." */
+function formatHold(sec) {
+  if (sec < 60) return `${sec} วิ`;
+  const m = Math.floor(sec / 60);
+  if (m < 60) return `${m} นาที`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} ชม.${m % 60 ? ` ${m % 60} นาที` : ''}`;
+  return `${Math.floor(h / 24)} วัน${h % 24 ? ` ${h % 24} ชม.` : ''}`;
+}
+
 export default function TradeHistory() {
   const { apiFetch } = useAuth();
   const [page, setPage] = useState(1);
@@ -98,6 +108,7 @@ export default function TradeHistory() {
                 <th className="num">ราคา</th>
                 <th className="num">Lot</th>
                 <th className="num">SL / TP</th>
+                <th className="num">ถือไม้</th>
                 <th className="num">กำไร/ขาดทุน</th>
               </tr>
             </thead>
@@ -115,6 +126,14 @@ export default function TradeHistory() {
                     <td className="num">{formatPrice(t.price)}</td>
                     <td className="num">{t.lot ? t.lot.toFixed(2) : '—'}</td>
                     <td className="num faint small">{isOpen ? `${formatPrice(t.sl)} / ${t.tp > 0 ? formatPrice(t.tp) : 'รันเทรนด์'}` : '—'}</td>
+                    <td className="num small" title={t.holding ? 'ไม้ยังเปิดอยู่ — นับถึงตอนนี้' : undefined}>
+                      {t.holdSec === null || t.holdSec === undefined ? <span className="faint">—</span> : (
+                        <span className={t.holding ? 'text-gold' : ''}>
+                          {formatHold(t.holdSec)}
+                          {t.holding ? ' (ยังถือ)' : ''}
+                        </span>
+                      )}
+                    </td>
                     <td className={`num ${t.profit > 0 ? 'text-green' : t.profit < 0 ? 'text-red' : 'faint'}`} style={{ fontWeight: 600 }}>
                       {isOpen ? '—' : formatUsd(t.profit, { sign: true })}
                     </td>

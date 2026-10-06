@@ -184,6 +184,37 @@ latest_radar_cache = {
     "XAUUSD": {"symbol": "XAUUSD", "status": "[WAIT OUTSIDE ZONE]", "up_prob": 0.50, "price": 0.0, "is_in_zone": False, "h4_trend": "ANALYZING...", "h4_diff_pct": 0.0, "h1_trend": "ANALYZING...", "h1_diff_pct": 0.0}
 }
 
+_web_extra_cache = {"pnl_at": 0.0, "pnl": []}
+
+
+def _web_extras():
+    """ข้อมูลชุดเดียวกับที่โปรแกรมแสดง ส่งขึ้นเว็บ: AI คาดการณ์ · ผลวิเคราะห์ข่าว · แท่ง M15 16 แท่ง · กำไร/ขาดทุนรายวัน 14 วัน"""
+    extra = {}
+    try:
+        import ai_outlook
+        import news_impact
+        from bot_controller import bot_ctrl
+        extra["outlook"] = ai_outlook.latest()
+        extra["news"] = news_impact.published()
+        c = bot_ctrl.get_live_candles(16)
+        if c:
+            from datetime import timezone as _tz
+            off = round((c["server_time"] - time.time()) / 3600) * 3600
+            off = off if abs(off) <= 14 * 3600 else 0
+            th = _tz(timedelta(hours=7))
+            extra["candles"] = [{**{k: (round(v, 2) if isinstance(v, float) else v) for k, v in x.items()},
+                                 "label": datetime.fromtimestamp(x["time"] - off, th).strftime("%H:%M")} for x in c["candles"]]
+        if time.time() - _web_extra_cache["pnl_at"] > 60:
+            today = datetime.now().date()
+            _web_extra_cache["pnl"] = [{"date": r["date"].isoformat(), "profit": round(r["profit"], 2), "closed": r["closed"]}
+                                       for r in bot_ctrl.get_daily_pnl(today - timedelta(days=13), today)]
+            _web_extra_cache["pnl_at"] = time.time()
+        extra["daily_pnl"] = _web_extra_cache["pnl"]
+    except Exception:
+        pass
+    return extra
+
+
 def telemetry_background_worker():
     """เธรดเบื้องหลัง: สตรีมยอดเงิน, กำไรลอยตัว (Floating P&L) และเรดาร์ AI สดไปยัง Supabase Cloud ทุกๆ 5 วินาที"""
     global latest_radar_cache
@@ -246,6 +277,7 @@ def telemetry_background_worker():
                             "mode": "DEMO" if int(acc_info.trade_mode) == 0 else ("CONTEST" if int(acc_info.trade_mode) == 1 else "REAL"),
                             "lot": float(current_lot()),
                         },
+                        **(_web_extras() if s == "XAUUSD" else {}),
                     })
 
                 # แยกแถว Telemetry ตามบัญชีผู้ใช้ GoldBot24 (id ใน bot_config) — ลูกค้าแต่ละคนเห็นเฉพาะพอร์ตตัวเอง
@@ -1122,7 +1154,7 @@ def main():
     print(f"{Colors.BOLD}🏆 [AI BOT] {BOT_NAME} v{BOT_VERSION} Started{Colors.RESET}")
     print(f"{Colors.GREEN}{Colors.BOLD}[ASSET FOCUS]: XAUUSD (Gold Specialist 100%){Colors.RESET}")
     print(f"{Colors.CYAN}{Colors.BOLD}[ACTIVE PLANS]: Plan 1 (MA-Cross M15), Plan 2 (MA-Cross H1), Plan 3 (SMC), Plan 4 (Bounce), Plan 5 (BB-H1 Reversion){Colors.RESET}")
-    print(f"{Colors.YELLOW}{Colors.BOLD}[RISK/RRR]: RRR 1:1.50 | SL 0.75 ATR | Early Profit Lock +0.35 ATR{Colors.RESET}")
+    print(f"{Colors.YELLOW}{Colors.BOLD}[RISK/RRR]: P1 SL {P1_SL_ATR_MULT} ATR (No TP, Step Trail) | P2 SL {SL_ATR_MULT} ATR H1 (No TP) | P3-P5 SL {SL_ATR_MULT} ATR, TP RRR 1:{TP_RRR_XAU:.2f} | Early Profit Lock +0.35 ATR{Colors.RESET}")
     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}\n")
 
     models = {}

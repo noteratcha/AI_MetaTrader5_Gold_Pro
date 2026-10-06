@@ -238,6 +238,32 @@ def analyze(ev: dict) -> dict:
     return {"kind": kind, "rule": TH_TYPES[kind], "lean": lean, "stats": stats, "actual": actual}
 
 
+_published = {"items": []}
+
+
+def publish(events: list, analyses: dict):
+    """เก็บผลวิเคราะห์ข่าวแบบ JSON ให้ Telemetry ส่งขึ้นเว็บ (เรียกจากโปรแกรมหลังคำนวณเสร็จ)"""
+    items = []
+    for ev in events:
+        a = analyses.get((ev["title"], ev["time"]))
+        if not a:
+            continue
+        st = a.get("stats") or {}
+        items.append({
+            "title": ev["title"], "time": ev["time"].isoformat(), "impact": ev["impact"],
+            "forecast": ev.get("forecast", ""), "previous": ev.get("previous", ""),
+            "kind": a["kind"], "rule": a["rule"], "lean": a["lean"],
+            "actual": round(a["actual"], 3) if a.get("actual") is not None else None,
+            "move": round(st["median_abs"], 3) if st else None, "move_big": round(st["p80_abs"], 3) if st else None,
+            "move_n": st.get("n") if st else None, "move_src": st.get("source") if st else None,
+        })
+    _published["items"] = items
+
+
+def published() -> list:
+    return _published["items"]
+
+
 def short_text(a: dict) -> tuple[str, str]:
     """ข้อความสั้นสำหรับแถวปฏิทิน + ระดับสี ('up' / 'down' / 'muted')"""
     if a["actual"] is not None:

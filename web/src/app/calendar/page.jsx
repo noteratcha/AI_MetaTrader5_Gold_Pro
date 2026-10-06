@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { CalendarDays } from 'lucide-react';
 import { PageHeader } from '../../components/ui';
 import { EconCalendarList, InvestingWidget, NextNewsCard, useCalendar } from '../../components/EconCalendar';
@@ -8,6 +9,21 @@ import { EconCalendarList, InvestingWidget, NextNewsCard, useCalendar } from '..
 export default function CalendarPage() {
   const { events, error, updatedAt, reload } = useCalendar();
   const [tab, setTab] = useState('native');
+  const { user, apiFetch } = useAuth();
+  const [news, setNews] = useState(null);
+
+  // ผลวิเคราะห์ข่าวต่อทองจากโปรแกรม Desktop ของผู้ใช้ (ชุดเดียวกับในโปรแกรม)
+  useEffect(() => {
+    if (!user) return;
+    apiFetch('/api/user/telemetry')
+      .then((r) => setNews((r.telemetry?.radar_signals || [])[0]?.news || []))
+      .catch(() => setNews([]));
+  }, [user?.id, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const impacts = useMemo(
+    () => (news && news.length ? new Map(news.map((n) => [`${n.title}|${new Date(n.time).getTime()}`, n])) : null),
+    [news]
+  );
 
   return (
     <div className="container container-wide page">
@@ -29,7 +45,13 @@ export default function CalendarPage() {
 
       {tab === 'native' ? (
         <div className="grid grid-main-side" style={{ alignItems: 'start' }}>
-          <EconCalendarList events={events} error={error} updatedAt={updatedAt} onReload={reload} />
+          <div className="stack" style={{ gap: 8 }}>
+            <EconCalendarList events={events} error={error} updatedAt={updatedAt} onReload={reload} impacts={impacts} />
+            {user && !impacts && (
+              <div className="tiny faint">คอลัมน์ “ผลต่อทอง” จะแสดงเมื่อโปรแกรม Desktop เปิดอยู่และส่งข้อมูลขึ้นเว็บ</div>
+            )}
+            {!user && <div className="tiny faint">เข้าสู่ระบบเพื่อดูการวิเคราะห์ผลกระทบของข่าวต่อราคาทอง</div>}
+          </div>
           <div className="stack" style={{ gap: 16 }}>
             <NextNewsCard events={events} />
             <div className="card card-pad small muted">

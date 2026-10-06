@@ -25,6 +25,36 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, error: 'โหลดประวัติการเทรดไม่สำเร็จ' });
   }
 
+  // ระยะเวลาถือไม้: จับคู่แถวเปิด (OPEN_*) กับแถวปิด (CLOSE / TP_HIT / SL_HIT) ด้วยเลข ticket เดียวกัน
+  const CLOSE_ACTIONS = ['CLOSE', 'TP_HIT', 'SL_HIT'];
+  const tickets = [...new Set((data || []).filter((r) => r.ticket && (String(r.action).startsWith('OPEN_') || CLOSE_ACTIONS.includes(r.action))).map((r) => r.ticket))];
+  const opened = {};
+  const closed = {};
+  if (tickets.length) {
+    const { data: pairs } = await getAdminClient()
+      .from('trade_logs')
+      .select('ticket, action, time')
+      .eq('email', auth.user.email)
+      .in('ticket', tickets)
+      .or(`action.like.OPEN_%,action.in.(${CLOSE_ACTIONS.join(',')})`)
+      .limit(1000);
+    for (const p of pairs || []) {
+      if (String(p.action).startsWith('OPEN_')) opened[p.ticket] = p.time;
+      else if (!closed[p.ticket] || p.time < closed[p.ticket]) closed[p.ticket] = p.time;
+    }
+  }
+  const holdOf = (r) => {
+    const isOpenRow = String(r.action).startsWith('OPEN_');
+    if (!isOpenRow && !CLOSE_ACTIONS.includes(r.action)) return { holdSec: null, holding: false };
+    const start = opened[r.ticket];
+    const end = closed[r.ticket];
+    if (!start) return { holdSec: null, holding: false };
+    if (end) return { holdSec: Math.max(0, Math.round((new Date(end) - new Date(start)) / 1000)), holding: false };
+    // ยังไม่มีแถวปิด → ไม้ยังเปิดอยู่ (นับถึงตอนนี้ ไม่เกิน 30 วัน)
+    const sec = Math.round((Date.now() - new Date(start)) / 1000);
+    return sec < 30 * 86400 ? { holdSec: sec, holding: true } : { holdSec: null, holding: false };
+  };
+
   const total = count || 0;
   return res.status(200).json({
     success: true,
@@ -45,6 +75,7 @@ export default async function handler(req, res) {
       tp: Number(r.tp) || 0,
       profit: Number(r.profit) || 0,
       comment: r.comment || '',
+      ...holdOf(r),
     })),
   });
 }
