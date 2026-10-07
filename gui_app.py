@@ -29,6 +29,8 @@ import econ_calendar
 import news_impact
 import news_th
 import ai_outlook
+import position_advisor
+import position_chart
 from version import APP_VERSION
 import secure_store
 import plan_config
@@ -1238,6 +1240,449 @@ class GoldCandleDialog(ctk.CTkToplevel):
                     ma = f" · MA5 {c['ma5']:,.2f} / MA13 {c['ma13']:,.2f}"
                 self.lbl_tip.configure(text=f"{self._hhmm(c['time'], self.offset)} น. · O {c['open']:,.2f}  H {c['high']:,.2f}  "
                                             f"L {c['low']:,.2f}  C {c['close']:,.2f} ({c['close'] - c['open']:+.2f}){ma}")
+                return
+
+
+class PositionDetailDialog(ctk.CTkToplevel):
+    """คลิกไม้ในแท็บออเดอร์ที่เปิดอยู่ → กราฟ M15 80 แท่งเรียลไทม์ + Lot / ราคาเข้า / ราคาปัจจุบัน / SL / TP
+    + อินดิเคเตอร์ที่แผนของไม้นั้นใช้จริง (position_chart.get) + คำแนะนำถือต่อ/ปิด (position_advisor)"""
+
+    BARS = 80
+    REFRESH_MS = 1000
+    STYLE_COLORS = {"fast": COLOR_CYAN_ACCENT, "slow": COLOR_GOLD_WARM, "ma50": "#A78BFA", "band": "#A78BFA",
+                    "mid": "#8A93A6", "sup": COLOR_SUCCESS_GREEN, "res": COLOR_DANGER_RED}
+    PLAN_RULES = {
+        "P1": "MA5 ตัด MA13 (M15) + H1 MA100/150/200 เรียงตัว · กรอง RSI + MA50 · SL 1.0 ATR · ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ · เลื่อน SL ทุก +5 จุด",
+        "P2": "MA5 ตัด MA10 (H1) + H4 MA10/30 + ความชัน MA5 H4 + MA200 H4 · SL 0.75 ATR H1 · ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ",
+        "P3": "ราคากวาดแนวรับ/ต้าน H1 แล้วดึงกลับ + ไส้เทียน ≥ 0.30 ATR + เทรนด์ H1 + AI · SL 0.75 ATR · TP 1.5 เท่า",
+        "P4": "เด้งโซนแนวรับ/ต้าน H1 (≤ 1 ATR) + RSI Divergence + AI · SL 0.75 ATR · TP 1.5 เท่า",
+        "P5": "หลุดกรอบ Bollinger H1 แล้วกลับเข้า + Divergence + MACD H1 หมดแรง + AI · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
+        "M": "ไม้ที่กดเข้าเอง · บอทดูแลต่อด้วยล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึงเป้า",
+    }
+
+    @staticmethod
+    def _f(size, weight="normal", family="Segoe UI"):
+        return ctk.CTkFont(family=family, size=size, weight=weight)
+
+    def __init__(self, parent, pos):
+        super().__init__(parent)
+        self.ticket = int(pos["ticket"])
+        self.fallback = {"type": pos.get("type"), "comment": pos.get("comment")}
+        self.data, self.last_pos, self.slots, self._job, self.offset = None, None, [], None, 0
+        self._ind_names, self._ind_rows, self._legend_sig, self._adv_sig = None, [], None, None
+        self.title(f"ไม้ #{self.ticket} · XAUUSD M15 เรียลไทม์")
+        self.configure(fg_color=COLOR_BG_DARK)
+        # ไม่ใช้ transient เพื่อให้มีปุ่มขยาย/ย่อ บนแถบหัวหน้าต่าง
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        w, h = min(1140, sw - 40), min(700, sh - 80)
+        self.after(10, self.lift)
+        self.update_idletasks()
+        x = max(0, parent.winfo_rootx() + (parent.winfo_width() - w) // 2)
+        y = max(0, parent.winfo_rooty() + (parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.minsize(820, 520)
+        f = self._f
+
+        top = ctk.CTkFrame(self, fg_color="transparent")
+        top.pack(fill="x", padx=16, pady=(12, 6))
+        self.lbl_side = ctk.CTkLabel(top, text="", font=f(13, "bold"), corner_radius=6, height=26, width=58)
+        self.lbl_side.pack(side="left")
+        ctk.CTkLabel(top, text=f"#{self.ticket}", font=f(16, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left", padx=10)
+        self.lbl_plan = ctk.CTkLabel(top, text="", font=f(15, "bold"), text_color=COLOR_GOLD_PRIMARY)
+        self.lbl_plan.pack(side="left")
+        ctk.CTkLabel(top, text="   XAUUSD · M15 · 80 แท่ง · อัปเดตทุก 1 วินาที", font=f(11), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        self.btn_full = ctk.CTkButton(top, text="ขยายเต็มจอ", width=96, height=28, font=f(12, "bold"), fg_color=COLOR_CARD_BG,
+                                      hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
+                                      text_color=COLOR_GOLD_PRIMARY, command=self._toggle_full)
+        self.btn_full.pack(side="right", padx=(10, 0))
+        self.lbl_pnl = ctk.CTkLabel(top, text="", font=f(16, "bold"), corner_radius=8, height=30)
+        self.lbl_pnl.pack(side="right")
+        self.lbl_clock = ctk.CTkLabel(top, text="", font=f(11), text_color=COLOR_TEXT_MUTED)
+        self.lbl_clock.pack(side="right", padx=12)
+        self.bind("<F11>", lambda e: self._toggle_full())
+        self.bind("<Escape>", lambda e: self.state() == "zoomed" and self._toggle_full())
+
+        stats = ctk.CTkFrame(self, fg_color="transparent")
+        stats.pack(fill="x", padx=12)
+        self.stat = {}
+        for i, (key, title) in enumerate((("lot", "Lot"), ("entry", "ราคาเข้า"), ("price", "ราคาปัจจุบัน"),
+                                          ("sl", "Stop Loss"), ("tp", "Take Profit"), ("held", "ถือมา"))):
+            stats.grid_columnconfigure(i, weight=1, uniform="st")
+            box = ctk.CTkFrame(stats, fg_color=COLOR_CARD_BG, corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
+            box.grid(row=0, column=i, sticky="ew", padx=4)
+            ctk.CTkLabel(box, text=title, font=f(10), text_color=COLOR_TEXT_MUTED, height=16).pack(anchor="w", padx=10, pady=(6, 0))
+            v = ctk.CTkLabel(box, text="—", font=f(16, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY, height=24)
+            v.pack(anchor="w", padx=10)
+            s = ctk.CTkLabel(box, text="", font=f(10), text_color=COLOR_TEXT_MUTED, height=16)
+            s.pack(anchor="w", padx=10, pady=(0, 6))
+            self.stat[key] = (v, s)
+
+        body = ctk.CTkFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=12, pady=(8, 4))
+        side = ctk.CTkFrame(body, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER, width=340)
+        side.pack(side="right", fill="y", padx=(8, 4))
+        side.pack_propagate(False)
+        ctk.CTkLabel(side, text="อินดิเคเตอร์ของแผน", font=f(14, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=14, pady=(10, 0))
+        self.lbl_rule = ctk.CTkLabel(side, text="", font=f(10), text_color=COLOR_TEXT_MUTED, justify="left", wraplength=306)
+        self.lbl_rule.pack(anchor="w", padx=14, pady=(0, 4))
+        leg = ctk.CTkFrame(side, fg_color="transparent")
+        leg.pack(anchor="w", padx=14)
+        for txt, col in (("● หนุนไม้", COLOR_SUCCESS_GREEN), ("● สวนไม้", COLOR_DANGER_RED), ("● กลาง", COLOR_TEXT_MUTED)):
+            ctk.CTkLabel(leg, text=txt, font=f(10), text_color=col, height=16).pack(side="left", padx=(0, 10))
+        self.adv_box = ctk.CTkFrame(side, fg_color="#14171E", corner_radius=10)
+        self.adv_box.pack(side="bottom", fill="x", padx=10, pady=10)
+        self.ind_list = ctk.CTkScrollableFrame(side, fg_color="transparent")
+        self.ind_list.pack(fill="both", expand=True, padx=4, pady=(4, 0))
+
+        chart = ctk.CTkFrame(body, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        chart.pack(side="left", fill="both", expand=True, padx=(4, 0))
+        self.legend = ctk.CTkFrame(chart, fg_color="transparent")
+        self.legend.pack(fill="x", padx=12, pady=(8, 0))
+        self.canvas = tk.Canvas(chart, bg=COLOR_CARD_BG, highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True, padx=6, pady=(2, 6))
+        self.canvas.bind("<Configure>", lambda e: self._draw())
+        self.canvas.bind("<Motion>", self._hover)
+        self.canvas.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
+        self.tip_default = "ชี้ที่แท่งเพื่อดู Open / High / Low / Close และค่าอินดิเคเตอร์ของแท่งนั้น"
+        self.lbl_tip = ctk.CTkLabel(self, text=self.tip_default, font=f(12), text_color=COLOR_TEXT_MUTED)
+        self.lbl_tip.pack(pady=(0, 8))
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        self._tick()
+
+    def _toggle_full(self):
+        if self.state() == "zoomed":
+            self.state("normal")
+            self.btn_full.configure(text="ขยายเต็มจอ")
+        else:
+            self.state("zoomed")
+            self.btn_full.configure(text="ย่อหน้าต่าง")
+
+    def _close(self):
+        if self._job:
+            try:
+                self.after_cancel(self._job)
+            except Exception:
+                pass
+        self.destroy()
+
+    def _hhmm(self, server_ts):
+        from datetime import datetime, timedelta, timezone
+        return datetime.fromtimestamp(server_ts - self.offset, timezone(timedelta(hours=7))).strftime("%H:%M")
+
+    def _tick(self):
+        try:
+            d = position_chart.get(self.ticket, self.BARS, fallback=self.fallback)
+        except Exception:
+            d = None
+        if d:
+            self.data = d
+            off = round((d["server_time"] - time.time()) / 3600) * 3600
+            self.offset = off if abs(off) <= 14 * 3600 else 0
+            if d["position"]:
+                self.last_pos = d["position"]
+            self._update_header(d)
+            self._update_legend(d)
+            self._update_indicators(d)
+            self._update_advice()
+            self._draw()
+        else:
+            self.lbl_tip.configure(text="เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
+        self._job = self.after(self.REFRESH_MS, self._tick)
+
+    # ---- ส่วนหัว + การ์ดตัวเลข ----
+    def _update_header(self, d):
+        buy = d["side"] > 0
+        self.lbl_side.configure(text="BUY" if buy else "SELL", text_color=COLOR_SUCCESS_GREEN if buy else COLOR_DANGER_RED,
+                                fg_color="#12261C" if buy else "#2C1618")
+        self.lbl_plan.configure(text=d["plan_name"])
+        self.lbl_rule.configure(text=self.PLAN_RULES.get(d["plan_key"], ""))
+        remain = max(0, d["candles"][-1]["time"] + 900 - d["server_time"])
+        self.lbl_clock.configure(text=f"แท่งปัจจุบันปิดในอีก {remain // 60:02d}:{remain % 60:02d}")
+        lp = d["position"] or self.last_pos
+        if not lp:
+            self.lbl_pnl.configure(text="  ไม้นี้ปิดแล้ว  ", text_color=COLOR_TEXT_MUTED, fg_color=COLOR_CARD_BG)
+            return
+        side, mpp = d["side"], d["money_per_pt"]
+        profit = lp["profit"]
+        good = profit >= 0
+        if d["position"] is None:
+            self.lbl_pnl.configure(text="  ไม้นี้ปิดแล้ว (ค่าล่าสุดก่อนปิด)  ", text_color=COLOR_TEXT_MUTED, fg_color=COLOR_CARD_BG)
+        else:
+            self.lbl_pnl.configure(text=f"  {'กำไร' if good else 'ขาดทุน'} {'+' if good else '-'}{abs(profit):,.2f}  ",
+                                   text_color=COLOR_SUCCESS_GREEN if good else COLOR_DANGER_RED, fg_color="#0F2A20" if good else "#2A1215")
+        entry, price, sl, tp = lp["entry"], lp["price"], lp["sl"], lp["tp"]
+        moved = (price - entry) * side
+
+        def put(key, val, sub, col=COLOR_TEXT_PRIMARY, sub_col=COLOR_TEXT_MUTED):
+            v, s = self.stat[key]
+            v.configure(text=val, text_color=col)
+            s.configure(text=sub, text_color=sub_col)
+
+        put("lot", f"{lp['lot']:.2f}", f"{mpp:,.2f} ต่อราคา 1 จุด")
+        put("entry", f"{entry:,.2f}", f"Spread ตอนนี้ {d['spread_pts']} pts")
+        put("price", f"{price:,.2f}", f"{'+' if moved >= 0 else '-'}{abs(moved):,.2f} จุดจากราคาเข้า",
+            COLOR_SUCCESS_GREEN if moved > 0 else (COLOR_DANGER_RED if moved < 0 else COLOR_GOLD_PRIMARY),
+            COLOR_SUCCESS_GREEN if moved > 0 else (COLOR_DANGER_RED if moved < 0 else COLOR_TEXT_MUTED))
+        if sl > 0:
+            locked = (sl - entry) * side > 0
+            if locked:
+                put("sl", f"{sl:,.2f}", f"ล็อกกำไรแล้ว +{(sl - entry) * side * mpp:,.2f}", COLOR_CYAN_ACCENT, COLOR_CYAN_ACCENT)
+            else:
+                put("sl", f"{sl:,.2f}", f"ห่าง {abs(price - sl):,.2f} จุด · เสี่ยง -{abs(entry - sl) * mpp:,.2f}", COLOR_DANGER_RED)
+        else:
+            put("sl", "ไม่มี", "ไม่มี Stop Loss", COLOR_DANGER_RED, COLOR_DANGER_RED)
+        if tp > 0:
+            put("tp", f"{tp:,.2f}", f"อีก {max(0.0, (tp - price) * side):,.2f} จุด · เป้า +{abs(tp - entry) * mpp:,.2f}", COLOR_SUCCESS_GREEN)
+        else:
+            put("tp", "รันเทรนด์", "ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ" if d["plan_key"] in ("P1", "P2") else "ไม่ตั้ง TP", COLOR_GOLD_PRIMARY)
+        put("held", MainTradingApp._fmt_duration(d["server_time"] - lp["time"]), f"เปิด {self._hhmm(lp['time'])} น. (เวลาไทย)")
+
+    def _update_legend(self, d):
+        items = [(f"━ {ln['label']}", self.STYLE_COLORS.get(ln["style"], COLOR_TEXT_MUTED)) for ln in d["lines"]]
+        items += [(f"┅ {lv['label'].split(' ')[0]} {lv['label'].split(' ')[1]}", self.STYLE_COLORS[lv["style"]]) for lv in d["levels"]]
+        items += [("┅ ราคาเข้า", COLOR_CYAN_ACCENT), ("┅ SL", COLOR_DANGER_RED), ("┅ TP", COLOR_SUCCESS_GREEN)]
+        if items == self._legend_sig:
+            return
+        self._legend_sig = items
+        for w in self.legend.winfo_children():
+            w.destroy()
+        for txt, col in items:
+            ctk.CTkLabel(self.legend, text=txt, font=self._f(11), text_color=col, height=18).pack(side="left", padx=(0, 12))
+
+    # ---- รายการอินดิเคเตอร์ (สร้างแถวครั้งเดียว อัปเดตข้อความในที่เดิม) ----
+    def _update_indicators(self, d):
+        inds = d["indicators"]
+        names = [i["name"] for i in inds]
+        if names != self._ind_names:
+            self._ind_names = names
+            for w in self.ind_list.winfo_children():
+                w.destroy()
+            self._ind_rows = []
+            for _ in inds:
+                row = ctk.CTkFrame(self.ind_list, fg_color="#14171E", corner_radius=8)
+                row.pack(fill="x", padx=4, pady=3)
+                head = ctk.CTkFrame(row, fg_color="transparent")
+                head.pack(fill="x", padx=8, pady=(5, 0))
+                dot = ctk.CTkLabel(head, text="●", font=self._f(12), width=14, height=18)
+                dot.pack(side="left")
+                name = ctk.CTkLabel(head, text="", font=self._f(11, "bold"), text_color=COLOR_TEXT_PRIMARY, height=18)
+                name.pack(side="left", padx=(4, 0))
+                val = ctk.CTkLabel(row, text="", font=self._f(13, "bold", "Consolas"), anchor="w", height=20)
+                val.pack(fill="x", padx=(26, 8))
+                note = ctk.CTkLabel(row, text="", font=self._f(10), text_color=COLOR_TEXT_MUTED, justify="left", anchor="w", wraplength=270)
+                self._ind_rows.append((dot, name, val, note))
+        for (dot, name, val, note), it in zip(self._ind_rows, inds):
+            col = COLOR_SUCCESS_GREEN if it["dir"] > 0 else (COLOR_DANGER_RED if it["dir"] < 0 else COLOR_TEXT_MUTED)
+            dot.configure(text_color=col)
+            name.configure(text=it["name"])
+            val.configure(text=it["value"], text_color=col if it["dir"] else COLOR_TEXT_PRIMARY)
+            if note.cget("text") != it["note"]:
+                note.configure(text=it["note"])
+            if it["note"] and not note.winfo_manager():
+                note.pack(fill="x", padx=(26, 8), pady=(0, 5))
+            elif not it["note"] and note.winfo_manager():
+                note.pack_forget()
+
+    def _update_advice(self):
+        a = position_advisor.latest().get(self.ticket)
+        sig = (a or {}).get("verdict"), (a or {}).get("score"), (a or {}).get("advice")
+        if sig == self._adv_sig:
+            return
+        self._adv_sig = sig
+        for w in self.adv_box.winfo_children():
+            w.destroy()
+        head = ctk.CTkFrame(self.adv_box, fg_color="transparent")
+        head.pack(fill="x", padx=10, pady=(8, 2))
+        ctk.CTkLabel(head, text="AI แนะนำ", font=self._f(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        if not a:
+            ctk.CTkLabel(self.adv_box, text="กำลังวิเคราะห์… (ทุก 30 วินาที)", font=self._f(11), text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=10, pady=(0, 8))
+            return
+        fg, bg = MainTradingApp.ADVICE_STYLE[a["verdict"]]
+        ctk.CTkLabel(head, text=f" {a['verdict_text']} ", font=self._f(12, "bold"), text_color=fg, fg_color=bg,
+                     corner_radius=6, height=22).pack(side="right")
+        ctk.CTkLabel(self.adv_box, text=a["advice"], font=self._f(11), text_color=fg, justify="left", anchor="w",
+                     wraplength=300).pack(fill="x", padx=10, pady=(0, 2))
+        ctk.CTkLabel(self.adv_box, text=f"คะแนน {a['score']:+.1f} · เหตุผลทั้งหมดดูที่แท็บ \"ออเดอร์ที่เปิดอยู่\"", font=self._f(10),
+                     text_color=COLOR_TEXT_MUTED, anchor="w").pack(fill="x", padx=10, pady=(0, 8))
+
+    # ---- กราฟ ----
+    def _draw(self):
+        cv = self.canvas
+        cv.delete("all")
+        self.slots = []
+        d = self.data
+        if not d:
+            return
+        W, H = cv.winfo_width(), cv.winfo_height()
+        if W < 120 or H < 120:
+            return
+        candles = d["candles"]
+        n = len(candles)
+        left, right, top, bottom = 10, 74, 12, 22
+        pane = d.get("pane")
+        pane_h = int((H - top - bottom) * 0.24) if pane else 0
+        gap = 16 if pane else 0
+        main_bottom = H - bottom - pane_h - gap
+        lp = d["position"] or self.last_pos
+        vals = [v for c in candles for v in (c["high"], c["low"])]
+        for ln in d["lines"]:
+            vals += [v for v in ln["values"] if v is not None]
+        vals += [lv["price"] for lv in d["levels"]]
+        vals += [d["ask"], d["bid"]]
+        if lp:
+            vals += [v for v in (lp["entry"], lp["sl"], lp["tp"]) if v and v > 0]
+        hi, lo = max(vals), min(vals)
+        pad = max((hi - lo) * 0.06, 0.5)
+        hi, lo = hi + pad, lo - pad
+
+        def y_of(v):
+            return top + (hi - v) / (hi - lo) * (main_bottom - top)
+
+        yb_tag, ya_tag = y_of(d["bid"]), y_of(d["ask"])
+        if abs(ya_tag - yb_tag) < 18:
+            ya_tag -= 12
+        for k in range(6):
+            v = lo + (hi - lo) * k / 5
+            y = y_of(v)
+            cv.create_line(left, y, W - right, y, fill="#1E232C")
+            if abs(y - yb_tag) > 12 and abs(y - ya_tag) > 10:   # ไม่ทับป้าย Bid / Ask
+                cv.create_text(W - right + 6, y, text=f"{v:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 9))
+        slot = (W - left - right) / n
+        bw = max(2, min(18, slot * 0.62))
+
+        def xs(i):
+            return left + slot * (i + 0.5)
+
+        left_labels, right_labels = [], []   # ป้ายเส้นราคา — วางทีหลังแบบไม่ให้ทับกัน
+        # แนวรับ/แนวต้าน
+        for lv in d["levels"]:
+            y = y_of(lv["price"])
+            col = self.STYLE_COLORS.get(lv["style"], COLOR_TEXT_MUTED)
+            cv.create_line(left, y, W - right, y, fill=col, dash=(8, 4))
+            right_labels.append((y, lv["label"], col))
+        # เส้นอินดิเคเตอร์ของแผน
+        for ln in d["lines"]:
+            col = self.STYLE_COLORS.get(ln["style"], COLOR_TEXT_MUTED)
+            kw = {"dash": (5, 3)} if ln["style"] == "mid" else {}
+            pts = []
+            for i, v in enumerate(ln["values"] + [None]):
+                if v is None:
+                    if len(pts) >= 4:
+                        cv.create_line(*pts, fill=col, width=2, **kw)
+                    pts = []
+                    continue
+                pts += [xs(i), y_of(v)]
+        # แท่งเทียน
+        for i, c in enumerate(candles):
+            cx = xs(i)
+            up = c["close"] >= c["open"]
+            col = COLOR_SUCCESS_GREEN if up else COLOR_DANGER_RED
+            cv.create_line(cx, y_of(c["high"]), cx, y_of(c["low"]), fill=col)
+            y1, y2 = y_of(c["open"]), y_of(c["close"])
+            if abs(y1 - y2) < 1:
+                y2 = y1 + 1
+            live = i == n - 1
+            cv.create_rectangle(cx - bw / 2, min(y1, y2), cx + bw / 2, max(y1, y2), fill=col,
+                                outline=COLOR_GOLD_PRIMARY if live else col, width=2 if live else 1)
+            every = max(1, int(round(n / max(1, (W - left - right) / 60))))
+            if (i % every == 0 and i < n - max(2, int(every * 0.8))) or live:
+                cv.create_text(cx, H - bottom + 11, text="ตอนนี้" if live else self._hhmm(c["time"]),
+                               fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=("Segoe UI", 9, "bold" if live else "normal"))
+            self.slots.append((cx - slot / 2, cx + slot / 2, i))
+        # ไม้: ราคาเข้า / SL / TP + จุดเข้าไม้บนแท่งที่เปิด
+        if lp:
+            side = d["side"]
+            for val, col, txt in ((lp["entry"], COLOR_CYAN_ACCENT, f"{lp['type']} {lp['lot']:.2f} lot @ {lp['entry']:,.2f}"),
+                                  (lp["tp"], COLOR_SUCCESS_GREEN, f"TP {lp['tp']:,.2f}"),
+                                  (lp["sl"], COLOR_DANGER_RED, f"SL {lp['sl']:,.2f}" + (" (ล็อกกำไร)" if (lp["sl"] - lp["entry"]) * side > 0 else ""))):
+                if not val or val <= 0:
+                    continue
+                yy = y_of(val)
+                cv.create_line(left, yy, W - right, yy, fill=col, dash=(6, 3), width=2 if col == COLOR_CYAN_ACCENT else 1)
+                left_labels.append((yy, txt, col))
+            for i, c in enumerate(candles):
+                if c["time"] <= lp["time"] < c["time"] + 900:
+                    cx, ye = xs(i), y_of(lp["entry"])
+                    s = 9
+                    if side > 0:
+                        cv.create_polygon(cx, ye + 3, cx - s, ye + 3 + s * 1.4, cx + s, ye + 3 + s * 1.4, fill=COLOR_CYAN_ACCENT, outline="#0B0D12")
+                    else:
+                        cv.create_polygon(cx, ye - 3, cx - s, ye - 3 - s * 1.4, cx + s, ye - 3 - s * 1.4, fill=COLOR_CYAN_ACCENT, outline="#0B0D12")
+                    break
+        # Ask / Bid
+        ya, yb = y_of(d["ask"]), y_of(d["bid"])
+        cv.create_line(left, ya, W - right, ya, fill="#5B6270", dash=(2, 4))
+        cv.create_text(W - right + 6, ya - 12 if abs(ya - yb) < 18 else ya, text=f"A {d['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 8))
+        cv.create_line(left, yb, W - right, yb, fill=COLOR_TEXT_MUTED, dash=(3, 3))
+        cv.create_rectangle(W - right + 2, yb - 9, W - 2, yb + 9, fill=COLOR_GOLD_PRIMARY, outline="")
+        cv.create_text(W - right + 6, yb, text=f"{d['bid']:,.2f}", anchor="w", fill="#111111", font=("Segoe UI", 9, "bold"))
+        self._place_labels(left_labels, left + 4, "w", top, main_bottom)
+        self._place_labels(right_labels, W - right - 4, "e", top, main_bottom)
+        # หน้าต่างย่อย: RSI / MACD Histogram
+        if pane:
+            pt, pb = main_bottom + gap, H - bottom
+            cv.create_rectangle(left, pt, W - right, pb, outline="#232833")
+            pv = pane["values"]
+            if pane["kind"] == "rsi":
+                def py(v):
+                    return pb - v / 100.0 * (pb - pt)
+                if pane.get("band"):
+                    b0, b1 = pane["band"]
+                    cv.create_rectangle(left + 1, py(b1), W - right - 1, py(b0), fill="#14241C" if d["side"] > 0 else "#2A1719", outline="")
+                for lvl in (30, 50, 70):
+                    y = py(lvl)
+                    cv.create_line(left, y, W - right, y, fill="#2A303C", dash=(2, 3))
+                    cv.create_text(W - right + 6, y, text=str(lvl), anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 8))
+                pts = []
+                for i, v in enumerate(pv):
+                    if v is not None:
+                        pts += [xs(i), py(max(0.0, min(100.0, v)))]
+                if len(pts) >= 4:
+                    cv.create_line(*pts, fill=COLOR_GOLD_PRIMARY, width=2)
+                last = next((v for v in reversed(pv) if v is not None), None)
+            else:
+                mx = max([abs(v) for v in pv if v is not None] or [1.0]) or 1.0
+                zero = (pt + pb) / 2
+                sc = (pb - pt) / 2 * 0.9 / mx
+                cv.create_line(left, zero, W - right, zero, fill="#2A303C")
+                for i, v in enumerate(pv):
+                    if v is None:
+                        continue
+                    cx = xs(i)
+                    cv.create_rectangle(cx - bw / 2, min(zero, zero - v * sc), cx + bw / 2, max(zero, zero - v * sc),
+                                        fill=COLOR_SUCCESS_GREEN if v >= 0 else COLOR_DANGER_RED, outline="")
+                last = next((v for v in reversed(pv) if v is not None), None)
+            cv.create_text(left + 6, pt + 3, text=pane["label"] + (f"  {last:,.2f}" if last is not None else ""), anchor="nw",
+                           fill=COLOR_TEXT_PRIMARY, font=("Segoe UI", 9, "bold"))
+
+    def _place_labels(self, items, x, anchor, y_min, y_max, gap=15):
+        """วางป้ายเส้นราคาเรียงจากบนลงล่าง ดันลงเมื่อใกล้กันเกินไป + พื้นหลังทึบให้อ่านออกแม้ทับแท่งเทียน"""
+        cv = self.canvas
+        placed = []
+        for y, txt, col in sorted(items):
+            y = max(y - 8, y_min + 7)
+            if placed and y - placed[-1] < gap:
+                y = placed[-1] + gap
+            y = min(y, y_max - 7)
+            placed.append(y)
+            t = cv.create_text(x, y, text=txt, anchor=anchor, fill=col, font=("Segoe UI", 9, "bold"))
+            x0, y0, x1, y1 = cv.bbox(t)
+            r = cv.create_rectangle(x0 - 3, y0, x1 + 3, y1, fill=COLOR_CARD_BG, outline=col)
+            cv.tag_raise(t, r)
+
+    def _hover(self, event):
+        d = self.data
+        if not d:
+            return
+        for x0, x1, i in self.slots:
+            if x0 <= event.x < x1:
+                c = d["candles"][i]
+                extra = [f"{ln['label']} {ln['values'][i]:,.2f}" for ln in d["lines"] if ln["values"][i] is not None]
+                pane = d.get("pane")
+                if pane and pane["values"][i] is not None:
+                    extra.append(f"{pane['label'].split(' ·')[0]} {pane['values'][i]:,.2f}")
+                self.lbl_tip.configure(text=f"{self._hhmm(c['time'])} น. · O {c['open']:,.2f}  H {c['high']:,.2f}  L {c['low']:,.2f}  "
+                                            f"C {c['close']:,.2f} ({c['close'] - c['open']:+.2f})" + (" · " + " · ".join(extra) if extra else ""))
                 return
 
 
@@ -3032,7 +3477,23 @@ class MainTradingApp(ctk.CTk):
         top.pack(fill="x", padx=6, pady=(0, 8))
         self.lbl_positions_summary = ctk.CTkLabel(top, text="ไม่มีออเดอร์ที่เปิดอยู่", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED)
         self.lbl_positions_summary.pack(side="left")
-        ctk.CTkLabel(top, text="อัปเดตอัตโนมัติ · เวลาเปิดตามเซิร์ฟเวอร์ MT5", font=self._font(10), text_color=COLOR_TEXT_MUTED).pack(side="right")
+        ctk.CTkLabel(top, text="คลิกที่ไม้เพื่อดูกราฟ M15 + อินดิเคเตอร์ของแผน · อัปเดตอัตโนมัติ", font=self._font(10), text_color=COLOR_TEXT_MUTED).pack(side="right")
+
+        adv = ctk.CTkFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
+        adv.pack(side="bottom", fill="x", padx=6, pady=(4, 4))
+        ahead = ctk.CTkFrame(adv, fg_color="transparent")
+        ahead.pack(fill="x", padx=12, pady=(8, 2))
+        ctk.CTkLabel(ahead, text="AI วิเคราะห์ไม้ที่ถืออยู่ · ถือต่อหรือปิด?", font=self._font(13, "bold"),
+                     text_color=COLOR_GOLD_PRIMARY).pack(side="left")
+        self.lbl_advice_meta = ctk.CTkLabel(ahead, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED)
+        self.lbl_advice_meta.pack(side="right")
+        self.advice_body = ctk.CTkScrollableFrame(adv, fg_color="transparent", height=230)
+        self.advice_body.pack(fill="x", padx=4, pady=(0, 4))
+        ctk.CTkLabel(adv, text="วิเคราะห์จากกฎ: เทรนด์ H1/H4 · MA200 · โมเมนตัม M15 · แนวรับ/ต้าน · AI 1-4 ชม. · สัญญาณออกของแผน · SL/TP · ข่าวแรง "
+                               "— ใช้ประกอบการตัดสินใจ ไม่รับประกันผล",
+                     font=self._font(10), text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=12, pady=(0, 6))
+        self._advice_sig = None
+        position_advisor.start_background()
 
         table = ctk.CTkFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
         table.pack(fill="both", expand=True, padx=6, pady=(0, 4))
@@ -3071,6 +3532,7 @@ class MainTradingApp(ctk.CTk):
     def _render_positions(self, positions, server_time):
         positions = sorted(positions or [], key=lambda p: p.get("time", 0), reverse=True)
         tickets = [p["ticket"] for p in positions]
+        self._positions_by_ticket = {p["ticket"]: p for p in positions}
 
         # สร้าง/ลบแถวเฉพาะเมื่อรายการ ticket เปลี่ยน (นอกนั้นอัปเดตข้อความในที่เดิม)
         if tickets != list(self._position_rows.keys()):
@@ -3092,11 +3554,19 @@ class MainTradingApp(ctk.CTk):
                     command=lambda tk_=t: self._on_close_single(tk_),
                 )
                 btn.grid(row=0, column=len(self.POSITION_COLUMNS) - 1, padx=4)
+                for wdg in [frame] + cells:   # คลิกที่แถว → กราฟ M15 + อินดิเคเตอร์ของแผน
+                    wdg.bind("<Button-1>", lambda e, tk_=t: self._open_position_detail(tk_), add="+")
+                    try:
+                        wdg.configure(cursor="hand2")
+                    except Exception:
+                        pass
                 self._position_rows[t] = {"frame": frame, "cells": cells}
             if tickets:
                 self.lbl_positions_empty.pack_forget()
             else:
                 self.lbl_positions_empty.pack(pady=40)
+            position_advisor.request_refresh()
+        self._render_advice(tickets)
 
         total_profit = 0.0
         total_lot = 0.0
@@ -3149,6 +3619,72 @@ class MainTradingApp(ctk.CTk):
             )
         else:
             self.lbl_positions_summary.configure(text="ไม่มีออเดอร์ที่เปิดอยู่", text_color=COLOR_TEXT_MUTED)
+
+    ADVICE_STYLE = {
+        "hold": (COLOR_SUCCESS_GREEN, "#12261C"),
+        "caution": (COLOR_GOLD_PRIMARY, "#2A2412"),
+        "close": (COLOR_DANGER_RED, "#2C1618"),
+    }
+
+    def _render_advice(self, tickets):
+        """การ์ดคำแนะนำ ถือต่อ/ปิด ต่อไม้ (อ่านผลจากเธรด position_advisor — วาดใหม่เมื่อผลเปลี่ยน)"""
+        res = position_advisor.latest()
+        upd = position_advisor._state.get("updated", 0)
+        sig = (tuple(tickets), upd, tuple(t in res for t in tickets))
+        if sig == self._advice_sig:
+            return
+        self._advice_sig = sig
+        for w in self.advice_body.winfo_children():
+            w.destroy()
+        if not tickets:
+            self.lbl_advice_meta.configure(text="")
+            ctk.CTkLabel(self.advice_body, text="ไม่มีไม้ที่ถืออยู่", font=self._font(11), text_color=COLOR_TEXT_MUTED).pack(pady=8)
+            return
+        err = position_advisor._state.get("error")
+        self.lbl_advice_meta.configure(text=(f"อัปเดต {time.strftime('%H:%M:%S', time.localtime(upd))} · ทุก 30 วิ" if upd else "กำลังวิเคราะห์…")
+                                       + (f" · {err[:40]}" if err else ""))
+        for t in tickets:
+            a = res.get(t)
+            card = ctk.CTkFrame(self.advice_body, fg_color="#14171E", corner_radius=8)
+            card.pack(fill="x", padx=4, pady=3)
+            if not a:
+                ctk.CTkLabel(card, text=f"#{t} · กำลังวิเคราะห์…", font=self._font(11), text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=10, pady=6)
+                continue
+            fg, bg = self.ADVICE_STYLE[a["verdict"]]
+            top = ctk.CTkFrame(card, fg_color="transparent")
+            top.pack(fill="x", padx=10, pady=(6, 0))
+            ctk.CTkLabel(top, text=f" {a['verdict_text']} ", font=self._font(12, "bold"), text_color=fg, fg_color=bg,
+                         corner_radius=6, height=24).pack(side="left")
+            ctk.CTkLabel(top, text=f"  #{t} · {a['side']} · {a['plan'][:22]}", font=self._font(12, "bold"),
+                         text_color=COLOR_SUCCESS_GREEN if a["side"] == "BUY" else COLOR_DANGER_RED).pack(side="left")
+            pf = a["profit"]
+            ctk.CTkLabel(top, text=f"คะแนน {a['score']:+.1f} · กำไร {'+' if pf >= 0 else '-'}{abs(pf):,.2f}", font=self._font(11),
+                         text_color=COLOR_TEXT_MUTED).pack(side="right")
+            ctk.CTkLabel(card, text=a["advice"], font=self._font(11, "bold"), text_color=fg, anchor="w").pack(fill="x", padx=12, pady=(2, 0))
+            for r in a["reasons"]:
+                w = r["w"]
+                mark, col = ("✓", COLOR_SUCCESS_GREEN) if w > 0 else (("✗", COLOR_DANGER_RED) if w < 0 else ("•", COLOR_TEXT_MUTED))
+                row = ctk.CTkFrame(card, fg_color="transparent")
+                row.pack(fill="x", padx=14)
+                ctk.CTkLabel(row, text=mark, width=16, font=self._font(11, "bold"), text_color=col, height=18).pack(side="left")
+                ctk.CTkLabel(row, text=r["text"], font=self._font(11), text_color=COLOR_TEXT_PRIMARY if w else COLOR_TEXT_MUTED,
+                             anchor="w", height=18).pack(side="left", fill="x")
+            ctk.CTkFrame(card, fg_color="transparent", height=4).pack()
+
+    def _open_position_detail(self, ticket):
+        """หน้าต่างรายละเอียดไม้ (1 หน้าต่างต่อ 1 ไม้ — คลิกซ้ำดึงอันเดิมขึ้นมา)"""
+        wins = self.__dict__.setdefault("_pos_detail_wins", {})
+        w = wins.get(ticket)
+        if w is not None:
+            try:
+                if w.winfo_exists():
+                    w.deiconify(); w.lift(); w.focus_force()
+                    return
+            except Exception:
+                pass
+        pos = getattr(self, "_positions_by_ticket", {}).get(ticket)
+        if pos:
+            wins[ticket] = PositionDetailDialog(self, pos)
 
     def _on_close_single(self, ticket):
         if not messagebox.askyesno("ยืนยันการปิดออเดอร์", f"ต้องการปิดออเดอร์ #{ticket} ทันทีหรือไม่?"):
