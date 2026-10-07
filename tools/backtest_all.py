@@ -109,8 +109,9 @@ def stats(name, trades):
                 last100_net=round(last.sum(), 1), last100_win=round((last > 0).mean() * 100, 1))
 
 
-def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entry_ok=None, sl_mult=0.75):
-    """step=None → ไม่เลื่อน SL · entry_ok(i, d) = ตัวกรองเพิ่มเติมก่อนเข้าไม้"""
+def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entry_ok=None, sl_mult=0.75, trail="sl", first_frac=None):
+    """step=None → ไม่เลื่อน SL · entry_ok(i, d) = ตัวกรองเพิ่มเติมก่อนเข้าไม้
+    trail="sl": เลื่อน frac ของระยะ SL → ราคาของขั้น · trail="entry": เลื่อน (first_frac ขั้นแรก / frac ขั้นถัดไป) ของระยะ ราคาเข้า → ราคาของขั้น"""
     o, h, l, a, t = frame.open.values, frame.high.values, frame.low.values, frame[atr_col].values, frame.time.values
     mf, ms, td = frame[fast].values, frame[slow].values, frame[trend_col].values
     out, pos = [], None
@@ -126,7 +127,13 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
             elif step:
                 best = (h[i] - e) if d == 1 else (e - l[i])
                 while best >= k * step:
-                    sl = sl + d * frac * abs(e + d * k * step - sl); k += 1
+                    step_px = e + d * k * step
+                    if trail == "entry":
+                        ns = sl + d * (first_frac if (first_frac is not None and k == 1) else frac) * abs(step_px - e)
+                        ns = min(ns, step_px - SPREAD) if d == 1 else max(ns, step_px + SPREAD)   # ไม่ให้ SL เลยราคา (บอทบีบไว้ที่ราคา ± สเปรด)
+                    else:
+                        ns = sl + d * frac * abs(step_px - sl)
+                    sl = max(sl, ns) if d == 1 else min(sl, ns); k += 1
                 pos = (d, e, sl, k, te)
         if not pos and (up or dn) and not np.isnan(a[i]):
             d = 1 if up else -1
@@ -227,7 +234,8 @@ b["ma50"] = b.close.rolling(50).mean()
 _rsi, _c, _m50 = b.rsi.values, b.close.values, b.ma50.values
 def p1_filter(i, d):  # ตัวกรองสัญญาณหลอก: RSI 50–70 (BUY) / 30–50 (SELL) + ราคาปิดฝั่งเดียวกับ MA50 M15
     return ((50 < _rsi[i] < 70) if d == 1 else (30 < _rsi[i] < 50)) and (_c[i] - _m50[i]) * d > 0
-rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "h1_stack", entry_ok=p1_filter, sl_mult=1.0))))
+rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "h1_stack", entry_ok=p1_filter, sl_mult=1.0,
+                                                trail="entry", first_frac=0.25, frac=0.20))))
 f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
 f["atr"] = A(f); f["ma5"], f["ma10"] = f.close.rolling(5).mean(), f.close.rolling(10).mean()
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
@@ -242,7 +250,7 @@ print(pd.DataFrame(rows).to_string(index=False))
 
 # ---------------------------------------------------------------- JSON สำหรับหน้าเว็บ /backtest
 from version import APP_VERSION  # noqa: E402
-NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก $5"),
+NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (25%/20% จากราคาเข้า)"),
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 (500 แท่ง) + AI"),
          4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 + Divergence + AI"),

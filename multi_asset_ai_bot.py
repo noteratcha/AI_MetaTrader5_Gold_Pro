@@ -113,10 +113,15 @@ TRADE_MODS_CSV = _data_path('trade_modifications.csv')
 SIGNAL_HISTORY_CSV = _data_path('signal_history.csv')
 last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กันเข้าไม้ Plan 1/2 ซ้ำบนแท่ง Cross เดิม
 
-# Step Trailing SL (Plan 1 MA M15 + Plan 5 BB-H1): ทุกกำไร 5 จุด (= $5 ที่ 0.01 lot) เลื่อน SL เข้าหาราคา 40% ของระยะ SL → ราคา
-# Backtest 2.5 ปี (กฎ MA100/150/200 + MA5×MA13): กำไร 898 → 885 จุด (เท่าเดิม), PF 1.13 → 1.17, Max DD 346 → 245
+# Step Trailing SL: ทุกกำไร 5 จุด (= $5 ที่ 0.01 lot) เลื่อน SL ครั้งละขั้น
+# - Plan 5 BB-H1: เลื่อน SL เข้าหาราคา 40% ของระยะ SL → ราคาของขั้น
+# - Plan 1 MA M15 (ผู้ใช้กำหนด 7 ต.ค. 2026): วัดระยะ ราคาเข้า → ราคาของขั้น แล้วเลื่อนจาก SL เดิม ขั้นแรก 25% ขั้นถัดไป 20%
+#   Backtest 2.5 ปี เทียบแบบ 40% ของระยะ SL → ราคา: กำไร 951.6 → 1,038.9 จุด, PF 1.45 → 1.42, Max DD 131.5 → 131.0, ชนะ 35.5% → 29.2%
+#   (ทดสอบแล้วแย่กว่า: 40% ทุกขั้น กำไร 760 / DD 167 · ขั้นแรก 30% DD 205.6)
 P4_TRAIL_STEP_POINTS = 5.0
 P4_TRAIL_FRACTION = 0.40
+P1_TRAIL_FIRST_FRACTION = 0.25
+P1_TRAIL_FRACTION = 0.20
 P4_TRAIL_STATE_FILE = _data_path('p4_trail_state.json')
 
 
@@ -140,7 +145,9 @@ p4_trail_steps = _load_p4_trail_state()   # {ticket: จำนวนขั้น
 
 
 def apply_p4_step_trailing(pos, tick, info):
-    """เลื่อน SL ของไม้ Plan 1 และ Plan 5 (BB-H1) ตามขั้นกำไร (คืน True ถ้ามีการเลื่อน)"""
+    """เลื่อน SL ของไม้ Plan 1 และ Plan 5 (BB-H1) ตามขั้นกำไร (คืน True ถ้ามีการเลื่อน)
+    Plan 1: ขั้นที่ k เลื่อน SL เดิมเข้าหาราคา (25% ขั้นแรก / 20% ขั้นถัดไป) × ระยะ ราคาเข้า → ราคาของขั้น (= k × 5 จุด)
+    Plan 5: ขั้นที่ k เลื่อน SL เดิมเข้าหาราคา 40% × ระยะ SL → ราคาของขั้น"""
     if pos.sl is None or pos.sl <= 0 or tick is None:
         return False
     d = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
@@ -151,9 +158,14 @@ def apply_p4_step_trailing(pos, tick, info):
     if reached <= done:
         return False
     new_sl = float(pos.sl)
+    is_p1 = str(pos.comment or "").startswith("MA-Cross-Trend")
     for k in range(done + 1, reached + 1):
         step_px = pos.price_open + d * k * P4_TRAIL_STEP_POINTS        # ราคาตอนกำไรถึงขั้นที่ k
-        new_sl = new_sl + d * P4_TRAIL_FRACTION * abs(step_px - new_sl)  # เลื่อน 40% ของระยะ SL → ราคา
+        if is_p1:
+            frac = P1_TRAIL_FIRST_FRACTION if k == 1 else P1_TRAIL_FRACTION
+            new_sl = new_sl + d * frac * abs(step_px - pos.price_open)    # ระยะ ราคาเข้า → ราคาของขั้น
+        else:
+            new_sl = new_sl + d * P4_TRAIL_FRACTION * abs(step_px - new_sl)  # 40% ของระยะ SL → ราคาของขั้น
     # ระยะห่างขั้นต่ำจากราคาตามที่โบรกเกอร์กำหนด (stops level)
     min_gap = 0.0
     if info is not None:
@@ -2093,11 +2105,11 @@ def main():
                                 log_signal_event(sym, 'POSITION_MGMT', 'MA-Cross-Trend', 'BUY', tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'MA_CROSS_EXIT', f'MA5 crossed above MA13 (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment="MA5 Cross Up Exit")
                                 continue
-                            # Step Trailing: ทุกกำไร 5 จุด เลื่อน SL 40% ของระยะ SL → ราคา
+                            # Step Trailing: ทุกกำไร 5 จุด เลื่อน SL (ขั้นแรก 25% / ถัดไป 20% ของระยะ ราคาเข้า → ราคาของขั้น)
                             if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
                                 continue
 
-                        # 0.15 Plan 5 (BB-H1): เลื่อน SL ทุกกำไร 5 จุด ครั้งละ 40% แบบเดียวกับ Plan 1 (ผู้ใช้เลือก 6 ต.ค. 2026)
+                        # 0.15 Plan 5 (BB-H1): เลื่อน SL ทุกกำไร 5 จุด ครั้งละ 40% ของระยะ SL → ราคา (ผู้ใช้เลือก 6 ต.ค. 2026)
                         #      ยังใช้ล็อกกำไร 70% / Dynamic TP 80% ตามเดิม — SL ขยับเฉพาะทิศที่ดีขึ้นเท่านั้น
                         if pos.comment.startswith("BB-H1"):
                             if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):

@@ -211,15 +211,25 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         if not pos:
             return
         step = bot.P4_TRAIL_STEP_POINTS
+        if plan_key == "P1":
+            rule = (f"ทุก +{step:g} จุด เลื่อน SL {bot.P1_TRAIL_FIRST_FRACTION:.0%} (ขั้นแรก) / {bot.P1_TRAIL_FRACTION:.0%} (ขั้นถัดไป)"
+                    " ของระยะ ราคาเข้า → ราคาของขั้น")
+        else:
+            rule = f"ทุก +{step:g} จุด เลื่อน SL เข้าหาราคา {bot.P4_TRAIL_FRACTION:.0%} ของระยะ SL → ราคา"
         if live:
             gain = (price - entry) * side
             k = int(gain // step) if gain > 0 else 0
+            nk, npx, sl = k + 1, entry + side * (k + 1) * step, pos["sl"]
+            if plan_key == "P1":
+                nsl = sl + side * (bot.P1_TRAIL_FIRST_FRACTION if nk == 1 else bot.P1_TRAIL_FRACTION) * abs(npx - entry)
+            else:
+                nsl = sl + side * bot.P4_TRAIL_FRACTION * abs(npx - sl)
             inds.append(_ind("เลื่อน SL ขั้นบันได", f"ผ่านแล้ว {k} ขั้น", 1 if k else 0,
-                             f"ทุก +{step:g} จุด เลื่อน SL เข้าหาราคา {bot.P4_TRAIL_FRACTION:.0%} · ขั้นถัดไปที่ {entry + side * (k + 1) * step:,.2f}"))
+                             f"{rule} · ขั้นถัดไปเมื่อราคาถึง {npx:,.2f} → SL {nsl:,.2f}" if sl > 0 else rule))
         elif mfe is not None:
             k = int(mfe // step) if mfe > 0 else 0
             inds.append(_ind("เลื่อน SL ขั้นบันได", f"ผ่าน {k} ขั้นระหว่างถือ", 1 if k else 0,
-                             f"ทุก +{step:g} จุด เลื่อน SL เข้าหาราคา {bot.P4_TRAIL_FRACTION:.0%} · กำไรสูงสุดระหว่างถือ {mfe:,.2f} จุด"))
+                             f"{rule} · กำไรสูงสุดระหว่างถือ {mfe:,.2f} จุด"))
 
     def tp_progress():
         if not pos or pos["tp"] <= 0:
