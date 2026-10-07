@@ -445,7 +445,7 @@ class BotController:
             return None
 
     def quick_order(self, side: str, sl_pts: float, tp_pts: float, symbol: str = "XAUUSD") -> tuple[bool, str]:
-        """เปิดออเดอร์ทันทีจากปุ่มในโปรแกรม (ใช้ send_order ตัวเดียวกับบอท: Lot ที่ตั้งไว้, เช็กมาร์จิ้น, บันทึกประวัติ)
+        """เปิดออเดอร์ทันทีจากปุ่มในโปรแกรม (ใช้ send_order ตัวเดียวกับบอท: Lot ที่ตั้งไว้, เช็กหลักประกัน, บันทึกประวัติ)
         sl_pts / tp_pts = ระยะเป็นจุดราคา (tp_pts <= 0 = ไม่ตั้ง TP)"""
         if not license_mgr.is_authenticated:
             return False, "กรุณาเข้าสู่ระบบก่อน"

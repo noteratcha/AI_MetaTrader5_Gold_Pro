@@ -125,11 +125,11 @@ def set_user_enabled(plan_name: str, enabled: bool, email: str = None):
         json.dump(data, f)
 
 
-DEFAULT_MARGIN_PER_TRADE = 400.0   # มาร์จิ้นว่างทุก 400 เปิดได้ 1 ไม้ (ที่ Lot 0.01)
+DEFAULT_MARGIN_PER_TRADE = 400.0   # หลักประกันว่างทุก 400 เปิดได้ 1 ไม้ (ที่ Lot 0.01)
 
 
 def get_margin_per_trade(email: str = None) -> float:
-    """มาร์จิ้นที่ต้องมีต่อ 1 ไม้ (ที่ Lot 0.01) ของผู้ใช้คนนี้ — ค่าเริ่มต้น 400 · บันทึกใน bot_settings.json คีย์ margin_per_trade[email]"""
+    """หลักประกันที่ต้องมีต่อ 1 ไม้ (ที่ Lot 0.01) ของผู้ใช้คนนี้ — ค่าเริ่มต้น 400 · บันทึกใน bot_settings.json คีย์ margin_per_trade[email]"""
     try:
         v = float((_settings().get("margin_per_trade") or {}).get((email or _current_email()) or "_local", DEFAULT_MARGIN_PER_TRADE))
         return v if v >= 10 else DEFAULT_MARGIN_PER_TRADE
@@ -162,7 +162,7 @@ def account_usd(acc) -> float:
 
 
 def max_positions(free_margin: float, lot: float, email: str = None, margin: float = None) -> int:
-    """จำนวนไม้สูงสุดที่เปิดได้ = มาร์จิ้นว่าง ÷ (มาร์จิ้นต่อไม้ × Lot/0.01) ปัดเศษขึ้น — อย่างน้อย 1 ไม้"""
+    """จำนวนไม้สูงสุดที่เปิดได้ = หลักประกันว่าง ÷ (หลักประกันต่อไม้ × Lot/0.01) ปัดเศษขึ้น — อย่างน้อย 1 ไม้"""
     per = (margin or get_margin_per_trade(email)) * max(float(lot or 0.01), 0.01) / 0.01
     # ทุก `per` ปัดเศษขึ้น: ไม่เกิน 400 = 1 ไม้, 401–800 = 2 ไม้, 960 = 3 ไม้
     return max(1, math.ceil(float(free_margin or 0) / per - 1e-9)) if per > 0 else 1

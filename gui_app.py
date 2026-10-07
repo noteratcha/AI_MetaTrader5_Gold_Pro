@@ -645,14 +645,14 @@ class ContactDialog(ctk.CTkToplevel):
 
 
 class MarginSettingDialog(ctk.CTkToplevel):
-    """ตั้งมาร์จิ้นต่อ 1 ไม้ (จำแยกตามบัญชี) — ยิ่งตั้งสูง บอทยิ่งเปิดไม้พร้อมกันได้น้อยลง (ปลอดภัยขึ้น)"""
+    """ตั้งหลักประกันต่อ 1 ไม้ (จำแยกตามบัญชี) — ยิ่งตั้งสูง บอทยิ่งเปิดไม้พร้อมกันได้น้อยลง (ปลอดภัยขึ้น)"""
 
     PRESETS = (200, 300, 400, 500, 800)
 
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.title("มาร์จิ้นต่อไม้")
+        self.title("หลักประกันต่อไม้")
         self.configure(fg_color=COLOR_BG_DARK)
         self.transient(parent)
         self.resizable(False, False)
@@ -665,8 +665,8 @@ class MarginSettingDialog(ctk.CTkToplevel):
         self.lot = float(parent._load_lot())
         self.n_open = len(t.get("open_positions") or [])
 
-        ctk.CTkLabel(self, text="มาร์จิ้นต่อ 1 ไม้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
-        for txt, color, pad in (("จำนวนไม้สูงสุด = มาร์จิ้นว่าง ÷ มาร์จิ้นต่อไม้ (เศษปัดขึ้น)", COLOR_TEXT_MUTED, (2, 0)),
+        ctk.CTkLabel(self, text="หลักประกันต่อ 1 ไม้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
+        for txt, color, pad in (("จำนวนไม้สูงสุด = หลักประกันว่าง ÷ หลักประกันต่อไม้ (เศษปัดขึ้น)", COLOR_TEXT_MUTED, (2, 0)),
                                 ("เช่น ตั้ง 400: ไม่เกิน 400 = 1 ไม้ · 401–800 = 2 ไม้ · 960 = 3 ไม้", COLOR_GOLD_PRIMARY, (0, 0)),
                                 ("ตั้งสูง = เปิดได้น้อยไม้ (ปลอดภัยขึ้น) · ตั้งต่ำ = เปิดได้หลายไม้ (เสี่ยงขึ้น)", COLOR_TEXT_MUTED, (0, 10))):
             ctk.CTkLabel(self, text=txt, font=f(11), text_color=color, justify="left", height=20).pack(anchor="w", padx=20, pady=pad)
@@ -675,11 +675,11 @@ class MarginSettingDialog(ctk.CTkToplevel):
         card.pack(fill="x", padx=18)
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.pack(fill="x", padx=14, pady=(12, 6))
-        ctk.CTkLabel(top, text="มาร์จิ้นว่างตอนนี้", font=f(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        ctk.CTkLabel(top, text="หลักประกันว่างตอนนี้", font=f(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
         ctk.CTkLabel(top, text=f"{self.free:,.2f}", font=f(15, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY).pack(side="right")
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(2, 4))
-        ctk.CTkLabel(row, text="มาร์จิ้นต่อ 1 ไม้ (ที่ Lot 0.01)", font=f(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        ctk.CTkLabel(row, text="หลักประกันต่อ 1 ไม้ (ที่ Lot 0.01)", font=f(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
         self.var = tk.StringVar(value=f"{plan_config.get_margin_per_trade():g}")
         ent = ctk.CTkEntry(row, textvariable=self.var, width=100, height=32, justify="center", font=f(14, "bold", "Consolas"))
         ent.pack(side="right")
@@ -732,7 +732,7 @@ class MarginSettingDialog(ctk.CTkToplevel):
             return
         per = v * max(self.lot, 0.01) / 0.01
         n = plan_config.max_positions(self.free, self.lot, margin=v)
-        self.lbl_calc.configure(text=f"มาร์จิ้นว่าง {self.free:,.2f} ÷ {per:,.0f} (ปัดขึ้น) → เปิดได้สูงสุด {n} ไม้ (เปิดอยู่ {self.n_open})",
+        self.lbl_calc.configure(text=f"หลักประกันว่าง {self.free:,.2f} ÷ {per:,.0f} (ปัดขึ้น) → เปิดได้สูงสุด {n} ไม้ (เปิดอยู่ {self.n_open})",
                                 text_color=COLOR_SUCCESS_GREEN)
         lot_note = f"Lot ตอนนี้ {self.lot:.2f} → ใช้ {per:,.0f} ต่อไม้" if abs(self.lot - 0.01) > 1e-9 else "Lot 0.01 → ใช้ตามค่าที่ตั้ง"
         self.lbl_note.configure(text=f"{lot_note} · อย่างน้อยเปิดได้ 1 ไม้เสมอ · จำค่าแยกตามบัญชี")
@@ -744,7 +744,7 @@ class MarginSettingDialog(ctk.CTkToplevel):
             return
         try:
             plan_config.set_margin_per_trade(v)
-            print(f"[MARGIN SETTING] มาร์จิ้นต่อไม้ = {v:,.0f} (ที่ Lot 0.01)")
+            print(f"[MARGIN SETTING] หลักประกันต่อไม้ = {v:,.0f} (ที่ Lot 0.01)")
         except Exception as e:
             self.lbl_calc.configure(text=f"บันทึกไม่สำเร็จ: {e}", text_color=COLOR_DANGER_RED)
             return
@@ -3138,7 +3138,7 @@ class MainTradingApp(ctk.CTk):
         stats.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="ctl_stats")
         self.ctl_stat_labels = {}
         for col, (key, title, init) in enumerate((("open", "ออเดอร์ / สูงสุด", "0 / 0"), ("float", "กำไรลอยตัว", "0.00"),
-                                                  ("margin", "มาร์จิ้นว่าง ›", "0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
+                                                  ("margin", "หลักประกันว่าง ›", "0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
             box = ctk.CTkFrame(stats, fg_color="transparent")
             box.grid(row=0, column=col, sticky="nsew", pady=5)
             ttl = ctk.CTkLabel(box, text=title, font=self._font(10), height=16,
@@ -3151,7 +3151,7 @@ class MainTradingApp(ctk.CTk):
                 for w in (box, val, ttl):
                     w.configure(cursor="hand2")
                     w.bind("<Button-1>", lambda e: self.main_tabs.set(self.TAB_POSITIONS))
-            if key == "margin":  # กดมาร์จิ้น → ตั้งมาร์จิ้นต่อไม้
+            if key == "margin":  # กดหลักประกัน → ตั้งหลักประกันต่อไม้
                 for w in (box, val, ttl):
                     w.configure(cursor="hand2")
                     w.bind("<Button-1>", lambda e: self._open_margin_setting())

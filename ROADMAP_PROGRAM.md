@@ -58,7 +58,7 @@ d:/โปรเจค/AI_MetaTrader5_FBS/
   * `10004`: `TRADE_RETCODE_REQUOTE` (ราคาวิ่งเปลี่ยน) ➔ ดึงราคา Tick ใหม่ทันทีแล้วยิงซ้ำภายใน 0.5 วินาที (ไม่เกิน 3 ครั้ง)
   * `10006`: `TRADE_RETCODE_REJECT` (คำสั่งถูกปฏิเสธ) ➔ บันทึก Log และข้ามรอบ
   * `10018`: `TRADE_RETCODE_MARKET_CLOSED` (ตลาดปิดเสาร์-อาทิตย์) ➔ เข้าสู่ Sleep Mode อัตโนมัติ ไม่เปลือง CPU
-  * `10019`: `TRADE_RETCODE_NO_MONEY` (มาร์จิ้นไม่พอ) ➔ แจ้งเตือนลูกค้าบน Terminal และหยุดออกไม้ใหม่
+  * `10019`: `TRADE_RETCODE_NO_MONEY` (หลักประกันไม่พอ) ➔ แจ้งเตือนลูกค้าบน Terminal และหยุดออกไม้ใหม่
 
 ### 2.2 ระบบ Auto-Reconnect เมื่อสัญญาณเน็ตหลุด
 * หาก `mt5.terminal_info().connected == False` หรือดึง `mt5.copy_rates_from_pos()` ล้มเหลว:

@@ -876,7 +876,7 @@ def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
     try:
         acc = mt5.account_info()
         if acc is not None and acc.margin_free < 25.0:
-            print(f"{Colors.RED}[FAILED - AUTO TRADE {symbol}] มาร์จิ้นคงเหลือไม่เพียงพอ (${acc.margin_free:.2f} < $25.00){Colors.RESET}")
+            print(f"{Colors.RED}[FAILED - AUTO TRADE {symbol}] หลักประกันว่างไม่เพียงพอ ({acc.margin_free:,.2f} < 25.00 USD){Colors.RESET}")
             return False
     except Exception:
         pass
@@ -1917,7 +1917,7 @@ def main():
                 
                 # โหมดไม่สนสเปรด (ตามคำขอ): เข้าเทรดได้ทุกสภาวะตลาดโดยไม่มีข้อจำกัดเรื่องสเปรด
                 
-                # เข้าไม้ใหม่ (7 ต.ค. 2026): เปิดได้แม้มีไม้ค้าง — ไม่เกินจำนวนไม้ตามมาร์จิ้น และแผนละไม่เกิน 1 ไม้ (เหมือน Backtest)
+                # เข้าไม้ใหม่ (7 ต.ค. 2026): เปิดได้แม้มีไม้ค้าง — ไม่เกินจำนวนไม้ตามหลักประกัน และแผนละไม่เกิน 1 ไม้ (เหมือน Backtest)
                 # วนครั้งเดียว: break = ข้ามการเข้าไม้รอบนี้ แต่ยังดูแลไม้ที่เปิดอยู่ด้านล่างต่อ
                 for _entry_once in (1,):
                         # ตรวจสอบระบบ Cooldown หลังปิดไม้ / Circuit Breaker
@@ -1936,7 +1936,7 @@ def main():
                             break
 
                         # ---- Max Positions by Free Margin ----
-                        # มาจินทุก $400 เปิดได้ 1 ไม้ (คำนวณจาก Free Margin ปัจจุบัน)
+                        # หลักประกันว่าง (Free Margin) ทุก 400 เปิดได้ 1 ไม้ (เศษปัดขึ้น)
                         acc_info = mt5.account_info()
                         # ยอดเงินขั้นต่ำ 25 USD (Equity) — ต่ำกว่านี้ไม่เปิดไม้ใหม่ (ยังดูแลไม้ที่เปิดอยู่ตามปกติ)
                         if acc_info is not None and plan_config.account_usd(acc_info) < plan_config.MIN_BALANCE_USD:
@@ -1947,11 +1947,11 @@ def main():
                         all_open_pos = mt5.positions_get()
                         total_open_pos = len(all_open_pos) if all_open_pos else 0
                         free_margin = float(acc_info.margin_free) if acc_info else 0.0
-                        # มาร์จิ้นต่อไม้: ผู้ใช้ตั้งเองได้ (ค่าเริ่มต้น 400 ที่ Lot 0.01 · จำแยกตามบัญชี) ปรับตามขนาดไม้
+                        # หลักประกันต่อไม้: ผู้ใช้ตั้งเองได้ (ค่าเริ่มต้น 400 ที่ Lot 0.01 · จำแยกตามบัญชี) ปรับตามขนาดไม้
                         max_allowed = plan_config.max_positions(free_margin, current_lot())  # อย่างน้อย 1 ไม้
                         if total_open_pos >= max_allowed:
                             if is_in_zone:
-                                print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} มาจิน ${free_margin:.0f} → เปิดได้สูงสุด {max_allowed} ไม้ (เปิดอยู่แล้ว {total_open_pos} ไม้) — รอเปิดมาจินเพิ่มหรือปิดไม้เดิมก่อน{Colors.RESET}")
+                                print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} หลักประกันว่าง {free_margin:,.0f} → เปิดได้สูงสุด {max_allowed} ไม้ (เปิดอยู่แล้ว {total_open_pos} ไม้) — รอให้มีหลักประกันเพิ่มหรือปิดไม้เดิมก่อน{Colors.RESET}")
                                 log_signal_event(sym, 'RISK_BLOCKED', status_text, 'N/A', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'MAX_POS_BLOCKED', f'Margin ${free_margin:.0f} max allowed {max_allowed} (Already open {total_open_pos})')
                             break
 

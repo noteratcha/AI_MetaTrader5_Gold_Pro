@@ -75,7 +75,7 @@ _RULES = [
 
 _FRIENDLY = [
     (re.compile(r"Market closed|\(Code: 10018\)"), "  → ตลาดปิด (นอกเวลาเทรด/วันหยุด) บอทจะเข้าไม้ใหม่เมื่อตลาดเปิด"),
-    (re.compile(r"\(Code: 10019\)|No money|Not enough money"), "  → มาร์จิ้นไม่พอ"),
+    (re.compile(r"\(Code: 10019\)|No money|Not enough money"), "  → หลักประกันไม่พอ"),
     (re.compile(r"\(Code: 10027\)|AutoTrading disabled"), "  → กรุณาเปิดปุ่ม Algo Trading ใน MT5"),
 ]
 

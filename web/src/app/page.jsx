@@ -139,7 +139,7 @@ function LiveMonitor() {
               sub={`${positions.length} ออเดอร์ที่เปิดอยู่`}
               loading={loading}
             />
-            <StatCard icon={Gauge} label="Free Margin" value={formatUsd(t?.margin_free)} tone="gold" sub="เปิดได้ 1 ไม้ ต่อทุก $400" loading={loading} />
+            <StatCard icon={Gauge} label="หลักประกันว่าง" value={formatUsd(t?.margin_free)} tone="gold" sub="ค่าเริ่มต้น 1 ไม้ ต่อทุก $400 (ปัดขึ้น)" loading={loading} />
           </div>
 
           <div className="grid grid-main-side section">
