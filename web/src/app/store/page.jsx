@@ -67,6 +67,11 @@ export default function StorePage() {
         description={`${rateRange(packages)}ไม่มีรายเดือน · ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ`}
       />
 
+      <div className="card card-pad row-between wrap" style={{ marginBottom: 18, gap: 12 }}>
+        <span className="small">มีคีย์โปรโมชันหรือ Product Key อยู่แล้ว? เติมชั่วโมงเข้าบัญชีได้เองทันที</span>
+        <Link href="/redeem" className="btn btn-outline-gold btn-sm">เติมคีย์</Link>
+      </div>
+
       <div className="grid grid-3" style={{ marginBottom: 28 }}>
         {[
           { icon: Clock, title: 'ตัดเวลาเฉพาะตอนบอททำงาน', text: 'กดหยุดหรือปิดโปรแกรม มิเตอร์หยุดทันที' },

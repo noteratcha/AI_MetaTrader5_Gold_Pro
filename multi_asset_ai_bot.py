@@ -94,6 +94,10 @@ last_exit_time = {}            # บันทึกเวลาปิดไม�
 # ==================== แผนการปรับปรุงความแม่นยำสูง (v2026.1002.2225) ====================
 P1_SL_ATR_MULT = 1.0              # Plan 1 (MA M15): SL 1.0 ATR — ไส้เทียนสะบัดชน SL น้อยลง (Backtest ดีที่สุด)
 SL_ATR_MULT = 0.75                # ขยายพื้นที่หายใจ SL = 0.75 ATR (ป้องกัน Market Noise ในแท่ง M15)
+# Plan 2 (7 ต.ค. 2026): SL 1.25 ATR H1 + ออกเมื่อ MA5 ตัด MA20 H1 กลับ (เข้ายังใช้ MA5 ตัด MA10)
+# Backtest 2.5 ปี: กำไร 1,126 → 1,755 จุด, PF 1.59 → 1.96, Max DD 219 → 134
+P2_SL_ATR_MULT = 1.25
+P2_EXIT_MA = 20
 # Plan 3 (7 ต.ค. 2026): H1 MA100/150/200 ต้องเรียงตามทิศ + SL 1.0 ATR / TP 2.0 ATR
 # Backtest 2.5 ปี: กำไร 194 → 478 จุด, PF 1.08 → 1.45, Max DD 155 → 54, กำไรทั้ง 2 ครึ่ง
 P3_SL_ATR_MULT = 1.0
@@ -1189,7 +1193,7 @@ def main():
     print(f"{Colors.BOLD}🏆 [AI BOT] {BOT_NAME} v{BOT_VERSION} Started{Colors.RESET}")
     print(f"{Colors.GREEN}{Colors.BOLD}[ASSET FOCUS]: XAUUSD (Gold Specialist 100%){Colors.RESET}")
     print(f"{Colors.CYAN}{Colors.BOLD}[ACTIVE PLANS]: Plan 1 (MA-Cross M15), Plan 2 (MA-Cross H1), Plan 3 (SMC), Plan 4 (Bounce), Plan 5 (BB-H1 Reversion){Colors.RESET}")
-    print(f"{Colors.YELLOW}{Colors.BOLD}[RISK/RRR]: P1 SL {P1_SL_ATR_MULT} ATR (No TP, Step Trail) | P2 SL {SL_ATR_MULT} ATR H1 (No TP) | P3-P5 SL {SL_ATR_MULT} ATR, TP RRR 1:{TP_RRR_XAU:.2f} | Early Profit Lock +0.35 ATR{Colors.RESET}")
+    print(f"{Colors.YELLOW}{Colors.BOLD}[RISK/RRR]: P1 SL {P1_SL_ATR_MULT} ATR (No TP, Step Trail) | P2 SL {P2_SL_ATR_MULT} ATR H1 (No TP, exit MA5xMA20) | P3-P5 SL {SL_ATR_MULT} ATR, TP RRR 1:{TP_RRR_XAU:.2f} | Early Profit Lock +0.35 ATR{Colors.RESET}")
     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}\n")
 
     models = {}
@@ -1222,6 +1226,7 @@ def main():
         
     print(f"\n{Colors.GREEN}{Colors.BOLD}[AI READY] AI Multi-Asset Bot Ready! Auto-Trading Active for {', '.join(TRADE_SYMBOLS)}...{Colors.RESET}\n")
     
+    scan_errors = 0   # error ติดกันกี่รอบ — ครบ 3 รอบหยุดบอท (ไม่ตัดชั่วโมงขณะบอททำงานไม่ได้)
     while BOT_RUNNING_FLAG:
         if BOT_PAUSED_FLAG:
             time.sleep(1)
@@ -1297,6 +1302,14 @@ def main():
                 ma_cross_h1_down = bool((prev_closed_ma5_h1 >= prev_closed_ma10_h1) and (closed_ma5_h1 < closed_ma10_h1))
                 # เวลาแท่ง H1 ที่เกิด Cross (ใช้กันเข้าไม้ซ้ำบนสัญญาณ Cross เดิมตลอดทั้งชั่วโมง)
                 ma_cross_h1_bar_time = df_h1['time'].iloc[-2] if len(df_h1) >= 2 else df_h1['time'].iloc[-1]
+                # Plan 2 ออกไม้: MA5 ตัด MA20 H1 กลับขั้ว (แท่งที่ปิดแล้ว)
+                _ma_exit_h1 = df_h1['close'].rolling(P2_EXIT_MA).mean()
+                if len(df_h1) >= P2_EXIT_MA + 3:
+                    _x1, _x0 = float(_ma_exit_h1.iloc[-2]), float(_ma_exit_h1.iloc[-3])
+                    p2_exit_up = bool(prev_closed_ma5_h1 <= _x0 and closed_ma5_h1 > _x1)
+                    p2_exit_down = bool(prev_closed_ma5_h1 >= _x0 and closed_ma5_h1 < _x1)
+                else:
+                    p2_exit_up = p2_exit_down = False
 
                 # ATR(14) บน H1 สำหรับ Safety SL ของ Plan 2 (0.75 ATR H1) — ใช้แท่งที่ปิดแล้ว
                 tr_h1 = pd.concat([
@@ -1812,281 +1825,287 @@ def main():
                 
                 # โหมดไม่สนสเปรด (ตามคำขอ): เข้าเทรดได้ทุกสภาวะตลาดโดยไม่มีข้อจำกัดเรื่องสเปรด
                 
-                if not has_position:
-                    # ตรวจสอบระบบ Cooldown หลังปิดไม้ / Circuit Breaker
-                    cd_minutes = COOLDOWN_MINUTES_XAU
-                    cd_seconds = cd_minutes * 60
-                    elapsed_time = time.time() - last_exit_time.get(sym, 0)
+                # เข้าไม้ใหม่ (7 ต.ค. 2026): เปิดได้แม้มีไม้ค้าง — ไม่เกินจำนวนไม้ตามมาร์จิ้น และแผนละไม่เกิน 1 ไม้ (เหมือน Backtest)
+                # วนครั้งเดียว: break = ข้ามการเข้าไม้รอบนี้ แต่ยังดูแลไม้ที่เปิดอยู่ด้านล่างต่อ
+                for _entry_once in (1,):
+                        # ตรวจสอบระบบ Cooldown หลังปิดไม้ / Circuit Breaker
+                        cd_minutes = COOLDOWN_MINUTES_XAU
+                        cd_seconds = cd_minutes * 60
+                        elapsed_time = time.time() - last_exit_time.get(sym, 0)
                     
-                    if elapsed_time < cd_seconds:
-                        rem_sec = int(cd_seconds - elapsed_time)
-                        rem_m = rem_sec // 60
-                        rem_s = rem_sec % 60
-                        if is_in_zone:
-                            label = "CIRCUIT BREAKER" if (last_exit_time.get(sym, 0) - time.time()) > cd_seconds else "COOLDOWN"
-                            print(f"{Colors.YELLOW}[{label}] {sym} waiting {rem_m:02d}:{rem_s:02d}m before next trade (Loss streak: {consecutive_loss.get(sym, 0)}){Colors.RESET}")
-                            log_signal_event(sym, 'RISK_BLOCKED', status_text, 'N/A', close_price, prob[1], prob[0], h4_cloud_status, div_name, label, f'Waiting {rem_m:02d}:{rem_s:02d}m before next trade (Loss streak: {consecutive_loss.get(sym, 0)})')
-                        continue
+                        if elapsed_time < cd_seconds:
+                            rem_sec = int(cd_seconds - elapsed_time)
+                            rem_m = rem_sec // 60
+                            rem_s = rem_sec % 60
+                            if is_in_zone:
+                                label = "CIRCUIT BREAKER" if (last_exit_time.get(sym, 0) - time.time()) > cd_seconds else "COOLDOWN"
+                                print(f"{Colors.YELLOW}[{label}] {sym} waiting {rem_m:02d}:{rem_s:02d}m before next trade (Loss streak: {consecutive_loss.get(sym, 0)}){Colors.RESET}")
+                                log_signal_event(sym, 'RISK_BLOCKED', status_text, 'N/A', close_price, prob[1], prob[0], h4_cloud_status, div_name, label, f'Waiting {rem_m:02d}:{rem_s:02d}m before next trade (Loss streak: {consecutive_loss.get(sym, 0)})')
+                            break
 
-                    # ---- Max Positions by Free Margin ----
-                    # มาจินทุก $400 เปิดได้ 1 ไม้ (คำนวณจาก Free Margin ปัจจุบัน)
-                    acc_info = mt5.account_info()
-                    all_open_pos = mt5.positions_get()
-                    total_open_pos = len(all_open_pos) if all_open_pos else 0
-                    free_margin = float(acc_info.margin_free) if acc_info else 0.0
-                    # มาร์จิ้นต่อไม้: ผู้ใช้ตั้งเองได้ (ค่าเริ่มต้น 400 ที่ Lot 0.01 · จำแยกตามบัญชี) ปรับตามขนาดไม้
-                    max_allowed = plan_config.max_positions(free_margin, current_lot())  # อย่างน้อย 1 ไม้
-                    if total_open_pos >= max_allowed:
-                        if is_in_zone:
-                            print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} มาจิน ${free_margin:.0f} → เปิดได้สูงสุด {max_allowed} ไม้ (เปิดอยู่แล้ว {total_open_pos} ไม้) — รอเปิดมาจินเพิ่มหรือปิดไม้เดิมก่อน{Colors.RESET}")
-                            log_signal_event(sym, 'RISK_BLOCKED', status_text, 'N/A', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'MAX_POS_BLOCKED', f'Margin ${free_margin:.0f} max allowed {max_allowed} (Already open {total_open_pos})')
-                        continue
+                        # ---- Max Positions by Free Margin ----
+                        # มาจินทุก $400 เปิดได้ 1 ไม้ (คำนวณจาก Free Margin ปัจจุบัน)
+                        acc_info = mt5.account_info()
+                        all_open_pos = mt5.positions_get()
+                        total_open_pos = len(all_open_pos) if all_open_pos else 0
+                        free_margin = float(acc_info.margin_free) if acc_info else 0.0
+                        # มาร์จิ้นต่อไม้: ผู้ใช้ตั้งเองได้ (ค่าเริ่มต้น 400 ที่ Lot 0.01 · จำแยกตามบัญชี) ปรับตามขนาดไม้
+                        max_allowed = plan_config.max_positions(free_margin, current_lot())  # อย่างน้อย 1 ไม้
+                        if total_open_pos >= max_allowed:
+                            if is_in_zone:
+                                print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} มาจิน ${free_margin:.0f} → เปิดได้สูงสุด {max_allowed} ไม้ (เปิดอยู่แล้ว {total_open_pos} ไม้) — รอเปิดมาจินเพิ่มหรือปิดไม้เดิมก่อน{Colors.RESET}")
+                                log_signal_event(sym, 'RISK_BLOCKED', status_text, 'N/A', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'MAX_POS_BLOCKED', f'Margin ${free_margin:.0f} max allowed {max_allowed} (Already open {total_open_pos})')
+                            break
 
-                    # ---- Same Plan + Same Symbol Cooldown (60 นาที — เฉพาะไม้ขาดทุน) ----
-                    # ห้ามเข้าทิศเดิมที่สกุลเดิมภายใน 60 นาที เฉพาะเมื่อไม้นั้นเคยขาดทุน
-                    def _is_plan_blocked(direction, plan_name):
-                        # แผนที่แอดมินปิดไว้ (เว็บ /admin/plans) — ห้ามเข้าไม้ใหม่
-                        if not plan_config.is_enabled(plan_name):
-                            key = (sym, plan_config.base_plan(plan_name))
-                            if time.time() - _plan_disabled_logged.get(key, 0) > 600:
-                                _plan_disabled_logged[key] = time.time()
-                                who = "ผู้ดูแลระบบ" if plan_config.disabled_reason(plan_name) == "admin" else "คุณ (เลือกไม่ใช้แผนนี้)"
-                                print(f"{Colors.YELLOW}[PLAN DISABLED] {sym} {plan_config.base_plan(plan_name)} ถูกปิดโดย{who} — ข้ามสัญญาณ {direction}{Colors.RESET}")
-                            return True
-                        sym_plans = last_loss_plan.get(sym, {})
-                        if direction in sym_plans:
-                            last_plan, last_ts = sym_plans[direction]
-                            elapsed_p = time.time() - last_ts
-                            if elapsed_p < SAME_PLAN_COOLDOWN_MINUTES * 60:
-                                rem = int(SAME_PLAN_COOLDOWN_MINUTES * 60 - elapsed_p)
-                                if is_in_zone:
-                                    print(f"{Colors.YELLOW}[PLAN BLOCK] {sym} ไม้ขาดทุน ({last_plan} {direction}) เมื่อ {int(elapsed_p//60)}m - รอ {rem//60:02d}:{rem%60:02d}m ก่อนเข้า {plan_name} {direction} อีกครั้ง{Colors.RESET}")
-                                    log_signal_event(sym, 'RISK_BLOCKED', plan_name, direction, close_price, prob[1], prob[0], h4_cloud_status, div_name, 'PLAN_BLOCKED', f'Loss on {last_plan} {direction} - waiting {rem//60:02d}:{rem%60:02d}m')
+                        # ---- Same Plan + Same Symbol Cooldown (60 นาที — เฉพาะไม้ขาดทุน) ----
+                        # ห้ามเข้าทิศเดิมที่สกุลเดิมภายใน 60 นาที เฉพาะเมื่อไม้นั้นเคยขาดทุน
+                        def _is_plan_blocked(direction, plan_name):
+                            # แผนที่แอดมินปิดไว้ (เว็บ /admin/plans) — ห้ามเข้าไม้ใหม่
+                            if not plan_config.is_enabled(plan_name):
+                                key = (sym, plan_config.base_plan(plan_name))
+                                if time.time() - _plan_disabled_logged.get(key, 0) > 600:
+                                    _plan_disabled_logged[key] = time.time()
+                                    who = "ผู้ดูแลระบบ" if plan_config.disabled_reason(plan_name) == "admin" else "คุณ (เลือกไม่ใช้แผนนี้)"
+                                    print(f"{Colors.YELLOW}[PLAN DISABLED] {sym} {plan_config.base_plan(plan_name)} ถูกปิดโดย{who} — ข้ามสัญญาณ {direction}{Colors.RESET}")
                                 return True
-                        # Plan 1/2: สัญญาณ Cross ค้างอยู่ตลอดอายุแท่ง (15 นาที / 1 ชม.) — ห้ามเข้าซ้ำบนแท่ง Cross เดิม
-                        cross_bar = _cross_bar_for(plan_name)
-                        if cross_bar is not None and last_cross_entry_bar.get((sym, plan_name, direction)) == cross_bar:
-                            return True
-                        return False  # ไม่มี loss block → เข้าได้เลย
+                            sym_plans = last_loss_plan.get(sym, {})
+                            if direction in sym_plans:
+                                last_plan, last_ts = sym_plans[direction]
+                                elapsed_p = time.time() - last_ts
+                                if elapsed_p < SAME_PLAN_COOLDOWN_MINUTES * 60:
+                                    rem = int(SAME_PLAN_COOLDOWN_MINUTES * 60 - elapsed_p)
+                                    if is_in_zone:
+                                        print(f"{Colors.YELLOW}[PLAN BLOCK] {sym} ไม้ขาดทุน ({last_plan} {direction}) เมื่อ {int(elapsed_p//60)}m - รอ {rem//60:02d}:{rem%60:02d}m ก่อนเข้า {plan_name} {direction} อีกครั้ง{Colors.RESET}")
+                                        log_signal_event(sym, 'RISK_BLOCKED', plan_name, direction, close_price, prob[1], prob[0], h4_cloud_status, div_name, 'PLAN_BLOCKED', f'Loss on {last_plan} {direction} - waiting {rem//60:02d}:{rem%60:02d}m')
+                                    return True
+                            # Plan 1/2: สัญญาณ Cross ค้างอยู่ตลอดอายุแท่ง (15 นาที / 1 ชม.) — ห้ามเข้าซ้ำบนแท่ง Cross เดิม
+                            cross_bar = _cross_bar_for(plan_name)
+                            if cross_bar is not None and last_cross_entry_bar.get((sym, plan_name, direction)) == cross_bar:
+                                return True
+                            # แผนละไม่เกิน 1 ไม้ในเวลาเดียวกัน (Backtest จำลองแบบนี้)
+                            base = plan_config.base_plan(plan_name)
+                            if any(plan_config.base_plan(getattr(op, 'comment', '')) == base for op in (positions or ())):
+                                return True
+                            return False  # ไม่มี loss block → เข้าได้เลย
 
-                    def _cross_bar_for(plan_name):
-                        if plan_name == "MA-Cross-Trend":
-                            return ma_cross_bar_time
-                        if plan_name == "MA-Cross-H1-Trend":
-                            return ma_cross_h1_bar_time
-                        return None
+                        def _cross_bar_for(plan_name):
+                            if plan_name == "MA-Cross-Trend":
+                                return ma_cross_bar_time
+                            if plan_name == "MA-Cross-H1-Trend":
+                                return ma_cross_h1_bar_time
+                            return None
 
-                    def _record_plan(direction, plan_name):
-                        # loss block สร้างตอนปิดไม้ขาดทุนเท่านั้น — ที่นี่จดเฉพาะแท่ง Cross ที่เข้าไม้แล้ว (Plan 1/2)
-                        cross_bar = _cross_bar_for(plan_name)
-                        if cross_bar is not None:
-                            last_cross_entry_bar[(sym, plan_name, direction)] = cross_bar
+                        def _record_plan(direction, plan_name):
+                            # loss block สร้างตอนปิดไม้ขาดทุนเท่านั้น — ที่นี่จดเฉพาะแท่ง Cross ที่เข้าไม้แล้ว (Plan 1/2)
+                            cross_bar = _cross_bar_for(plan_name)
+                            if cross_bar is not None:
+                                last_cross_entry_bar[(sym, plan_name, direction)] = cross_bar
                     
-                    tick = mt5.symbol_info_tick(sym)
-                    if tick is None:
-                        continue
+                        tick = mt5.symbol_info_tick(sym)
+                        if tick is None:
+                            break
 
-                    # SL = 0.75 ATR (M15) สำหรับ Plan 3/4/5 · 0.75 ATR (H1) สำหรับ Plan 2
-                    sl_dist = round(atr_val * SL_ATR_MULT, digits)
-                    # Plan 1 (H1 MA100/150/200 + MA5×MA13 M15 + ตัวกรอง RSI/MA50): SL คงที่ 1.0 ATR M15
-                    # Backtest 2.5 ปี 0.75 → 1.0 ATR: กำไร 690 → 931 จุด, PF 1.37 → 1.44, ชนะ 32% → 35%, Max DD 92 → 131
-                    sl_dist_p4 = round(atr_val * P1_SL_ATR_MULT, digits)
-                    # ถ้ายังคำนวณ ATR H1 ไม่ได้ (ข้อมูลไม่พอ) ใช้ ATR M15 x2 เป็นค่าประมาณสำรอง
-                    sl_dist_h1 = round((atr_h1_val if pd.notna(atr_h1_val) and atr_h1_val > 0 else atr_val * 2.0) * SL_ATR_MULT, digits)
+                        # SL = 0.75 ATR (M15) สำหรับ Plan 3/4/5 · 0.75 ATR (H1) สำหรับ Plan 2
+                        sl_dist = round(atr_val * SL_ATR_MULT, digits)
+                        # Plan 1 (H1 MA100/150/200 + MA5×MA13 M15 + ตัวกรอง RSI/MA50): SL คงที่ 1.0 ATR M15
+                        # Backtest 2.5 ปี 0.75 → 1.0 ATR: กำไร 690 → 931 จุด, PF 1.37 → 1.44, ชนะ 32% → 35%, Max DD 92 → 131
+                        sl_dist_p4 = round(atr_val * P1_SL_ATR_MULT, digits)
+                        # ถ้ายังคำนวณ ATR H1 ไม่ได้ (ข้อมูลไม่พอ) ใช้ ATR M15 x2 เป็นค่าประมาณสำรอง
+                        sl_dist_h1 = round((atr_h1_val if pd.notna(atr_h1_val) and atr_h1_val > 0 else atr_val * 2.0) * P2_SL_ATR_MULT, digits)
 
-                    # แผน 3: SMC Liquidity Sweep (SMC-LiquidityHunt)
-                    if is_sweep_buy:
-                        p_min = 0.50
-                        p_label = "SMC-LiquidityHunt+Div" if bull_div_active else "SMC-LiquidityHunt"
-                        if prob[1] >= p_min:
-                            h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
-                            if not h4_ok:
-                                print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
-                                log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
-                            elif not _is_plan_blocked('BUY', p_label):
-                                price = tick.ask
-                                sl = round(price - atr_val * P3_SL_ATR_MULT, digits)
-                                tp = round(price + atr_val * P3_TP_ATR_MULT, digits)
-                                div_note = " + BULL DIVERGENCE (Grade A+)" if bull_div_active else ""
-                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: SMC Sweep Below Support + H1 UPTREND + MA100>150>200 + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
-                                send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
-                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
-                                _record_plan('BUY', p_label)
-                        else:
-                            log_signal_event(sym, 'ZONE_ALERT', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'SMC Sweep Support | AI UP {prob[1]:.1%} < {p_min:.1%}')
+                        # แผน 3: SMC Liquidity Sweep (SMC-LiquidityHunt)
+                        if is_sweep_buy:
+                            p_min = 0.50
+                            p_label = "SMC-LiquidityHunt+Div" if bull_div_active else "SMC-LiquidityHunt"
+                            if prob[1] >= p_min:
+                                h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                                if not h4_ok:
+                                    print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
+                                    log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                                elif not _is_plan_blocked('BUY', p_label):
+                                    price = tick.ask
+                                    sl = round(price - atr_val * P3_SL_ATR_MULT, digits)
+                                    tp = round(price + atr_val * P3_TP_ATR_MULT, digits)
+                                    div_note = " + BULL DIVERGENCE (Grade A+)" if bull_div_active else ""
+                                    print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: SMC Sweep Below Support + H1 UPTREND + MA100>150>200 + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
+                                    send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                    _record_plan('BUY', p_label)
+                            else:
+                                log_signal_event(sym, 'ZONE_ALERT', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'SMC Sweep Support | AI UP {prob[1]:.1%} < {p_min:.1%}')
 
-                    elif is_sweep_sell:
-                        p_min = 0.50
-                        p_label = "SMC-LiquidityHunt+Div" if bear_div_active else "SMC-LiquidityHunt"
-                        if prob[0] >= p_min:
-                            h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
-                            if not h4_ok:
-                                print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
-                                log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
-                            elif not _is_plan_blocked('SELL', p_label):
-                                price = tick.bid
-                                sl = round(price + atr_val * P3_SL_ATR_MULT, digits)
-                                tp = round(price - atr_val * P3_TP_ATR_MULT, digits)
-                                div_note = " + BEAR DIVERGENCE (Grade A+)" if bear_div_active else ""
-                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: SMC Sweep Above Resistance + H1 DOWNTREND + MA100<150<200 + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
-                                send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
-                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
-                                _record_plan('SELL', p_label)
-                        else:
-                            log_signal_event(sym, 'ZONE_ALERT', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'SMC Sweep Resistance | AI DOWN {prob[0]:.1%} < {p_min:.1%}')
+                        elif is_sweep_sell:
+                            p_min = 0.50
+                            p_label = "SMC-LiquidityHunt+Div" if bear_div_active else "SMC-LiquidityHunt"
+                            if prob[0] >= p_min:
+                                h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                                if not h4_ok:
+                                    print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
+                                    log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                                elif not _is_plan_blocked('SELL', p_label):
+                                    price = tick.bid
+                                    sl = round(price + atr_val * P3_SL_ATR_MULT, digits)
+                                    tp = round(price - atr_val * P3_TP_ATR_MULT, digits)
+                                    div_note = " + BEAR DIVERGENCE (Grade A+)" if bear_div_active else ""
+                                    print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: SMC Sweep Above Resistance + H1 DOWNTREND + MA100<150<200 + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
+                                    send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                    _record_plan('SELL', p_label)
+                            else:
+                                log_signal_event(sym, 'ZONE_ALERT', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'SMC Sweep Resistance | AI DOWN {prob[0]:.1%} < {p_min:.1%}')
 
-                    # แผน 4: BUY Bounce (SR-SwingBounce)
-                    elif bounce_buy_confirm:
-                        has_div_boost = bull_div_active or hidden_bull_active
-                        req_conf = P4_AI_MIN
-                        p_label = "SR-SwingBounce+Div" if has_div_boost else "SR-SwingBounce"
-                        if prob[1] >= req_conf:
-                            h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
-                            if not h4_ok:
-                                print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
-                                log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
-                            elif not _is_plan_blocked('BUY', p_label):
-                                price = tick.ask
-                                sl = round(price - atr_val * P4_SL_ATR_MULT, digits)
-                                tp = round(price + atr_val * P4_TP_ATR_MULT, digits)
-                                div_note = " + DIVERGENCE CONFLUENCE" if has_div_boost else ""
-                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: Bounce Support H1 + Wick Confirm + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
-                                send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
-                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
-                                _record_plan('BUY', p_label)
-                        else:
-                            log_signal_event(sym, 'ZONE_ALERT', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'Bounce Support H1 | AI UP {prob[1]:.1%} < {req_conf:.1%}')
+                        # แผน 4: BUY Bounce (SR-SwingBounce)
+                        elif bounce_buy_confirm:
+                            has_div_boost = bull_div_active or hidden_bull_active
+                            req_conf = P4_AI_MIN
+                            p_label = "SR-SwingBounce+Div" if has_div_boost else "SR-SwingBounce"
+                            if prob[1] >= req_conf:
+                                h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                                if not h4_ok:
+                                    print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
+                                    log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                                elif not _is_plan_blocked('BUY', p_label):
+                                    price = tick.ask
+                                    sl = round(price - atr_val * P4_SL_ATR_MULT, digits)
+                                    tp = round(price + atr_val * P4_TP_ATR_MULT, digits)
+                                    div_note = " + DIVERGENCE CONFLUENCE" if has_div_boost else ""
+                                    print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: Bounce Support H1 + Wick Confirm + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
+                                    send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                    _record_plan('BUY', p_label)
+                            else:
+                                log_signal_event(sym, 'ZONE_ALERT', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'Bounce Support H1 | AI UP {prob[1]:.1%} < {req_conf:.1%}')
                         
-                    # แผน 4: SELL Bounce (SR-SwingBounce)
-                    elif bounce_sell_confirm:
-                        has_div_boost = bear_div_active or hidden_bear_active
-                        req_conf = P4_AI_MIN
-                        p_label = "SR-SwingBounce+Div" if has_div_boost else "SR-SwingBounce"
-                        if prob[0] >= req_conf:
-                            h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
-                            if not h4_ok:
-                                print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
-                                log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
-                            elif not _is_plan_blocked('SELL', p_label):
-                                price = tick.bid
-                                sl = round(price + atr_val * P4_SL_ATR_MULT, digits)
-                                tp = round(price - atr_val * P4_TP_ATR_MULT, digits)
-                                div_note = " + DIVERGENCE CONFLUENCE" if has_div_boost else ""
-                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: Bounce Resistance H1 + Wick Confirm + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
-                                send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
-                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
-                                _record_plan('SELL', p_label)
-                        else:
-                            log_signal_event(sym, 'ZONE_ALERT', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'Bounce Resistance H1 | AI DOWN {prob[0]:.1%} < {req_conf:.1%}')
+                        # แผน 4: SELL Bounce (SR-SwingBounce)
+                        elif bounce_sell_confirm:
+                            has_div_boost = bear_div_active or hidden_bear_active
+                            req_conf = P4_AI_MIN
+                            p_label = "SR-SwingBounce+Div" if has_div_boost else "SR-SwingBounce"
+                            if prob[0] >= req_conf:
+                                h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                                if not h4_ok:
+                                    print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
+                                    log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                                elif not _is_plan_blocked('SELL', p_label):
+                                    price = tick.bid
+                                    sl = round(price + atr_val * P4_SL_ATR_MULT, digits)
+                                    tp = round(price - atr_val * P4_TP_ATR_MULT, digits)
+                                    div_note = " + DIVERGENCE CONFLUENCE" if has_div_boost else ""
+                                    print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: Bounce Resistance H1 + Wick Confirm + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
+                                    send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                    _record_plan('SELL', p_label)
+                            else:
+                                log_signal_event(sym, 'ZONE_ALERT', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'Bounce Resistance H1 | AI DOWN {prob[0]:.1%} < {req_conf:.1%}')
 
-                    # แผน 5: BUY BB-H1-Reversion (Plan 5) - เปิดเฉพาะ XAUUSD
-                    elif bb_buy_confirm:
-                        req_bb_p = P5_AI_MIN
-                        p_label = "BB-H1-Reversion+Div"
-                        if prob[1] >= req_bb_p:
-                            h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                        # แผน 5: BUY BB-H1-Reversion (Plan 5) - เปิดเฉพาะ XAUUSD
+                        elif bb_buy_confirm:
+                            req_bb_p = P5_AI_MIN
+                            p_label = "BB-H1-Reversion+Div"
+                            if prob[1] >= req_bb_p:
+                                h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                                if not h4_ok:
+                                    print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
+                                    log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                                elif not _is_plan_blocked('BUY', p_label):
+                                    price = tick.ask
+                                    sl = round(price - sl_dist, digits)
+                                    risk = price - sl
+                                    tp = round(price + (risk * symbol_rrr), digits)
+                                    div_note = " + DIVERGENCE + MACD CONFLUENCE"
+                                    print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: H1 Lower Band Rejection + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                    send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                    _record_plan('BUY', p_label)
+                            else:
+                                log_signal_event(sym, 'ZONE_ALERT', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'H1 BB Lower Band Rejection | AI UP {prob[1]:.1%} < {req_bb_p:.1%}')
+
+                        # แผน 5: SELL BB-H1-Reversion (Plan 5) - เปิดเฉพาะ XAUUSD
+                        elif bb_sell_confirm:
+                            req_bb_p = P5_AI_MIN
+                            p_label = "BB-H1-Reversion+Div"
+                            if prob[0] >= req_bb_p:
+                                h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                                if not h4_ok:
+                                    print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
+                                    log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                                elif not _is_plan_blocked('SELL', p_label):
+                                    price = tick.bid
+                                    sl = round(price + sl_dist, digits)
+                                    risk = sl - price
+                                    tp = round(price - (risk * symbol_rrr), digits)
+                                    div_note = " + DIVERGENCE + MACD CONFLUENCE"
+                                    print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: H1 Upper Band Rejection + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                    send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                    _record_plan('SELL', p_label)
+                            else:
+                                log_signal_event(sym, 'ZONE_ALERT', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'H1 BB Upper Band Rejection | AI DOWN {prob[0]:.1%} < {req_bb_p:.1%}')
+
+                        # แผน 1: BUY MA-Cross-Trend (MA 5 ตัดขึ้น MA 10 บนแท่ง M15 + เทรนด์ H1 Uptrend)
+                        elif ma_cross_buy_confirm:
+                            p_label = "MA-Cross-Trend"
+                            h4_ok, h4_msg = True, "H1 MA100/150/200 ขาขึ้น"  # Plan 1 ใช้เฉพาะ 2 กฎที่กำหนด
                             if not h4_ok:
                                 print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
                                 log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                             elif not _is_plan_blocked('BUY', p_label):
                                 price = tick.ask
-                                sl = round(price - sl_dist, digits)
-                                risk = price - sl
-                                tp = round(price + (risk * symbol_rrr), digits)
-                                div_note = " + DIVERGENCE + MACD CONFLUENCE"
-                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: H1 Lower Band Rejection + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                sl = round(price - sl_dist_p4, digits)
+                                tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดลง MA10)
+                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
                                 send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
-                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                                 _record_plan('BUY', p_label)
-                        else:
-                            log_signal_event(sym, 'ZONE_ALERT', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'H1 BB Lower Band Rejection | AI UP {prob[1]:.1%} < {req_bb_p:.1%}')
 
-                    # แผน 5: SELL BB-H1-Reversion (Plan 5) - เปิดเฉพาะ XAUUSD
-                    elif bb_sell_confirm:
-                        req_bb_p = P5_AI_MIN
-                        p_label = "BB-H1-Reversion+Div"
-                        if prob[0] >= req_bb_p:
-                            h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                        # แผน 1: SELL MA-Cross-Trend (MA 5 ตัดลง MA 10 บนแท่ง M15 + เทรนด์ H1 Downtrend)
+                        elif ma_cross_sell_confirm:
+                            p_label = "MA-Cross-Trend"
+                            h4_ok, h4_msg = True, "H1 MA100/150/200 ขาลง"  # Plan 1 ใช้เฉพาะ 2 กฎที่กำหนด
                             if not h4_ok:
                                 print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
                                 log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                             elif not _is_plan_blocked('SELL', p_label):
                                 price = tick.bid
-                                sl = round(price + sl_dist, digits)
-                                risk = sl - price
-                                tp = round(price - (risk * symbol_rrr), digits)
-                                div_note = " + DIVERGENCE + MACD CONFLUENCE"
-                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: H1 Upper Band Rejection + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                sl = round(price + sl_dist_p4, digits)
+                                tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10)
+                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
                                 send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
-                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                                 _record_plan('SELL', p_label)
-                        else:
-                            log_signal_event(sym, 'ZONE_ALERT', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'H1 BB Upper Band Rejection | AI DOWN {prob[0]:.1%} < {req_bb_p:.1%}')
 
-                    # แผน 1: BUY MA-Cross-Trend (MA 5 ตัดขึ้น MA 10 บนแท่ง M15 + เทรนด์ H1 Uptrend)
-                    elif ma_cross_buy_confirm:
-                        p_label = "MA-Cross-Trend"
-                        h4_ok, h4_msg = True, "H1 MA100/150/200 ขาขึ้น"  # Plan 1 ใช้เฉพาะ 2 กฎที่กำหนด
-                        if not h4_ok:
-                            print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
-                            log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
-                        elif not _is_plan_blocked('BUY', p_label):
-                            price = tick.ask
-                            sl = round(price - sl_dist_p4, digits)
-                            tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดลง MA10)
-                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
-                            send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
-                            log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
-                            _record_plan('BUY', p_label)
+                        # แผน 2: BUY MA-Cross-H1-Trend (MA 5 ตัดขึ้น MA 10 บนแท่ง H1 + เทรนด์ H4 Bullish - เข้าไม้ H1 กรองเทรนด์ H4)
+                        elif ma_cross_h1_up and plan5_buy_ok:
+                            p_label = "MA-Cross-H1-Trend"
+                            h4_ok, h4_msg = True, "H4 ขาขึ้น + MA5 ชันขึ้น + เหนือ MA200"
+                            if not h4_ok:
+                                print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
+                                log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                            elif not _is_plan_blocked('BUY', p_label):
+                                price = tick.ask
+                                sl = round(price - sl_dist_h1, digits)
+                                tp = 0.0  # Plan 2: ไม่ต้องตั้ง TP (รันตามเทรนด์ H1 ปิดทันทีเมื่อ MA5 ตัดลง MA10 บน H1)
+                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA10 on H1 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA5 Cross Below MA10){Colors.RESET}")
+                                send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
+                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
+                                _record_plan('BUY', p_label)
 
-                    # แผน 1: SELL MA-Cross-Trend (MA 5 ตัดลง MA 10 บนแท่ง M15 + เทรนด์ H1 Downtrend)
-                    elif ma_cross_sell_confirm:
-                        p_label = "MA-Cross-Trend"
-                        h4_ok, h4_msg = True, "H1 MA100/150/200 ขาลง"  # Plan 1 ใช้เฉพาะ 2 กฎที่กำหนด
-                        if not h4_ok:
-                            print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
-                            log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
-                        elif not _is_plan_blocked('SELL', p_label):
-                            price = tick.bid
-                            sl = round(price + sl_dist_p4, digits)
-                            tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10)
-                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
-                            send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
-                            log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
-                            _record_plan('SELL', p_label)
-
-                    # แผน 2: BUY MA-Cross-H1-Trend (MA 5 ตัดขึ้น MA 10 บนแท่ง H1 + เทรนด์ H4 Bullish - เข้าไม้ H1 กรองเทรนด์ H4)
-                    elif ma_cross_h1_up and plan5_buy_ok:
-                        p_label = "MA-Cross-H1-Trend"
-                        h4_ok, h4_msg = True, "H4 ขาขึ้น + MA5 ชันขึ้น + เหนือ MA200"
-                        if not h4_ok:
-                            print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
-                            log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
-                        elif not _is_plan_blocked('BUY', p_label):
-                            price = tick.ask
-                            sl = round(price - sl_dist_h1, digits)
-                            tp = 0.0  # Plan 2: ไม่ต้องตั้ง TP (รันตามเทรนด์ H1 ปิดทันทีเมื่อ MA5 ตัดลง MA10 บน H1)
-                            print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA10 on H1 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA5 Cross Below MA10){Colors.RESET}")
-                            send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
-                            log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
-                            _record_plan('BUY', p_label)
-
-                    # แผน 2: SELL MA-Cross-H1-Trend (MA 5 ตัดลง MA 10 บนแท่ง H1 + เทรนด์ H4 Bearish - เข้าไม้ H1 กรองเทรนด์ H4)
-                    elif ma_cross_h1_down and plan5_sell_ok:
-                        p_label = "MA-Cross-H1-Trend"
-                        h4_ok, h4_msg = True, "H4 ขาลง + MA5 ชันลง + ใต้ MA200"
-                        if not h4_ok:
-                            print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
-                            log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
-                        elif not _is_plan_blocked('SELL', p_label):
-                            price = tick.bid
-                            sl = round(price + sl_dist_h1, digits)
-                            tp = 0.0  # Plan 2: ไม่ต้องตั้ง TP (รันตามเทรนด์ H1 ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10 บน H1)
-                            print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA10 on H1 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA5 Cross Above MA10){Colors.RESET}")
-                            send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
-                            log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
-                            _record_plan('SELL', p_label)
-                else:
+                        # แผน 2: SELL MA-Cross-H1-Trend (MA 5 ตัดลง MA 10 บนแท่ง H1 + เทรนด์ H4 Bearish - เข้าไม้ H1 กรองเทรนด์ H4)
+                        elif ma_cross_h1_down and plan5_sell_ok:
+                            p_label = "MA-Cross-H1-Trend"
+                            h4_ok, h4_msg = True, "H4 ขาลง + MA5 ชันลง + ใต้ MA200"
+                            if not h4_ok:
+                                print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
+                                log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                            elif not _is_plan_blocked('SELL', p_label):
+                                price = tick.bid
+                                sl = round(price + sl_dist_h1, digits)
+                                tp = 0.0  # Plan 2: ไม่ต้องตั้ง TP (รันตามเทรนด์ H1 ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10 บน H1)
+                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA10 on H1 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_h1:.{digits}f} / 0.75ATR H1, NO TP - Exit on H1 MA5 Cross Above MA10){Colors.RESET}")
+                                send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
+                                log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
+                                _record_plan('SELL', p_label)
+                if has_position:
                     # เช็คเงื่อนไขการจัดการ Position (Plan 1 MA Exit + Plan 2 H1 MA Exit + AI Reversal + Early BE Lock + Unlimited Dynamic TP)
                     open_tickets = {p.ticket for p in positions}
                     stale = [t for t in p4_trail_steps if t not in open_tickets]
@@ -2136,15 +2155,15 @@ def main():
                         # - ถ้าถือ BUY: เมื่อ MA 5 ตัดลง MA 10 บนแท่ง H1 ให้ปิดไม้ทันที
                         # - ถ้าถือ SELL: เมื่อ MA 5 ตัดขึ้น MA 10 บนแท่ง H1 ให้ปิดไม้ทันที
                         if pos.comment == "MA-Cross-H1-Trend":
-                            if pos.type == mt5.ORDER_TYPE_BUY and ma_cross_h1_down:
+                            if pos.type == mt5.ORDER_TYPE_BUY and p2_exit_down:
                                 p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
-                                print(f"{Colors.YELLOW}[PLAN 2 EXIT] {sym} MA5 Crossed Below MA10 on H1. Closing BUY position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                print(f"{Colors.YELLOW}[PLAN 2 EXIT] {sym} MA5 Crossed Below MA20 on H1. Closing BUY position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
                                 log_signal_event(sym, 'POSITION_MGMT', 'MA-Cross-H1-Trend', 'SELL', tick.bid, prob[1], prob[0], h4_cloud_status, div_name, 'MA_CROSS_H1_EXIT', f'H1 MA5 crossed below MA10 (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment="H1 MA5 Cross Down Exit")
                                 continue
-                            elif pos.type == mt5.ORDER_TYPE_SELL and ma_cross_h1_up:
+                            elif pos.type == mt5.ORDER_TYPE_SELL and p2_exit_up:
                                 p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
-                                print(f"{Colors.YELLOW}[PLAN 2 EXIT] {sym} MA5 Crossed Above MA10 on H1. Closing SELL position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                print(f"{Colors.YELLOW}[PLAN 2 EXIT] {sym} MA5 Crossed Above MA20 on H1. Closing SELL position immediately! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
                                 log_signal_event(sym, 'POSITION_MGMT', 'MA-Cross-H1-Trend', 'BUY', tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'MA_CROSS_H1_EXIT', f'H1 MA5 crossed above MA10 (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment="H1 MA5 Cross Up Exit")
                                 continue
@@ -2244,6 +2263,7 @@ def main():
                     print(f"  -> {item}")
                 print(f"{Colors.CYAN}------------------------------------------------------------{Colors.RESET}\n")
             
+            scan_errors = 0
             # ระบบนับถอยหลัง Real-time Ticker แสดงวินาทีวิ่งสดบนหน้าจอ ป้องกัน Terminal นิ่ง/ค้าง
             COUNTDOWN_SECONDS = 20
             for sec in range(COUNTDOWN_SECONDS, 0, -1):
@@ -2256,6 +2276,18 @@ def main():
         except KeyboardInterrupt:
             print("\n[STOP] Bot stopped by user (Ctrl+C). Shutting down cleanly.")
             break
+        except Exception as e:
+            scan_errors += 1
+            import traceback
+            where = traceback.extract_tb(e.__traceback__)[-1]
+            print(f"{Colors.RED}[BOT ENGINE ERROR] {e} (บรรทัด {where.lineno}) — ครั้งที่ {scan_errors}/3{Colors.RESET}")
+            if scan_errors >= 3:
+                print(f"{Colors.RED}[BOT STOPPED] เจอข้อผิดพลาดติดกัน 3 รอบ — หยุดบอทเพื่อไม่ตัดชั่วโมงขณะทำงานไม่ได้{Colors.RESET}")
+                raise
+            for _ in range(20):   # รอ 20 วิ แล้วลองสแกนใหม่
+                if not BOT_RUNNING_FLAG:
+                    break
+                time.sleep(1)
             
     mt5.shutdown()
 

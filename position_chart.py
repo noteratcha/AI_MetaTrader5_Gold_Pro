@@ -78,7 +78,7 @@ def _context_from(h1, h4, price):
         return None
     c1, c4 = h1["close"], h4["close"]
     h1s = pd.DataFrame({"time": h1["time"]})
-    h1s["ma5"], h1s["ma10"] = c1.rolling(5).mean(), c1.rolling(10).mean()
+    h1s["ma5"], h1s["ma10"], h1s["ma20"] = c1.rolling(5).mean(), c1.rolling(10).mean(), c1.rolling(20).mean()
     mid, sd = c1.shift(1).rolling(20).mean(), c1.shift(1).rolling(20).std()   # เหมือนบอท: Shift 1 ไม่ Repaint
     h1s["bb_mid"], h1s["bb_up"], h1s["bb_lo"] = mid, mid + 2 * sd, mid - 2 * sd
     macd = c1.ewm(span=12, adjust=False).mean() - c1.ewm(span=26, adjust=False).mean()
@@ -95,7 +95,7 @@ def _context_from(h1, h4, price):
     st = [_f(c1.rolling(n).mean().iloc[-2]) for n in (100, 150, 200)]
     d["h1_stack"] = st
     d["h1_stack_dir"] = 0 if None in st else (-1 if st[0] < st[1] < st[2] else (1 if st[0] > st[1] > st[2] else 0))
-    d["h1_ma5"], d["h1_ma10"] = _f(h1s["ma5"].iloc[-2]), _f(h1s["ma10"].iloc[-2])
+    d["h1_ma5"], d["h1_ma10"], d["h1_ma20"] = _f(h1s["ma5"].iloc[-2]), _f(h1s["ma10"].iloc[-2]), _f(h1s["ma20"].iloc[-2])
     d["macd_now"], d["macd_prev"] = _f(h1s["macd_hist"].iloc[-2]), _f(h1s["macd_hist"].iloc[-3])
     sr = bot.find_sr_levels(h1, float(price))
     d["sup"], d["res"] = _f(sr["support"]), _f(sr["resistance"])
@@ -134,7 +134,7 @@ def _map_h1(m, ctx):
     if ctx is None:
         return
     hkey = pd.to_datetime(m["time"], unit="s").dt.floor("h")
-    for col in ("ma5", "ma10", "bb_up", "bb_mid", "bb_lo", "macd_hist"):
+    for col in ("ma5", "ma10", "ma20", "bb_up", "bb_mid", "bb_lo", "macd_hist"):
         m["h1_" + col] = hkey.map(ctx["h1s"][col]).astype(float)
 
 
@@ -186,7 +186,8 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                 "band": ((50, 70) if side > 0 else (30, 50)) if plan_key == "P1" else None}
     elif plan_key == "P2":
         lines = [{"label": "MA5 H1", "style": "fast", "values": ser("h1_ma5")},
-                 {"label": "MA10 H1", "style": "slow", "values": ser("h1_ma10")}]
+                 {"label": "MA10 H1", "style": "slow", "values": ser("h1_ma10")},
+                 {"label": "MA20 H1 (ออก)", "style": "ma50", "values": ser("h1_ma20")}]
     elif plan_key == "P5":
         lines = [{"label": "BB บน H1", "style": "band", "values": ser("h1_bb_up")},
                  {"label": "BB กลาง H1", "style": "mid", "values": ser("h1_bb_mid")},
@@ -279,9 +280,11 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                              " / ".join(_fmt(v) for v in s)))
         step_trail()
     elif plan_key == "P2" and ctx:
-        dd = _agree((ctx["h1_ma5"] or 0) - (ctx["h1_ma10"] or 0), side)
-        inds.append(_ind("MA5 / MA10 (H1 แท่งปิด)", f"{_fmt(ctx['h1_ma5'])} / {_fmt(ctx['h1_ma10'])}", dd,
-                         "ยังไม่ตัดกลับ — ถือตามแผน" if dd > 0 else f"ตัดกลับแล้ว = สัญญาณออก ({exit_word})"))
+        inds.append(_ind("MA5 / MA10 (H1 แท่งปิด)", f"{_fmt(ctx['h1_ma5'])} / {_fmt(ctx['h1_ma10'])}",
+                         _agree((ctx["h1_ma5"] or 0) - (ctx["h1_ma10"] or 0), side), "ใช้ตอนเข้าไม้ (MA5 ตัด MA10)"))
+        dd = _agree((ctx["h1_ma5"] or 0) - (ctx["h1_ma20"] or 0), side)
+        inds.append(_ind("MA5 / MA20 (H1 แท่งปิด)", f"{_fmt(ctx['h1_ma5'])} / {_fmt(ctx['h1_ma20'])}", dd,
+                         "MA5 อยู่ฝั่งไม้ — ถือตามแผน" if dd > 0 else f"MA5 อยู่ผิดฝั่ง MA20 · ออกเมื่อ MA5 ตัด MA20 กลับ ({exit_word})"))
         inds.append(_ind("H4 MA10 vs MA30", f"{ctx['h4_diff']:+.2f}%", _agree(ctx["h4_diff"], side), "ต้องตรงทิศตอนเข้า (Strict Pro-Trend)"))
         if ctx["h4_slope"] is not None:
             inds.append(_ind("ความชัน MA5 H4 (2 แท่ง)", f"{ctx['h4_slope']:+.2f} ATR", _agree(ctx["h4_slope"], side), ""))
@@ -289,7 +292,7 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
             inds.append(_ind("ราคาปิด H4 vs MA200", f"{ctx['h4_close']:,.2f} / {ctx['h4_ma200']:,.2f}",
                              _agree(ctx["h4_close"] - ctx["h4_ma200"], side), ""))
         if ctx["atr_h1"]:
-            inds.append(_ind("ATR(14) H1", f"{ctx['atr_h1']:,.2f}", 0, "SL = 0.75 ATR H1 · ไม่ตั้ง TP · ไม่เลื่อน SL"))
+            inds.append(_ind("ATR(14) H1", f"{ctx['atr_h1']:,.2f}", 0, "SL = 1.25 ATR H1 · ไม่ตั้ง TP · ไม่เลื่อน SL"))
     elif plan_key in ("P3", "P4") and ctx:
         if ctx["sup"] and ctx["res"]:
             inds.append(_ind("แนวรับ / แนวต้าน H1", f"{ctx['sup']:,.2f} / {ctx['res']:,.2f}", 0,

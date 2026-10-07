@@ -109,20 +109,23 @@ def stats(name, trades):
                 last100_net=round(last.sum(), 1), last100_win=round((last > 0).mean() * 100, 1))
 
 
-def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entry_ok=None, sl_mult=0.75, trail="sl", first_frac=None):
+def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entry_ok=None, sl_mult=0.75, trail="sl", first_frac=None, exit_slow=None):
     """step=None → ไม่เลื่อน SL · entry_ok(i, d) = ตัวกรองเพิ่มเติมก่อนเข้าไม้
     trail="sl": เลื่อน frac ของระยะ SL → ราคาของขั้น · trail="entry": เลื่อน (first_frac ขั้นแรก / frac ขั้นถัดไป) ของระยะ ราคาเข้า → ราคาของขั้น"""
     o, h, l, a, t = frame.open.values, frame.high.values, frame.low.values, frame[atr_col].values, frame.time.values
     mf, ms, td = frame[fast].values, frame[slow].values, frame[trend_col].values
+    mx = frame[exit_slow].values if exit_slow else ms   # เส้นที่ใช้ออกไม้ (ค่าเริ่มต้น = เส้นเดียวกับตอนเข้า)
     out, pos = [], None
     for i in range(3, len(frame) - 1):
         up = mf[i - 1] <= ms[i - 1] and mf[i] > ms[i]
         dn = mf[i - 1] >= ms[i - 1] and mf[i] < ms[i]
+        xup = mf[i - 1] <= mx[i - 1] and mf[i] > mx[i]
+        xdn = mf[i - 1] >= mx[i - 1] and mf[i] < mx[i]
         if pos:
             d, e, sl, k, te = pos
             if (d == 1 and l[i] <= sl) or (d == -1 and h[i] >= sl):
                 out.append(dict(time=te, pnl=(sl - e) * d - SPREAD)); pos = None
-            elif (d == 1 and dn) or (d == -1 and up):
+            elif (d == 1 and xdn) or (d == -1 and xup):
                 out.append(dict(time=te, pnl=(o[i + 1] - e) * d - SPREAD)); pos = None
             elif step:
                 best = (h[i] - e) if d == 1 else (e - l[i])
@@ -238,9 +241,9 @@ def p1_filter(i, d):  # ตัวกรองสัญญาณหลอก: RSI
 rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "h1_stack", entry_ok=p1_filter, sl_mult=1.0,
                                                 trail="sl", first_frac=0.50, frac=0.40))))
 f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
-f["atr"] = A(f); f["ma5"], f["ma10"] = f.close.rolling(5).mean(), f.close.rolling(10).mean()
+f["atr"] = A(f); f["ma5"], f["ma10"], f["ma20"] = f.close.rolling(5).mean(), f.close.rolling(10).mean(), f.close.rolling(20).mean()
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
-rows.append(stats("P2 MA H1", keep(2, sim_ma(f, "ma5", "ma10", "p2_dir", step=None))))
+rows.append(stats("P2 MA H1", keep(2, sim_ma(f, "ma5", "ma10", "p2_dir", step=None, sl_mult=1.25, exit_slow="ma20"))))
 rows.append(stats("P3 SMC", keep(3, sim_ai_plan(sig_smc, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
 rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
 rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4, first_frac=0.5))))
@@ -252,7 +255,7 @@ print(pd.DataFrame(rows).to_string(index=False))
 # ---------------------------------------------------------------- JSON สำหรับหน้าเว็บ /backtest
 from version import APP_VERSION  # noqa: E402
 NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
-         2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200"),
+         2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200 · SL 1.25 ATR · ออกเมื่อ MA5 ตัด MA20"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
          4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 55% · SL 1.0 / TP 2.0 ATR"),
          5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · เลื่อน SL ทุก 5 จุด (50%/40%)")}

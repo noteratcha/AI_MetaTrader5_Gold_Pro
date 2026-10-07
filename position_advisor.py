@@ -1,7 +1,7 @@
 """
 วิเคราะห์ไม้ที่เปิดค้างอยู่: แนะนำ "ถือต่อ" / "ถือต่อแบบระวัง" / "แนะนำปิด" พร้อมเหตุผล
 - ใช้ปัจจัยเดียวกับแท็บ AI คาดการณ์ (เทรนด์ H1/H4, MA200 H4, โมเมนตัม M15, แนวรับ/ต้าน H1) เทียบกับทิศของไม้
-- สัญญาณออกของแผนเอง (P1: MA5/13 M15 · P2: MA5/10 H1 ตัดกลับ), AI 1 ชม./4 ชม., ระยะ SL/TP, ล็อกกำไร, ข่าวแรงใกล้ ๆ
+- สัญญาณออกของแผนเอง (P1: MA5/13 M15 · P2: MA5/20 H1 ตัดกลับ), AI 1 ชม./4 ชม., ระยะ SL/TP, ล็อกกำไร, ข่าวแรงใกล้ ๆ
 - รันในเธรดเบื้องหลัง (เรียก MT5) — GUI อ่านผลจาก latest() เท่านั้น
 """
 import threading
@@ -60,7 +60,10 @@ def _plan_exit(comment, side, m15, h1):
         f, s, tf, pair = cm.rolling(5).mean().iloc[-2], cm.rolling(13).mean().iloc[-2], "M15", "MA5/MA13"
     elif c.startswith("MA-Cross-H1"):
         ch = h1["close"]
-        f, s, tf, pair = ch.rolling(5).mean().iloc[-2], ch.rolling(10).mean().iloc[-2], "H1", "MA5/MA10"
+        m5, m20 = ch.rolling(5).mean(), ch.rolling(20).mean()
+        # P2 ออกเมื่อ MA5 ตัด MA20 กลับ (เหตุการณ์ตัดบนแท่งปิดล่าสุด — ตอนเข้า MA5 อาจยังอยู่ผิดฝั่ง MA20 ได้)
+        crossed = (m5.iloc[-3] - m20.iloc[-3]) * side > 0 and (m5.iloc[-2] - m20.iloc[-2]) * side < 0
+        return "MA5/MA20 H1 ตัดกลับขั้วแล้ว = สัญญาณออกของแผนนี้ (บอทจะปิดเองเมื่อทำงานอยู่)" if crossed else None
     else:
         return None
     if (side > 0 and f < s) or (side < 0 and f > s):

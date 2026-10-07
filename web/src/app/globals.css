@@ -914,8 +914,27 @@ select.input {
 .nav-toggle {
   display: none !important;
 }
+.nav-link {
+  white-space: nowrap;
+}
+/* จอกลาง: เมนู 8 รายการ — ซ่อนไอคอน ลดระยะ ไม่ให้ชื่อเมนูตัดเป็น 2 บรรทัด */
+@media (min-width: 1181px) and (max-width: 1500px) {
+  .nav-links {
+    gap: 0;
+  }
+  .nav-link {
+    padding: 0 9px;
+    font-size: 0.86rem;
+  }
+  .nav-link svg {
+    display: none;
+  }
+  .nav-brand-sub {
+    display: none;
+  }
+}
 
-@media (max-width: 900px) {
+@media (max-width: 1180px) {
   .nav-toggle {
     display: inline-flex !important;
   }
