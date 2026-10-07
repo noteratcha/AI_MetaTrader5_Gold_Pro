@@ -142,6 +142,10 @@ export default function BacktestPage() {
   }
   if (!data) return <PageLoading />;
   const s = data.summary;
+  const sum = (key) => data.plans.reduce((a, p) => a + (Number(p[key]) || 0), 0);
+  const monthTotal = (m) => data.plans.reduce((a, p) => a + (Number(p.monthly?.[m]) || 0), 0);
+  const planYear = (p) => months.reduce((a, m) => a + (Number(p.monthly?.[m]) || 0), 0);
+  const grandYear = months.reduce((a, m) => a + monthTotal(m), 0);
 
   return (
     <div className="container container-wide page">
@@ -149,7 +153,7 @@ export default function BacktestPage() {
         eyebrow="Trading Plans"
         icon={FlaskConical}
         title="แผนเทรดทองคำ (XAUUSD)"
-        description={`หลักการเข้า-ออกของบอททั้ง 5 แผน พร้อมผลทดสอบย้อนหลัง ${data.period[0]} ถึง ${data.period[1]} (กฎเวอร์ชัน v${data.app_version})`}
+        description={`หลักการเข้า-ออกของบอททั้ง ${data.plans.length} แผน พร้อมผลทดสอบย้อนหลัง ${data.period[0]} ถึง ${data.period[1]} (กฎเวอร์ชัน v${data.app_version})`}
       />
 
       <div className="grid grid-3" style={{ marginBottom: 24 }}>
@@ -266,6 +270,24 @@ export default function BacktestPage() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="table-total">
+                <td>
+                  <strong>รวมทุกแผน</strong>
+                  <div className="tiny faint">ชนะ · PF · Max DD คิดจากทุกไม้รวมกัน (เข้าไม้พร้อมกันได้)</div>
+                </td>
+                <td className="num">{sum('n').toLocaleString()}</td>
+                <td className="num">{s.win}%</td>
+                <td className={`num ${tone(s.net)}`}>
+                  <strong>{pts(s.net)}</strong>
+                </td>
+                <td className="num">{s.pf ?? '—'}</td>
+                <td className="num text-red">{s.maxdd ? pts(-s.maxdd) : '—'}</td>
+                <td className={`num ${tone(sum('half1'))}`}>{pts(Math.round(sum('half1') * 10) / 10)}</td>
+                <td className={`num ${tone(sum('half2'))}`}>{pts(Math.round(sum('half2') * 10) / 10)}</td>
+                <td className={`num ${tone(sum('last100_net'))}`}>{pts(Math.round(sum('last100_net') * 10) / 10)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -284,6 +306,7 @@ export default function BacktestPage() {
                     {m.slice(2)}
                   </th>
                 ))}
+                <th className="num">รวม</th>
               </tr>
             </thead>
             <tbody>
@@ -298,9 +321,27 @@ export default function BacktestPage() {
                       </td>
                     );
                   })}
+                  <td className={`num small ${tone(planYear(p))}`}>
+                    <strong>{pts(Math.round(planYear(p) * 10) / 10)}</strong>
+                  </td>
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="table-total">
+                <td>
+                  <strong>รวมทุกแผน</strong>
+                </td>
+                {months.map((m) => (
+                  <td key={m} className={`num tiny ${tone(monthTotal(m))}`}>
+                    <strong>{pts(Math.round(monthTotal(m) * 10) / 10)}</strong>
+                  </td>
+                ))}
+                <td className={`num small ${tone(grandYear)}`}>
+                  <strong>{pts(Math.round(grandYear * 10) / 10)}</strong>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>

@@ -102,7 +102,7 @@ def stats(name, trades):
     t = np.array([x["pnl"] for x in trades])
     if not len(t):
         return dict(plan=name, n=0)
-    eq = np.cumsum(t); dd = float(np.max(np.maximum.accumulate(eq) - eq))
+    eq = np.r_[0.0, np.cumsum(t)]; dd = float(np.max(np.maximum.accumulate(eq) - eq))   # DD นับจากจุดเริ่ม (0)
     w, ls = t[t > 0].sum(), -t[t < 0].sum()
     last = t[-100:]
     return dict(plan=name, n=len(t), win=round((t > 0).mean() * 100, 1), net=round(t.sum(), 1), pf=round(w / ls, 2) if ls else 0,
@@ -319,7 +319,7 @@ for t, k, pnl in events:
     eq[t.strftime("%Y-%m-%d")] = (round(total, 1), {str(kk): round(v, 1) for kk, v in cum.items()})
 curve = [dict(date=d, total=v[0], plans=v[1]) for d, v in eq.items()]
 tt = np.array([e[2] for e in events])
-eqv = np.cumsum(tt) if len(tt) else np.array([0.0])
+eqv = np.r_[0.0, np.cumsum(tt)]   # DD พอร์ตรวมนับจากจุดเริ่ม (0)
 summary = dict(net=round(float(tt.sum()), 1), trades=int(len(tt)), win=round(float((tt > 0).mean() * 100), 1) if len(tt) else 0,
                pf=round(float(tt[tt > 0].sum() / -tt[tt < 0].sum()), 2) if (tt < 0).any() else None,
                maxdd=round(float(np.max(np.maximum.accumulate(eqv) - eqv)), 1))
