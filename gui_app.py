@@ -2645,7 +2645,6 @@ class MainTradingApp(ctk.CTk):
 
         self._build_main_tabs(left)
         self._build_control_panel(right)
-        self._build_next_news_card(right)
         self._build_plans_card(right)
 
         self._refresh_history_async()
@@ -2769,6 +2768,9 @@ class MainTradingApp(ctk.CTk):
             text_color="#1A1406", height=32, width=104, corner_radius=8,
             command=lambda: webbrowser.open(self.STORE_URL),
         ).pack(side="left")
+
+        # --- ขวา: ข่าว USD ผลกระทบสูงถัดไป (ย้ายจากคอลัมน์ขวามาแถบบน 8 ต.ค. 2026)
+        self._build_header_news(h_inner)
 
     def _open_user_menu(self):
         """เมนูผู้ใช้: เปิดเว็บ / สถิติ / ตรวจอัปเดต / ออกจากระบบ"""
@@ -3185,28 +3187,36 @@ class MainTradingApp(ctk.CTk):
         self.btn_sound_toggle.grid(row=0, column=3)
         self._bot_started_at = None
 
-    def _build_next_news_card(self, parent):
-        card = self._card(parent, fill="x", pady=(0, 8))
-        body = ctk.CTkFrame(card, fg_color="transparent")
-        body.pack(fill="x", padx=14, pady=(6, 6))
-        body.grid_columnconfigure(0, weight=1)
+    NEWS_PILL_BG = "#191D26"
 
-        ctk.CTkLabel(body, text="📅 ข่าวสำคัญถัดไป · USD", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor="w", height=20).grid(row=0, column=0, sticky="w")
-        ctk.CTkButton(
-            body, text="ดูทั้งหมด ›", font=self._font(11, "bold"), fg_color="transparent", hover_color="#1F2430",
-            text_color=COLOR_CYAN_ACCENT, width=66, height=20, corner_radius=6,
-            command=lambda: self.main_tabs.set(self.TAB_CALENDAR),
-        ).grid(row=0, column=1, sticky="e")
+    def _build_header_news(self, parent):
+        """ป้ายข่าว USD ผลกระทบสูงถัดไปบนแถบบน: วัน/เวลา + ป้ายผลกระทบ | ชื่อข่าว + นับถอยหลัง · คลิกเปิดแท็บปฏิทินข่าว"""
+        pill = ctk.CTkFrame(parent, fg_color=self.NEWS_PILL_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        pill.pack(side="right", padx=(0, 12))
+        inner = ctk.CTkFrame(pill, fg_color="transparent")
+        inner.pack(padx=12, pady=4)
+        top = ctk.CTkFrame(inner, fg_color="transparent")
+        top.pack(anchor="w")
+        head = ctk.CTkLabel(top, text="📅 ข่าวสำคัญ USD", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, height=16)
+        head.pack(side="left")
+        self.lbl_news_time = ctk.CTkLabel(top, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED, height=16)
+        self.lbl_news_time.pack(side="left", padx=(6, 0))
+        self.lbl_news_badge = ctk.CTkLabel(top, text="", font=self._font(9, "bold"), text_color="#101218", fg_color=self.NEWS_PILL_BG, corner_radius=6, height=16)
+        self.lbl_news_badge.pack(side="left", padx=(8, 0))
+        bottom = ctk.CTkFrame(inner, fg_color="transparent")
+        bottom.pack(anchor="w")
+        self.lbl_news_title = ctk.CTkLabel(bottom, text="กำลังโหลดปฏิทินข่าว...", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY, height=20)
+        self.lbl_news_title.pack(side="left")
+        self.lbl_news_countdown = ctk.CTkLabel(bottom, text="", font=self._font(12, "bold"), text_color=COLOR_GOLD_PRIMARY, height=20)
+        self.lbl_news_countdown.pack(side="left", padx=(10, 0))
 
-        self.lbl_news_title = ctk.CTkLabel(body, text="กำลังโหลดปฏิทินข่าว...", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY, anchor="w", height=22)
-        self.lbl_news_title.grid(row=1, column=0, sticky="w", pady=(2, 0))
-        self.lbl_news_badge = ctk.CTkLabel(body, text="", font=self._font(10, "bold"), text_color="#101218", fg_color=COLOR_CARD_BG, corner_radius=6, height=18)
-        self.lbl_news_badge.grid(row=1, column=1, sticky="e", pady=(2, 0))
-
-        self.lbl_news_time = ctk.CTkLabel(body, text="", font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="w", height=20)
-        self.lbl_news_time.grid(row=2, column=0, sticky="w")
-        self.lbl_news_countdown = ctk.CTkLabel(body, text="", font=self._font(13, "bold"), text_color=COLOR_GOLD_PRIMARY, height=20)
-        self.lbl_news_countdown.grid(row=2, column=1, sticky="e")
+        def open_calendar(_e=None):
+            if hasattr(self, "main_tabs"):
+                self.main_tabs.set(self.TAB_CALENDAR)
+        for w in (pill, inner, top, bottom, head, self.lbl_news_time, self.lbl_news_badge, self.lbl_news_title, self.lbl_news_countdown):
+            w.bind("<Button-1>", open_calendar)
+            w.configure(cursor="hand2")
+        HoverTip(pill, lambda: "คลิกเพื่อดูปฏิทินข่าวทั้งหมด")
 
     PLAN_ROWS = [
         ("📈", "P1 · MA M15", "Plan 1: MA-Cross-Trend"),
@@ -4297,11 +4307,11 @@ class MainTradingApp(ctk.CTk):
             self.lbl_news_title.configure(text="ไม่มีข่าว USD ผลกระทบสูงในสัปดาห์นี้" if self._calendar_events else "กำลังโหลดปฏิทินข่าว...")
             self.lbl_news_time.configure(text="")
             self.lbl_news_countdown.configure(text="")
-            self.lbl_news_badge.configure(text="", fg_color=COLOR_CARD_BG)
+            self.lbl_news_badge.configure(text="", fg_color=self.NEWS_PILL_BG)
             return
-        self.lbl_news_badge.configure(text="  ผลกระทบสูง  ", fg_color=self.IMPACT_COLORS["High"])
-        self.lbl_news_title.configure(text=ev["title"] if len(ev["title"]) <= 30 else ev["title"][:29] + "…")
-        detail = f"{econ_calendar.format_day(ev['time'])} · {ev['time'].strftime('%H:%M')} น."
+        self.lbl_news_badge.configure(text=" ผลกระทบสูง ", fg_color=self.IMPACT_COLORS["High"])
+        self.lbl_news_title.configure(text=ev["title"] if len(ev["title"]) <= 28 else ev["title"][:27] + "…")
+        detail = f"· {econ_calendar.format_day(ev['time'])} {ev['time'].strftime('%H:%M')} น."
         self.lbl_news_time.configure(text=detail)
         countdown = econ_calendar.format_countdown(ev["time"])
         soon = (ev["time"] - econ_calendar.datetime.now(econ_calendar.BANGKOK)).total_seconds() < 3600
