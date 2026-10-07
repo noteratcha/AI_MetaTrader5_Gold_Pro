@@ -1152,7 +1152,10 @@ def main():
     c_pass = local_creds.get('mt5_password')
     c_server = local_creds.get('mt5_server') or 'FBS-Real'
 
-    if c_login and c_pass and int(c_login) > 0:
+    # ไม่สั่ง login ซ้ำถ้า MT5 ล็อกอินบัญชีเดียวกันอยู่แล้ว — ถ้ารหัสที่เก็บไว้เก่า/ผิด การ login จะทำให้ MT5 หลุดจากบัญชี (Authorization failed)
+    acc_now = mt5.account_info()
+    already_in = acc_now is not None and c_login and int(acc_now.login) == int(c_login)
+    if c_login and c_pass and int(c_login) > 0 and not already_in:
         print(f"[ACCOUNT] Checking MT5 login for #{c_login} ({c_server})...")
         if mt5.login(login=int(c_login), password=c_pass, server=c_server):
             print(f"{Colors.GREEN}[SUCCESS] Logged in to MT5 Account #{c_login}!{Colors.RESET}")
@@ -2176,7 +2179,7 @@ def main():
                                 throttle_ok = (time.time() - last_lock_time.get(pos.ticket, 0)) >= LOCK_SL_THROTTLE_SECS
                                 buffer_ok = be_sl < (tick.bid - min_sl_dist_from_market)
                                 if be_sl > pos.sl and throttle_ok and buffer_ok:
-                                    print(f"{Colors.CYAN}[PROFIT LOCK 70%] {sym} Moved SL to +0.35 ATR: {pos.sl:.{digits}f} -> {be_sl:.{digits}f} (Buffer: {min_sl_dist_from_market:.{digits}f} ATR, Market: {tick.bid:.{digits}f}){Colors.RESET}")
+                                    print(f"{Colors.CYAN}[PROFIT LOCK 70%] {sym} Moved SL to +0.35 ATR: {pos.sl:.{digits}f} -> {be_sl:.{digits}f} (Buffer ≥ {min_sl_dist_from_market:.{digits}f} pts, Market: {tick.bid:.{digits}f}){Colors.RESET}")
                                     modify_position(pos, be_sl, pos.tp, reason="Early Profit Lock (70% Target / +0.35 ATR)")
                                     last_lock_time[pos.ticket] = time.time()
                                 elif not throttle_ok:
@@ -2210,7 +2213,7 @@ def main():
                                 throttle_ok = (time.time() - last_lock_time.get(pos.ticket, 0)) >= LOCK_SL_THROTTLE_SECS
                                 buffer_ok = be_sl > (tick.ask + min_sl_dist_from_market)
                                 if (pos.sl == 0 or be_sl < pos.sl) and throttle_ok and buffer_ok:
-                                    print(f"{Colors.CYAN}[PROFIT LOCK 70%] {sym} Moved SL to -0.35 ATR: {pos.sl:.{digits}f} -> {be_sl:.{digits}f} (Buffer: {min_sl_dist_from_market:.{digits}f} ATR, Market: {tick.ask:.{digits}f}){Colors.RESET}")
+                                    print(f"{Colors.CYAN}[PROFIT LOCK 70%] {sym} Moved SL to -0.35 ATR: {pos.sl:.{digits}f} -> {be_sl:.{digits}f} (Buffer ≥ {min_sl_dist_from_market:.{digits}f} pts, Market: {tick.ask:.{digits}f}){Colors.RESET}")
                                     modify_position(pos, be_sl, pos.tp, reason="Early Profit Lock (70% Target / -0.35 ATR)")
                                     last_lock_time[pos.ticket] = time.time()
                                 elif not throttle_ok:
