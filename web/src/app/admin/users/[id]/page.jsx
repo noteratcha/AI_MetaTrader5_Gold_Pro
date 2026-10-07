@@ -17,6 +17,7 @@ const PLAN_ROWS = [
   'Plan 3: SMC-LiquidityHunt',
   'Plan 4: SR-SwingBounce',
   'Plan 5: BB-H1-Reversion',
+  'Plan 6: PSAR-H1-Trend',
 ];
 
 export default function AdminUserDetailPage() {

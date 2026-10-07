@@ -21,7 +21,8 @@ STANDARD_PLANS = [
     "Plan 2: MA-Cross-H1-Trend",
     "Plan 3: SMC-LiquidityHunt",
     "Plan 4: SR-SwingBounce",
-    "Plan 5: BB-H1-Reversion"
+    "Plan 5: BB-H1-Reversion",
+    "Plan 6: PSAR-H1-Trend",
 ]
 
 def clean_plan_name(raw_plan: str) -> str:
@@ -29,6 +30,8 @@ def clean_plan_name(raw_plan: str) -> str:
     p = str(raw_plan).strip()
     # จับจากชื่อแผนก่อน (ชื่ออย่าง "BB-H1-Reversion" / "MA-Cross-H1-Trend" มีเลข 1 อยู่ในคำว่า H1
     # ถ้าเช็คตัวเลขก่อนจะถูกจัดผิดแผน)
+    if "PSAR" in p:
+        return "Plan 6: PSAR-H1-Trend"
     if "SMC" in p or "Sweep" in p or "Hunt" in p:
         return "Plan 3: SMC-LiquidityHunt"
     if "Bounce" in p or "Swing" in p:

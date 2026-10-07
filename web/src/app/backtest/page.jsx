@@ -5,7 +5,7 @@ import { FlaskConical, LineChart, ShieldAlert, Target, TrendingDown, TrendingUp 
 import { Alert, EmptyState, PageHeader, PageLoading, StatCard } from '../../components/ui';
 import { planDisplay } from '../../lib/plans';
 
-const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa' };
+const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa', 6: '#fb923c' };
 
 // หลักการของแต่ละแผน (ตรงกับกฎในโปรแกรมเวอร์ชันล่าสุด)
 const PLAN_INFO = {
@@ -15,7 +15,7 @@ const PLAN_INFO = {
       'เทรนด์ H1: MA100 < MA150 < MA200 = ขาลง (SELL) · MA100 > MA150 > MA200 = ขาขึ้น (BUY)',
       'จุดเข้า: MA5 ตัด MA13 บนแท่ง M15 ที่ปิดแล้ว ตามทิศเทรนด์',
       'กรองสัญญาณหลอก: RSI 50–70 (BUY) / 30–50 (SELL) และราคาปิดอยู่ฝั่งเดียวกับ MA50 M15',
-      'SL 1.0 ATR · เลื่อน SL ทุกกำไร $5 ครั้งละ 40% · ปิดเมื่อ MA5 ตัด MA13 กลับ (ไม่ตั้ง TP)',
+      'SL 1.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (ขั้นแรก 50% / ถัดไป 40%) · ปิดเมื่อ MA5 ตัด MA13 กลับ (ไม่ตั้ง TP)',
     ],
   },
   2: {
@@ -23,31 +23,40 @@ const PLAN_INFO = {
     rules: [
       'เทรนด์ H4: MA10/MA30 + ความชัน MA5 + ราคาอยู่ฝั่งเดียวกับ MA200',
       'จุดเข้า: MA5 ตัด MA10 บนแท่ง H1 ที่ปิดแล้ว ตามทิศเทรนด์',
-      'SL 0.75 ATR (H1) · ปิดเมื่อ MA5 ตัด MA10 กลับ (ไม่ตั้ง TP · ปล่อยกำไรวิ่ง)',
+      'SL 1.25 ATR (H1) · ปิดเมื่อ MA5 ตัด MA20 กลับ (ไม่ตั้ง TP · ปล่อยกำไรวิ่ง)',
     ],
   },
   3: {
     type: 'กวาดสภาพคล่อง · M15',
     rules: [
-      'ราคาทะลุแนวรับ/ต้าน H1 (โซนกลับตัว 500 แท่ง) แล้วดึงกลับ พร้อมไส้เทียนยาว ≥ 0.3 ATR',
-      'ต้องตามเทรนด์ H1 และ AI ยืนยันทิศ ≥ 50% (มี Divergence ≥ 48%)',
-      'SL 0.75 ATR · TP 1.125 ATR (RRR 1:1.5) · ล็อกกำไรที่ 70% ของเป้า',
+      'ราคาทะลุแนวรับ/ต้าน H1 (โซนกลับตัว 500 แท่ง) แล้วดึงกลับ พร้อมไส้เทียน 0.4–1.0 ATR',
+      'ต้องตามเทรนด์ H1 (MA10/30 และ MA100/150/200 เรียงตามทิศ) และ AI ยืนยันทิศ ≥ 50%',
+      'SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (50% / 40%) · ล็อกกำไรที่ 70% ของเป้า',
     ],
   },
   4: {
     type: 'เด้งแนวรับ/ต้าน · M15',
     rules: [
-      'ราคาเข้าใกล้แนวรับ/ต้าน H1 (500 แท่ง) ไม่เกิน 1 ATR + แท่งปฏิเสธราคา',
-      'ต้องมี RSI Divergence และ AI ยืนยันทิศ ≥ 51%',
-      'SL 0.75 ATR · TP 1.125 ATR (RRR 1:1.5) · ล็อกกำไรที่ 70% ของเป้า',
+      'ราคาเข้าใกล้แนวรับ/ต้าน H1 (500 แท่ง) ไม่เกิน 0.75 ATR + แท่งปฏิเสธราคา',
+      'ต้องมี RSI Divergence · H1 MA100/150/200 ไม่เรียงสวนทิศ และ AI ยืนยันทิศ ≥ 55%',
+      'SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (50% / 40%) · ล็อกกำไรที่ 70% ของเป้า',
     ],
   },
   5: {
     type: 'กลับตัวขอบ Bollinger · H1',
     rules: [
       'ราคาหลุดขอบ Bollinger Bands H1 (20, 2 SD) แล้วปิดกลับเข้ากรอบ + ไส้เทียน ≥ 0.2 ATR',
-      'ต้องมี RSI Divergence + MACD H1 เริ่มหมดแรง และ AI ยืนยันทิศ ≥ 50%',
-      'SL 0.75 ATR · TP 1.125 ATR (RRR 1:1.5) · เลื่อน SL ทุกกำไร $5 ครั้งละ 40% + ล็อกกำไรที่ 70% ของเป้า',
+      'ต้องมี RSI Divergence และ AI ยืนยันทิศ ≥ 55%',
+      'SL 0.75 ATR · TP 1.125 ATR · เลื่อน SL ทุกกำไร 5 จุด (50% / 40%) + ล็อกกำไรที่ 70% ของเป้า',
+    ],
+  },
+  6: {
+    type: 'ตามเทรนด์ · Parabolic SAR H1',
+    rules: [
+      'เทรนด์ H4: MA10/MA30 ต้องตรงกับฝั่งของราคาเทียบ MA200',
+      'จุดเข้า: Parabolic SAR (0.01/0.1) บนแท่ง H1 ที่ปิดแล้วสลับข้างมาทางเทรนด์ (ไม่ใช้ AI)',
+      'SL เริ่มที่จุด SAR (ไม่เกิน 3 ATR H1) และเลื่อนตาม SAR ทุกชั่วโมง · กำไรถึง 2 ATR เปลี่ยนไปตาม SAR เร็ว (0.02/0.2)',
+      'ไม่ตั้ง TP · ปิดเมื่อเทรนด์ H4 เปลี่ยน หรือราคาปิด H1 ผิดฝั่ง EMA100',
     ],
   },
 };
@@ -104,7 +113,7 @@ function EquityChart({ equity, plans, visible }) {
 export default function BacktestPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [visible, setVisible] = useState({ 1: true, 2: true, 3: false, 4: false, 5: false });
+  const [visible, setVisible] = useState({ 1: true, 2: true, 3: false, 4: false, 5: false, 6: true });
 
   useEffect(() => {
     fetch('/backtest.json', { cache: 'no-store' })

@@ -7,6 +7,7 @@ const PLAN_ORDER = [
   'Plan 3: SMC-LiquidityHunt',
   'Plan 4: SR-SwingBounce',
   'Plan 5: BB-H1-Reversion',
+  'Plan 6: PSAR-H1-Trend',
 ];
 
 // สถิติการเทรดรายแผนของผู้ใช้ (ซิงค์จาก Desktop App → user_plan_stats)

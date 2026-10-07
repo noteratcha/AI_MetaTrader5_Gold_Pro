@@ -112,6 +112,16 @@ P4_SL_ATR_MULT = 1.0
 P4_TP_ATR_MULT = 2.0
 # Plan 5 (7 ต.ค. 2026): ตัดเงื่อนไข MACD H1 + AI ≥ 55% · Backtest 2.5 ปี: ไม้ 34 → 87, กำไร 16 → 69 จุด, PF 1.18 → 1.30
 P5_AI_MIN = 0.55
+# Plan 6 (8 ต.ค. 2026): Parabolic SAR H1 ตามเทรนด์ H4 (MA10/30 + ราคาเทียบ MA200) — ไม่ใช้ AI · ไม่ตั้ง TP
+# เข้า: SAR(0.01/0.1) สลับข้างมาทางเทรนด์บนแท่ง H1 ที่ปิดแล้ว · SL เริ่ม = จุด SAR (ไม่เกิน 3 ATR H1)
+# เลื่อน SL: ตาม SAR ช้าทุกแท่ง H1 → กำไรสูงสุดถึง 2 ATR เปลี่ยนไปตาม SAR เร็ว (0.02/0.2)
+# ออก: เทรนด์ H4 เปลี่ยน หรือราคาปิด H1 ผิดฝั่ง EMA100 · Backtest 2.7 ปี: +2,568 จุด PF 2.08 DD 191 (ระหว่างถือ 239)
+P6_NAME = "PSAR-H1-Trend"
+P6_SAR = (0.01, 0.1)
+P6_SAR_FAST = (0.02, 0.2)
+P6_FAST_AFTER_ATR = 2.0
+P6_SL_CAP_ATR = 3.0
+P6_EXIT_EMA = 100
 BE_LOCK_BUFFER_ATR = 0.4          # Break-Even Lock ต้องมี buffer ≥ 0.4 ATR จากราคาตลาดก่อน lock
 LOCK_SL_THROTTLE_SECS = 60       # [Priority 2] ห้าม modify position ซ้ำภายใน 60 วินาที (ป้องกัน double-lock)
 SAME_PLAN_COOLDOWN_MINUTES = 60  # [Priority 4] ห้ามเข้าแผนเดิม + สกุลเดิม (ทิศเดิม) ภายใน 60 นาที
@@ -649,6 +659,64 @@ SR_LOOKBACK_BARS = 500   # แนวรับ/ต้าน: ดูย้อน�
 SR_PIVOT_K = 3           # Swing High/Low = สูง/ต่ำสุดเมื่อเทียบ 3 แท่งซ้าย-ขวา
 SR_ZONE_ATR = 0.5        # รวมจุดกลับตัวที่ห่างกันไม่เกิน 0.5 ATR เป็นโซนเดียวกัน
 SR_MIN_TOUCHES = 2       # โซนที่ใช้ได้ต้องมีราคากลับตัวอย่างน้อย 2 ครั้ง
+
+
+def psar_series(high, low, af0=0.02, af_max=0.2):
+    """Parabolic SAR (Wilder) → (ค่า SAR, ทิศ +1/-1) ต่อแท่ง · ค่าแท่ง i คำนวณจากข้อมูลถึงแท่ง i"""
+    high = np.asarray(high, dtype=float); low = np.asarray(low, dtype=float)
+    n = len(high)
+    sar, dirn = np.zeros(n), np.zeros(n)
+    if n == 0:
+        return sar, dirn
+    up, ep, af = True, high[0], af0
+    sar[0], dirn[0] = low[0], 1
+    for i in range(1, n):
+        s = sar[i - 1] + af * (ep - sar[i - 1])
+        if up:
+            s = min(s, low[i - 1], low[i - 2] if i > 1 else low[i - 1])
+            if low[i] < s:
+                up, s, ep, af = False, ep, low[i], af0
+            elif high[i] > ep:
+                ep, af = high[i], min(af + af0, af_max)
+        else:
+            s = max(s, high[i - 1], high[i - 2] if i > 1 else high[i - 1])
+            if high[i] > s:
+                up, s, ep, af = True, ep, high[i], af0
+            elif low[i] < ep:
+                ep, af = low[i], min(af + af0, af_max)
+        sar[i], dirn[i] = s, (1 if up else -1)
+    return sar, dirn
+
+
+def p6_trail_sl(pos, df_h1, sar, dr, sar_fast, dr_fast, atr_series, tick, info):
+    """SL ใหม่ของไม้ Plan 6 (หรือ None ถ้าไม่ต้องเลื่อน): SAR ช้าของแท่ง H1 ที่ปิดล่าสุด
+    · กำไรสูงสุด (แท่ง H1 ที่ปิดหลังเข้าไม้) ≥ 2 ATR ตอนเข้า → ใช้ SAR เร็วถ้าแน่นกว่า · SL ขยับเฉพาะทิศที่ดีขึ้น"""
+    if len(df_h1) < 3 or tick is None:
+        return None
+    d = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
+    t_open = np.array(df_h1['time'].values.astype('datetime64[s]').astype('int64'))
+    j = int(np.searchsorted(t_open, int(pos.time), side='right')) - 1   # แท่งที่เข้าไม้
+    a0 = float(atr_series.iloc[j - 1]) if j >= 1 and pd.notna(atr_series.iloc[j - 1]) else float(atr_series.iloc[-2])
+    last = len(df_h1) - 2                                                 # แท่งที่ปิดล่าสุด
+    mfe = 0.0
+    if j + 1 <= last:
+        seg = df_h1.iloc[j + 1:last + 1]
+        mfe = float(seg['high'].max() - pos.price_open) if d == 1 else float(pos.price_open - seg['low'].min())
+    cur = float(pos.sl or 0.0)
+    better = (lambda a, b: max(a, b)) if d == 1 else (lambda a, b: min(a, b) if a > 0 else b)
+    new = cur
+    if dr[last] == d:
+        new = better(new, float(sar[last]))
+    if a0 > 0 and mfe >= P6_FAST_AFTER_ATR * a0 and dr_fast[last] == d:
+        new = better(new, float(sar_fast[last]))
+    min_gap = 0.0
+    if info is not None:
+        min_gap = max(float(getattr(info, 'trade_stops_level', 0) or 0), float(getattr(info, 'spread', 0) or 0)) * float(info.point)
+    price = float(tick.bid) if d == 1 else float(tick.ask)
+    new = min(new, price - min_gap) if d == 1 else max(new, price + min_gap)
+    new = round(new, 2)
+    improved = (new > cur + 0.005) if d == 1 else (cur <= 0 or new < cur - 0.005)
+    return new if improved else None
 
 
 def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
@@ -1192,7 +1260,7 @@ def main():
     print(f"\n{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}")
     print(f"{Colors.BOLD}🏆 [AI BOT] {BOT_NAME} v{BOT_VERSION} Started{Colors.RESET}")
     print(f"{Colors.GREEN}{Colors.BOLD}[ASSET FOCUS]: XAUUSD (Gold Specialist 100%){Colors.RESET}")
-    print(f"{Colors.CYAN}{Colors.BOLD}[ACTIVE PLANS]: Plan 1 (MA-Cross M15), Plan 2 (MA-Cross H1), Plan 3 (SMC), Plan 4 (Bounce), Plan 5 (BB-H1 Reversion){Colors.RESET}")
+    print(f"{Colors.CYAN}{Colors.BOLD}[ACTIVE PLANS]: Plan 1 (MA-Cross M15), Plan 2 (MA-Cross H1), Plan 3 (SMC), Plan 4 (Bounce), Plan 5 (BB-H1 Reversion), Plan 6 (PSAR H1){Colors.RESET}")
     print(f"{Colors.YELLOW}{Colors.BOLD}[RISK/RRR]: P1 SL {P1_SL_ATR_MULT} ATR (No TP, Step Trail) | P2 SL {P2_SL_ATR_MULT} ATR H1 (No TP, exit MA5xMA20) | P3-P5 SL {SL_ATR_MULT} ATR, TP RRR 1:{TP_RRR_XAU:.2f} | Early Profit Lock +0.35 ATR{Colors.RESET}")
     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}\n")
 
@@ -1302,6 +1370,22 @@ def main():
                 ma_cross_h1_down = bool((prev_closed_ma5_h1 >= prev_closed_ma10_h1) and (closed_ma5_h1 < closed_ma10_h1))
                 # เวลาแท่ง H1 ที่เกิด Cross (ใช้กันเข้าไม้ซ้ำบนสัญญาณ Cross เดิมตลอดทั้งชั่วโมง)
                 ma_cross_h1_bar_time = df_h1['time'].iloc[-2] if len(df_h1) >= 2 else df_h1['time'].iloc[-1]
+                # ===== Plan 6: Parabolic SAR H1 ตามเทรนด์ H4 (แท่งที่ปิดแล้วทั้ง H1/H4) =====
+                p6_sar, p6_dir = psar_series(df_h1['high'].values, df_h1['low'].values, *P6_SAR)
+                p6_sar_fast, p6_dir_fast = psar_series(df_h1['high'].values, df_h1['low'].values, *P6_SAR_FAST)
+                _c4 = df_h4['close']
+                if len(_c4) >= 202:
+                    _t4 = 1 if _c4.rolling(10).mean().iloc[-2] > _c4.rolling(30).mean().iloc[-2] else -1
+                    _l4 = 1 if _c4.iloc[-2] > _c4.rolling(200).mean().iloc[-2] else -1
+                    p6_trend = _t4 if _t4 == _l4 else 0
+                else:
+                    p6_trend = 0
+                p6_ema100 = float(df_h1['close'].ewm(span=P6_EXIT_EMA, adjust=False).mean().iloc[-2])
+                p6_close = float(df_h1['close'].iloc[-2])
+                p6_flip = len(df_h1) >= 3 and p6_dir[-2] != p6_dir[-3]
+                p6_buy = bool(p6_flip and p6_dir[-2] == 1 and p6_trend == 1)
+                p6_sell = bool(p6_flip and p6_dir[-2] == -1 and p6_trend == -1)
+                p6_bar_time = df_h1['time'].iloc[-2]
                 # Plan 2 ออกไม้: MA5 ตัด MA20 H1 กลับขั้ว (แท่งที่ปิดแล้ว)
                 _ma_exit_h1 = df_h1['close'].rolling(P2_EXIT_MA).mean()
                 if len(df_h1) >= P2_EXIT_MA + 3:
@@ -1662,6 +1746,12 @@ def main():
                 elif ma_cross_h1_down and plan5_sell_ok:
                     status_text = "[MA-CROSS-H1 SELL] MA5 < MA10 (H1) + H4 Bearish + MA200"
                     status_color = Colors.RED
+                elif p6_buy:
+                    status_text = "[PSAR-H1 BUY] SAR flip up + H4 Up + MA200"
+                    status_color = Colors.GREEN
+                elif p6_sell:
+                    status_text = "[PSAR-H1 SELL] SAR flip down + H4 Down + MA200"
+                    status_color = Colors.RED
 
                 # แสดงผลแบบ Dashboard สวยงาม โดยปรับจุดทศนิยมอัตโนมัติ
                 info = mt5.symbol_info(sym)
@@ -1893,6 +1983,8 @@ def main():
                                 return ma_cross_bar_time
                             if plan_name == "MA-Cross-H1-Trend":
                                 return ma_cross_h1_bar_time
+                            if plan_name == P6_NAME:
+                                return p6_bar_time
                             return None
 
                         def _record_plan(direction, plan_name):
@@ -2105,6 +2197,24 @@ def main():
                                 send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on H1 Cross) ({h4_msg})')
                                 _record_plan('SELL', p_label)
+
+                        # แผน 6: Parabolic SAR H1 ตามเทรนด์ H4 (PSAR-H1-Trend) — ไม่ใช้ AI / ไม่ตั้ง TP
+                        elif p6_buy or p6_sell:
+                            d6 = 1 if p6_buy else -1
+                            side6 = 'BUY' if d6 == 1 else 'SELL'
+                            if not _is_plan_blocked(side6, P6_NAME):
+                                a6 = atr_h1_val if pd.notna(atr_h1_val) and atr_h1_val > 0 else atr_val * 2.0
+                                price = tick.ask if d6 == 1 else tick.bid
+                                sl = float(p6_sar[-2])
+                                if (sl - price) * d6 >= 0:          # SAR อยู่ผิดฝั่งราคา (gap) → 1 ATR
+                                    sl = price - d6 * a6
+                                if abs(price - sl) > P6_SL_CAP_ATR * a6:
+                                    sl = price - d6 * P6_SL_CAP_ATR * a6
+                                sl = round(sl, digits)
+                                print(f"{Colors.GREEN if d6 == 1 else Colors.RED}[SIGNAL] {sym} {P6_NAME}: SAR H1 flipped {'up' if d6 == 1 else 'down'} + H4 trend + MA200 -> SENDING {side6} ORDER (SL={abs(price - sl):.{digits}f} / SAR · max 3 ATR H1, NO TP){Colors.RESET}")
+                                send_order(sym, mt5.ORDER_TYPE_BUY if d6 == 1 else mt5.ORDER_TYPE_SELL, price, sl, 0.0, plan_name=P6_NAME)
+                                log_signal_event(sym, 'ENTRY_SIGNAL', P6_NAME, side6, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (SAR trail)')
+                                _record_plan(side6, P6_NAME)
                 if has_position:
                     # เช็คเงื่อนไขการจัดการ Position (Plan 1 MA Exit + Plan 2 H1 MA Exit + AI Reversal + Early BE Lock + Unlimited Dynamic TP)
                     open_tickets = {p.ticket for p in positions}
@@ -2167,6 +2277,22 @@ def main():
                                 log_signal_event(sym, 'POSITION_MGMT', 'MA-Cross-H1-Trend', 'BUY', tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'MA_CROSS_H1_EXIT', f'H1 MA5 crossed above MA10 (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment="H1 MA5 Cross Up Exit")
                                 continue
+
+                        # 0.3 Plan 6 (PSAR-H1-Trend): ออกเมื่อเทรนด์ H4 เปลี่ยน / ราคาปิด H1 ผิดฝั่ง EMA100 · เลื่อน SL ตาม SAR
+                        #     (ไม่ใช้ AI Reversal / ล็อกกำไร 70% — ตรงกับ Backtest)
+                        if pos.comment.startswith(P6_NAME):
+                            d6 = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
+                            why6 = "H4 Trend Change Exit" if p6_trend != d6 else ("EMA100 H1 Exit" if (p6_close - p6_ema100) * d6 < 0 else None)
+                            if why6:
+                                p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
+                                print(f"{Colors.YELLOW}[PLAN 6 EXIT] {sym} {why6}. Closing {'BUY' if d6 == 1 else 'SELL'} position! Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                log_signal_event(sym, 'POSITION_MGMT', P6_NAME, 'SELL' if d6 == 1 else 'BUY', tick.bid if d6 == 1 else tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'PSAR_EXIT', f'{why6} (Profit: ${pos.profit:.2f})')
+                                close_position(pos, comment=why6)
+                                continue
+                            new6 = p6_trail_sl(pos, df_h1, p6_sar, p6_dir, p6_sar_fast, p6_dir_fast, atr_h1_series, tick, mt5.symbol_info(sym))
+                            if new6 is not None:
+                                modify_position(pos, new6, pos.tp, reason=f"SAR Trail ({pos.comment})")
+                            continue
 
                         # 1. เช็คเงื่อนไขการตัดขาดทุนเมื่อทิศทางเปลี่ยน (AI Dynamic Exit พร้อม Whipsaw Protection)
                         if pos.type == mt5.ORDER_TYPE_BUY and prob[0] >= 0.60 and (tick.bid < pos.price_open):

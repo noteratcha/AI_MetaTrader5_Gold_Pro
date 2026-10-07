@@ -27,6 +27,7 @@ PLANS = (  # (ขึ้นต้น comment, key, ชื่อสั้น) — 
     ("SMC", "P3", "P3 · SMC Hunt"),
     ("SR-Swing", "P4", "P4 · SR Bounce"),
     ("BB-H1", "P5", "P5 · BB-H1"),
+    ("PSAR", "P6", "P6 · SAR H1"),
 )
 
 
@@ -83,6 +84,9 @@ def _context_from(h1, h4, price):
     h1s["bb_mid"], h1s["bb_up"], h1s["bb_lo"] = mid, mid + 2 * sd, mid - 2 * sd
     macd = c1.ewm(span=12, adjust=False).mean() - c1.ewm(span=26, adjust=False).mean()
     h1s["macd_hist"] = macd - macd.ewm(span=9, adjust=False).mean()
+    h1s["sar"], sdir = bot.psar_series(h1["high"].values, h1["low"].values, *bot.P6_SAR)
+    h1s["sar_fast"], fdir = bot.psar_series(h1["high"].values, h1["low"].values, *bot.P6_SAR_FAST)
+    h1s["ema100"] = c1.ewm(span=bot.P6_EXIT_EMA, adjust=False).mean()
     atr_h1, atr_h4 = bot._atr_series(h1), bot._atr_series(h4)
     d = {"h1s": h1s.set_index("time"), "atr_h1": _f(atr_h1.iloc[-2])}
     _, d["h1_diff"], d["h1_dir"] = bot.closed_trend(c1.rolling(10).mean(), c1.rolling(30).mean(), atr=atr_h1)
@@ -97,6 +101,12 @@ def _context_from(h1, h4, price):
     d["h1_stack_dir"] = 0 if None in st else (-1 if st[0] < st[1] < st[2] else (1 if st[0] > st[1] > st[2] else 0))
     d["h1_ma5"], d["h1_ma10"], d["h1_ma20"] = _f(h1s["ma5"].iloc[-2]), _f(h1s["ma10"].iloc[-2]), _f(h1s["ma20"].iloc[-2])
     d["macd_now"], d["macd_prev"] = _f(h1s["macd_hist"].iloc[-2]), _f(h1s["macd_hist"].iloc[-3])
+    d["p6_sar"], d["p6_dir"] = _f(h1s["sar"].iloc[-2]), int(sdir[-2])
+    d["p6_sar_fast"], d["p6_dir_fast"] = _f(h1s["sar_fast"].iloc[-2]), int(fdir[-2])
+    d["h1_ema100"], d["h1_close"] = _f(h1s["ema100"].iloc[-2]), _f(c1.iloc[-2])
+    _t4 = 1 if c4.rolling(10).mean().iloc[-2] > c4.rolling(30).mean().iloc[-2] else -1
+    _l4 = 1 if c4.iloc[-2] > c4.rolling(200).mean().iloc[-2] else -1
+    d["p6_trend"] = _t4 if _t4 == _l4 else 0
     sr = bot.find_sr_levels(h1, float(price))
     d["sup"], d["res"] = _f(sr["support"]), _f(sr["resistance"])
     d["sup_t"], d["res_t"] = int(sr["sup_touches"]), int(sr["res_touches"])
@@ -134,7 +144,7 @@ def _map_h1(m, ctx):
     if ctx is None:
         return
     hkey = pd.to_datetime(m["time"], unit="s").dt.floor("h")
-    for col in ("ma5", "ma10", "ma20", "bb_up", "bb_mid", "bb_lo", "macd_hist"):
+    for col in ("ma5", "ma10", "ma20", "bb_up", "bb_mid", "bb_lo", "macd_hist", "sar", "ema100"):
         m["h1_" + col] = hkey.map(ctx["h1s"][col]).astype(float)
 
 
@@ -188,6 +198,9 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         lines = [{"label": "MA5 H1", "style": "fast", "values": ser("h1_ma5")},
                  {"label": "MA10 H1", "style": "slow", "values": ser("h1_ma10")},
                  {"label": "MA20 H1 (ออก)", "style": "ma50", "values": ser("h1_ma20")}]
+    elif plan_key == "P6":
+        lines = [{"label": "SAR H1", "style": "fast", "values": ser("h1_sar")},
+                 {"label": "EMA100 H1 (ออก)", "style": "ma50", "values": ser("h1_ema100")}]
     elif plan_key == "P5":
         lines = [{"label": "BB บน H1", "style": "band", "values": ser("h1_bb_up")},
                  {"label": "BB กลาง H1", "style": "mid", "values": ser("h1_bb_mid")},
@@ -329,6 +342,22 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         ai_prob()
         step_trail()
         tp_progress()
+    elif plan_key == "P6" and ctx:
+        word = {1: "ขาขึ้น", -1: "ขาลง", 0: "ไม่ชัด (MA10/30 กับ MA200 ไม่ตรงกัน)"}[ctx["p6_trend"]]
+        inds.append(_ind("เทรนด์ H4 (MA10/30 + MA200)", word, _agree(ctx["p6_trend"], side),
+                         "ต้องตรงทิศตอนเข้า · เทรนด์เปลี่ยน = สัญญาณออก" + (f" ({exit_word})" if ctx["p6_trend"] != side else "")))
+        if ctx["p6_sar"] is not None:
+            inds.append(_ind("SAR H1 (0.01/0.1 · แท่งปิด)", _fmt(ctx["p6_sar"]), _agree(ctx["p6_dir"], side),
+                             "SL เลื่อนตามจุดนี้ทุกชั่วโมง (ขยับเฉพาะทิศที่ดีขึ้น)"))
+        if ctx["p6_sar_fast"] is not None:
+            inds.append(_ind("SAR เร็ว H1 (0.02/0.2)", _fmt(ctx["p6_sar_fast"]), _agree(ctx["p6_dir_fast"], side),
+                             "ใช้เมื่อกำไรสูงสุดถึง 2 ATR H1 — เลื่อน SL แน่นขึ้น"))
+        if ctx["h1_ema100"] is not None and ctx["h1_close"] is not None:
+            dd6 = _agree(ctx["h1_close"] - ctx["h1_ema100"], side)
+            inds.append(_ind("ราคาปิด H1 vs EMA100", f"{ctx['h1_close']:,.2f} / {ctx['h1_ema100']:,.2f}", dd6,
+                             "อยู่ฝั่งไม้ — ถือต่อ" if dd6 >= 0 else f"ปิดผิดฝั่ง = สัญญาณออก ({exit_word})"))
+        if ctx["atr_h1"]:
+            inds.append(_ind("ATR(14) H1", f"{ctx['atr_h1']:,.2f}", 0, "SL เริ่มไม่เกิน 3 ATR H1 · ไม่ตั้ง TP"))
     if plan_key == "M" and ctx:
         inds.append(_ind("เทรนด์ H4 (MA10/30)", f"{ctx['h4_diff']:+.2f}%", _agree(ctx["h4_dir"], side), ""))
     if atr:

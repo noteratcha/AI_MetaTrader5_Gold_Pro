@@ -84,6 +84,7 @@ vx["h4_side"] = ((f10 / f30 - 1).abs() * 100 < 0.20).astype(float)
 t100, t150, t200 = (h4.close.rolling(k).mean() for k in (100, 150, 200))
 vx["h4_stack"] = np.where((t100 < t150) & (t150 < t200), -1, np.where((t100 > t150) & (t150 > t200), 1, 0))
 _m5 = h4.close.rolling(5).mean(); _a4 = A(h4); _sl5 = (_m5 - _m5.shift(2)) / _a4; _up = f10 > f30
+vx["p6_dir"] = np.where(_up == (h4.close > t200), np.where(_up, 1, -1), 0)   # Plan 6: H4 MA10/30 ตรงกับราคาเทียบ MA200
 vx["p2_dir"] = np.where(_up & (_sl5 > 0) & (h4.close > t200), 1, np.where(~_up & (_sl5 < 0) & (h4.close < t200), -1, 0))
 
 b = pd.merge_asof(b.sort_values("close_time"), hx, left_on="close_time", right_on="avail", direction="backward").drop(columns="avail")
@@ -242,11 +243,49 @@ rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "h1_stack", entr
                                                 trail="sl", first_frac=0.50, frac=0.40))))
 f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
 f["atr"] = A(f); f["ma5"], f["ma10"], f["ma20"] = f.close.rolling(5).mean(), f.close.rolling(10).mean(), f.close.rolling(20).mean()
-f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
+f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir", "p6_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
 rows.append(stats("P2 MA H1", keep(2, sim_ma(f, "ma5", "ma10", "p2_dir", step=None, sl_mult=1.25, exit_slow="ma20"))))
 rows.append(stats("P3 SMC", keep(3, sim_ai_plan(sig_smc, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
 rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
+
+
+def sim_psar(fr):
+    """Plan 6: SAR(0.01/0.1) H1 สลับมาทางเทรนด์ H4 → SL = SAR (ไม่เกิน 3 ATR) เลื่อนตาม SAR ·
+    กำไรสูงสุด ≥ 2 ATR → SAR เร็ว (0.02/0.2) · ออกเมื่อเทรนด์เปลี่ยน / ราคาปิดผิดฝั่ง EMA100 · SL มี gap: ปิดที่ราคาเปิด"""
+    o, h, l, c, a, t = fr.open.values, fr.high.values, fr.low.values, fr.close.values, fr.atr.values, fr.time.values
+    T6 = fr.p6_dir.fillna(0).values.astype(int)
+    sar, dr = bot.psar_series(h, l, *bot.P6_SAR)
+    sf, df_ = bot.psar_series(h, l, *bot.P6_SAR_FAST)
+    ema = fr.close.ewm(span=bot.P6_EXIT_EMA, adjust=False).mean().values
+    out, pos = [], None
+    for i in range(3, len(fr) - 1):
+        if pos:
+            d, e, sl, a0, mfe, te = pos
+            xp = None
+            if d == 1 and o[i] <= sl: xp = o[i]
+            elif d == 1 and l[i] <= sl: xp = sl
+            elif d == -1 and o[i] >= sl: xp = o[i]
+            elif d == -1 and h[i] >= sl: xp = sl
+            if xp is None:
+                mfe = max(mfe, (h[i] - e) if d == 1 else (e - l[i]))
+                if T6[i] != d or (c[i] - ema[i]) * d < 0:
+                    xp = o[i + 1]
+            if xp is not None:
+                out.append(dict(time=te, pnl=(xp - e) * d - SPREAD)); pos = None
+            else:
+                if dr[i] == d: sl = max(sl, sar[i]) if d == 1 else min(sl, sar[i])
+                if mfe >= bot.P6_FAST_AFTER_ATR * a0 and df_[i] == d: sl = max(sl, sf[i]) if d == 1 else min(sl, sf[i])
+                pos = (d, e, sl, a0, mfe, te)
+        if pos is None and dr[i] != dr[i - 1] and T6[i] != 0 and dr[i] == T6[i] and not np.isnan(a[i]):
+            d = int(T6[i]); e = o[i + 1]; sl = sar[i]
+            if (sl - e) * d >= 0: sl = e - d * a[i]
+            if abs(e - sl) > bot.P6_SL_CAP_ATR * a[i]: sl = e - d * bot.P6_SL_CAP_ATR * a[i]
+            pos = (d, e, sl, a[i], 0.0, t[i + 1])
+    return out
+
+
 rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4, first_frac=0.5))))
+rows.append(stats("P6 SAR H1", keep(6, sim_psar(f))))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
 print(pd.DataFrame(rows).to_string(index=False))
@@ -258,9 +297,10 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · �
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200 · SL 1.25 ATR · ออกเมื่อ MA5 ตัด MA20"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
          4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 55% · SL 1.0 / TP 2.0 ATR"),
-         5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · เลื่อน SL ทุก 5 จุด (50%/40%)")}
+         5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · เลื่อน SL ทุก 5 จุด (50%/40%)"),
+         6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100")}
 plans_out, events = [], []
-for k in (1, 2, 3, 4, 5):
+for k in (1, 2, 3, 4, 5, 6):
     tr = ALL[k]
     st = stats(NAMES[k][1], tr)
     df_t = pd.DataFrame(tr)
@@ -272,7 +312,7 @@ for k in (1, 2, 3, 4, 5):
             events.append((pd.Timestamp(x["time"]), k, float(x["pnl"])))
     plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly))
 events.sort(key=lambda e: e[0])
-eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5)}
+eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6)}
 total = 0.0
 for t, k, pnl in events:
     cum[k] += pnl; total += pnl

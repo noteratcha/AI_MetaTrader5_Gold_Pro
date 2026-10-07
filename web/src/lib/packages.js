@@ -53,5 +53,6 @@ export const PLAN_LIST = [
   { key: 'MA-Cross-H1-Trend', label: 'P2 · MA H1', tag: 'H1 · H4 Anchor' },
   { key: 'SMC-LiquidityHunt', label: 'P3 · SMC Hunt', tag: 'H1 S&R Sweep' },
   { key: 'SR-SwingBounce', label: 'P4 · SR Bounce', tag: 'Divergence' },
-  { key: 'BB-H1-Reversion', label: 'P5 · BB-H1', tag: 'BB 2STD + MACD' },
+  { key: 'BB-H1-Reversion', label: 'P5 · BB-H1', tag: 'BB 2STD + Divergence' },
+  { key: 'PSAR-H1-Trend', label: 'P6 · SAR H1', tag: 'Parabolic SAR · H4 Trend' },
 ];

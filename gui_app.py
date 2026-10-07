@@ -1269,6 +1269,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
         "P3": "ราคากวาดแนวรับ/ต้าน H1 แล้วดึงกลับ + ไส้เทียน 0.4–1.0 ATR + เทรนด์ H1 + MA100/150/200 H1 เรียงตามทิศ + AI · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
         "P4": "เด้งโซนแนวรับ/ต้าน H1 (≤ 0.75 ATR) + RSI Divergence + H1 MA100/150/200 ไม่สวนทิศ + AI ≥ 55% · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
         "P5": "หลุดกรอบ Bollinger H1 แล้วกลับเข้า + Divergence + AI ≥ 55% · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
+        "P6": "Parabolic SAR H1 สลับข้างมาทางเทรนด์ H4 (MA10/30 + MA200) · SL = จุด SAR (ไม่เกิน 3 ATR H1) เลื่อนตาม SAR ทุกชั่วโมง · กำไรถึง 2 ATR เลื่อนเร็วขึ้น · ไม่ตั้ง TP · ออกเมื่อเทรนด์ H4 เปลี่ยนหรือราคาปิดผิดฝั่ง EMA100",
         "M": "ไม้ที่กดเข้าเอง · บอทดูแลต่อด้วยล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึงเป้า",
     }
 
@@ -3224,6 +3225,7 @@ class MainTradingApp(ctk.CTk):
         ("⚡", "P3 · SMC Hunt", "Plan 3: SMC-LiquidityHunt"),
         ("🎯", "P4 · SR Bounce", "Plan 4: SR-SwingBounce"),
         ("🌊", "P5 · BB-H1", "Plan 5: BB-H1-Reversion"),
+        ("◆", "P6 · SAR H1", "Plan 6: PSAR-H1-Trend"),
     ]
 
     def _build_plans_card(self, parent):
@@ -3496,7 +3498,7 @@ class MainTradingApp(ctk.CTk):
 
     CONSOLE_BANNER = (
         (f"🏆 AI Gold Commander Pro v{APP_VERSION}\n", "close"),
-        ("XAUUSD · P1 SL 1.0 ATR ไม่ตั้ง TP · P2 SL 1.25 ATR (H1) ไม่ตั้ง TP · P3–P4 SL 1.0 / TP 2.0 ATR · P5 SL 0.75 ATR · TP RRR 1:1.5\n", "muted"),
+        ("XAUUSD · P1 SL 1.0 ATR ไม่ตั้ง TP · P2 SL 1.25 ATR (H1) ไม่ตั้ง TP · P3–P4 SL 1.0 / TP 2.0 ATR · P5 SL 0.75 ATR · TP RRR 1:1.5 · P6 SL ตาม SAR ไม่ตั้ง TP\n", "muted"),
         ("คิดเวลาเฉพาะตอนบอททำงาน\n", "muted"),
         ("กด ▶ เริ่มการทำงานบอท ด้านขวาเพื่อเริ่มสแกนตลาด — ที่นี่จะแสดงเฉพาะเหตุการณ์สำคัญ (เปิด/ปิดออเดอร์ ฯลฯ)\n\n", "profit"),
     )

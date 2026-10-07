@@ -5,11 +5,13 @@ export const PLAN_NAMES = {
   3: 'P3 · SMC Hunt',
   4: 'P4 · SR Bounce',
   5: 'P5 · BB-H1',
+  6: 'P6 · SAR H1',
 };
 
 /** เลขแผนจากชื่อใด ๆ เช่น "MA-Cross-Trend", "Plan 3: SMC-LiquidityHunt", "BB-H1-Reversion+Div" — ไม่รู้จักคืน 0 */
 export function planNumber(raw) {
   const p = String(raw || '').toLowerCase();
+  if (p.includes('psar') || p.includes('sar h1')) return 6;
   if (p.includes('ma-cross-h1') || p.includes('ma h1')) return 2;
   if (p.includes('ma-cross') || p.includes('ma m15')) return 1;
   if (p.includes('smc') || p.includes('liquidity')) return 3;

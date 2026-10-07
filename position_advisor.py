@@ -58,6 +58,12 @@ def _plan_exit(comment, side, m15, h1):
     if c.startswith("MA-Cross-Trend"):
         cm = m15["close"]
         f, s, tf, pair = cm.rolling(5).mean().iloc[-2], cm.rolling(13).mean().iloc[-2], "M15", "MA5/MA13"
+    elif c.startswith("PSAR"):
+        ch = h1["close"]
+        e100 = ch.ewm(span=100, adjust=False).mean().iloc[-2]
+        if (ch.iloc[-2] - e100) * side < 0:
+            return "ราคาปิด H1 ผิดฝั่ง EMA100 = สัญญาณออกของแผนนี้ (บอทจะปิดเองเมื่อทำงานอยู่)"
+        return None
     elif c.startswith("MA-Cross-H1"):
         ch = h1["close"]
         m5, m20 = ch.rolling(5).mean(), ch.rolling(20).mean()

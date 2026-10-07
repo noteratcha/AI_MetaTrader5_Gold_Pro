@@ -9,6 +9,7 @@ const PLAN_STAT_NAMES = {
   'SMC-LiquidityHunt': 'Plan 3: SMC-LiquidityHunt',
   'SR-SwingBounce': 'Plan 4: SR-SwingBounce',
   'BB-H1-Reversion': 'Plan 5: BB-H1-Reversion',
+  'PSAR-H1-Trend': 'Plan 6: PSAR-H1-Trend',
 };
 
 // GET สถานะเปิด/ปิดแผนเทรด + ผลงานรวมรายแผน · PUT บันทึกการเปิด/ปิด (บอททุกเครื่องอ่านภายใน ~5 นาที)
