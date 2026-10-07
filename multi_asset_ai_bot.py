@@ -1936,6 +1936,12 @@ def main():
                         # ---- Max Positions by Free Margin ----
                         # มาจินทุก $400 เปิดได้ 1 ไม้ (คำนวณจาก Free Margin ปัจจุบัน)
                         acc_info = mt5.account_info()
+                        # ยอดเงินขั้นต่ำ 25 USD (Equity) — ต่ำกว่านี้ไม่เปิดไม้ใหม่ (ยังดูแลไม้ที่เปิดอยู่ตามปกติ)
+                        if acc_info is not None and plan_config.account_usd(acc_info) < plan_config.MIN_BALANCE_USD:
+                            if time.time() - _plan_disabled_logged.get((sym, "MIN_BALANCE"), 0) > 600:
+                                _plan_disabled_logged[(sym, "MIN_BALANCE")] = time.time()
+                                print(f"{Colors.YELLOW}[MIN BALANCE] ยอดเงิน {plan_config.account_usd(acc_info):,.2f} USD ต่ำกว่าขั้นต่ำ {plan_config.MIN_BALANCE_USD:.0f} USD — หยุดเปิดไม้ใหม่ (ไม้ที่เปิดอยู่ยังดูแลตามปกติ){Colors.RESET}")
+                            break
                         all_open_pos = mt5.positions_get()
                         total_open_pos = len(all_open_pos) if all_open_pos else 0
                         free_margin = float(acc_info.margin_free) if acc_info else 0.0

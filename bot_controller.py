@@ -72,6 +72,10 @@ class BotController:
         if not license_mgr.has_active_hours():
             return False, "เวลาใช้งานหมดแล้ว! กรุณาเติมชั่วโมงด้วย Product Key ก่อนเริ่มต้น"
 
+        low = self._min_balance_message()
+        if low:
+            return False, low
+
         # เปลี่ยนเส้นทาง stdout ไปยัง GUI
         sys.stdout = self.redirector
 
@@ -118,6 +122,10 @@ class BotController:
         if not license_mgr.has_active_hours():
             return False, "เวลาใช้งานหมดแล้ว! กรุณาเติมชั่วโมงก่อนกลับมาทำงาน"
 
+        low = self._min_balance_message()
+        if low:
+            return False, low
+
         bot_core.BOT_PAUSED_FLAG = False
         self.is_paused = False
 
@@ -138,6 +146,23 @@ class BotController:
 
         if self.status_callback:
             self.status_callback("STOPPED")
+
+    def _min_balance_message(self):
+        """ยอดเงิน (Equity) ต้องมีอย่างน้อย 25 USD ระบบถึงจะทำงาน — คืนข้อความเตือน หรือ None ถ้าผ่าน/อ่าน MT5 ไม่ได้"""
+        try:
+            import plan_config
+            if mt5.terminal_info() is None and not mt5.initialize():
+                return None   # ยังเชื่อม MT5 ไม่ได้ — ให้บอทแจ้งเรื่องการเชื่อมต่อเอง
+            acc = mt5.account_info()
+            if acc is None:
+                return None
+            usd = plan_config.account_usd(acc)
+            if usd < plan_config.MIN_BALANCE_USD:
+                return (f"ยอดเงินในบัญชี MT5 ต้องมีอย่างน้อย {plan_config.MIN_BALANCE_USD:.0f} USD ระบบถึงจะทำงาน\n"
+                        f"บัญชี #{acc.login} มี {usd:,.2f} USD — กรุณาเติมเงินหรือเปลี่ยนบัญชีใน MT5")
+        except Exception:
+            return None
+        return None
 
     def _run_bot_thread(self):
         """ฟังก์ชันรันเธรดหลักของบอท"""

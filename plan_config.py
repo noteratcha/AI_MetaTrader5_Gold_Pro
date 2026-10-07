@@ -149,6 +149,18 @@ def set_margin_per_trade(value: float, email: str = None):
         json.dump(data, f)
 
 
+MIN_BALANCE_USD = 25.0   # ยอดเงินขั้นต่ำ (Equity) ที่ระบบยอมเริ่มบอท/เปิดไม้ใหม่ (ผู้ใช้กำหนด 8 ต.ค. 2026)
+
+
+def account_usd(acc) -> float:
+    """Equity ของบัญชี MT5 เป็น USD (บัญชีเซ็นต์ USC/USc หาร 100) — 0 ถ้าอ่านไม่ได้"""
+    if acc is None:
+        return 0.0
+    eq = float(getattr(acc, "equity", 0.0) or 0.0)
+    cur = str(getattr(acc, "currency", "") or "").upper()
+    return eq / 100.0 if cur in ("USC", "USCENT", "CENT") else eq
+
+
 def max_positions(free_margin: float, lot: float, email: str = None, margin: float = None) -> int:
     """จำนวนไม้สูงสุดที่เปิดได้ = มาร์จิ้นว่าง ÷ (มาร์จิ้นต่อไม้ × Lot/0.01) ปัดเศษขึ้น — อย่างน้อย 1 ไม้"""
     per = (margin or get_margin_per_trade(email)) * max(float(lot or 0.01), 0.01) / 0.01
