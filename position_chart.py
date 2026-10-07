@@ -211,16 +211,13 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         if not pos:
             return
         step = bot.P4_TRAIL_STEP_POINTS
-        if plan_key == "P1":
-            rule = (f"ทุก +{step:g} จุด เลื่อน SL {bot.P1_TRAIL_FIRST_FRACTION:.0%} (ขั้นแรก) / {bot.P4_TRAIL_FRACTION:.0%} (ขั้นถัดไป)"
-                    " ของระยะ SL → ราคา")
-        else:
-            rule = f"ทุก +{step:g} จุด เลื่อน SL เข้าหาราคา {bot.P4_TRAIL_FRACTION:.0%} ของระยะ SL → ราคา"
+        rule = (f"ทุก +{step:g} จุด เลื่อน SL {bot.TRAIL_FIRST_FRACTION:.0%} (ขั้นแรก) / {bot.P4_TRAIL_FRACTION:.0%} (ขั้นถัดไป)"
+                " ของระยะ SL → ราคา")
         if live:
             gain = (price - entry) * side
             k = int(gain // step) if gain > 0 else 0
             nk, npx, sl = k + 1, entry + side * (k + 1) * step, pos["sl"]
-            fr = bot.P1_TRAIL_FIRST_FRACTION if (plan_key == "P1" and nk == 1) else bot.P4_TRAIL_FRACTION
+            fr = bot.TRAIL_FIRST_FRACTION if nk == 1 else bot.P4_TRAIL_FRACTION
             nsl = sl + side * fr * abs(npx - sl)
             inds.append(_ind("เลื่อน SL ขั้นบันได", f"ผ่านแล้ว {k} ขั้น", 1 if k else 0,
                              f"{rule} · ขั้นถัดไปเมื่อราคาถึง {npx:,.2f} → SL {nsl:,.2f}" if sl > 0 else rule))
@@ -308,6 +305,7 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                 inds.append(_ind("RSI(14) M15", f"{rsic:.1f}", _agree(rsic - 50, side), ""))
             divergence()
         ai_prob()
+        step_trail()
         tp_progress()
     elif plan_key == "P5":
         if ctx:

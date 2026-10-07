@@ -144,7 +144,7 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
     return out
 
 
-def sim_ai_plan(signal_fn, step=None, frac=0.4):
+def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None):
     """Plan 3–5: SL 0.75 ATR · TP 1.125 ATR · ล็อกกำไร +0.35 ATR ที่ 70% · ขยาย TP +1 ATR ที่ 80% เมื่อ AI ≥54% · AI กลับทิศ ≥60% และติดลบ → ปิด"""
     o, h, l, c, a, p = b.open.values, b.high.values, b.low.values, b.close.values, b.atr.values, b.p_up.values
     t = b.time.values
@@ -162,10 +162,10 @@ def sim_ai_plan(signal_fn, step=None, frac=0.4):
                 if not np.isnan(pu) and (1 - pd_same) >= 0.60 and (c[i] - e) * d < 0:
                     out.append(dict(time=te, pnl=(o[i + 1] - e) * d - SPREAD)); pos = None
                 else:
-                    if step:  # Step Trailing (Plan 5): ทุกกำไร step จุด เลื่อน SL frac ของระยะ SL → ราคา
+                    if step:  # Step Trailing: ทุกกำไร step จุด เลื่อน SL (first_frac ขั้นแรก / frac ขั้นถัดไป) ของระยะ SL → ราคา
                         best = (h[i] - e) if d == 1 else (e - l[i])
                         while best >= k * step:
-                            ns = sl + d * frac * abs(e + d * k * step - sl)
+                            ns = sl + d * (first_frac if (first_frac is not None and k == 1) else frac) * abs(e + d * k * step - sl)
                             sl = max(sl, ns) if d == 1 else min(sl, ns); k += 1
                     target = abs(tp - e)
                     prog = ((h[i] - e) if d == 1 else (e - l[i])) / target if target else 0
@@ -241,9 +241,9 @@ f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
 f["atr"] = A(f); f["ma5"], f["ma10"] = f.close.rolling(5).mean(), f.close.rolling(10).mean()
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
 rows.append(stats("P2 MA H1", keep(2, sim_ma(f, "ma5", "ma10", "p2_dir", step=None))))
-rows.append(stats("P3 SMC", keep(3, sim_ai_plan(sig_smc))))
-rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce))))
-rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4))))
+rows.append(stats("P3 SMC", keep(3, sim_ai_plan(sig_smc, step=5.0, frac=0.4, first_frac=0.5))))
+rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce, step=5.0, frac=0.4, first_frac=0.5))))
+rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4, first_frac=0.5))))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
 print(pd.DataFrame(rows).to_string(index=False))
@@ -253,9 +253,9 @@ print(pd.DataFrame(rows).to_string(index=False))
 from version import APP_VERSION  # noqa: E402
 NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200"),
-         3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 (500 แท่ง) + AI"),
-         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 + Divergence + AI"),
-         5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + MACD + AI")}
+         3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 (500 แท่ง) + AI · เลื่อน SL ทุก 5 จุด (50%/40%)"),
+         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 + Divergence + AI · เลื่อน SL ทุก 5 จุด (50%/40%)"),
+         5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + MACD + AI · เลื่อน SL ทุก 5 จุด (50%/40%)")}
 plans_out, events = [], []
 for k in (1, 2, 3, 4, 5):
     tr = ALL[k]
