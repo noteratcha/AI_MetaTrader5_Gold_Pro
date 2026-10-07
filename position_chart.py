@@ -358,6 +358,8 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                              "อยู่ฝั่งไม้ — ถือต่อ" if dd6 >= 0 else f"ปิดผิดฝั่ง = สัญญาณออก ({exit_word})"))
         if ctx["atr_h1"]:
             inds.append(_ind("ATR(14) H1", f"{ctx['atr_h1']:,.2f}", 0, "SL เริ่มไม่เกิน 3 ATR H1 · ไม่ตั้ง TP"))
+    if plan_key == "M":
+        step_trail()
     if plan_key == "M" and ctx:
         inds.append(_ind("เทรนด์ H4 (MA10/30)", f"{ctx['h4_diff']:+.2f}%", _agree(ctx["h4_dir"], side), ""))
     if atr:

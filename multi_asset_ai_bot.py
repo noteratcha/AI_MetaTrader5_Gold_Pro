@@ -117,6 +117,7 @@ P5_AI_MIN = 0.55
 # เลื่อน SL: ตาม SAR ช้าทุกแท่ง H1 → กำไรสูงสุดถึง 2 ATR เปลี่ยนไปตาม SAR เร็ว (0.02/0.2)
 # ออก: เทรนด์ H4 เปลี่ยน หรือราคาปิด H1 ผิดฝั่ง EMA100 · Backtest 2.7 ปี: +2,568 จุด PF 2.08 DD 191 (ระหว่างถือ 239)
 P6_NAME = "PSAR-H1-Trend"
+MANUAL_SL_ATR = 1.0   # ไม้ที่เข้าเองไม่มี SL → บอทตั้ง SL 1.0 ATR M15 (เท่าค่าเริ่มต้นของหน้าต่างเข้าไม้เอง)
 P6_SAR = (0.01, 0.1)
 P6_SAR_FAST = (0.02, 0.2)
 P6_FAST_AFTER_ATR = 2.0
@@ -2258,6 +2259,23 @@ def main():
                                 close_position(pos, comment="MA5 Cross Up Exit")
                                 continue
                             # Step Trailing: ทุกกำไร 5 จุด เลื่อน SL (ขั้นแรก 50% / ถัดไป 40% ของระยะ SL → ราคาของขั้น)
+                            if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
+                                continue
+
+                        # 0.14 ไม้ที่เข้าเอง (ปุ่ม BUY/SELL ในโปรแกรม = Manual-Quick หรือเปิดเองใน MT5 = magic 0) — 8 ต.ค. 2026
+                        #      ไม่มี SL → ตั้ง SL 1.0 ATR (M15) จากราคาเข้า · มี SL แล้ว → เลื่อน SL ทุกกำไร 5 จุด (ขั้นแรก 50% / ถัดไป 40%)
+                        if (pos.comment or "").startswith("Manual") or pos.magic == 0:
+                            if not pos.sl or pos.sl <= 0:
+                                dm = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
+                                px = tick.bid if dm == 1 else tick.ask
+                                si = mt5.symbol_info(sym)
+                                gap = (max(float(si.trade_stops_level or 0), float(si.spread or 0)) * float(si.point)) if si else 0.0
+                                new_sl = pos.price_open - dm * atr_val * MANUAL_SL_ATR
+                                if (px - new_sl) * dm <= gap:      # ราคาเลยจุดนั้นไปแล้ว → ตั้ง 1.0 ATR จากราคาปัจจุบัน
+                                    new_sl = px - dm * atr_val * MANUAL_SL_ATR
+                                print(f"{Colors.CYAN}[MANUAL SL] {sym} ไม้ที่เข้าเอง #{pos.ticket} ไม่มี SL — ตั้ง SL {new_sl:.2f} ({MANUAL_SL_ATR:g} ATR){Colors.RESET}")
+                                modify_position(pos, round(new_sl, 2), pos.tp, reason=f"Manual SL {MANUAL_SL_ATR:g} ATR")
+                                continue
                             if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
                                 continue
 

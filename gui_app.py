@@ -839,7 +839,7 @@ class QuickOrderDialog(ctk.CTkToplevel):
             self.sum_cells[key] = (v, sub)
         self.lbl_rrr = ctk.CTkLabel(self, text="", font=f(11, "bold"), text_color=COLOR_GOLD_PRIMARY)
         self.lbl_rrr.pack(pady=(8, 0))
-        ctk.CTkLabel(self, text="บอทดูแลไม้นี้ต่อด้วยล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึง $ ตามปกติ",
+        ctk.CTkLabel(self, text="บอทดูแลไม้นี้ต่อ: เลื่อน SL ทุกกำไร 5 จุด (50% / 40%) · ล็อกกำไร · AI กลับทิศ · ปิดเมื่อกำไรถึงเป้า",
                      font=f(10), text_color=COLOR_TEXT_MUTED).pack(pady=(2, 0))
         self.lbl_status = ctk.CTkLabel(self, text="", font=f(12, "bold"), text_color=COLOR_TEXT_MUTED, wraplength=420)
         self.lbl_status.pack(pady=(4, 0))
@@ -1270,7 +1270,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
         "P4": "เด้งโซนแนวรับ/ต้าน H1 (≤ 0.75 ATR) + RSI Divergence + H1 MA100/150/200 ไม่สวนทิศ + AI ≥ 55% · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
         "P5": "หลุดกรอบ Bollinger H1 แล้วกลับเข้า + Divergence + AI ≥ 55% · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
         "P6": "Parabolic SAR H1 สลับข้างมาทางเทรนด์ H4 (MA10/30 + MA200) · SL = จุด SAR (ไม่เกิน 3 ATR H1) เลื่อนตาม SAR ทุกชั่วโมง · กำไรถึง 2 ATR เลื่อนเร็วขึ้น · ไม่ตั้ง TP · ออกเมื่อเทรนด์ H4 เปลี่ยนหรือราคาปิดผิดฝั่ง EMA100",
-        "M": "ไม้ที่กดเข้าเอง · บอทดูแลต่อด้วยล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึงเป้า",
+        "M": "ไม้ที่เข้าเอง (ปุ่มในโปรแกรมหรือใน MT5) · ไม่มี SL บอทตั้งให้ 1.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (ขั้นแรก 50% / ถัดไป 40%) · ล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึงเป้า",
     }
 
     @staticmethod

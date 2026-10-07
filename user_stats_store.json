@@ -1,1 +1,91 @@
-{}
+{
+  "local_user": {
+    "user_id": "local_user",
+    "email": "local_user@aitrade24.local",
+    "plans": {
+      "Plan 1: MA-Cross-Trend": {
+        "plan_name": "Plan 1: MA-Cross-Trend",
+        "total_trades": 0,
+        "win_trades": 0,
+        "loss_trades": 0,
+        "win_rate_pct": 0.0,
+        "total_profit_usd": 0.0,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 0.0,
+        "profit_factor": 0.0,
+        "last_trade_time": ""
+      },
+      "Plan 2: MA-Cross-H1-Trend": {
+        "plan_name": "Plan 2: MA-Cross-H1-Trend",
+        "total_trades": 0,
+        "win_trades": 0,
+        "loss_trades": 0,
+        "win_rate_pct": 0.0,
+        "total_profit_usd": 0.0,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 0.0,
+        "profit_factor": 0.0,
+        "last_trade_time": ""
+      },
+      "Plan 3: SMC-LiquidityHunt": {
+        "plan_name": "Plan 3: SMC-LiquidityHunt",
+        "total_trades": 0,
+        "win_trades": 0,
+        "loss_trades": 1,
+        "win_rate_pct": 0.0,
+        "total_profit_usd": -8.87,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 8.87,
+        "profit_factor": 0.0,
+        "last_trade_time": ""
+      },
+      "Plan 4: SR-SwingBounce": {
+        "plan_name": "Plan 4: SR-SwingBounce",
+        "total_trades": 0,
+        "win_trades": 0,
+        "loss_trades": 0,
+        "win_rate_pct": 0.0,
+        "total_profit_usd": 0.0,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 0.0,
+        "profit_factor": 0.0,
+        "last_trade_time": ""
+      },
+      "Plan 5: BB-H1-Reversion": {
+        "plan_name": "Plan 5: BB-H1-Reversion",
+        "total_trades": 0,
+        "win_trades": 0,
+        "loss_trades": 0,
+        "win_rate_pct": 0.0,
+        "total_profit_usd": 0.0,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 0.0,
+        "profit_factor": 0.0,
+        "last_trade_time": ""
+      },
+      "Plan 6: PSAR-H1-Trend": {
+        "plan_name": "Plan 6: PSAR-H1-Trend",
+        "total_trades": 0,
+        "win_trades": 0,
+        "loss_trades": 0,
+        "win_rate_pct": 0.0,
+        "total_profit_usd": 0.0,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 0.0,
+        "profit_factor": 0.0,
+        "last_trade_time": ""
+      }
+    },
+    "open_tickets": {},
+    "overall": {
+      "total_trades": 0,
+      "win_trades": 0,
+      "loss_trades": 1,
+      "win_rate_pct": 0.0,
+      "total_profit_usd": -8.87,
+      "gross_profit_usd": 0.0,
+      "gross_loss_usd": 8.87,
+      "profit_factor": 0.0
+    }
+  }
+}
