@@ -1256,7 +1256,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
 class PositionDetailDialog(ctk.CTkToplevel):
     """คลิกไม้ในแท็บออเดอร์ที่เปิดอยู่ → กราฟ M15 80 แท่งเรียลไทม์ + Lot / ราคาเข้า / ราคาปัจจุบัน / SL / TP
-    + อินดิเคเตอร์ที่แผนของไม้นั้นใช้จริง (position_chart.get) + คำแนะนำถือต่อ/ปิด (position_advisor)"""
+    + อินดิเคเตอร์ที่แผนของไม้นั้นใช้จริง (position_chart.get) + คำแนะนำถือต่อ/ปิด (position_advisor)
+    trade=แถวจากประวัติการเทรด → ภาพ ณ ตอนปิดไม้ (position_chart.get_closed) + สรุปไม้ · ไม่อัปเดตต่อ"""
 
     BARS = 80
     REFRESH_MS = 1000
@@ -1275,13 +1276,14 @@ class PositionDetailDialog(ctk.CTkToplevel):
     def _f(size, weight="normal", family="Segoe UI"):
         return ctk.CTkFont(family=family, size=size, weight=weight)
 
-    def __init__(self, parent, pos):
+    def __init__(self, parent, pos, trade=None):
         super().__init__(parent)
         self.ticket = int(pos["ticket"])
+        self.trade, self.closed = trade, trade is not None
         self.fallback = {"type": pos.get("type"), "comment": pos.get("comment")}
         self.data, self.last_pos, self.slots, self._job, self.offset = None, None, [], None, 0
         self._ind_names, self._ind_rows, self._legend_sig, self._adv_sig = None, [], None, None
-        self.title(f"ไม้ #{self.ticket} · XAUUSD M15 เรียลไทม์")
+        self.title(f"ประวัติไม้ #{self.ticket} · ภาพตอนปิดไม้ (M15)" if self.closed else f"ไม้ #{self.ticket} · XAUUSD M15 เรียลไทม์")
         self.configure(fg_color=COLOR_BG_DARK)
         # ไม่ใช้ transient เพื่อให้มีปุ่มขยาย/ย่อ บนแถบหัวหน้าต่าง
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
@@ -1301,7 +1303,8 @@ class PositionDetailDialog(ctk.CTkToplevel):
         ctk.CTkLabel(top, text=f"#{self.ticket}", font=f(16, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left", padx=10)
         self.lbl_plan = ctk.CTkLabel(top, text="", font=f(15, "bold"), text_color=COLOR_GOLD_PRIMARY)
         self.lbl_plan.pack(side="left")
-        ctk.CTkLabel(top, text="   XAUUSD · M15 · 80 แท่ง · อัปเดตทุก 1 วินาที", font=f(11), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        ctk.CTkLabel(top, text="   XAUUSD · M15 · 80 แท่ง · " + ("ภาพ ณ ตอนปิดไม้" if self.closed else "อัปเดตทุก 1 วินาที"),
+                     font=f(11), text_color=COLOR_TEXT_MUTED).pack(side="left")
         self.btn_full = ctk.CTkButton(top, text="ขยายเต็มจอ", width=96, height=28, font=f(12, "bold"), fg_color=COLOR_CARD_BG,
                                       hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
                                       text_color=COLOR_GOLD_PRIMARY, command=self._toggle_full)
@@ -1316,8 +1319,10 @@ class PositionDetailDialog(ctk.CTkToplevel):
         stats = ctk.CTkFrame(self, fg_color="transparent")
         stats.pack(fill="x", padx=12)
         self.stat = {}
-        for i, (key, title) in enumerate((("lot", "Lot"), ("entry", "ราคาเข้า"), ("price", "ราคาปัจจุบัน"),
-                                          ("sl", "Stop Loss"), ("tp", "Take Profit"), ("held", "ถือมา"))):
+        for i, (key, title) in enumerate((("lot", "Lot"), ("entry", "ราคาเข้า"), ("price", "ราคาตอนปิด" if self.closed else "ราคาปัจจุบัน"),
+                                          ("sl", "Stop Loss ตอนปิด" if self.closed else "Stop Loss"),
+                                          ("tp", "Take Profit ตอนปิด" if self.closed else "Take Profit"),
+                                          ("held", "ถือไว้" if self.closed else "ถือมา"))):
             stats.grid_columnconfigure(i, weight=1, uniform="st")
             box = ctk.CTkFrame(stats, fg_color=COLOR_CARD_BG, corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
             box.grid(row=0, column=i, sticky="ew", padx=4)
@@ -1380,25 +1385,36 @@ class PositionDetailDialog(ctk.CTkToplevel):
         from datetime import datetime, timedelta, timezone
         return datetime.fromtimestamp(server_ts - self.offset, timezone(timedelta(hours=7))).strftime("%H:%M")
 
+    def _dt(self, server_ts):
+        from datetime import datetime, timedelta, timezone
+        return datetime.fromtimestamp(server_ts - self.offset, timezone(timedelta(hours=7))).strftime("%d/%m %H:%M")
+
     def _tick(self):
         try:
-            d = position_chart.get(self.ticket, self.BARS, fallback=self.fallback)
+            if self.closed:
+                d = position_chart.get_closed(self.trade, self.BARS)
+            else:
+                d = position_chart.get(self.ticket, self.BARS, fallback=self.fallback)
         except Exception:
             d = None
         if d:
             self.data = d
-            off = round((d["server_time"] - time.time()) / 3600) * 3600
-            self.offset = off if abs(off) <= 14 * 3600 else 0
+            self.offset = d.get("server_offset", 0)
             if d["position"]:
                 self.last_pos = d["position"]
             self._update_header(d)
             self._update_legend(d)
             self._update_indicators(d)
-            self._update_advice()
+            if self.closed:
+                self._update_summary(d)
+            else:
+                self._update_advice()
             self._draw()
         else:
-            self.lbl_tip.configure(text="เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
-        self._job = self.after(self.REFRESH_MS, self._tick)
+            self.lbl_tip.configure(text="ไม่พบข้อมูลราคาช่วงเวลาของไม้นี้ใน MT5" if self.closed
+                                   else "เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
+        if not self.closed:   # ไม้ที่ปิดแล้ว = ภาพนิ่ง ณ ตอนปิด
+            self._job = self.after(self.REFRESH_MS, self._tick)
 
     # ---- ส่วนหัว + การ์ดตัวเลข ----
     def _update_header(self, d):
@@ -1407,8 +1423,12 @@ class PositionDetailDialog(ctk.CTkToplevel):
                                 fg_color="#12261C" if buy else "#2C1618")
         self.lbl_plan.configure(text=d["plan_name"])
         self.lbl_rule.configure(text=self.PLAN_RULES.get(d["plan_key"], ""))
-        remain = max(0, d["candles"][-1]["time"] + 900 - d["server_time"])
-        self.lbl_clock.configure(text=f"แท่งปัจจุบันปิดในอีก {remain // 60:02d}:{remain % 60:02d}")
+        if self.closed:
+            reason, rcol = MainTradingApp._close_reason(self.trade)
+            self.lbl_clock.configure(text=f"ปิด {self._dt(self.trade['close_time'])} น. · {reason}", text_color=rcol)
+        else:
+            remain = max(0, d["candles"][-1]["time"] + 900 - d["server_time"])
+            self.lbl_clock.configure(text=f"แท่งปัจจุบันปิดในอีก {remain // 60:02d}:{remain % 60:02d}")
         lp = d["position"] or self.last_pos
         if not lp:
             self.lbl_pnl.configure(text="  ไม้นี้ปิดแล้ว  ", text_color=COLOR_TEXT_MUTED, fg_color=COLOR_CARD_BG)
@@ -1430,11 +1450,16 @@ class PositionDetailDialog(ctk.CTkToplevel):
             s.configure(text=sub, text_color=sub_col)
 
         put("lot", f"{lp['lot']:.2f}", f"{mpp:,.2f} ต่อราคา 1 จุด")
-        put("entry", f"{entry:,.2f}", f"Spread ตอนนี้ {d['spread_pts']} pts")
+        put("entry", f"{entry:,.2f}", f"เปิด {self._dt(lp['time'])} น." if self.closed else f"Spread ตอนนี้ {d['spread_pts']} pts")
         put("price", f"{price:,.2f}", f"{'+' if moved >= 0 else '-'}{abs(moved):,.2f} จุดจากราคาเข้า",
             COLOR_SUCCESS_GREEN if moved > 0 else (COLOR_DANGER_RED if moved < 0 else COLOR_GOLD_PRIMARY),
             COLOR_SUCCESS_GREEN if moved > 0 else (COLOR_DANGER_RED if moved < 0 else COLOR_TEXT_MUTED))
-        if sl > 0:
+        code = lp.get("close_code", -1) if self.closed else -1
+        if sl > 0 and code == 4:   # ปิดเพราะชน SL
+            locked = (sl - entry) * side > 0
+            put("sl", f"{sl:,.2f}", "ปิดที่ SL" + (f" · ล็อกกำไร +{(sl - entry) * side * mpp:,.2f}" if locked else ""),
+                COLOR_CYAN_ACCENT if locked else COLOR_DANGER_RED, COLOR_CYAN_ACCENT if locked else COLOR_DANGER_RED)
+        elif sl > 0:
             locked = (sl - entry) * side > 0
             if locked:
                 put("sl", f"{sl:,.2f}", f"ล็อกกำไรแล้ว +{(sl - entry) * side * mpp:,.2f}", COLOR_CYAN_ACCENT, COLOR_CYAN_ACCENT)
@@ -1442,16 +1467,26 @@ class PositionDetailDialog(ctk.CTkToplevel):
                 put("sl", f"{sl:,.2f}", f"ห่าง {abs(price - sl):,.2f} จุด · เสี่ยง -{abs(entry - sl) * mpp:,.2f}", COLOR_DANGER_RED)
         else:
             put("sl", "ไม่มี", "ไม่มี Stop Loss", COLOR_DANGER_RED, COLOR_DANGER_RED)
-        if tp > 0:
-            put("tp", f"{tp:,.2f}", f"อีก {max(0.0, (tp - price) * side):,.2f} จุด · เป้า +{abs(tp - entry) * mpp:,.2f}", COLOR_SUCCESS_GREEN)
+        if tp > 0 and code == 5:   # ปิดเพราะชน TP
+            put("tp", f"{tp:,.2f}", f"ปิดที่ TP · +{abs(tp - entry) * mpp:,.2f}", COLOR_SUCCESS_GREEN, COLOR_SUCCESS_GREEN)
+        elif tp > 0:
+            put("tp", f"{tp:,.2f}", (f"ห่าง {max(0.0, (tp - price) * side):,.2f} จุดตอนปิด" if self.closed else
+                                     f"อีก {max(0.0, (tp - price) * side):,.2f} จุด") + f" · เป้า +{abs(tp - entry) * mpp:,.2f}", COLOR_SUCCESS_GREEN)
         else:
             put("tp", "รันเทรนด์", "ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ" if d["plan_key"] in ("P1", "P2") else "ไม่ตั้ง TP", COLOR_GOLD_PRIMARY)
-        put("held", MainTradingApp._fmt_duration(d["server_time"] - lp["time"]), f"เปิด {self._hhmm(lp['time'])} น. (เวลาไทย)")
+        if self.closed:
+            put("held", MainTradingApp._fmt_duration(lp["close_time"] - lp["time"]), f"ปิด {self._dt(lp['close_time'])} น.")
+        else:
+            put("held", MainTradingApp._fmt_duration(d["server_time"] - lp["time"]), f"เปิด {self._hhmm(lp['time'])} น. (เวลาไทย)")
 
     def _update_legend(self, d):
         items = [(f"━ {ln['label']}", self.STYLE_COLORS.get(ln["style"], COLOR_TEXT_MUTED)) for ln in d["lines"]]
         items += [(f"┅ {lv['label'].split(' ')[0]} {lv['label'].split(' ')[1]}", self.STYLE_COLORS[lv["style"]]) for lv in d["levels"]]
         items += [("┅ ราคาเข้า", COLOR_CYAN_ACCENT), ("┅ SL", COLOR_DANGER_RED), ("┅ TP", COLOR_SUCCESS_GREEN)]
+        if d.get("paths"):
+            items.append(("━ การเลื่อน SL/TP", "#C7CDD8"))
+        if self.closed:
+            items.append(("◆ จุดปิดไม้", COLOR_GOLD_PRIMARY))
         if items == self._legend_sig:
             return
         self._legend_sig = items
@@ -1493,6 +1528,37 @@ class PositionDetailDialog(ctk.CTkToplevel):
                 note.pack(fill="x", padx=(26, 8), pady=(0, 5))
             elif not it["note"] and note.winfo_manager():
                 note.pack_forget()
+
+    def _update_summary(self, d):
+        """ไม้ที่ปิดแล้ว: สรุปผล / ปิดโดย / กำไรสูงสุด-ติดลบสูงสุดระหว่างถือ / SL-TP ตอนเข้าเทียบตอนปิด"""
+        for w in self.adv_box.winfo_children():
+            w.destroy()
+        s, lp = d.get("summary") or {}, d["position"]
+        reason, rcol = MainTradingApp._close_reason(self.trade)
+        head = ctk.CTkFrame(self.adv_box, fg_color="transparent")
+        head.pack(fill="x", padx=10, pady=(8, 4))
+        ctk.CTkLabel(head, text="สรุปไม้", font=self._f(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        ctk.CTkLabel(head, text=f" {reason} ", font=self._f(11, "bold"), text_color=rcol, fg_color="#1A1E27",
+                     corner_radius=6, height=22).pack(side="right")
+        pf = lp["profit"]
+        rows = [("ผลลัพธ์", f"{'+' if pf >= 0 else '-'}{abs(pf):,.2f}",
+                 COLOR_SUCCESS_GREEN if pf > 0 else (COLOR_DANGER_RED if pf < 0 else COLOR_TEXT_MUTED))]
+        if s.get("mfe") is not None:
+            rows.append(("กำไรสูงสุดระหว่างถือ", f"+{s['mfe']:,.2f} จุด (+{s['mfe_money']:,.2f})", COLOR_SUCCESS_GREEN))
+            rows.append(("ติดลบสูงสุดระหว่างถือ", f"-{s['mae']:,.2f} จุด (-{s['mae_money']:,.2f})", COLOR_DANGER_RED))
+        if s.get("initial_sl"):
+            rows.append(("SL เข้า → ปิด", f"{s['initial_sl']:,.2f} → {lp['sl']:,.2f}" + (f" · เลื่อน {s['sl_moves']}" if s.get("sl_moves") else ""),
+                         COLOR_TEXT_PRIMARY))
+        if s.get("initial_tp"):
+            rows.append(("TP เข้า → ปิด", f"{s['initial_tp']:,.2f} → {lp['tp']:,.2f}" + (f" · ขยาย {s['tp_moves']}" if s.get("tp_moves") else ""),
+                         COLOR_TEXT_PRIMARY))
+        for name, val, col in rows:
+            r = ctk.CTkFrame(self.adv_box, fg_color="transparent")
+            r.pack(fill="x", padx=10)
+            ctk.CTkLabel(r, text=name, font=self._f(10), text_color=COLOR_TEXT_MUTED, height=19).pack(side="left")
+            ctk.CTkLabel(r, text=val, font=self._f(11, "bold"), text_color=col, height=19).pack(side="right")
+        ctk.CTkLabel(self.adv_box, text="ค่าอินดิเคเตอร์ด้านบน = ค่า ณ ตอนปิดไม้", font=self._f(10),
+                     text_color=COLOR_TEXT_MUTED, anchor="w").pack(fill="x", padx=10, pady=(2, 8))
 
     def _update_advice(self):
         a = position_advisor.latest().get(self.ticket)
@@ -1539,9 +1605,11 @@ class PositionDetailDialog(ctk.CTkToplevel):
         for ln in d["lines"]:
             vals += [v for v in ln["values"] if v is not None]
         vals += [lv["price"] for lv in d["levels"]]
-        vals += [d["ask"], d["bid"]]
+        vals += [v for v in (d["ask"], d["bid"]) if v]
         if lp:
             vals += [v for v in (lp["entry"], lp["sl"], lp["tp"]) if v and v > 0]
+        for pth in d.get("paths") or []:
+            vals += [v for _, v in pth["points"]]
         hi, lo = max(vals), min(vals)
         pad = max((hi - lo) * 0.06, 0.5)
         hi, lo = hi + pad, lo - pad
@@ -1549,7 +1617,8 @@ class PositionDetailDialog(ctk.CTkToplevel):
         def y_of(v):
             return top + (hi - v) / (hi - lo) * (main_bottom - top)
 
-        yb_tag, ya_tag = y_of(d["bid"]), y_of(d["ask"])
+        yb_tag = y_of(d["bid"])
+        ya_tag = y_of(d["ask"]) if d["ask"] else -999
         if abs(ya_tag - yb_tag) < 18:
             ya_tag -= 12
         for k in range(6):
@@ -1597,9 +1666,22 @@ class PositionDetailDialog(ctk.CTkToplevel):
                                 outline=COLOR_GOLD_PRIMARY if live else col, width=2 if live else 1)
             every = max(1, int(round(n / max(1, (W - left - right) / 60))))
             if (i % every == 0 and i < n - max(2, int(every * 0.8))) or live:
-                cv.create_text(cx, H - bottom + 11, text="ตอนนี้" if live else self._hhmm(c["time"]),
+                cv.create_text(cx, H - bottom + 11, text=("ปิดไม้" if self.closed else "ตอนนี้") if live else self._hhmm(c["time"]),
                                fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=("Segoe UI", 9, "bold" if live else "normal"))
             self.slots.append((cx - slot / 2, cx + slot / 2, i))
+        # เส้นทางการเลื่อน SL/TP ระหว่างถือ (ไม้ที่ปิดแล้ว) — เส้นขั้นบันไดตามเวลา
+        for pth in d.get("paths") or []:
+            col = self.STYLE_COLORS.get(pth["style"], COLOR_TEXT_MUTED)
+            pts = pth["points"]
+            seg = []
+            for i, c in enumerate(candles):
+                t_end = c["time"] + 899
+                if t_end < pts[0][0] or c["time"] > pts[-1][0]:
+                    continue
+                v = next((vv for tt, vv in reversed(pts) if tt <= t_end), pts[0][1])
+                seg += [xs(i) - slot / 2, y_of(v), xs(i) + slot / 2, y_of(v)]
+            if len(seg) >= 4:
+                cv.create_line(*seg, fill=col, width=2)
         # ไม้: ราคาเข้า / SL / TP + จุดเข้าไม้บนแท่งที่เปิด
         if lp:
             side = d["side"]
@@ -1620,10 +1702,15 @@ class PositionDetailDialog(ctk.CTkToplevel):
                     else:
                         cv.create_polygon(cx, ye - 3, cx - s, ye - 3 - s * 1.4, cx + s, ye - 3 - s * 1.4, fill=COLOR_CYAN_ACCENT, outline="#0B0D12")
                     break
-        # Ask / Bid
-        ya, yb = y_of(d["ask"]), y_of(d["bid"])
-        cv.create_line(left, ya, W - right, ya, fill="#5B6270", dash=(2, 4))
-        cv.create_text(W - right + 6, ya - 12 if abs(ya - yb) < 18 else ya, text=f"A {d['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 8))
+        # Ask / Bid (ไม้ที่ปิดแล้ว: ราคาตอนปิด + จุดปิดไม้)
+        yb = y_of(d["bid"])
+        if d["ask"]:
+            ya = y_of(d["ask"])
+            cv.create_line(left, ya, W - right, ya, fill="#5B6270", dash=(2, 4))
+            cv.create_text(W - right + 6, ya - 12 if abs(ya - yb) < 18 else ya, text=f"A {d['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 8))
+        if self.closed:
+            cx, s = xs(n - 1), 8
+            cv.create_polygon(cx, yb - s, cx + s, yb, cx, yb + s, cx - s, yb, fill=COLOR_GOLD_PRIMARY, outline="#0B0D12", width=2)
         cv.create_line(left, yb, W - right, yb, fill=COLOR_TEXT_MUTED, dash=(3, 3))
         cv.create_rectangle(W - right + 2, yb - 9, W - 2, yb + 9, fill=COLOR_GOLD_PRIMARY, outline="")
         cv.create_text(W - right + 6, yb, text=f"{d['bid']:,.2f}", anchor="w", fill="#111111", font=("Segoe UI", 9, "bold"))
@@ -3753,6 +3840,8 @@ class MainTradingApp(ctk.CTk):
         self.lbl_history_summary = ctk.CTkLabel(top, text="กำลังโหลดประวัติจาก MT5...", font=self._font(12), text_color=COLOR_TEXT_MUTED)
         self.lbl_history_summary.pack(side="left")
         self._refresh_button(top, lambda: self._refresh_history_async(force=True)).pack(side="right")
+        ctk.CTkLabel(top, text="คลิกรายการเพื่อดูกราฟ M15 + อินดิเคเตอร์ ณ ตอนปิดไม้", font=self._font(10),
+                     text_color=COLOR_TEXT_MUTED).pack(side="right", padx=10)
 
         table = ctk.CTkFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
         table.pack(fill="x", padx=6)
@@ -3773,6 +3862,11 @@ class MainTradingApp(ctk.CTk):
                 lbl = ctk.CTkLabel(table, text="", font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor=anchor, height=28)
                 last = r == self.HISTORY_PAGE_SIZE - 1
                 lbl.grid(row=r + 2, column=col, sticky="ew", padx=6, pady=(0, 6) if last else 0)
+                lbl.bind("<Button-1>", lambda e, i=r: self._open_history_detail(i), add="+")   # คลิกแถว → กราฟตอนปิดไม้
+                try:
+                    lbl.configure(cursor="hand2")
+                except Exception:
+                    pass
                 cells.append(lbl)
             self.history_cells.append(cells)
 
@@ -3800,6 +3894,30 @@ class MainTradingApp(ctk.CTk):
             self._history_loading = False
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _open_history_detail(self, i):
+        """คลิกแถวประวัติ: ไม้ที่ปิดแล้ว → ภาพ ณ ตอนปิด · ไม้ที่ยังเปิดอยู่ → กราฟเรียลไทม์ (1 หน้าต่างต่อ 1 ไม้)"""
+        idx = self._history_page * self.HISTORY_PAGE_SIZE + i
+        if idx >= len(self._history_rows):
+            return
+        r = self._history_rows[idx]
+        if r.get("status") != "CLOSED":
+            if r["ticket"] not in getattr(self, "_positions_by_ticket", {}):
+                self.__dict__.setdefault("_positions_by_ticket", {})[r["ticket"]] = {
+                    "ticket": r["ticket"], "type": r.get("side"), "comment": r.get("plan")}
+            self._open_position_detail(r["ticket"])
+            return
+        wins = self.__dict__.setdefault("_pos_detail_wins", {})
+        key = ("closed", r["ticket"])
+        w = wins.get(key)
+        if w is not None:
+            try:
+                if w.winfo_exists():
+                    w.deiconify(); w.lift(); w.focus_force()
+                    return
+            except Exception:
+                pass
+        wins[key] = PositionDetailDialog(self, {"ticket": r["ticket"], "type": r.get("side"), "comment": r.get("plan")}, trade=r)
 
     def _change_history_page(self, delta):
         pages = max(1, -(-len(self._history_rows) // self.HISTORY_PAGE_SIZE))

@@ -1,10 +1,14 @@
 """
-ข้อมูลหน้าต่าง "รายละเอียดไม้" (คลิกแถวในแท็บออเดอร์ที่เปิดอยู่)
-- แท่ง M15 ล่าสุด (แท่งสุดท้าย = แท่งที่กำลังวิ่ง ใช้ราคา Bid ล่าสุด)
-- เส้นอินดิเคเตอร์ที่แผนของไม้นั้นใช้จริง + ค่าที่แผนใช้ตัดสินใจ (เทียบกับทิศของไม้)
-- หน้าต่างเรียกทุก 1 วินาที · ข้อมูล H1/H4 (แนวรับ/ต้าน, BB, MACD, MA ใหญ่) แคชไว้ 15 วินาที
+ข้อมูลหน้าต่าง "รายละเอียดไม้"
+- get(ticket)        : ไม้ที่เปิดอยู่ (คลิกแถวในแท็บออเดอร์ที่เปิดอยู่) — แท่งสุดท้ายใช้ราคา Bid ล่าสุด · เรียกทุก 1 วินาที
+- get_closed(trade)  : ไม้ที่ปิดแล้ว (คลิกแถวในประวัติการเทรด) — ภาพ ณ ตอนปิดไม้: แท่ง M15 ถึงแท่งที่ปิด (ตัดที่เวลาปิดจริง),
+                       SL/TP ตอนปิด, เส้นทางการเลื่อน SL/TP, กำไรสูงสุด/ติดลบสูงสุดระหว่างถือ
+ทั้งสองแบบแสดงเส้นอินดิเคเตอร์ที่แผนของไม้นั้นใช้จริง + ค่าที่แผนใช้ตัดสินใจ (เทียบกับทิศของไม้)
+ข้อมูล H1/H4 ของไม้ที่เปิดอยู่แคชไว้ 15 วินาที
 """
+import csv
 import math
+import re
 import time
 
 import MetaTrader5 as mt5
@@ -42,13 +46,34 @@ def _f(v):
         return None
 
 
-def _context():
-    """ค่าจาก H1/H4 (แท่งปิด) ที่แผนใช้ — แคช 15 วินาที"""
-    now = time.time()
-    if _ctx["data"] is not None and now - _ctx["t"] < CTX_TTL:
-        return _ctx["data"]
-    h1 = bot.get_data(SYMBOL, mt5.TIMEFRAME_H1, 620)
-    h4 = bot.get_data(SYMBOL, mt5.TIMEFRAME_H4, 320)
+def _server_offset():
+    """เวลาเซิร์ฟเวอร์ MT5 − เวลาจริง (วินาที ปัดเป็นชั่วโมง)"""
+    tick = mt5.symbol_info_tick(SYMBOL)
+    if not tick:
+        return 0
+    off = round((tick.time - time.time()) / 3600) * 3600
+    return off if abs(off) <= 14 * 3600 else 0
+
+
+def _rates_df(rates):
+    """rates ของ MT5 → DataFrame แบบเดียวกับ bot.get_data (คอลัมน์ time เป็น datetime)"""
+    if rates is None or len(rates) == 0:
+        return None
+    df = pd.DataFrame(rates)
+    df["time"] = pd.to_datetime(df["time"], unit="s")
+    return df
+
+
+def _set_last(df, price):
+    """แทนแท่งสุดท้าย (แท่งที่กำลังวิ่ง/แท่งที่ปิดไม้) ด้วยราคา ณ เวลานั้น"""
+    i = df.index[-1]
+    df.loc[i, "close"] = float(price)
+    df.loc[i, "high"] = max(float(df.loc[i, "high"]), float(price))
+    df.loc[i, "low"] = min(float(df.loc[i, "low"]), float(price))
+
+
+def _context_from(h1, h4, price):
+    """ค่าจาก H1/H4 (แท่งปิด) ที่แผนใช้ — h1/h4 = แท่งจนถึงเวลาที่ต้องการ (แท่งสุดท้าย = แท่งที่ยังไม่ปิด)"""
     if h1 is None or h4 is None or len(h1) < 60 or len(h4) < 40:
         return None
     c1, c4 = h1["close"], h4["close"]
@@ -72,11 +97,52 @@ def _context():
     d["h1_stack_dir"] = 0 if None in st else (-1 if st[0] < st[1] < st[2] else (1 if st[0] > st[1] > st[2] else 0))
     d["h1_ma5"], d["h1_ma10"] = _f(h1s["ma5"].iloc[-2]), _f(h1s["ma10"].iloc[-2])
     d["macd_now"], d["macd_prev"] = _f(h1s["macd_hist"].iloc[-2]), _f(h1s["macd_hist"].iloc[-3])
-    sr = bot.find_sr_levels(h1, float(c1.iloc[-1]))
+    sr = bot.find_sr_levels(h1, float(price))
     d["sup"], d["res"] = _f(sr["support"]), _f(sr["resistance"])
     d["sup_t"], d["res_t"] = int(sr["sup_touches"]), int(sr["res_touches"])
-    _ctx.update(t=now, data=d)
     return d
+
+
+def _context():
+    """บริบท H1/H4 ปัจจุบัน — แคช 15 วินาที"""
+    now = time.time()
+    if _ctx["data"] is not None and now - _ctx["t"] < CTX_TTL:
+        return _ctx["data"]
+    h1 = bot.get_data(SYMBOL, mt5.TIMEFRAME_H1, 620)
+    h4 = bot.get_data(SYMBOL, mt5.TIMEFRAME_H4, 320)
+    d = _context_from(h1, h4, float(h1["close"].iloc[-1])) if h1 is not None else None
+    if d is not None:
+        _ctx.update(t=now, data=d)
+    return d
+
+
+def _m15_frame(rates, last_price):
+    """แท่ง M15 + MA5/13/50, RSI(14), ATR(14) — แท่งสุดท้ายแทนด้วย last_price"""
+    m = pd.DataFrame(rates)
+    _set_last(m, last_price)
+    c = m["close"]
+    m["ma5"], m["ma13"], m["ma50"] = c.rolling(5).mean(), c.rolling(13).mean(), c.rolling(50).mean()
+    dl = c.diff()
+    g, l_ = dl.where(dl > 0, 0).rolling(14).mean(), (-dl.where(dl < 0, 0)).rolling(14).mean()
+    m["rsi"] = 100 - 100 / (1 + g / (l_ + 1e-9))
+    m["atr"] = bot._atr_series(m)
+    return m
+
+
+def _map_h1(m, ctx):
+    """วางค่า H1 (MA5/10, BB, MACD) ลงแท่ง M15 ตามชั่วโมงของแท่ง"""
+    if ctx is None:
+        return
+    hkey = pd.to_datetime(m["time"], unit="s").dt.floor("h")
+    for col in ("ma5", "ma10", "bb_up", "bb_mid", "bb_lo", "macd_hist"):
+        m["h1_" + col] = hkey.map(ctx["h1s"][col]).astype(float)
+
+
+def _money_per_pt(lot):
+    info = mt5.symbol_info(SYMBOL)
+    if info and info.trade_tick_size:
+        return float(info.trade_tick_value) / float(info.trade_tick_size) * float(lot or 0.01)
+    return 100.0 * float(lot or 0.01)
 
 
 def _ind(name, value, d=0, note=""):
@@ -94,58 +160,9 @@ def _fmt(v, nd=2):
     return "—" if v is None else f"{v:,.{nd}f}"
 
 
-def get(ticket, count=80, fallback=None):
-    """
-    ข้อมูลกราฟ + อินดิเคเตอร์ของไม้ `ticket` — None ถ้าเชื่อม MT5 ไม่ได้
-    fallback = dict ไม้จากหน้าจอ (comment/type) ใช้เมื่อไม้ถูกปิดไปแล้ว
-    """
-    if mt5.terminal_info() is None and not mt5.initialize():
-        return None
-    tick = mt5.symbol_info_tick(SYMBOL)
-    info = mt5.symbol_info(SYMBOL)
-    rates = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M15, 0, count + WARMUP)
-    if tick is None or rates is None or len(rates) < count:
-        return None
-    m = pd.DataFrame(rates)
-    last = m.index[-1]
-    m.loc[last, "close"] = float(tick.bid)          # แท่งปัจจุบันใช้ราคาล่าสุด
-    m.loc[last, "high"] = max(float(m.loc[last, "high"]), float(tick.bid))
-    m.loc[last, "low"] = min(float(m.loc[last, "low"]), float(tick.bid))
-    c = m["close"]
-    m["ma5"], m["ma13"], m["ma50"] = c.rolling(5).mean(), c.rolling(13).mean(), c.rolling(50).mean()
-    dl = c.diff()
-    g, l_ = dl.where(dl > 0, 0).rolling(14).mean(), (-dl.where(dl < 0, 0)).rolling(14).mean()
-    m["rsi"] = 100 - 100 / (1 + g / (l_ + 1e-9))
-    m["atr"] = bot._atr_series(m)
-    ctx = _context()
-    if ctx is not None:   # วางค่า H1 ลงแท่ง M15 ตามชั่วโมงของแท่ง
-        hkey = pd.to_datetime(m["time"], unit="s").dt.floor("h")
-        for col in ("ma5", "ma10", "bb_up", "bb_mid", "bb_lo", "macd_hist"):
-            m["h1_" + col] = hkey.map(ctx["h1s"][col]).astype(float)
-
-    # ---- ไม้ ----
-    plist = mt5.positions_get(ticket=int(ticket)) or []
-    p = plist[0] if plist else None
-    if p is not None:
-        side = 1 if p.type == mt5.ORDER_TYPE_BUY else -1
-        comment = p.comment or ""
-        price_now = float(tick.bid) if side > 0 else float(tick.ask)   # ราคาที่ใช้ปิดไม้
-        pos = {
-            "ticket": int(p.ticket), "type": "BUY" if side > 0 else "SELL", "lot": float(p.volume),
-            "entry": float(p.price_open), "price": price_now, "sl": float(p.sl or 0), "tp": float(p.tp or 0),
-            "profit": float(p.profit) + float(p.swap), "time": int(p.time), "comment": comment,
-        }
-    else:
-        fb = fallback or {}
-        side = 1 if fb.get("type") == "BUY" else -1
-        comment = fb.get("comment") or ""
-        pos = None
+def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
+    """เส้นบนกราฟ + ค่าที่แผนใช้ ณ แท่งสุดท้ายของ m (แท่งที่กำลังวิ่ง หรือแท่งที่ปิดไม้)"""
     plan_key, plan_name = plan_of(comment)
-    point = float(info.point) if info and info.point else 0.01
-    money_per_pt = 0.0
-    if info and info.trade_tick_size:
-        money_per_pt = float(info.trade_tick_value) / float(info.trade_tick_size) * (pos["lot"] if pos else 0.01)
-
     tail = m.iloc[-count:]
 
     def ser(col):
@@ -187,27 +204,34 @@ def get(ticket, count=80, fallback=None):
     inds = []
     close_c = _f(cb["close"])
     ma5c, ma13c, ma50c, rsic = _f(cb["ma5"]), _f(cb["ma13"]), _f(cb["ma50"]), _f(cb["rsi"])
-    price = pos["price"] if pos else float(tick.bid)
+    price = pos["price"] if pos else float(m["close"].iloc[-1])
     entry = pos["entry"] if pos else None
 
     def step_trail():
         if not pos:
             return
-        gain = (price - entry) * side
-        k = int(gain // bot.P4_TRAIL_STEP_POINTS) if gain > 0 else 0
-        nxt = entry + side * (k + 1) * bot.P4_TRAIL_STEP_POINTS
-        inds.append(_ind("เลื่อน SL ขั้นบันได", f"ผ่านแล้ว {k} ขั้น", 1 if k else 0,
-                         f"ทุก +{bot.P4_TRAIL_STEP_POINTS:g} จุด เลื่อน SL เข้าหาราคา {bot.P4_TRAIL_FRACTION:.0%} · ขั้นถัดไปที่ {nxt:,.2f}"))
+        step = bot.P4_TRAIL_STEP_POINTS
+        if live:
+            gain = (price - entry) * side
+            k = int(gain // step) if gain > 0 else 0
+            inds.append(_ind("เลื่อน SL ขั้นบันได", f"ผ่านแล้ว {k} ขั้น", 1 if k else 0,
+                             f"ทุก +{step:g} จุด เลื่อน SL เข้าหาราคา {bot.P4_TRAIL_FRACTION:.0%} · ขั้นถัดไปที่ {entry + side * (k + 1) * step:,.2f}"))
+        elif mfe is not None:
+            k = int(mfe // step) if mfe > 0 else 0
+            inds.append(_ind("เลื่อน SL ขั้นบันได", f"ผ่าน {k} ขั้นระหว่างถือ", 1 if k else 0,
+                             f"ทุก +{step:g} จุด เลื่อน SL เข้าหาราคา {bot.P4_TRAIL_FRACTION:.0%} · กำไรสูงสุดระหว่างถือ {mfe:,.2f} จุด"))
 
     def tp_progress():
         if not pos or pos["tp"] <= 0:
             return
         target = abs(pos["tp"] - entry)
         pct = (price - entry) * side / target * 100 if target else 0
-        inds.append(_ind("ความคืบหน้าสู่ TP", f"{pct:.0f}%", 1 if pct >= 70 else (0 if pct >= 0 else -1),
+        inds.append(_ind("ความคืบหน้าสู่ TP" + ("" if live else " ตอนปิด"), f"{pct:.0f}%", 1 if pct >= 70 else (0 if pct >= 0 else -1),
                          "ถึง 70% บอทล็อกกำไร +0.35 ATR · ถึง 80% และ AI ยืนยัน ขยาย TP อีก 1 ATR"))
 
     def ai_prob():
+        if not live:   # ไม่มีบันทึกค่า AI ย้อนหลัง
+            return
         up = _f((bot.latest_radar_cache.get(SYMBOL) or {}).get("up_prob"))
         if up is None:
             inds.append(_ind("AI (โมเดลของบอท)", "—", 0, "เริ่มบอทเพื่อให้ AI คำนวณ"))
@@ -230,11 +254,12 @@ def get(ticket, count=80, fallback=None):
         except Exception:
             pass
 
+    exit_word = "บอทปิดไม้" if live else "ตรงกับจังหวะที่ปิด"
     if plan_key in ("P1", "M"):
         if ma5c is not None and ma13c is not None:
             dd = _agree(ma5c - ma13c, side)
             inds.append(_ind("MA5 / MA13 (M15 แท่งปิด)", f"{ma5c:,.2f} / {ma13c:,.2f}", dd,
-                             ("ยังไม่ตัดกลับ — ถือตามแผน" if dd > 0 else "ตัดกลับแล้ว = สัญญาณออก (บอทปิดไม้)") if plan_key == "P1" else ""))
+                             ("ยังไม่ตัดกลับ — ถือตามแผน" if dd > 0 else f"ตัดกลับแล้ว = สัญญาณออก ({exit_word})") if plan_key == "P1" else ""))
         if rsic is not None:
             inds.append(_ind("RSI(14) M15", f"{rsic:.1f}", _agree(rsic - 50, side),
                              "เกณฑ์ตอนเข้า: BUY 50–70 · SELL 30–50" if plan_key == "P1" else "เหนือ 50 = แรงซื้อ · ใต้ 50 = แรงขาย"))
@@ -251,7 +276,7 @@ def get(ticket, count=80, fallback=None):
     elif plan_key == "P2" and ctx:
         dd = _agree((ctx["h1_ma5"] or 0) - (ctx["h1_ma10"] or 0), side)
         inds.append(_ind("MA5 / MA10 (H1 แท่งปิด)", f"{_fmt(ctx['h1_ma5'])} / {_fmt(ctx['h1_ma10'])}", dd,
-                         "ยังไม่ตัดกลับ — ถือตามแผน" if dd > 0 else "ตัดกลับแล้ว = สัญญาณออก (บอทปิดไม้)"))
+                         "ยังไม่ตัดกลับ — ถือตามแผน" if dd > 0 else f"ตัดกลับแล้ว = สัญญาณออก ({exit_word})"))
         inds.append(_ind("H4 MA10 vs MA30", f"{ctx['h4_diff']:+.2f}%", _agree(ctx["h4_diff"], side), "ต้องตรงทิศตอนเข้า (Strict Pro-Trend)"))
         if ctx["h4_slope"] is not None:
             inds.append(_ind("ความชัน MA5 H4 (2 แท่ง)", f"{ctx['h4_slope']:+.2f} ATR", _agree(ctx["h4_slope"], side), ""))
@@ -295,11 +320,158 @@ def get(ticket, count=80, fallback=None):
     if atr:
         inds.append(_ind("ATR(14) M15", f"{atr:,.2f}", 0, "ความผันผวนต่อแท่ง 15 นาที"))
 
-    return {
-        "plan_key": plan_key, "plan_name": plan_name, "side": side,
-        "candles": candles, "lines": lines, "levels": levels, "pane": pane,
-        "position": pos, "indicators": inds, "money_per_pt": money_per_pt,
+    return {"plan_key": plan_key, "plan_name": plan_name, "side": side, "candles": candles,
+            "lines": lines, "levels": levels, "pane": pane, "indicators": inds}
+
+
+def get(ticket, count=80, fallback=None):
+    """
+    ไม้ที่เปิดอยู่: กราฟ + อินดิเคเตอร์ของไม้ `ticket` — None ถ้าเชื่อม MT5 ไม่ได้
+    fallback = dict ไม้จากหน้าจอ (comment/type) ใช้เมื่อไม้ถูกปิดไปแล้วระหว่างเปิดหน้าต่าง
+    """
+    if mt5.terminal_info() is None and not mt5.initialize():
+        return None
+    tick = mt5.symbol_info_tick(SYMBOL)
+    info = mt5.symbol_info(SYMBOL)
+    rates = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M15, 0, count + WARMUP)
+    if tick is None or rates is None or len(rates) < count:
+        return None
+    m = _m15_frame(rates, float(tick.bid))   # แท่งปัจจุบันใช้ราคาล่าสุด
+    ctx = _context()
+    _map_h1(m, ctx)
+
+    plist = mt5.positions_get(ticket=int(ticket)) or []
+    p = plist[0] if plist else None
+    if p is not None:
+        side = 1 if p.type == mt5.ORDER_TYPE_BUY else -1
+        comment = p.comment or ""
+        pos = {
+            "ticket": int(p.ticket), "type": "BUY" if side > 0 else "SELL", "lot": float(p.volume),
+            "entry": float(p.price_open), "price": float(tick.bid) if side > 0 else float(tick.ask),   # ราคาที่ใช้ปิดไม้
+            "sl": float(p.sl or 0), "tp": float(p.tp or 0),
+            "profit": float(p.profit) + float(p.swap), "time": int(p.time), "comment": comment,
+        }
+    else:
+        fb = fallback or {}
+        side = 1 if fb.get("type") == "BUY" else -1
+        comment = fb.get("comment") or ""
+        pos = None
+    point = float(info.point) if info and info.point else 0.01
+    out = _build(m, ctx, pos, side, comment, count, live=True)
+    out.update({
+        "position": pos, "money_per_pt": _money_per_pt(pos["lot"] if pos else 0.01),
         "bid": float(tick.bid), "ask": float(tick.ask),
         "spread_pts": int(round((float(tick.ask) - float(tick.bid)) / point)),
-        "server_time": int(tick.time),
+        "server_time": int(tick.time), "server_offset": _server_offset(), "closed": False,
+    })
+    return out
+
+
+def _sl_tp_at_close(pid, open_time, close_time, close_comment, offset):
+    """
+    SL/TP ตอนปิดไม้ + เส้นทางการเลื่อน [(เวลาเซิร์ฟเวอร์, sl, tp)]
+    1) ค่าเริ่มต้นจาก Order เปิดไม้ 2) การเลื่อนที่บอทบันทึกใน trade_modifications.csv (เวลาเครื่อง → เวลาเซิร์ฟเวอร์)
+    3) ราคาที่ชนจริงจากคอมเมนต์ Deal ปิด เช่น "[sl 4168.67]" / "[tp 4161.38]"
+    """
+    sl = tp = 0.0
+    orders = mt5.history_orders_get(position=int(pid)) or []
+    first = next((o for o in orders if int(o.ticket) == int(pid)), None) or (min(orders, key=lambda o: o.time_setup) if orders else None)
+    if first is not None:
+        sl, tp = float(first.sl or 0), float(first.tp or 0)
+    path = [(int(open_time), sl, tp)]
+    try:
+        with open(bot.TRADE_MODS_CSV, encoding="utf-8-sig", errors="replace") as f:
+            for row in csv.DictReader(f):
+                if str(row.get("Ticket", "")).strip() != str(pid):
+                    continue
+                t_srv = int(time.mktime(time.strptime(row["Time"].strip(), "%Y-%m-%d %H:%M:%S")) + offset)
+                if t_srv > close_time + 60:
+                    continue
+                sl, tp = float(row.get("New_SL") or 0), float(row.get("New_TP") or 0)
+                path.append((t_srv, sl, tp))
+    except Exception:
+        pass
+    mt = re.match(r"\[(sl|tp)\s+([\d.]+)\]", (close_comment or "").strip())
+    if mt:
+        if mt.group(1) == "sl":
+            sl = float(mt.group(2))
+        else:
+            tp = float(mt.group(2))
+    path.sort()
+    return sl, tp, path
+
+
+def get_closed(trade, count=80):
+    """
+    ไม้ที่ปิดแล้ว (แถวจาก BotController.get_trade_history): ภาพ ณ ตอนปิดไม้ — None ถ้าเชื่อม MT5 ไม่ได้/ไม่มีข้อมูลราคา
+    แท่งสุดท้าย = แท่ง M15 ที่ปิดไม้ ตัดที่เวลาปิดจริง (สูง/ต่ำจากแท่ง M1 ถึงนาทีที่ปิด · ราคาปิด = ราคาออก)
+    """
+    if mt5.terminal_info() is None and not mt5.initialize():
+        return None
+    pid = int(trade["ticket"])
+    side = 1 if trade.get("side") == "BUY" else -1
+    open_t, close_t = int(trade["open_time"]), int(trade["close_time"])
+    entry, exit_px = float(trade["open_price"]), float(trade["close_price"])
+    lot = float(trade.get("volume") or 0.01)
+    rates = mt5.copy_rates_from(SYMBOL, mt5.TIMEFRAME_M15, close_t, count + WARMUP)
+    if rates is None or len(rates) < count:
+        return None
+    m = pd.DataFrame(rates)
+    bar_open = int(m["time"].iloc[-1])
+    m1 = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M1, bar_open, close_t)
+    if m1 is not None and len(m1):   # แท่งที่ปิดไม้: ตัดที่นาทีที่ปิด
+        i = m.index[-1]
+        m.loc[i, "high"] = max(float(x["high"]) for x in m1)
+        m.loc[i, "low"] = min(float(x["low"]) for x in m1)
+    m = _m15_frame(m.to_records(index=False), exit_px)
+
+    h1 = _rates_df(mt5.copy_rates_from(SYMBOL, mt5.TIMEFRAME_H1, close_t, 620))
+    h4 = _rates_df(mt5.copy_rates_from(SYMBOL, mt5.TIMEFRAME_H4, close_t, 320))
+    if h1 is not None and h4 is not None:
+        _set_last(h1, exit_px)
+        _set_last(h4, exit_px)
+    ctx = _context_from(h1, h4, exit_px)
+    _map_h1(m, ctx)
+
+    offset = _server_offset()
+    sl, tp, path = _sl_tp_at_close(pid, open_t, close_t, trade.get("close_reason"), offset)
+
+    # กำไรสูงสุด / ติดลบสูงสุดระหว่างถือ (จากแท่ง M1 — ถ้าไม่มีใช้ M15)
+    span = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M1, open_t, close_t)
+    if span is None or len(span) == 0:
+        span = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M15, open_t - open_t % 900, close_t)
+    mfe = mae = None
+    if span is not None and len(span):
+        hi, lo = max(float(x["high"]) for x in span), min(float(x["low"]) for x in span)
+        hi, lo = max(hi, exit_px), min(lo, exit_px)
+        mfe, mae = ((hi - entry), (entry - lo)) if side > 0 else ((entry - lo), (hi - entry))
+        mfe, mae = max(0.0, mfe), max(0.0, mae)
+
+    pos = {
+        "ticket": pid, "type": "BUY" if side > 0 else "SELL", "lot": lot, "entry": entry, "price": exit_px,
+        "sl": sl, "tp": tp, "profit": float(trade.get("profit") or 0.0), "time": open_t, "comment": trade.get("plan") or "",
+        "close_time": close_t, "close_code": int(trade.get("close_code", -1)), "close_reason": trade.get("close_reason") or "",
     }
+    mpp = _money_per_pt(lot)
+    out = _build(m, ctx, pos, side, pos["comment"], count, live=False, mfe=mfe)
+    sl_moves = sum(1 for a, b in zip(path, path[1:]) if abs(a[1] - b[1]) > 1e-6)
+    tp_moves = sum(1 for a, b in zip(path, path[1:]) if abs(a[2] - b[2]) > 1e-6)
+    paths = []
+    if len(path) > 1:   # เส้นทางการเลื่อน SL/TP ระหว่างถือ
+        pts_sl = [(t, s) for t, s, _ in path if s > 0] + [(close_t, sl)] if sl > 0 else []
+        pts_tp = [(t, v) for t, _, v in path if v > 0] + [(close_t, tp)] if tp > 0 else []
+        if sl_moves and len(pts_sl) > 1:
+            paths.append({"label": "SL", "style": "res", "points": pts_sl})
+        if tp_moves and len(pts_tp) > 1:
+            paths.append({"label": "TP", "style": "sup", "points": pts_tp})
+    out.update({
+        "position": pos, "money_per_pt": mpp, "bid": exit_px, "ask": None, "spread_pts": 0,
+        "server_time": close_t, "server_offset": offset, "closed": True, "paths": paths,
+        "summary": {
+            "mfe": mfe, "mae": mae, "mfe_money": None if mfe is None else mfe * mpp,
+            "mae_money": None if mae is None else mae * mpp,
+            "sl_moves": sl_moves, "tp_moves": tp_moves, "held": close_t - open_t,
+            "initial_sl": path[0][1], "initial_tp": path[0][2],
+        },
+    })
+    return out
