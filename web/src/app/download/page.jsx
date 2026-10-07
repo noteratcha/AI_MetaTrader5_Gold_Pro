@@ -132,6 +132,9 @@ export default function DownloadPage() {
                   </div>
                 </div>
               ))}
+              <Link href="/guide" className="small text-gold" style={{ fontWeight: 600 }}>
+                อ่านคู่มือการใช้งานฉบับเต็ม ›
+              </Link>
             </div>
           </div>
         </div>

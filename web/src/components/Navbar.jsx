@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, BarChart3, CalendarDays, Download, Eye, FlaskConical, Key, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, CalendarDays, Download, Eye, FlaskConical, Key, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatHHMM } from '../lib/format';
 
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/backtest', label: 'แผนเทรด', icon: FlaskConical },
   { href: '/store', label: 'ซื้อชั่วโมง', icon: ShoppingBag },
   { href: '/my-keys', label: 'คีย์ของฉัน', icon: Key },
+  { href: '/guide', label: 'คู่มือ', icon: BookOpen },
 ];
 
 /** สวิตช์โหมดการดูสำหรับแอดมิน: ผู้ใช้ ↔ แอดมิน */

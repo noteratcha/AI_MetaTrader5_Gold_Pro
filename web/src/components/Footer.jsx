@@ -48,6 +48,7 @@ export default function Footer() {
               <li><Link href="/backtest">แผนเทรด &amp; ผลทดสอบย้อนหลัง</Link></li>
               <li><Link href="/store">ซื้อชั่วโมง</Link></li>
               <li><Link href="/my-keys">คีย์ของฉัน</Link></li>
+              <li><Link href="/guide">คู่มือการใช้งาน</Link></li>
               <li><Link href="/contact">ติดต่อแอดมิน</Link></li>
               {isAdminView && <li><Link href="/admin">Admin</Link></li>}
             </ul>
