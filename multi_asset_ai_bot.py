@@ -1484,6 +1484,13 @@ def main():
                     div_tag = f" {Colors.RED}[H-BEAR v]{Colors.RESET}"
                     div_name = "H-BEAR v"
                 
+                # เทรนด์ H1 MA100/150/200 (แท่งปิด) — Plan 1/3/4 ใช้ ต้องคำนวณก่อนเงื่อนไข Plan 3/4
+                _h1c = df_h1['close']
+                if len(_h1c) >= 202:
+                    _a, _b, _c = (_h1c.rolling(k).mean().iloc[-2] for k in (100, 150, 200))
+                    h1_stack_dir = -1 if _a < _b < _c else (1 if _a > _b > _c else 0)
+                else:
+                    h1_stack_dir = 0
                 # 1. เงื่อนไข Liquidity Sweep (SMC: กวาดสภาพคล่องแล้วดึงกลับ ไส้ปฏิเสธชัดเจน >= 0.30 ATR + บังคับทิศทางเทรนด์ H1 100%)
                 #    + H1 MA100/150/200 ต้องเรียงตามทิศไม้ (7 ต.ค. 2026)
                 is_sweep_buy = (last_bar['low'] < support) and (close_price >= support) and (P3_WICK_MIN <= lower_wick_ratio <= P3_WICK_MAX) and is_uptrend_h1 and h1_stack_dir == 1
