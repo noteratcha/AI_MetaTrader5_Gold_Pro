@@ -301,7 +301,7 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
             lw = _f((float(min(cb["open"], cb["close"])) - float(cb["low"])) / atr) if atr else None
             uw = _f((float(cb["high"]) - float(max(cb["open"], cb["close"]))) / atr) if atr else None
             if lw is not None and uw is not None:
-                inds.append(_ind("ไส้เทียนแท่งปิดล่าสุด", f"ล่าง {lw:.2f} · บน {uw:.2f} ATR", 0, "ตอนเข้าต้อง ≥ 0.30 ATR ฝั่งที่กวาด"))
+                inds.append(_ind("ไส้เทียนแท่งปิดล่าสุด", f"ล่าง {lw:.2f} · บน {uw:.2f} ATR", 0, "ตอนเข้าต้อง 0.40–1.00 ATR ฝั่งที่กวาด"))
         else:
             if rsic is not None:
                 inds.append(_ind("RSI(14) M15", f"{rsic:.1f}", _agree(rsic - 50, side), ""))

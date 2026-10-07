@@ -98,6 +98,8 @@ SL_ATR_MULT = 0.75                # ขยายพื้นที่หาย�
 # Backtest 2.5 ปี: กำไร 194 → 478 จุด, PF 1.08 → 1.45, Max DD 155 → 54, กำไรทั้ง 2 ครึ่ง
 P3_SL_ATR_MULT = 1.0
 P3_TP_ATR_MULT = 2.0
+# ไส้เทียนฝั่งที่กวาด 0.4–1.0 ATR (ไส้ยาวเกิน 1 ATR มักเป็นแท่งทะลุจริง) · AI ≥ 50% เสมอ (Divergence ไม่ช่วย)
+P3_WICK_MIN, P3_WICK_MAX = 0.40, 1.00
 BE_LOCK_BUFFER_ATR = 0.4          # Break-Even Lock ต้องมี buffer ≥ 0.4 ATR จากราคาตลาดก่อน lock
 LOCK_SL_THROTTLE_SECS = 60       # [Priority 2] ห้าม modify position ซ้ำภายใน 60 วินาที (ป้องกัน double-lock)
 SAME_PLAN_COOLDOWN_MINUTES = 60  # [Priority 4] ห้ามเข้าแผนเดิม + สกุลเดิม (ทิศเดิม) ภายใน 60 นาที
@@ -1476,8 +1478,8 @@ def main():
                 
                 # 1. เงื่อนไข Liquidity Sweep (SMC: กวาดสภาพคล่องแล้วดึงกลับ ไส้ปฏิเสธชัดเจน >= 0.30 ATR + บังคับทิศทางเทรนด์ H1 100%)
                 #    + H1 MA100/150/200 ต้องเรียงตามทิศไม้ (7 ต.ค. 2026)
-                is_sweep_buy = (last_bar['low'] < support) and (close_price >= support) and (lower_wick_ratio >= 0.30) and is_uptrend_h1 and h1_stack_dir == 1
-                is_sweep_sell = (last_bar['high'] > resistance) and (close_price <= resistance) and (upper_wick_ratio >= 0.30) and (not is_uptrend_h1) and h1_stack_dir == -1
+                is_sweep_buy = (last_bar['low'] < support) and (close_price >= support) and (P3_WICK_MIN <= lower_wick_ratio <= P3_WICK_MAX) and is_uptrend_h1 and h1_stack_dir == 1
+                is_sweep_sell = (last_bar['high'] > resistance) and (close_price <= resistance) and (P3_WICK_MIN <= upper_wick_ratio <= P3_WICK_MAX) and (not is_uptrend_h1) and h1_stack_dir == -1
                 
                 # 2. เงื่อนไข Bounce (ชนแนวรับ/ต้าน แล้วมีแท่งปฏิเสธราคา)
                 near_support = abs(close_price - support) <= (atr_val * 1.0) and (close_price >= support)
@@ -1874,7 +1876,7 @@ def main():
 
                     # แผน 3: SMC Liquidity Sweep (SMC-LiquidityHunt)
                     if is_sweep_buy:
-                        p_min = 0.48 if bull_div_active else 0.50
+                        p_min = 0.50
                         p_label = "SMC-LiquidityHunt+Div" if bull_div_active else "SMC-LiquidityHunt"
                         if prob[1] >= p_min:
                             h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
@@ -1894,7 +1896,7 @@ def main():
                             log_signal_event(sym, 'ZONE_ALERT', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'SMC Sweep Support | AI UP {prob[1]:.1%} < {p_min:.1%}')
 
                     elif is_sweep_sell:
-                        p_min = 0.48 if bear_div_active else 0.50
+                        p_min = 0.50
                         p_label = "SMC-LiquidityHunt+Div" if bear_div_active else "SMC-LiquidityHunt"
                         if prob[0] >= p_min:
                             h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
