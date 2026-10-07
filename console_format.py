@@ -7,6 +7,7 @@
 """
 import re
 import time
+import thai_time
 
 # สีของแต่ละหมวด (Hex สำหรับ Tk เท่านั้น)
 TAG_COLORS = {
@@ -111,7 +112,7 @@ class ConsoleFormatter:
 
     # ------------------------------------------------------------------
     def _stamp(self):
-        return time.strftime("%H:%M:%S")
+        return thai_time.fmt_now("%H:%M:%S")   # เวลาไทยเสมอ ไม่ขึ้นกับโซนเวลาเครื่อง
 
     def _is_duplicate(self, line: str) -> bool:
         key = re.sub(r"[\d.,:+-]+", "#", line)

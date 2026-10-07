@@ -12,6 +12,7 @@ import time
 import queue
 import threading
 import webbrowser
+import thai_time
 import urllib.parse
 import tkinter as tk
 from tkinter import messagebox
@@ -3514,7 +3515,7 @@ class MainTradingApp(ctk.CTk):
         """ทุก 1 นาที: ถ้าเปิด 'ล้างอัตโนมัติ' และครบ 1 ชม. นับจากล้างครั้งล่าสุด → ล้างคอนโซล"""
         try:
             if self.console_autoclear_var.get() and time.time() - self._console_cleared_at >= 3600:
-                self._clear_console(note=f"ล้างประวัติอัตโนมัติเมื่อ {time.strftime('%H:%M')} น. (ปิดได้ที่ช่อง 'ล้างอัตโนมัติทุก 1 ชม.')\n\n")
+                self._clear_console(note=f"ล้างประวัติอัตโนมัติเมื่อ {thai_time.fmt_now('%H:%M')} น. (ปิดได้ที่ช่อง 'ล้างอัตโนมัติทุก 1 ชม.')\n\n")
         except Exception:
             pass
         self.after(60000, self._console_autoclear_tick)
@@ -3793,7 +3794,7 @@ class MainTradingApp(ctk.CTk):
             ctk.CTkLabel(self.advice_body, text="ไม่มีไม้ที่ถืออยู่", font=self._font(11), text_color=COLOR_TEXT_MUTED).pack(pady=8)
             return
         err = position_advisor._state.get("error")
-        self.lbl_advice_meta.configure(text=(f"อัปเดต {time.strftime('%H:%M:%S', time.localtime(upd))} · ทุก 30 วิ" if upd else "กำลังวิเคราะห์…")
+        self.lbl_advice_meta.configure(text=(f"อัปเดต {thai_time.from_epoch(upd)} · ทุก 30 วิ" if upd else "กำลังวิเคราะห์…")
                                        + (f" · {err[:40]}" if err else ""))
         for t in tickets:
             a = res.get(t)
@@ -3878,7 +3879,7 @@ class MainTradingApp(ctk.CTk):
         return "ปิดแล้ว", COLOR_TEXT_MUTED
 
     HISTORY_COLUMNS = [
-        ("เวลาเปิด (MT5)", 96, "w"),
+        ("เวลาเปิด (ไทย)", 96, "w"),
         ("ฝั่ง", 40, "center"),
         ("แผน", 140, "w"),
         ("Lot", 36, "e"),
@@ -3982,7 +3983,7 @@ class MainTradingApp(ctk.CTk):
     def _fmt_mt5_time(epoch):
         if not epoch:
             return "—"
-        return time.strftime("%d/%m %H:%M", time.gmtime(epoch))  # เวลา MT5 เก็บเป็นเวลาเซิร์ฟเวอร์
+        return thai_time.from_server(epoch, "%d/%m %H:%M")  # เวลาเซิร์ฟเวอร์ MT5 → เวลาไทย
 
     def _render_history(self):
         rows = self._history_rows

@@ -17,6 +17,7 @@ import supabase_sync
 import sound_manager
 import stats_manager
 import plan_config
+import thai_time
 from license_manager import license_mgr
 from datetime import datetime, timedelta
 
@@ -240,7 +241,7 @@ def _web_extras():
             extra["candles"] = [{**{k: (round(v, 2) if isinstance(v, float) else v) for k, v in x.items()},
                                  "label": datetime.fromtimestamp(x["time"] - off, th).strftime("%H:%M")} for x in c["candles"]]
         if time.time() - _web_extra_cache["pnl_at"] > 60:
-            today = datetime.now().date()
+            today = thai_time.now().date()
             _web_extra_cache["pnl"] = [{"date": r["date"].isoformat(), "profit": round(r["profit"], 2), "closed": r["closed"]}
                                        for r in bot_ctrl.get_daily_pnl(today - timedelta(days=13), today)]
             _web_extra_cache["pnl_at"] = time.time()
@@ -1011,7 +1012,7 @@ def close_position(position, comment="AI Reversal Close"):
             if loss_count >= MAX_CONSECUTIVE_LOSS:
                 ban_until = time.time() + (CIRCUIT_BREAKER_MINUTES * 60)
                 last_exit_time[sym] = ban_until
-                print(f"{Colors.RED}{Colors.BOLD}[CIRCUIT BREAKER] {sym} ขาดทุน {loss_count} ไม้ติดต่อกัน! หยุดเทรด {CIRCUIT_BREAKER_MINUTES} นาที จนถึง {time.strftime('%H:%M:%S', time.localtime(ban_until))}{Colors.RESET}")
+                print(f"{Colors.RED}{Colors.BOLD}[CIRCUIT BREAKER] {sym} ขาดทุน {loss_count} ไม้ติดต่อกัน! หยุดเทรด {CIRCUIT_BREAKER_MINUTES} นาที จนถึง {thai_time.from_epoch(ban_until)}{Colors.RESET}")
                 sound_manager.play_sl_hit()
                 supabase_sync.log_risk_event(sym, 'CIRCUIT_BREAKER', 'N/A', f'ขาดทุน {loss_count} ไม้ติดต่อกัน — หยุด {CIRCUIT_BREAKER_MINUTES}m', loss=round(position.profit, 2))
         else:
@@ -1829,7 +1830,7 @@ def main():
                             if loss_count >= MAX_CONSECUTIVE_LOSS:
                                 ban_until = time.time() + (CIRCUIT_BREAKER_MINUTES * 60)
                                 last_exit_time[sym] = ban_until
-                                print(f"{Colors.RED}{Colors.BOLD}[CIRCUIT BREAKER] {sym} ขาดทุน {loss_count} ไม้ติดกัน! หยุดเทรด {CIRCUIT_BREAKER_MINUTES} นาที จนถึง {time.strftime('%H:%M:%S', time.localtime(ban_until))}{Colors.RESET}")
+                                print(f"{Colors.RED}{Colors.BOLD}[CIRCUIT BREAKER] {sym} ขาดทุน {loss_count} ไม้ติดกัน! หยุดเทรด {CIRCUIT_BREAKER_MINUTES} นาที จนถึง {thai_time.from_epoch(ban_until)}{Colors.RESET}")
                                 supabase_sync.log_risk_event(sym, 'CIRCUIT_BREAKER', 'N/A', f'ขาดทุน {loss_count} ไม้ติดต่อกัน (SL Hit) - หยุด {CIRCUIT_BREAKER_MINUTES}m', loss=round(closed_deal_profit, 2))
                         elif closed_deal_profit is not None and closed_deal_profit > 0:
                             consecutive_loss[sym] = 0  # reset เมื่อได้กำไร
@@ -1851,7 +1852,7 @@ def main():
                 if is_in_zone or has_position:
                     h1_trend_label = f"{Colors.GREEN}UPTREND [^]{Colors.RESET}" if is_uptrend_h1 else f"{Colors.RED}DOWNTREND [v]{Colors.RESET}"
                     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}")
-                    print(f"[TIME: {time.strftime('%H:%M:%S')}] 🏆 ASSET: {Colors.YELLOW}XAUUSD (GOLD){Colors.RESET} {sym_mode_tag} | v{BOT_VERSION} | Spread: {spread_pts} pts | RRR: 1:{symbol_rrr:.1f}")
+                    print(f"[TIME: {thai_time.fmt_now()}] 🏆 ASSET: {Colors.YELLOW}XAUUSD (GOLD){Colors.RESET} {sym_mode_tag} | v{BOT_VERSION} | Spread: {spread_pts} pts | RRR: 1:{symbol_rrr:.1f}")
                     print(f"{Colors.CYAN}------------------------------------------------------------{Colors.RESET}")
                     print(f"Gold Price   : {Colors.BOLD}{close_price:.{digits}f}{Colors.RESET} | ATR(14): {atr_val:.{digits}f}")
                     print(f"H4 Regime    : {h4_trend_color}{Colors.BOLD}{h4_trend_text}{Colors.RESET} | H1 Trend: {h1_trend_label}")
@@ -1869,7 +1870,7 @@ def main():
                     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}\n")
                 else:
                     # ถ้ารอนอกโซน แสดงรายงานกระชับ 1 บรรทัดสดๆ สำหรับทองคำ
-                    print(f"[{time.strftime('%H:%M:%S')}] 🏆 {Colors.YELLOW}XAUUSD{Colors.RESET} Price: {Colors.BOLD}{close_price:>{digits+7}.{digits}f}{Colors.RESET} | {h4_badge} | AI: UP {Colors.GREEN}{prob[1]:.1%}{Colors.RESET} | DOWN {Colors.RED}{prob[0]:.1%}{Colors.RESET} | {status_text}{div_tag} (M15: {ma5_val:.1f}/{ma10_val:.1f} | H1: {ma5_h1_val:.1f}/{ma10_h1_val:.1f} | Sup: {support:.{digits}f} | Res: {resistance:.{digits}f})")
+                    print(f"[{thai_time.fmt_now()}] 🏆 {Colors.YELLOW}XAUUSD{Colors.RESET} Price: {Colors.BOLD}{close_price:>{digits+7}.{digits}f}{Colors.RESET} | {h4_badge} | AI: UP {Colors.GREEN}{prob[1]:.1%}{Colors.RESET} | DOWN {Colors.RED}{prob[0]:.1%}{Colors.RESET} | {status_text}{div_tag} (M15: {ma5_val:.1f}/{ma10_val:.1f} | H1: {ma5_h1_val:.1f}/{ma10_h1_val:.1f} | Sup: {support:.{digits}f} | Res: {resistance:.{digits}f})")
                 
                 # แคชสถานะเรดาร์แบบ Real-time ให้สตรีมขึ้นเว็บอัตโนมัติ
                 is_alert_zone = bool(is_sweep_buy or is_sweep_sell or near_support or near_resistance or bb_buy_confirm or bb_sell_confirm or ma_cross_buy_confirm or ma_cross_sell_confirm or ma_cross_h1_up or ma_cross_h1_down or is_in_zone or bull_div_active or bear_div_active)
