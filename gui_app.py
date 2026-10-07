@@ -125,11 +125,17 @@ def _app_icon_path():
 
 # หน้าต่างย่อยทุกอัน (CTkToplevel) ใช้โลโก้เดียวกับโปรแกรมหลัก
 # CustomTkinter ตั้งไอคอนเริ่มต้นของตัวเองหลังสร้าง ~200ms จึงต้องตั้งทับหลังจากนั้น
+# และอยู่หน้าสุดเสมอ (topmost) — ไม่ถูกโปรแกรมอื่น เช่น MT5 / เบราว์เซอร์ บังขณะเปิดอยู่
 _ctk_toplevel_init = ctk.CTkToplevel.__init__
 
 
 def _toplevel_init_with_icon(self, *args, **kwargs):
     _ctk_toplevel_init(self, *args, **kwargs)
+    try:
+        self.attributes("-topmost", True)
+        self.after(60, self.lift)
+    except Exception:
+        pass
     icon = _app_icon_path()
     if os.path.exists(icon):
         def _set():
@@ -618,13 +624,18 @@ class ContactDialog(ctk.CTkToplevel):
         ctk.CTkButton(btns, text="ปิด", width=90, height=40, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
                       border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
         ctk.CTkButton(btns, text="เปิด LINE ทักแชท", height=40, font=f(14, "bold"), fg_color="#06C755", hover_color="#05A647",
-                      text_color="#FFFFFF", command=lambda: webbrowser.open(self.LINE_URL)).pack(side="right", fill="x", expand=True, padx=(0, 10))
+                      text_color="#FFFFFF", command=self._open_line).pack(side="right", fill="x", expand=True, padx=(0, 10))
         self.bind("<Escape>", lambda e: self.destroy())
         self.update_idletasks()
         w, h = 440, self.winfo_reqheight()
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _open_line(self):
+        # หน้าต่างนี้อยู่หน้าสุด — ปิดก่อน ไม่ให้บังเบราว์เซอร์/LINE ที่เปิดขึ้นมา
+        webbrowser.open(self.LINE_URL)
+        self.destroy()
 
     def _copy(self):
         self.clipboard_clear()
