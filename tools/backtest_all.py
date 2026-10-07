@@ -220,9 +220,9 @@ def sig_bb(i):
     if np.isnan(lo) or np.isnan(V["macd_h_prev"][i]):
         return 0
     pu = V["p_up"][i]
-    if V["low"][i] < lo <= c and V["lw"][i] >= 0.20 and (V["bull_div"][i] or V["hidden_bull"][i]) and V["macd_h"][i] >= V["macd_h_prev"][i] and pu >= 0.50:
+    if V["low"][i] < lo <= c and V["lw"][i] >= 0.20 and (V["bull_div"][i] or V["hidden_bull"][i]) and pu >= 0.55:
         return 1
-    if V["high"][i] > upb >= c and V["uw"][i] >= 0.20 and (V["bear_div"][i] or V["hidden_bear"][i]) and V["macd_h"][i] <= V["macd_h_prev"][i] and (1 - pu) >= 0.50:
+    if V["high"][i] > upb >= c and V["uw"][i] >= 0.20 and (V["bear_div"][i] or V["hidden_bear"][i]) and (1 - pu) >= 0.55:
         return -1
     return 0
 
@@ -255,7 +255,7 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · �
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
          4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 55% · SL 1.0 / TP 2.0 ATR"),
-         5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + MACD + AI · เลื่อน SL ทุก 5 จุด (50%/40%)")}
+         5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · เลื่อน SL ทุก 5 จุด (50%/40%)")}
 plans_out, events = [], []
 for k in (1, 2, 3, 4, 5):
     tr = ALL[k]

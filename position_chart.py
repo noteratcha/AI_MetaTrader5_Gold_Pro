@@ -321,7 +321,7 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
             if ctx["macd_now"] is not None and ctx["macd_prev"] is not None:
                 ch = ctx["macd_now"] - ctx["macd_prev"]
                 inds.append(_ind("MACD Histogram H1", f"{ctx['macd_now']:+.2f} ({'ยกตัว' if ch > 0 else 'กดตัว'})", _agree(ch, side),
-                                 "ยกตัว = แรงขายหมด (หนุน BUY) · กดตัว = แรงซื้อหมด (หนุน SELL)"))
+                                 "ข้อมูลประกอบ (ไม่ใช่เงื่อนไขเข้า) · ยกตัว = หนุน BUY · กดตัว = หนุน SELL"))
         divergence()
         ai_prob()
         step_trail()

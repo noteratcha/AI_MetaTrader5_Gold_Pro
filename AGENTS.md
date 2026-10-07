@@ -1,6 +1,6 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1007.2141 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1007.2207 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1007.2141): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1007.2207): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
 > โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.2244`  
@@ -121,9 +121,10 @@
 
 ### 🔹 Plan 5: `BB-H1-Reversion` (เด้งขอบแบนด์ H1 + Divergence + MACD Exhaustion)
 * **จุดประสงค์**: ดักจังหวะราคาทองคำหลุดกรอบความผันผวนใหญ่ระดับวันของ H1 (SMA 20, 2 STD) แล้วถูกปฏิเสธดีดกลับเข้าหากึ่งกลาง ผสานการยืนยันการหมดแรงของโมเมนตัมด้วย MACD (**Win Rate สูงถึง 66.7% - 75.0%**)
-* **เงื่อนไข BUY**: `Low < Lower Band H1` และ `Close >= Lower Band H1` พร้อมไส้ล่าง `lower_wick_ratio >= 0.20` + **RSI Divergence Confluence** + **MACD Histogram H1 เริ่มยกตัวขึ้น (Exhaustion)** + AI UP $\ge 50\%$
-* **เงื่อนไข SELL**: `High > Upper Band H1` และ `Close <= Upper Band H1` พร้อมไส้บน `upper_wick_ratio >= 0.20` + **RSI Divergence Confluence** + **MACD Histogram H1 เริ่มกดตัวลง (Exhaustion)** + AI DOWN $\ge 50\%$
+* **เงื่อนไข BUY**: `Low < Lower Band H1` และ `Close >= Lower Band H1` พร้อมไส้ล่าง `lower_wick_ratio >= 0.20` + **RSI Divergence Confluence** + AI UP $\ge 55\%$
+* **เงื่อนไข SELL**: `High > Upper Band H1` และ `Close <= Upper Band H1` พร้อมไส้บน `upper_wick_ratio >= 0.20` + **RSI Divergence Confluence** + AI DOWN $\ge 55\%$
 * **ความเสี่ยง/เป้าหมาย**: SL = 0.75 ATR | TP = RRR 1:1.50 (1.125 ATR) | **เลื่อน SL ทุก 5 จุด ขั้นแรก 50% / ถัดไป 40%** (7 ต.ค. 2026)
+* **ตัด MACD + AI ≥ 55% (ผู้ใช้เลือก 7 ต.ค. 2026)**: เดิมมีเพียง 34 ไม้ใน 2.5 ปี · Backtest: ไม้ 34 → 87, กำไร 16 → 69 จุด, PF 1.18 → 1.30, DD 39 → 55 · ตัด Divergence = −99 (ห้ามตัด) · ตัด AI = −37 · ห้ามสวน H1 MA100/150/200 ไม่ช่วย · MACD H1 ยังแสดงในหน้าต่างไม้เป็นข้อมูลประกอบ
 * **เลื่อน SL ทุก $5 (ผู้ใช้เลือก 6 ต.ค. 2026 · 7 ต.ค. ขั้นแรก 50% / ถัดไป 40%)**: ใช้ `apply_p4_step_trailing` เหมือน Plan 1 (ทำงานร่วมกับ Early Profit Lock 70% / Dynamic TP 80% — SL ขยับเฉพาะทิศที่ดีขึ้น) · Backtest มีเพียง ~32 ไม้ใน 2.5 ปี: ไม่เลื่อน +31 จุด PF 1.32 vs เลื่อน $5/40% +17 จุด PF 1.20 (ต่างกัน 2–3 ไม้ สรุปไม่ได้), ขาดทุนเฉลี่ยต่อไม้ลด $5.94 → $4.57
 
 ---

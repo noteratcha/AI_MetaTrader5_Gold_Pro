@@ -106,6 +106,8 @@ P4_AI_MIN = 0.55
 P4_ZONE_ATR = 0.75
 P4_SL_ATR_MULT = 1.0
 P4_TP_ATR_MULT = 2.0
+# Plan 5 (7 ต.ค. 2026): ตัดเงื่อนไข MACD H1 + AI ≥ 55% · Backtest 2.5 ปี: ไม้ 34 → 87, กำไร 16 → 69 จุด, PF 1.18 → 1.30
+P5_AI_MIN = 0.55
 BE_LOCK_BUFFER_ATR = 0.4          # Break-Even Lock ต้องมี buffer ≥ 0.4 ATR จากราคาตลาดก่อน lock
 LOCK_SL_THROTTLE_SECS = 60       # [Priority 2] ห้าม modify position ซ้ำภายใน 60 วินาที (ป้องกัน double-lock)
 SAME_PLAN_COOLDOWN_MINUTES = 60  # [Priority 4] ห้ามเข้าแผนเดิม + สกุลเดิม (ทิศเดิม) ภายใน 60 นาที
@@ -1513,9 +1515,9 @@ def main():
                     and (close_price - support) <= atr_val * P4_ZONE_ATR and h1_stack_dir != -1
                 bounce_sell_confirm = near_resistance and has_div_bounce_sell and (upper_wick_ratio >= 0.20 or close_price < last_bar['open']) \
                     and (resistance - close_price) <= atr_val * P4_ZONE_ATR and h1_stack_dir != 1
-                # Plan 5 (BB-H1-Reversion) โฟกัสกรอบ H1 + ไส้เทียน + Divergence + MACD Exhaustion (Win Rate สูงถึง 60%)
-                bb_buy_confirm = (last_bar['low'] < bb_lower_h1) and (close_price >= bb_lower_h1) and (lower_wick_ratio >= 0.20) and has_div_bb_buy and macd_buy_exhaustion
-                bb_sell_confirm = (last_bar['high'] > bb_upper_h1) and (close_price <= bb_upper_h1) and (upper_wick_ratio >= 0.20) and has_div_bb_sell and macd_sell_exhaustion
+                # Plan 5 (BB-H1-Reversion) โฟกัสกรอบ H1 + ไส้เทียน + Divergence + AI ≥ 55% (ตัด MACD ออก 7 ต.ค. 2026)
+                bb_buy_confirm = (last_bar['low'] < bb_lower_h1) and (close_price >= bb_lower_h1) and (lower_wick_ratio >= 0.20) and has_div_bb_buy
+                bb_sell_confirm = (last_bar['high'] > bb_upper_h1) and (close_price <= bb_upper_h1) and (upper_wick_ratio >= 0.20) and has_div_bb_sell
 
                 # Plan 1 (MA-Cross-Trend) Moving Average 5 ตัด 10 บนแท่ง M15 กรองด้วยเทรนด์ใหญ่ H1
                 ma5_val = float(last_bar['ma5'])
@@ -1969,7 +1971,7 @@ def main():
 
                     # แผน 5: BUY BB-H1-Reversion (Plan 5) - เปิดเฉพาะ XAUUSD
                     elif bb_buy_confirm:
-                        req_bb_p = 0.50
+                        req_bb_p = P5_AI_MIN
                         p_label = "BB-H1-Reversion+Div"
                         if prob[1] >= req_bb_p:
                             h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
@@ -1991,7 +1993,7 @@ def main():
 
                     # แผน 5: SELL BB-H1-Reversion (Plan 5) - เปิดเฉพาะ XAUUSD
                     elif bb_sell_confirm:
-                        req_bb_p = 0.50
+                        req_bb_p = P5_AI_MIN
                         p_label = "BB-H1-Reversion+Div"
                         if prob[0] >= req_bb_p:
                             h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
