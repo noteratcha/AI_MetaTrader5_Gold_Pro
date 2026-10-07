@@ -248,8 +248,13 @@ class BotController:
             # รายการ Position ค้างอยู่
             positions = mt5.positions_get(symbol="XAUUSD")
             if positions:
+                si = mt5.symbol_info("XAUUSD")
+                per_pt = (float(si.trade_tick_value) / float(si.trade_tick_size)) if si and si.trade_tick_size else 100.0
                 for pos in positions:
+                    side = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
                     data["open_positions"].append({
+                        # กำไร/ขาดทุนถ้าราคาชน SL ตอนนี้ (บวก = SL ล็อกกำไรแล้ว) — None = ไม่มี SL
+                        "sl_pnl": round((float(pos.sl) - float(pos.price_open)) * side * per_pt * float(pos.volume), 2) if pos.sl else None,
                         "ticket": pos.ticket,
                         "type": "BUY" if pos.type == mt5.ORDER_TYPE_BUY else "SELL",
                         "volume": pos.volume,

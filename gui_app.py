@@ -3557,18 +3557,22 @@ class MainTradingApp(ctk.CTk):
 
     # ---- ออเดอร์ที่เปิดอยู่ (เรียลไทม์) ----
     POSITION_COLUMNS = [
-        ("Ticket", 78, "w"),
-        ("ฝั่ง", 44, "center"),
-        ("แผน", 120, "w"),
-        ("Lot", 36, "e"),
-        ("ราคาเข้า", 70, "e"),
-        ("ราคาปัจจุบัน", 80, "e"),
-        ("Stop Loss", 86, "e"),
-        ("Take Profit", 78, "e"),
-        ("ถือมา", 56, "e"),
-        ("กำไร", 72, "e"),
-        ("", 46, "center"),
+        ("Ticket", 74, "w"),
+        ("ฝั่ง", 40, "center"),
+        ("แผน", 96, "w"),
+        ("Lot", 34, "e"),
+        ("ราคาเข้า", 68, "e"),
+        ("ราคาปัจจุบัน", 76, "e"),
+        ("Stop Loss", 80, "e"),
+        ("ถ้าชน SL", 66, "e"),
+        ("Take Profit", 74, "e"),
+        ("ถือมา", 54, "e"),
+        ("กำไร", 64, "e"),
+        ("AI แนะนำ", 72, "center"),
+        ("", 42, "center"),
     ]
+    POS_AI_COL = 11          # คอลัมน์ป้ายคำแนะนำ AI (ถือต่อ / ระวัง / ควรปิด)
+    ADVICE_SHORT = {"hold": "ถือต่อ", "caution": "ระวัง", "close": "ควรปิด"}
 
     def _build_positions_tab(self, parent):
         top = ctk.CTkFrame(parent, fg_color="transparent")
@@ -3643,8 +3647,14 @@ class MainTradingApp(ctk.CTk):
                 self._configure_position_grid(frame)
                 cells = []
                 for col, (_, _, anchor) in enumerate(self.POSITION_COLUMNS[:-1]):
-                    lbl = ctk.CTkLabel(frame, text="", font=self._font(12), anchor=anchor, height=32)
-                    lbl.grid(row=0, column=col, sticky="ew", padx=4)
+                    if col == self.POS_AI_COL:   # ป้ายคำแนะนำ AI — ชี้เพื่อดูเหตุผล
+                        lbl = ctk.CTkLabel(frame, text="…", font=self._font(11, "bold"), corner_radius=6, height=24, width=64,
+                                           fg_color="#1A1E27", text_color=COLOR_TEXT_MUTED)
+                        lbl.grid(row=0, column=col, padx=4)
+                        HoverTip(lbl, lambda tk_=t: self._advice_tip(tk_))
+                    else:
+                        lbl = ctk.CTkLabel(frame, text="", font=self._font(12), anchor=anchor, height=32)
+                        lbl.grid(row=0, column=col, sticky="ew", padx=4)
                     cells.append(lbl)
                 btn = ctk.CTkButton(
                     frame, text="ปิด", width=40, height=24, corner_radius=6, font=self._font(11, "bold"),
@@ -3682,14 +3692,22 @@ class MainTradingApp(ctk.CTk):
             locked = sl > 0 and ((is_buy and sl > open_price) or (not is_buy and sl < open_price))
             sl_text = "ไม่มี" if sl <= 0 else (f"🔒 {sl:,.2f}" if locked else f"{sl:,.2f}")
             held = self._fmt_duration(server_time - p.get("time", server_time)) if server_time and p.get("time") else "—"
+            # ถ้าราคาชน SL ตอนนี้จะได้/เสียเท่าไร (บวก = ล็อกกำไรแล้ว · ลบ = ยังเสี่ยงขาดทุน)
+            sl_pnl = p.get("sl_pnl")
+            if sl_pnl is None:
+                sl_pnl_text, sl_pnl_col = "ไม่มี SL", COLOR_DANGER_RED
+            else:
+                sl_pnl_text = f"{'+' if sl_pnl >= 0 else '-'}{abs(sl_pnl):,.2f}"
+                sl_pnl_col = COLOR_CYAN_ACCENT if sl_pnl > 0 else (COLOR_DANGER_RED if sl_pnl < 0 else COLOR_TEXT_MUTED)
             values = [
                 f"#{p['ticket']}",
                 p.get("type", ""),
-                (p.get("comment") or "Manual")[:20],
+                position_chart.plan_of(p.get("comment"))[1][:16],
                 f"{float(p.get('volume', 0)):.2f}",
                 f"{open_price:,.2f}",
                 f"{float(p.get('price_current', 0)):,.2f}",
                 sl_text,
+                sl_pnl_text,
                 f"{tp:,.2f}" if tp > 0 else "รันเทรนด์",
                 held,
                 f"{'+' if profit >= 0 else '-'}{abs(profit):,.2f}",
@@ -3702,13 +3720,25 @@ class MainTradingApp(ctk.CTk):
                 COLOR_TEXT_PRIMARY,
                 COLOR_GOLD_PRIMARY,
                 COLOR_CYAN_ACCENT if locked else COLOR_TEXT_MUTED,
+                sl_pnl_col,
                 COLOR_TEXT_MUTED,
                 COLOR_TEXT_MUTED,
                 COLOR_SUCCESS_GREEN if profit > 0 else (COLOR_DANGER_RED if profit < 0 else COLOR_TEXT_MUTED),
             ]
-            for lbl, v, c in zip(self._position_rows[p["ticket"]]["cells"], values, colors):
+            cells = self._position_rows[p["ticket"]]["cells"]
+            for lbl, v, c in zip(cells, values, colors):
                 if lbl.cget("text") != v:
                     lbl.configure(text=v, text_color=c)
+            # ป้ายคำแนะนำ AI ท้ายแถว (ผลจาก position_advisor — อัปเดตทุก 30 วิ)
+            a = position_advisor.latest().get(p["ticket"])
+            ai_lbl = cells[self.POS_AI_COL]
+            if a:
+                fg, bg = self.ADVICE_STYLE[a["verdict"]]
+                ai_text = self.ADVICE_SHORT[a["verdict"]]
+            else:
+                fg, bg, ai_text = COLOR_TEXT_MUTED, "#1A1E27", "…"
+            if ai_lbl.cget("text") != ai_text:
+                ai_lbl.configure(text=ai_text, text_color=fg, fg_color=bg)
 
         if positions:
             self.lbl_positions_summary.configure(
@@ -3717,6 +3747,17 @@ class MainTradingApp(ctk.CTk):
             )
         else:
             self.lbl_positions_summary.configure(text="ไม่มีออเดอร์ที่เปิดอยู่", text_color=COLOR_TEXT_MUTED)
+
+    def _advice_tip(self, ticket):
+        """ข้อความเมื่อชี้ป้าย AI แนะนำ: คำแนะนำ + เหตุผลหลัก 4 ข้อ"""
+        a = position_advisor.latest().get(ticket)
+        if not a:
+            return "AI กำลังวิเคราะห์ไม้นี้ (อัปเดตทุก 30 วินาที)"
+        lines = [f"{a['verdict_text']} (คะแนน {a['score']:+.1f})", a["advice"], ""]
+        for r in a["reasons"][:4]:
+            mark = "✓" if r["w"] > 0 else ("✗" if r["w"] < 0 else "•")
+            lines.append(f"{mark} {r['text']}")
+        return "\n".join(lines)
 
     ADVICE_STYLE = {
         "hold": (COLOR_SUCCESS_GREEN, "#12261C"),
