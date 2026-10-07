@@ -296,6 +296,8 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                              f"แตะ {ctx['sup_t']} / {ctx['res_t']} ครั้ง · ห่างราคา {price - ctx['sup']:,.2f} / {ctx['res'] - price:,.2f} จุด"))
         if plan_key == "P3":
             inds.append(_ind("เทรนด์ H1 (MA10/30)", f"{ctx['h1_diff']:+.2f}%", _agree(ctx["h1_dir"], side), "ต้องตรงทิศตอนเข้า"))
+            word = {1: "เรียงขึ้น", -1: "เรียงลง", 0: "ไม่เรียง"}[ctx["h1_stack_dir"]]
+            inds.append(_ind("H1 MA100 / 150 / 200", word, _agree(ctx["h1_stack_dir"], side), "ต้องเรียงตามทิศตอนเข้า · SL 1.0 ATR · TP 2.0 ATR"))
             lw = _f((float(min(cb["open"], cb["close"])) - float(cb["low"])) / atr) if atr else None
             uw = _f((float(cb["high"]) - float(max(cb["open"], cb["close"]))) / atr) if atr else None
             if lw is not None and uw is not None:

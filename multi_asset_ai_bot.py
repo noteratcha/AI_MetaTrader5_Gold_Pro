@@ -94,6 +94,10 @@ last_exit_time = {}            # บันทึกเวลาปิดไม�
 # ==================== แผนการปรับปรุงความแม่นยำสูง (v2026.1002.2225) ====================
 P1_SL_ATR_MULT = 1.0              # Plan 1 (MA M15): SL 1.0 ATR — ไส้เทียนสะบัดชน SL น้อยลง (Backtest ดีที่สุด)
 SL_ATR_MULT = 0.75                # ขยายพื้นที่หายใจ SL = 0.75 ATR (ป้องกัน Market Noise ในแท่ง M15)
+# Plan 3 (7 ต.ค. 2026): H1 MA100/150/200 ต้องเรียงตามทิศ + SL 1.0 ATR / TP 2.0 ATR
+# Backtest 2.5 ปี: กำไร 194 → 478 จุด, PF 1.08 → 1.45, Max DD 155 → 54, กำไรทั้ง 2 ครึ่ง
+P3_SL_ATR_MULT = 1.0
+P3_TP_ATR_MULT = 2.0
 BE_LOCK_BUFFER_ATR = 0.4          # Break-Even Lock ต้องมี buffer ≥ 0.4 ATR จากราคาตลาดก่อน lock
 LOCK_SL_THROTTLE_SECS = 60       # [Priority 2] ห้าม modify position ซ้ำภายใน 60 วินาที (ป้องกัน double-lock)
 SAME_PLAN_COOLDOWN_MINUTES = 60  # [Priority 4] ห้ามเข้าแผนเดิม + สกุลเดิม (ทิศเดิม) ภายใน 60 นาที
@@ -1471,8 +1475,9 @@ def main():
                     div_name = "H-BEAR v"
                 
                 # 1. เงื่อนไข Liquidity Sweep (SMC: กวาดสภาพคล่องแล้วดึงกลับ ไส้ปฏิเสธชัดเจน >= 0.30 ATR + บังคับทิศทางเทรนด์ H1 100%)
-                is_sweep_buy = (last_bar['low'] < support) and (close_price >= support) and (lower_wick_ratio >= 0.30) and is_uptrend_h1
-                is_sweep_sell = (last_bar['high'] > resistance) and (close_price <= resistance) and (upper_wick_ratio >= 0.30) and (not is_uptrend_h1)
+                #    + H1 MA100/150/200 ต้องเรียงตามทิศไม้ (7 ต.ค. 2026)
+                is_sweep_buy = (last_bar['low'] < support) and (close_price >= support) and (lower_wick_ratio >= 0.30) and is_uptrend_h1 and h1_stack_dir == 1
+                is_sweep_sell = (last_bar['high'] > resistance) and (close_price <= resistance) and (upper_wick_ratio >= 0.30) and (not is_uptrend_h1) and h1_stack_dir == -1
                 
                 # 2. เงื่อนไข Bounce (ชนแนวรับ/ต้าน แล้วมีแท่งปฏิเสธราคา)
                 near_support = abs(close_price - support) <= (atr_val * 1.0) and (close_price >= support)
@@ -1878,11 +1883,10 @@ def main():
                                 log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                             elif not _is_plan_blocked('BUY', p_label):
                                 price = tick.ask
-                                sl = round(price - sl_dist, digits)
-                                risk = price - sl
-                                tp = round(price + (risk * symbol_rrr), digits)
+                                sl = round(price - atr_val * P3_SL_ATR_MULT, digits)
+                                tp = round(price + atr_val * P3_TP_ATR_MULT, digits)
                                 div_note = " + BULL DIVERGENCE (Grade A+)" if bull_div_active else ""
-                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: SMC Sweep Below Support + H1 UPTREND + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: SMC Sweep Below Support + H1 UPTREND + MA100>150>200 + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
                                 send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
                                 _record_plan('BUY', p_label)
@@ -1899,11 +1903,10 @@ def main():
                                 log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                             elif not _is_plan_blocked('SELL', p_label):
                                 price = tick.bid
-                                sl = round(price + sl_dist, digits)
-                                risk = sl - price
-                                tp = round(price - (risk * symbol_rrr), digits)
+                                sl = round(price + atr_val * P3_SL_ATR_MULT, digits)
+                                tp = round(price - atr_val * P3_TP_ATR_MULT, digits)
                                 div_note = " + BEAR DIVERGENCE (Grade A+)" if bear_div_active else ""
-                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: SMC Sweep Above Resistance + H1 DOWNTREND + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: SMC Sweep Above Resistance + H1 DOWNTREND + MA100<150<200 + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
                                 send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
                                 _record_plan('SELL', p_label)
