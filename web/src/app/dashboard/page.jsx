@@ -8,6 +8,7 @@ import RedeemCard from '../../components/RedeemCard';
 import { Alert, AuthGate, PageHeader, PageLoading, Spinner, StatCard } from '../../components/ui';
 import { formatHHMM, formatKeyInput, formatUsd } from '../../lib/format';
 import { planDisplay } from '../../lib/plans';
+import { LOW_HOURS } from '../../lib/hours';
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
@@ -43,7 +44,7 @@ function Dashboard() {
 
   const hours = Number(user.hoursRemaining) || 0;
   const out = hours <= 0;
-  const low = !out && hours < 5;
+  const low = !out && hours <= LOW_HOURS;
   const o = stats?.overall;
 
   return (

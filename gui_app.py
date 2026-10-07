@@ -2703,6 +2703,7 @@ class MainTradingApp(ctk.CTk):
     DOWNLOAD_URL = "https://goldbot24.vercel.app/download"
     WEB_URL = "https://goldbot24.vercel.app"
     LOW_HOURS_MINUTES = 5 * 60
+    LOW_HOURS_ALERTS = (5 * 60, 60)   # เตือนด้วยหน้าต่าง + เสียงเมื่อเหลือ 5 ชม. และ 1 ชม. (ครั้งละครั้ง)
 
     def _build_top_header(self):
         """แถบบน: แบรนด์ + สถานะเวอร์ชัน | กระเป๋าเวลา (เติมคีย์/ซื้อชั่วโมง) | เมนูผู้ใช้"""
@@ -4362,6 +4363,40 @@ class MainTradingApp(ctk.CTk):
             self.lbl_metering_status.configure(text="⏸ หยุดนับเวลา", text_color=COLOR_TEXT_MUTED)
             self.lbl_bot_state.configure(text="  ● หยุดทำงาน  ", text_color=COLOR_TEXT_MUTED, fg_color="#1F2430")
 
+    def _check_low_hours_alert(self, mins_left):
+        """เตือนเวลาใกล้หมด: หน้าต่าง + เสียง + Console ครั้งเดียวต่อเกณฑ์ (เติมชั่วโมงจนเกินเกณฑ์แล้วจะเตือนใหม่ได้)"""
+        warned = getattr(self, "_low_hours_warned", None)
+        if warned is None:
+            warned = self._low_hours_warned = set()
+        for th in self.LOW_HOURS_ALERTS:
+            if mins_left > th:
+                warned.discard(th)
+        if mins_left <= 0 or getattr(self, "_low_hours_dialog_open", False):
+            return
+        due = [th for th in self.LOW_HOURS_ALERTS if mins_left <= th and th not in warned]
+        if not due:
+            return
+        warned.update(due)   # เกณฑ์ที่ผ่านมาแล้วทั้งหมดนับว่าเตือนแล้ว (เปิดโปรแกรมตอนเหลือ 40 นาที เตือนครั้งเดียว)
+        h, m = divmod(int(mins_left), 60)
+        left = f"{h} ชม. {m:02d} นาที" if h else f"{m} นาที"
+        print(f"[LICENSE] เวลาใช้งานใกล้หมด — เหลือ {left} เมื่อหมดบอทจะหยุดอัตโนมัติ")
+        self.after(50, lambda: self._show_low_hours_dialog(left))
+
+    def _show_low_hours_dialog(self, left):
+        self._low_hours_dialog_open = True
+        try:
+            sound_manager.play_sl_hit()
+            buy = messagebox._run(
+                "เวลาใช้งานใกล้หมด",
+                f"ชั่วโมงใช้งานเหลือ {left}\n"
+                "เมื่อหมดบอทจะหยุดเอง · ไม้ที่เปิดอยู่ยังอยู่ใน MT5 พร้อม SL/TP เดิม",
+                "warning", ok_text="ซื้อชั่วโมง", cancel_text="ไว้ทีหลัง",
+            )
+            if buy:
+                webbrowser.open(self.STORE_URL)
+        finally:
+            self._low_hours_dialog_open = False
+
     def _on_time_expired(self):
         """เมื่อชั่วโมงการใช้งานหมดลง"""
         sound_manager.play_sl_hit()
@@ -4489,6 +4524,7 @@ class MainTradingApp(ctk.CTk):
                 if hasattr(self, 'lbl_header_hours'):
                     mins_left = license_mgr.get_remaining_minutes()
                     low = mins_left <= self.LOW_HOURS_MINUTES
+                    self._check_low_hours_alert(mins_left)
                     self.lbl_header_hours.configure(
                         text=f"⏳ {hrs_str} ชม.",
                         text_color=COLOR_DANGER_RED if low else COLOR_GOLD_PRIMARY,

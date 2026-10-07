@@ -95,6 +95,25 @@ export async function sendAlreadyRegisteredEmail(to, displayName, siteUrl) {
 }
 
 const SITE_URL = process.env.SITE_URL || 'https://goldbot24.vercel.app';
+
+/** เตือนเวลาใช้งานใกล้หมด (ส่งครั้งเดียวตอนชั่วโมงลดลงข้ามเกณฑ์ — /api/auth/meter) */
+export async function sendLowHoursEmail(to, displayName, hoursLeft) {
+  const name = escapeHtml(displayName || to.split('@')[0]);
+  const left = Number(hoursLeft || 0).toFixed(2);
+  const html = wrap(
+    'เวลาใช้งานใกล้หมด',
+    `<p style="margin:0 0 12px;color:#a3abba">สวัสดีคุณ ${name}<br/>ชั่วโมงใช้งานบอทของคุณเหลือ <b style="color:#f2c14e">${left} ชม.</b></p>
+    <p style="margin:0 0 16px;color:#a3abba">เมื่อเวลาหมด บอทจะหยุดเปิดและดูแลไม้อัตโนมัติ (ไม้ที่เปิดอยู่ยังอยู่ใน MT5 พร้อม SL/TP เดิม)</p>
+    <p style="margin:0 0 8px"><a href="${SITE_URL}/store" style="display:inline-block;padding:10px 18px;background:#f2c14e;color:#111;border-radius:10px;text-decoration:none;font-weight:700">ซื้อชั่วโมง</a>
+    &nbsp;<a href="${SITE_URL}/redeem" style="color:#f2c14e">หรือเติมคีย์โปรโมชัน</a></p>`
+  );
+  await send(
+    to,
+    `GoldBot24 · เวลาใช้งานเหลือ ${left} ชม.`,
+    `ชั่วโมงใช้งานบอท GoldBot24 ของคุณเหลือ ${left} ชม. เมื่อหมดบอทจะหยุดอัตโนมัติ\nซื้อชั่วโมง: ${SITE_URL}/store\nเติมคีย์: ${SITE_URL}/redeem`,
+    html
+  );
+}
 const thb = (n) => `฿${Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const thaiDate = (v) => new Date(v || Date.now()).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long', timeStyle: 'short' });
 

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Activity, BarChart3, BookOpen, CalendarDays, Download, Eye, FlaskConical, Key, LogIn, LogOut, Menu, Shield, ShoppingBag, X, Ticket } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatHHMM } from '../lib/format';
+import { LOW_HOURS } from '../lib/hours';
 
 const NAV_ITEMS = [
   { href: '/', label: 'พอร์ตสด', icon: Activity },
@@ -104,7 +105,7 @@ export default function Navbar() {
                 <span className="nav-avatar">{(user.displayName || user.email || '?').slice(0, 1).toUpperCase()}</span>
                 <span className="nav-user-meta">
                   <span className="nav-user-name">{user.displayName || user.email}</span>
-                  <span className={`nav-user-hours mono ${hours <= 0 ? 'text-red' : 'text-gold'}`}>{formatHHMM(hours)} ชม.</span>
+                  <span className={`nav-user-hours mono ${hours <= LOW_HOURS ? 'text-red' : 'text-gold'}`}>{formatHHMM(hours)} ชม.</span>
                 </span>
               </Link>
               <button className="btn btn-ghost btn-icon nav-desktop-only" onClick={logout} title="ออกจากระบบ" aria-label="ออกจากระบบ">

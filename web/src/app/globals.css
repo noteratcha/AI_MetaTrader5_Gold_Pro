@@ -2219,3 +2219,28 @@ select.input {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* แถบเตือนเวลาใช้งานใกล้หมด (LowHoursBanner) */
+.low-hours-banner {
+  background: #2a2210;
+  border-bottom: 1px solid #5a4519;
+  color: var(--gold);
+  font-size: 0.88rem;
+}
+.low-hours-banner.is-out {
+  background: #2a1518;
+  border-bottom-color: #6b2a30;
+  color: var(--red);
+}
+.low-hours-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.low-hours-inner strong {
+  font-weight: 700;
+}
