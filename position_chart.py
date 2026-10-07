@@ -303,6 +303,9 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
             if lw is not None and uw is not None:
                 inds.append(_ind("ไส้เทียนแท่งปิดล่าสุด", f"ล่าง {lw:.2f} · บน {uw:.2f} ATR", 0, "ตอนเข้าต้อง 0.40–1.00 ATR ฝั่งที่กวาด"))
         else:
+            word = {1: "เรียงขึ้น", -1: "เรียงลง", 0: "ไม่เรียง"}[ctx["h1_stack_dir"]]
+            inds.append(_ind("H1 MA100 / 150 / 200", word, -1 if ctx["h1_stack_dir"] == -side else (1 if ctx["h1_stack_dir"] == side else 0),
+                             "ห้ามเรียงสวนทิศตอนเข้า · ห่างแนว ≤ 0.75 ATR · AI ≥ 55% · SL 1.0 / TP 2.0 ATR"))
             if rsic is not None:
                 inds.append(_ind("RSI(14) M15", f"{rsic:.1f}", _agree(rsic - 50, side), ""))
             divergence()

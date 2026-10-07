@@ -208,9 +208,9 @@ def sig_bounce(i):
     pu = V["p_up"][i]
     bdiv = V["bull_div"][i] or V["hidden_bull"][i]
     sdiv = V["bear_div"][i] or V["hidden_bear"][i]
-    if c >= s and c - s <= a and bdiv and (V["lw"][i] >= 0.20 or c > V["open"][i]) and pu >= (0.51 if bdiv else 0.54):
+    if c >= s and c - s <= 0.75 * a and bdiv and (V["lw"][i] >= 0.20 or c > V["open"][i]) and V["h1_stack"][i] != -1 and pu >= 0.55:
         return 1
-    if c <= r and r - c <= a and sdiv and (V["uw"][i] >= 0.20 or c < V["open"][i]) and (1 - pu) >= (0.51 if sdiv else 0.54):
+    if c <= r and r - c <= 0.75 * a and sdiv and (V["uw"][i] >= 0.20 or c < V["open"][i]) and V["h1_stack"][i] != 1 and (1 - pu) >= 0.55:
         return -1
     return 0
 
@@ -242,7 +242,7 @@ f["atr"] = A(f); f["ma5"], f["ma10"] = f.close.rolling(5).mean(), f.close.rollin
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
 rows.append(stats("P2 MA H1", keep(2, sim_ma(f, "ma5", "ma10", "p2_dir", step=None))))
 rows.append(stats("P3 SMC", keep(3, sim_ai_plan(sig_smc, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
-rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce, step=5.0, frac=0.4, first_frac=0.5))))
+rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
 rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4, first_frac=0.5))))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
@@ -254,7 +254,7 @@ from version import APP_VERSION  # noqa: E402
 NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
-         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 + Divergence + AI · เลื่อน SL ทุก 5 จุด (50%/40%)"),
+         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 55% · SL 1.0 / TP 2.0 ATR"),
          5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + MACD + AI · เลื่อน SL ทุก 5 จุด (50%/40%)")}
 plans_out, events = [], []
 for k in (1, 2, 3, 4, 5):

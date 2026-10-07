@@ -100,6 +100,12 @@ P3_SL_ATR_MULT = 1.0
 P3_TP_ATR_MULT = 2.0
 # ไส้เทียนฝั่งที่กวาด 0.4–1.0 ATR (ไส้ยาวเกิน 1 ATR มักเป็นแท่งทะลุจริง) · AI ≥ 50% เสมอ (Divergence ไม่ช่วย)
 P3_WICK_MIN, P3_WICK_MAX = 0.40, 1.00
+# Plan 4 (7 ต.ค. 2026): AI ≥ 55% · ห่างแนวรับ/ต้าน ≤ 0.75 ATR · ห้ามเข้าเมื่อ H1 MA100/150/200 เรียงสวนทิศ · SL 1.0 / TP 2.0 ATR
+# Backtest 2.5 ปี: กำไร 65 → 436 จุด, PF 1.02 → 1.56, Max DD 170 → 68
+P4_AI_MIN = 0.55
+P4_ZONE_ATR = 0.75
+P4_SL_ATR_MULT = 1.0
+P4_TP_ATR_MULT = 2.0
 BE_LOCK_BUFFER_ATR = 0.4          # Break-Even Lock ต้องมี buffer ≥ 0.4 ATR จากราคาตลาดก่อน lock
 LOCK_SL_THROTTLE_SECS = 60       # [Priority 2] ห้าม modify position ซ้ำภายใน 60 วินาที (ป้องกัน double-lock)
 SAME_PLAN_COOLDOWN_MINUTES = 60  # [Priority 4] ห้ามเข้าแผนเดิม + สกุลเดิม (ทิศเดิม) ภายใน 60 นาที
@@ -1503,8 +1509,10 @@ def main():
                 # Plan 4 (SR-SwingBounce) เปิดพร้อม Divergence Confluence
                 has_div_bounce_buy = bull_div_active or hidden_bull_active
                 has_div_bounce_sell = bear_div_active or hidden_bear_active
-                bounce_buy_confirm = near_support and has_div_bounce_buy and (lower_wick_ratio >= 0.20 or close_price > last_bar['open'])
-                bounce_sell_confirm = near_resistance and has_div_bounce_sell and (upper_wick_ratio >= 0.20 or close_price < last_bar['open'])
+                bounce_buy_confirm = near_support and has_div_bounce_buy and (lower_wick_ratio >= 0.20 or close_price > last_bar['open']) \
+                    and (close_price - support) <= atr_val * P4_ZONE_ATR and h1_stack_dir != -1
+                bounce_sell_confirm = near_resistance and has_div_bounce_sell and (upper_wick_ratio >= 0.20 or close_price < last_bar['open']) \
+                    and (resistance - close_price) <= atr_val * P4_ZONE_ATR and h1_stack_dir != 1
                 # Plan 5 (BB-H1-Reversion) โฟกัสกรอบ H1 + ไส้เทียน + Divergence + MACD Exhaustion (Win Rate สูงถึง 60%)
                 bb_buy_confirm = (last_bar['low'] < bb_lower_h1) and (close_price >= bb_lower_h1) and (lower_wick_ratio >= 0.20) and has_div_bb_buy and macd_buy_exhaustion
                 bb_sell_confirm = (last_bar['high'] > bb_upper_h1) and (close_price <= bb_upper_h1) and (upper_wick_ratio >= 0.20) and has_div_bb_sell and macd_sell_exhaustion
@@ -1918,7 +1926,7 @@ def main():
                     # แผน 4: BUY Bounce (SR-SwingBounce)
                     elif bounce_buy_confirm:
                         has_div_boost = bull_div_active or hidden_bull_active
-                        req_conf = (CONFIDENCE - 0.03) if has_div_boost else CONFIDENCE
+                        req_conf = P4_AI_MIN
                         p_label = "SR-SwingBounce+Div" if has_div_boost else "SR-SwingBounce"
                         if prob[1] >= req_conf:
                             h4_ok, h4_msg = check_h4_confluence('BUY', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
@@ -1927,11 +1935,10 @@ def main():
                                 log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                             elif not _is_plan_blocked('BUY', p_label):
                                 price = tick.ask
-                                sl = round(price - sl_dist, digits)
-                                risk = price - sl
-                                tp = round(price + (risk * symbol_rrr), digits)
+                                sl = round(price - atr_val * P4_SL_ATR_MULT, digits)
+                                tp = round(price + atr_val * P4_TP_ATR_MULT, digits)
                                 div_note = " + DIVERGENCE CONFLUENCE" if has_div_boost else ""
-                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: Bounce Support H1 + Wick Confirm + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: Bounce Support H1 + Wick Confirm + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
                                 send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
                                 _record_plan('BUY', p_label)
@@ -1941,7 +1948,7 @@ def main():
                     # แผน 4: SELL Bounce (SR-SwingBounce)
                     elif bounce_sell_confirm:
                         has_div_boost = bear_div_active or hidden_bear_active
-                        req_conf = (CONFIDENCE - 0.03) if has_div_boost else CONFIDENCE
+                        req_conf = P4_AI_MIN
                         p_label = "SR-SwingBounce+Div" if has_div_boost else "SR-SwingBounce"
                         if prob[0] >= req_conf:
                             h4_ok, h4_msg = check_h4_confluence('SELL', is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
@@ -1950,11 +1957,10 @@ def main():
                                 log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
                             elif not _is_plan_blocked('SELL', p_label):
                                 price = tick.bid
-                                sl = round(price + sl_dist, digits)
-                                risk = sl - price
-                                tp = round(price - (risk * symbol_rrr), digits)
+                                sl = round(price + atr_val * P4_SL_ATR_MULT, digits)
+                                tp = round(price - atr_val * P4_TP_ATR_MULT, digits)
                                 div_note = " + DIVERGENCE CONFLUENCE" if has_div_boost else ""
-                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: Bounce Resistance H1 + Wick Confirm + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: Bounce Resistance H1 + Wick Confirm + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL 1.0ATR / TP 2.0ATR){Colors.RESET}")
                                 send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
                                 _record_plan('SELL', p_label)
