@@ -101,6 +101,110 @@ def _factors(bot, m15, h1, h4, ai_row):
             out.append(("แนวรับ/แนวต้าน H1", 0, f"อยู่กลางกรอบ {sup:,.2f} – {res:,.2f}"))
     except Exception:
         pass
+    try:
+        out.extend(_popular_factors(bot, h1, h4))
+    except Exception:
+        pass
+    return out
+
+
+def _rsi(c, n=14):
+    dl = c.diff()
+    g, l = dl.where(dl > 0, 0).rolling(n).mean(), (-dl.where(dl < 0, 0)).rolling(n).mean()
+    return 100 - 100 / (1 + g / (l + 1e-9))
+
+
+def _popular_factors(bot, h1, h4):
+    """อินดิเคเตอร์ยอดนิยมของนักเทรด (แสดงผลประกอบเท่านั้น — ไม่ใช้คิด 'เทรนด์ยืนยัน' / คะแนนถือ-ปิดไม้)
+    ชื่อห้ามขึ้นต้นด้วย 'เทรนด์' หรือ 'ราคาเทียบ' (กลุ่มนั้นผูกกับความแม่นจาก Backtest) · ใช้แท่งที่ปิดแล้ว"""
+    import MetaTrader5 as mt5
+    out = []
+    c4, h4h, h4l = h4["close"], h4["high"], h4["low"]
+    c1 = h1["close"]
+    # 1) EMA50/200 รายวัน — Golden / Death Cross
+    d1 = bot.get_data("XAUUSD", mt5.TIMEFRAME_D1, 400)
+    if d1 is not None and len(d1) >= 210:
+        e50, e200 = (d1["close"].ewm(span=k, adjust=False).mean().iloc[-2] for k in (50, 200))
+        d = 1 if e50 > e200 else -1
+        out.append(("EMA50/200 รายวัน", d, f"{'Golden Cross (EMA50 เหนือ EMA200)' if d > 0 else 'Death Cross (EMA50 ใต้ EMA200)'}"))
+    # 2) ADX H4 + DI — ความแรงเทรนด์
+    up, dn = h4h.diff(), -h4l.diff()
+    plus = up.where((up > dn) & (up > 0), 0.0)
+    minus = dn.where((dn > up) & (dn > 0), 0.0)
+    tr = (h4h - h4l).combine((h4h - c4.shift()).abs(), max).combine((h4l - c4.shift()).abs(), max)
+    aw = tr.ewm(alpha=1 / 14, adjust=False).mean()
+    pdi = 100 * plus.ewm(alpha=1 / 14, adjust=False).mean() / aw
+    mdi = 100 * minus.ewm(alpha=1 / 14, adjust=False).mean() / aw
+    adx = (100 * (pdi - mdi).abs() / (pdi + mdi + 1e-9)).ewm(alpha=1 / 14, adjust=False).mean()
+    a, p_, m_ = float(adx.iloc[-2]), float(pdi.iloc[-2]), float(mdi.iloc[-2])
+    d = (1 if p_ > m_ else -1) if a >= 25 else 0
+    out.append(("ADX H4 (ความแรงเทรนด์)", d, f"ADX {a:.0f} · {'เทรนด์แรง' if a >= 25 else 'เทรนด์อ่อน/ไซด์เวย์'} · +DI {p_:.0f} / −DI {m_:.0f}"))
+    # 3) Ichimoku Cloud H4
+    if len(c4) >= 90:
+        ten = (h4h.rolling(9).max() + h4l.rolling(9).min()) / 2
+        kij = (h4h.rolling(26).max() + h4l.rolling(26).min()) / 2
+        sa = ((ten + kij) / 2).shift(26).iloc[-2]
+        sb = ((h4h.rolling(52).max() + h4l.rolling(52).min()) / 2).shift(26).iloc[-2]
+        px, top, bot_ = float(c4.iloc[-2]), max(sa, sb), min(sa, sb)
+        d = 1 if px > top else (-1 if px < bot_ else 0)
+        out.append(("Ichimoku Cloud H4", d, "ราคาอยู่เหนือเมฆ" if d > 0 else "ราคาอยู่ใต้เมฆ" if d < 0 else f"ราคาอยู่ในเมฆ ({bot_:,.2f} – {top:,.2f})"))
+    # 4) Parabolic SAR H1 (มาตรฐาน 0.02/0.2)
+    sar, sdir = bot.psar_series(h1["high"].values, h1["low"].values, 0.02, 0.2)
+    d = int(sdir[-2])
+    out.append(("Parabolic SAR H1", d, f"จุด SAR {'ใต้' if d > 0 else 'เหนือ'}ราคา ({sar[-2]:,.2f})"))
+    # 5) RSI(14) H4
+    r = float(_rsi(c4).iloc[-2])
+    if r >= 70:
+        d, t = -1, "ซื้อมากเกินไป (Overbought) — เสี่ยงย่อตัว"
+    elif r <= 30:
+        d, t = 1, "ขายมากเกินไป (Oversold) — มีโอกาสเด้ง"
+    elif r >= 55:
+        d, t = 1, "โมเมนตัมขาขึ้น"
+    elif r <= 45:
+        d, t = -1, "โมเมนตัมขาลง"
+    else:
+        d, t = 0, "กลาง ๆ"
+    out.append(("RSI(14) H4", d, f"RSI {r:.0f} · {t}"))
+    # 6) MACD H4 (12,26,9)
+    macd = c4.ewm(span=12, adjust=False).mean() - c4.ewm(span=26, adjust=False).mean()
+    hist = macd - macd.ewm(span=9, adjust=False).mean()
+    h_now, h_prev = float(hist.iloc[-2]), float(hist.iloc[-3])
+    d = 1 if h_now > 0 and h_now >= h_prev else (-1 if h_now < 0 and h_now <= h_prev else 0)
+    out.append(("MACD H4 (12,26,9)", d, f"ฮิสโตแกรม {h_now:+.2f} · {'เพิ่มขึ้น' if h_now > h_prev else 'ลดลง'}"))
+    # 7) Stochastic H1 (14,3,3)
+    ll, hh = h1["low"].rolling(14).min(), h1["high"].rolling(14).max()
+    k = (100 * (c1 - ll) / (hh - ll + 1e-9)).rolling(3).mean()
+    dd = k.rolling(3).mean()
+    kv, dv = float(k.iloc[-2]), float(dd.iloc[-2])
+    if kv >= 80:
+        d, t = -1, "Overbought"
+    elif kv <= 20:
+        d, t = 1, "Oversold"
+    else:
+        d, t = (1 if kv > dv else -1), ("%K ตัดขึ้นเหนือ %D" if kv > dv else "%K อยู่ใต้ %D")
+    out.append(("Stochastic H1 (14,3,3)", d, f"%K {kv:.0f} · %D {dv:.0f} · {t}"))
+    # 8) Bollinger Bands H1 (20, 2)
+    mid, sd = c1.rolling(20).mean(), c1.rolling(20).std()
+    upb, lob = float((mid + 2 * sd).iloc[-2]), float((mid - 2 * sd).iloc[-2])
+    pb = (float(c1.iloc[-2]) - lob) / (upb - lob + 1e-9)
+    d = -1 if pb >= 0.9 else (1 if pb <= 0.1 else 0)
+    out.append(("Bollinger Bands H1", d, f"ตำแหน่งในกรอบ {pb * 100:.0f}% · " + ("ชิดขอบบน เสี่ยงย่อ" if d < 0 else "ชิดขอบล่าง มีโอกาสเด้ง" if d > 0 else f"กรอบ {lob:,.2f} – {upb:,.2f}")))
+    # 9) Pivot Point รายวัน (Classic)
+    if d1 is not None and len(d1) >= 3:
+        pd_ = d1.iloc[-2]
+        pv = (pd_["high"] + pd_["low"] + pd_["close"]) / 3
+        r1, s1 = 2 * pv - pd_["low"], 2 * pv - pd_["high"]
+        px = float(c1.iloc[-1])
+        d = 1 if px > pv else -1
+        out.append(("Pivot Point รายวัน", d, f"ราคา{'เหนือ' if d > 0 else 'ใต้'} Pivot {pv:,.2f} · R1 {r1:,.2f} · S1 {s1:,.2f}"))
+    # 10) ดอลลาร์สหรัฐ (ประมาณจาก EURUSD — ดอลลาร์อ่อน = ทองมักขึ้น)
+    mt5.symbol_select("EURUSD", True)
+    eu = bot.get_data("EURUSD", mt5.TIMEFRAME_H4, 80)
+    if eu is not None and len(eu) >= 32:
+        f10, f30 = (eu["close"].rolling(k).mean().iloc[-2] for k in (10, 30))
+        pct = (f10 / f30 - 1) * 100
+        d = 0 if abs(pct) < 0.1 else (1 if pct > 0 else -1)
+        out.append(("ดอลลาร์สหรัฐ (จาก EURUSD H4)", d, ("ดอลลาร์อ่อนค่า — หนุนทอง" if d > 0 else "ดอลลาร์แข็งค่า — กดทอง" if d < 0 else "ดอลลาร์ทรงตัว") + f" · EURUSD MA10/30 {pct:+.2f}%"))
     return out
 
 

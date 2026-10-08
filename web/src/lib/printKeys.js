@@ -52,11 +52,11 @@ export function buildKeysHtml(list, origin) {
 
   const html = `<!doctype html><html lang="th"><head><meta charset="utf-8" />
 <title>GoldBot24 Keys (${list.length})</title>
-<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet" />
 <style>
   @page { size: A5 landscape; margin: 0; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { margin: 0; font-family: 'Sarabun', Tahoma, sans-serif; color: #1a1406; background: #eee; }
+  body { margin: 0; font-family: 'Anuphan', Tahoma, sans-serif; color: #1a1406; background: #eee; }
   .sheet { position: relative; width: 210mm; height: 148mm; margin: 0 auto 8mm; background: #fffdf6; overflow: hidden;
            page-break-after: always; display: flex; align-items: center; justify-content: center; }
   .sheet:last-child { page-break-after: auto; }

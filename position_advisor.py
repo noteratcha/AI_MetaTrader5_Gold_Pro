@@ -92,7 +92,9 @@ def _analyze_one(bot, pos, m15, h1, h4, factors, outlook, news, atr):
 
     weights = {"เทรนด์ H1": 1.0, "เทรนด์ H4": 1.0, "ราคาเทียบ MA200": 0.5, "โมเมนตัม M15": 1.0, "แนวรับ/แนวต้าน": 1.0}
     for name, d, detail in factors:
-        w = next((v for k, v in weights.items() if name.startswith(k)), 0.5)
+        w = next((v for k, v in weights.items() if name.startswith(k)), None)
+        if w is None:   # ปัจจัยยอดนิยมที่เพิ่มในแท็บ AI คาดการณ์ — แสดงผลเท่านั้น ไม่นับคะแนนถือ/ปิดไม้
+            continue
         if d == 0:
             reasons.append((0.0, f"{name}: {detail.replace(' — ', ' · ')} — ยังไม่ชี้ทิศ"))
         elif d == side:

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
 
 /* =============================================================================
    GoldBot24 Design System — Obsidian & Gold
@@ -33,7 +33,7 @@
   --orange: #fb923c;
   --violet: #a78bfa;
 
-  --font: 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font: 'Anuphan', system-ui, -apple-system, 'Segoe UI', sans-serif;   /* เหมือนโปรแกรม (app_fonts.py) */
   --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
 
   --r-sm: 8px;

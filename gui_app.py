@@ -12,6 +12,7 @@ import time
 import queue
 import threading
 import webbrowser
+import app_fonts   # Anuphan + JetBrains Mono (โหลดก่อนสร้างหน้าต่างใด ๆ)
 import thai_time
 import mt5_algo
 import urllib.parse
@@ -44,6 +45,7 @@ from stats_manager import stats_mgr, STANDARD_PLANS
 # ตั้งค่ารูปลักษณ์และธีม CustomTkinter เป็น Dark Mode ระดับพรีเมียม
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+ctk.ThemeManager.theme["CTkFont"]["family"] = app_fonts.UI   # วิดเจ็ตที่ไม่ได้ระบุฟอนต์ใช้ Anuphan ด้วย
 
 # กำหนด Palette สีระดับพรีเมียม (Gold & Obsidian Theme)
 COLOR_BG_DARK = "#0A0B0F"          # พื้นหลังหลักโทนดำสนิท
@@ -74,6 +76,15 @@ class _HintProxy:
         short = {"บันทึกแล้ว ✓": "✓", "ปิดใช้งาน": "(ปิด)"}.get(text, "✗" if text else "")
         self.widget.configure(text=f"{self.base} {short}".strip() if short else self.base,
                               text_color=(text_color or self.base_color) if short else self.base_color)
+
+
+def status_pill_style(d, up="▲ หนุน", down="▼ สวน", mid="• กลาง"):
+    """ป้ายสถานะแบบแท็บ AI คาดการณ์: (ข้อความ, สีตัวอักษร, สีพื้น) ตามทิศ +1/-1/0"""
+    if d > 0:
+        return f" {up} ", COLOR_SUCCESS_GREEN, "#0F2A20"
+    if d < 0:
+        return f" {down} ", COLOR_DANGER_RED, "#2A1215"
+    return f" {mid} ", COLOR_TEXT_MUTED, "#262B36"
 
 
 class HoverTip:
@@ -109,7 +120,7 @@ class HoverTip:
         tw.attributes("-topmost", True)
         frame = tk.Frame(tw, bg=COLOR_GOLD_DARK, bd=0)
         frame.pack()
-        tk.Label(frame, text=text, justify="left", bg="#1A1E27", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 10),
+        tk.Label(frame, text=text, justify="left", bg="#1A1E27", fg=COLOR_TEXT_PRIMARY, font=(app_fonts.UI, 10),
                  padx=10, pady=6, wraplength=420).pack(padx=1, pady=1)
         tw.wm_geometry(f"+{x}+{y}")
 
@@ -189,14 +200,14 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             header_frame,
             text="🔑 เติมชั่วโมงการใช้งาน",
-            font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=22, weight="bold"),
             text_color=COLOR_GOLD_PRIMARY
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             header_frame,
             text="กรอกรหัส Product Key (บัตรเติมชั่วโมง) เพื่อเพิ่มเวลาเทรดให้กับบอท",
-            font=ctk.CTkFont(family="Segoe UI", size=13),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13),
             text_color=COLOR_TEXT_MUTED
         ).pack(anchor="w", pady=(4, 0))
 
@@ -211,14 +222,14 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             info_inner,
             text="เวลาใช้งานคงเหลือปัจจุบัน:",
-            font=ctk.CTkFont(family="Segoe UI", size=13),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13),
             text_color=COLOR_TEXT_MUTED
         ).pack(side="left")
 
         self.lbl_current_time = ctk.CTkLabel(
             info_inner,
             text=f"{current_hrs_str} ชม. (ชั่วโมง.นาที)",
-            font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=15, weight="bold"),
             text_color=COLOR_GOLD_WARM
         )
         self.lbl_current_time.pack(side="right")
@@ -230,7 +241,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             input_frame,
             text="รหัส Product Key (รูปแบบ: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX):",
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         ).pack(anchor="w", pady=(0, 6))
 
@@ -240,7 +251,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         self.key_entry = ctk.CTkEntry(
             input_frame,
             textvariable=self.key_var,
-            font=ctk.CTkFont(family="Consolas", size=15, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.MONO, size=15, weight="bold"),
             height=48,
             corner_radius=8,
             border_width=1,
@@ -258,7 +269,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             tip_frame,
             text="✨ หมายเหตุ: การเติมชั่วโมงจะ '+' บวกเพิ่มจากเวลาเดิมที่เหลืออยู่เสมอ (ไม่ทับของเก่า)",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12),
             text_color="#FDE68A"
         ).pack(padx=12, pady=8, anchor="w")
 
@@ -266,7 +277,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         self.lbl_result = ctk.CTkLabel(
             self,
             text="",
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13, weight="bold"),
             text_color=COLOR_SUCCESS_GREEN
         )
         self.lbl_result.pack(padx=28, pady=(0, 10))
@@ -278,7 +289,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         self.btn_cancel = ctk.CTkButton(
             btn_frame,
             text="ปิดหน้าต่าง",
-            font=ctk.CTkFont(family="Segoe UI", size=14),
+            font=ctk.CTkFont(family=app_fonts.UI, size=14),
             fg_color="#252A35",
             hover_color="#323846",
             height=42,
@@ -290,7 +301,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         self.btn_submit = ctk.CTkButton(
             btn_frame,
             text="✅ ยืนยันการเติมชั่วโมง",
-            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=14, weight="bold"),
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
             text_color="#1A1406",
@@ -350,7 +361,7 @@ class UpdateDialog(ctk.CTkToplevel):
         self.url = download_url
 
         def f(size, weight="normal"):
-            return ctk.CTkFont(family="Segoe UI", size=size, weight=weight)
+            return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
 
         # ส่วนหัว: ไอคอน + เวอร์ชันเดิม → ใหม่
         head = ctk.CTkFrame(self, fg_color=COLOR_GOLD_BG, corner_radius=0)
@@ -426,7 +437,7 @@ class NewsImpactDialog(ctk.CTkToplevel):
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
-        f = lambda size, weight="normal": ctk.CTkFont(family="Segoe UI", size=size, weight=weight)
+        f = lambda size, weight="normal": ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
         a = analysis or {}
 
         head = ctk.CTkFrame(self, fg_color="transparent")
@@ -511,7 +522,7 @@ class StyledMessage(ctk.CTkToplevel):
         self.transient(parent)
 
         def f(size, weight="normal"):
-            return ctk.CTkFont(family="Segoe UI", size=size, weight=weight)
+            return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
 
         msg = str(message or "").replace("⚠️", "").replace("⚠", "").strip()
         head, _, detail = msg.partition("\n")
@@ -520,7 +531,7 @@ class StyledMessage(ctk.CTkToplevel):
         icon = tk.Canvas(body, width=48, height=48, bg=COLOR_BG_DARK, highlightthickness=0, bd=0)
         icon.grid(row=0, column=0, rowspan=2, sticky="n", padx=(0, 14))
         icon.create_oval(2, 2, 46, 46, fill=bg, outline=color, width=2)
-        icon.create_text(24, 24, text=sym, fill=color, font=("Segoe UI", 18, "bold"))
+        icon.create_text(24, 24, text=sym, fill=color, font=(app_fonts.UI, 18, "bold"))
         ctk.CTkLabel(body, text=title, font=f(15, "bold"), text_color=color, anchor="w", justify="left").grid(row=0, column=1, sticky="w")
         ctk.CTkLabel(body, text=head.strip(), font=f(13), text_color=COLOR_TEXT_PRIMARY, anchor="w", justify="left",
                      wraplength=360).grid(row=1, column=1, sticky="w", pady=(4, 0))
@@ -599,7 +610,7 @@ class ContactDialog(ctk.CTkToplevel):
         self.transient(parent)
         self.resizable(False, False)
 
-        def f(size, weight="normal", family="Segoe UI"):
+        def f(size, weight="normal", family=app_fonts.UI):
             return ctk.CTkFont(family=family, size=size, weight=weight)
 
         ctk.CTkLabel(self, text="ติดต่อแอดมิน", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
@@ -614,7 +625,7 @@ class ContactDialog(ctk.CTkToplevel):
             pass
         idrow = ctk.CTkFrame(self, fg_color="transparent")
         idrow.pack(pady=(0, 4))
-        ctk.CTkLabel(idrow, text=self.LINE_ID, font=f(18, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(idrow, text=self.LINE_ID, font=f(18, "bold", app_fonts.MONO), text_color=COLOR_TEXT_PRIMARY).pack(side="left", padx=(0, 10))
         self.btn_copy = ctk.CTkButton(idrow, text="คัดลอก", width=70, height=28, font=f(11), fg_color=COLOR_CARD_BG,
                                       hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
                                       text_color=COLOR_TEXT_PRIMARY, command=self._copy)
@@ -660,7 +671,7 @@ class QuickOrderDialog(ctk.CTkToplevel):
         self.transient(parent)
         self.resizable(False, False)
 
-        def f(size, weight="normal", family="Segoe UI"):
+        def f(size, weight="normal", family=app_fonts.UI):
             return ctk.CTkFont(family=family, size=size, weight=weight)
         self.f = f
 
@@ -683,7 +694,7 @@ class QuickOrderDialog(ctk.CTkToplevel):
         ctk.CTkLabel(tbox, text=f"Lot {d['lot']:.2f} (ตั้งที่แผงควบคุม)" if d else "", font=f(11), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
         pbox = ctk.CTkFrame(hrow, fg_color="transparent")
         pbox.pack(side="right")
-        self.lbl_px = ctk.CTkLabel(pbox, text="—", font=f(20, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY)
+        self.lbl_px = ctk.CTkLabel(pbox, text="—", font=f(20, "bold", app_fonts.MONO), text_color=COLOR_TEXT_PRIMARY)
         self.lbl_px.pack(anchor="e")
         self.lbl_spread = ctk.CTkLabel(pbox, text="", font=f(10), text_color=COLOR_TEXT_MUTED)
         self.lbl_spread.pack(anchor="e")
@@ -727,7 +738,7 @@ class QuickOrderDialog(ctk.CTkToplevel):
             box = ctk.CTkFrame(summ, fg_color="transparent")
             box.grid(row=0, column=col, sticky="nsew", pady=10)
             ctk.CTkLabel(box, text=title, font=f(10), text_color=COLOR_TEXT_MUTED).pack()
-            v = ctk.CTkLabel(box, text="—", font=f(14, "bold", "Consolas"), text_color=color)
+            v = ctk.CTkLabel(box, text="—", font=f(14, "bold", app_fonts.MONO), text_color=color)
             v.pack()
             sub = ctk.CTkLabel(box, text="", font=f(10, "bold"), text_color=color)
             sub.pack()
@@ -779,7 +790,7 @@ class QuickOrderDialog(ctk.CTkToplevel):
                    border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_PRIMARY)
         b1 = ctk.CTkButton(box, text="−", command=lambda: step(-0.5), **btn)
         b1.pack(side="left")
-        ent = ctk.CTkEntry(box, textvariable=var, width=86, height=32, justify="center", font=f(14, "bold", "Consolas"))
+        ent = ctk.CTkEntry(box, textvariable=var, width=86, height=32, justify="center", font=f(14, "bold", app_fonts.MONO))
         ent.pack(side="left", padx=4)
         b2 = ctk.CTkButton(box, text="+", command=lambda: step(0.5), **btn)
         b2.pack(side="left")
@@ -870,7 +881,7 @@ class MarketExplainDialog(ctk.CTkToplevel):
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
 
-        def f(size, weight="normal", family="Segoe UI"):
+        def f(size, weight="normal", family=app_fonts.UI):
             return ctk.CTkFont(family=family, size=size, weight=weight)
 
         ctk.CTkLabel(self, text="สภาวะตลาด — ทำไมถึงเป็นแบบนี้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
@@ -891,7 +902,7 @@ class MarketExplainDialog(ctk.CTkToplevel):
             return c
 
         def line(parent, text, color=COLOR_TEXT_PRIMARY, size=12, mono=False):
-            ctk.CTkLabel(parent, text=text, font=f(size, "normal", "Consolas" if mono else "Segoe UI"), text_color=color,
+            ctk.CTkLabel(parent, text=text, font=f(size, "normal", app_fonts.MONO if mono else app_fonts.UI), text_color=color,
                          anchor="w", justify="left", wraplength=570).pack(anchor="w", padx=14)
 
         # 1) ป้ายบนการ์ด: MA50 / MA100 / MA150
@@ -965,36 +976,36 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         top = ctk.CTkFrame(self, fg_color="transparent")
         top.pack(fill="x", padx=18, pady=(14, 4))
-        ctk.CTkLabel(top, text="XAUUSD · M15", font=ctk.CTkFont(family="Segoe UI", size=17, weight="bold"),
+        ctk.CTkLabel(top, text="XAUUSD · M15", font=ctk.CTkFont(family=app_fonts.UI, size=17, weight="bold"),
                      text_color=COLOR_GOLD_PRIMARY).pack(side="left")
-        self.lbl_price = ctk.CTkLabel(top, text="—", font=ctk.CTkFont(family="Segoe UI", size=17, weight="bold"),
+        self.lbl_price = ctk.CTkLabel(top, text="—", font=ctk.CTkFont(family=app_fonts.UI, size=17, weight="bold"),
                                       text_color=COLOR_TEXT_PRIMARY)
         self.lbl_price.pack(side="left", padx=14)
-        self.lbl_change = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family="Segoe UI", size=12))
+        self.lbl_change = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family=app_fonts.UI, size=12))
         self.lbl_change.pack(side="left")
-        self.btn_full = ctk.CTkButton(top, text="ขยายเต็มจอ", width=96, height=26, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+        self.btn_full = ctk.CTkButton(top, text="ขยายเต็มจอ", width=96, height=26, font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
                                       fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
                                       text_color=COLOR_GOLD_PRIMARY, command=self._toggle_full)
         self.btn_full.pack(side="right", padx=(10, 0))
         self.bind("<F11>", lambda e: self._toggle_full())
         self.bind("<Escape>", lambda e: self.state() == "zoomed" and self._toggle_full())
-        self.lbl_clock = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_MUTED)
+        self.lbl_clock = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_TEXT_MUTED)
         self.lbl_clock.pack(side="right")
         # กำไร/ขาดทุนรวมของไม้ที่เปิดอยู่ (รวม swap)
-        self.lbl_pnl = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+        self.lbl_pnl = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family=app_fonts.UI, size=14, weight="bold"),
                                     corner_radius=8, height=26)
         self.lbl_pnl.pack(side="right", padx=12)
 
         legend = ctk.CTkFrame(self, fg_color="transparent")
         legend.pack(fill="x", padx=18)
         self.bars_var = tk.StringVar(value=str(self.BARS))
-        ctk.CTkSegmentedButton(legend, values=list(self.BAR_CHOICES), variable=self.bars_var, font=ctk.CTkFont(family="Segoe UI", size=11),
+        ctk.CTkSegmentedButton(legend, values=list(self.BAR_CHOICES), variable=self.bars_var, font=ctk.CTkFont(family=app_fonts.UI, size=11),
                                selected_color=COLOR_GOLD_WARM, selected_hover_color=COLOR_GOLD_DARK,
                                command=lambda v: self._tick(reschedule=False)).pack(side="right")
-        ctk.CTkLabel(legend, text="จำนวนแท่ง", font=ctk.CTkFont(family="Segoe UI", size=11), text_color=COLOR_TEXT_MUTED).pack(side="right", padx=6)
+        ctk.CTkLabel(legend, text="จำนวนแท่ง", font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=COLOR_TEXT_MUTED).pack(side="right", padx=6)
         for txt, col in (("━ MA5", COLOR_CYAN_ACCENT), ("━ MA13", COLOR_GOLD_WARM), ("┅ Bid / Ask", COLOR_TEXT_MUTED),
                          ("┅ ราคาเข้า", COLOR_CYAN_ACCENT), ("┅ TP", COLOR_SUCCESS_GREEN), ("┅ SL", COLOR_DANGER_RED)):
-            ctk.CTkLabel(legend, text=txt, font=ctk.CTkFont(family="Segoe UI", size=11), text_color=col).pack(side="left", padx=(0, 14))
+            ctk.CTkLabel(legend, text=txt, font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=col).pack(side="left", padx=(0, 14))
 
         box = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
         box.pack(fill="both", expand=True, padx=18, pady=8)
@@ -1004,7 +1015,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.canvas.bind("<Motion>", self._hover)
         self.canvas.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
         self.tip_default = "อัปเดตทุก 1 วินาที · ชี้ที่แท่งเพื่อดู Open / High / Low / Close"
-        self.lbl_tip = ctk.CTkLabel(self, text=self.tip_default, font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_MUTED)
+        self.lbl_tip = ctk.CTkLabel(self, text=self.tip_default, font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_TEXT_MUTED)
         self.lbl_tip.pack(pady=(0, 10))
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._tick()
@@ -1092,9 +1103,9 @@ class GoldCandleDialog(ctk.CTkToplevel):
             v = lo + (hi - lo) * k / 5
             y = y_of(v)
             cv.create_line(left, y, W - right, y, fill="#1E232C")
-            cv.create_text(W - right + 6, y, text=f"{v:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 9))
+            cv.create_text(W - right + 6, y, text=f"{v:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
         n = len(candles)
-        slot = (W - left - right) / n
+        slot = (W - left - right - 24) / n   # เว้น 24px ระหว่างแท่งสุดท้ายกับแถบราคา (ผู้ใช้ขอ 8 ต.ค. 2026)
         bw = max(3, min(26, slot * 0.62))
         for name, col in (("ma5", COLOR_CYAN_ACCENT), ("ma13", COLOR_GOLD_WARM)):
             pts = []
@@ -1117,7 +1128,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             every = max(1, int(round(n / max(1, (W - left - right) / 52))))
             if (i % every == 0 and i < n - max(2, int(every * 0.8))) or live:
                 cv.create_text(cx, H - bottom + 13, text="ตอนนี้" if live else self._hhmm(c["time"], self.offset),
-                               fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=("Segoe UI", 9, "bold" if live else "normal"))
+                               fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=(app_fonts.UI, 9, "bold" if live else "normal"))
             self.slots.append((cx - slot / 2, cx + slot / 2, c))
         # ไม้ที่เปิดอยู่: ราคาเข้า / TP / SL / Lot
         for p in self.data.get("positions", []):
@@ -1127,16 +1138,16 @@ class GoldCandleDialog(ctk.CTkToplevel):
                     continue
                 yy = y_of(val)
                 cv.create_line(left, yy, W - right, yy, fill=col, dash=(6, 3))
-                cv.create_text(left + 4, yy - 7, text=txt, anchor="w", fill=col, font=("Segoe UI", 9, "bold"))
+                cv.create_text(left + 4, yy - 7, text=txt, anchor="w", fill=col, font=(app_fonts.UI, 9, "bold"))
         # เส้น Ask
         ya = y_of(self.data["ask"])
         cv.create_line(left, ya, W - right, ya, fill="#5B6270", dash=(2, 4))
-        cv.create_text(W - right + 6, ya - 12 if abs(ya - y_of(self.data["bid"])) < 18 else ya, text=f"A {self.data['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 8))
+        cv.create_text(W - right + 6, ya - 12 if abs(ya - y_of(self.data["bid"])) < 18 else ya, text=f"A {self.data['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
         # เส้นราคาล่าสุด
         yb = y_of(self.data["bid"])
         cv.create_line(left, yb, W - right, yb, fill=COLOR_TEXT_MUTED, dash=(3, 3))
         cv.create_rectangle(W - right + 2, yb - 9, W - 2, yb + 9, fill=COLOR_GOLD_PRIMARY, outline="")
-        cv.create_text(W - right + 6, yb, text=f"{self.data['bid']:,.2f}", anchor="w", fill="#111111", font=("Segoe UI", 9, "bold"))
+        cv.create_text(W - right + 6, yb, text=f"{self.data['bid']:,.2f}", anchor="w", fill="#111111", font=(app_fonts.UI, 9, "bold"))
 
     def _hover(self, event):
         for x0, x1, c in self.slots:
@@ -1169,7 +1180,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
     }
 
     @staticmethod
-    def _f(size, weight="normal", family="Segoe UI"):
+    def _f(size, weight="normal", family=app_fonts.UI):
         return ctk.CTkFont(family=family, size=size, weight=weight)
 
     def __init__(self, parent, pos, trade=None):
@@ -1223,7 +1234,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
             box = ctk.CTkFrame(stats, fg_color=COLOR_CARD_BG, corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
             box.grid(row=0, column=i, sticky="ew", padx=4)
             ctk.CTkLabel(box, text=title, font=f(10), text_color=COLOR_TEXT_MUTED, height=16).pack(anchor="w", padx=10, pady=(6, 0))
-            v = ctk.CTkLabel(box, text="—", font=f(16, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY, height=24)
+            v = ctk.CTkLabel(box, text="—", font=f(16, "bold", app_fonts.MONO), text_color=COLOR_TEXT_PRIMARY, height=24)
             v.pack(anchor="w", padx=10)
             s = ctk.CTkLabel(box, text="", font=f(10), text_color=COLOR_TEXT_MUTED, height=16)
             s.pack(anchor="w", padx=10, pady=(0, 6))
@@ -1239,8 +1250,8 @@ class PositionDetailDialog(ctk.CTkToplevel):
         self.lbl_rule.pack(anchor="w", padx=14, pady=(0, 4))
         leg = ctk.CTkFrame(side, fg_color="transparent")
         leg.pack(anchor="w", padx=14)
-        for txt, col in (("● หนุนไม้", COLOR_SUCCESS_GREEN), ("● สวนไม้", COLOR_DANGER_RED), ("● กลาง", COLOR_TEXT_MUTED)):
-            ctk.CTkLabel(leg, text=txt, font=f(10), text_color=col, height=16).pack(side="left", padx=(0, 10))
+        self.lbl_ind_counts = ctk.CTkFrame(leg, fg_color="transparent")   # ป้ายสรุป หนุน / สวน / กลาง
+        self.lbl_ind_counts.pack(side="left")
         self.adv_box = ctk.CTkFrame(side, fg_color="#14171E", corner_radius=10)
         self.adv_box.pack(side="bottom", fill="x", padx=10, pady=10)
         self.ind_list = ctk.CTkScrollableFrame(side, fg_color="transparent")
@@ -1400,28 +1411,37 @@ class PositionDetailDialog(ctk.CTkToplevel):
             for w in self.ind_list.winfo_children():
                 w.destroy()
             self._ind_rows = []
-            for _ in inds:
-                row = ctk.CTkFrame(self.ind_list, fg_color="#14171E", corner_radius=8)
-                row.pack(fill="x", padx=4, pady=3)
+            for i, _ in enumerate(inds):
+                row = ctk.CTkFrame(self.ind_list, fg_color="#171B23" if i % 2 == 0 else "transparent", corner_radius=8)
+                row.pack(fill="x", padx=4, pady=1)
                 head = ctk.CTkFrame(row, fg_color="transparent")
-                head.pack(fill="x", padx=8, pady=(5, 0))
-                dot = ctk.CTkLabel(head, text="●", font=self._f(12), width=14, height=18)
+                head.pack(fill="x", padx=6, pady=(5, 0))
+                dot = ctk.CTkLabel(head, text="", font=self._f(10, "bold"), width=58, height=20, corner_radius=6)
                 dot.pack(side="left")
-                name = ctk.CTkLabel(head, text="", font=self._f(11, "bold"), text_color=COLOR_TEXT_PRIMARY, height=18)
-                name.pack(side="left", padx=(4, 0))
-                val = ctk.CTkLabel(row, text="", font=self._f(13, "bold", "Consolas"), anchor="w", height=20)
-                val.pack(fill="x", padx=(26, 8))
-                note = ctk.CTkLabel(row, text="", font=self._f(10), text_color=COLOR_TEXT_MUTED, justify="left", anchor="w", wraplength=270)
+                name = ctk.CTkLabel(head, text="", font=self._f(11, "bold"), text_color=COLOR_TEXT_PRIMARY, height=20)
+                name.pack(side="left", padx=(8, 0))
+                val = ctk.CTkLabel(row, text="", font=self._f(13, "bold", app_fonts.MONO), anchor="w", height=20)
+                val.pack(fill="x", padx=(72, 8))
+                note = ctk.CTkLabel(row, text="", font=self._f(10), text_color=COLOR_TEXT_MUTED, justify="left", anchor="w", wraplength=240)
                 self._ind_rows.append((dot, name, val, note))
+        counts = (sum(1 for it in inds if it["dir"] > 0), sum(1 for it in inds if it["dir"] < 0), sum(1 for it in inds if not it["dir"]))
+        if getattr(self, "_ind_counts", None) != counts:
+            self._ind_counts = counts
+            for w in self.lbl_ind_counts.winfo_children():
+                w.destroy()
+            for txt, n, col in (("หนุนไม้", counts[0], COLOR_SUCCESS_GREEN), ("สวนไม้", counts[1], COLOR_DANGER_RED), ("กลาง", counts[2], COLOR_TEXT_MUTED)):
+                ctk.CTkLabel(self.lbl_ind_counts, text=f" {txt} {n} ", font=self._f(10, "bold"), corner_radius=6, height=20,
+                             fg_color="#101218", text_color=col).pack(side="left", padx=(0, 6))
         for (dot, name, val, note), it in zip(self._ind_rows, inds):
             col = COLOR_SUCCESS_GREEN if it["dir"] > 0 else (COLOR_DANGER_RED if it["dir"] < 0 else COLOR_TEXT_MUTED)
-            dot.configure(text_color=col)
+            ptxt, pfg, pbg = status_pill_style(it["dir"])
+            dot.configure(text=ptxt, text_color=pfg, fg_color=pbg)
             name.configure(text=it["name"])
             val.configure(text=it["value"], text_color=col if it["dir"] else COLOR_TEXT_PRIMARY)
             if note.cget("text") != it["note"]:
                 note.configure(text=it["note"])
             if it["note"] and not note.winfo_manager():
-                note.pack(fill="x", padx=(26, 8), pady=(0, 5))
+                note.pack(fill="x", padx=(72, 8), pady=(0, 5))
             elif not it["note"] and note.winfo_manager():
                 note.pack_forget()
 
@@ -1522,8 +1542,8 @@ class PositionDetailDialog(ctk.CTkToplevel):
             y = y_of(v)
             cv.create_line(left, y, W - right, y, fill="#1E232C")
             if abs(y - yb_tag) > 12 and abs(y - ya_tag) > 10:   # ไม่ทับป้าย Bid / Ask
-                cv.create_text(W - right + 6, y, text=f"{v:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 9))
-        slot = (W - left - right) / n
+                cv.create_text(W - right + 6, y, text=f"{v:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
+        slot = (W - left - right - 24) / n   # เว้น 24px ระหว่างแท่งสุดท้ายกับแถบราคา (ผู้ใช้ขอ 8 ต.ค. 2026)
         bw = max(2, min(18, slot * 0.62))
 
         def xs(i):
@@ -1563,7 +1583,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
             every = max(1, int(round(n / max(1, (W - left - right) / 60))))
             if (i % every == 0 and i < n - max(2, int(every * 0.8))) or live:
                 cv.create_text(cx, H - bottom + 11, text=("ปิดไม้" if self.closed else "ตอนนี้") if live else self._hhmm(c["time"]),
-                               fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=("Segoe UI", 9, "bold" if live else "normal"))
+                               fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=(app_fonts.UI, 9, "bold" if live else "normal"))
             self.slots.append((cx - slot / 2, cx + slot / 2, i))
         # เส้นทางการเลื่อน SL/TP ระหว่างถือ (ไม้ที่ปิดแล้ว) — เส้นขั้นบันไดตามเวลา
         for pth in d.get("paths") or []:
@@ -1603,13 +1623,13 @@ class PositionDetailDialog(ctk.CTkToplevel):
         if d["ask"]:
             ya = y_of(d["ask"])
             cv.create_line(left, ya, W - right, ya, fill="#5B6270", dash=(2, 4))
-            cv.create_text(W - right + 6, ya - 12 if abs(ya - yb) < 18 else ya, text=f"A {d['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 8))
+            cv.create_text(W - right + 6, ya - 12 if abs(ya - yb) < 18 else ya, text=f"A {d['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
         if self.closed:
             cx, s = xs(n - 1), 8
             cv.create_polygon(cx, yb - s, cx + s, yb, cx, yb + s, cx - s, yb, fill=COLOR_GOLD_PRIMARY, outline="#0B0D12", width=2)
         cv.create_line(left, yb, W - right, yb, fill=COLOR_TEXT_MUTED, dash=(3, 3))
         cv.create_rectangle(W - right + 2, yb - 9, W - 2, yb + 9, fill=COLOR_GOLD_PRIMARY, outline="")
-        cv.create_text(W - right + 6, yb, text=f"{d['bid']:,.2f}", anchor="w", fill="#111111", font=("Segoe UI", 9, "bold"))
+        cv.create_text(W - right + 6, yb, text=f"{d['bid']:,.2f}", anchor="w", fill="#111111", font=(app_fonts.UI, 9, "bold"))
         self._place_labels(left_labels, left + 4, "w", top, main_bottom)
         self._place_labels(right_labels, W - right - 4, "e", top, main_bottom)
         # หน้าต่างย่อย: RSI / MACD Histogram
@@ -1626,7 +1646,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
                 for lvl in (30, 50, 70):
                     y = py(lvl)
                     cv.create_line(left, y, W - right, y, fill="#2A303C", dash=(2, 3))
-                    cv.create_text(W - right + 6, y, text=str(lvl), anchor="w", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 8))
+                    cv.create_text(W - right + 6, y, text=str(lvl), anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
                 pts = []
                 for i, v in enumerate(pv):
                     if v is not None:
@@ -1647,7 +1667,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
                                         fill=COLOR_SUCCESS_GREEN if v >= 0 else COLOR_DANGER_RED, outline="")
                 last = next((v for v in reversed(pv) if v is not None), None)
             cv.create_text(left + 6, pt + 3, text=pane["label"] + (f"  {last:,.2f}" if last is not None else ""), anchor="nw",
-                           fill=COLOR_TEXT_PRIMARY, font=("Segoe UI", 9, "bold"))
+                           fill=COLOR_TEXT_PRIMARY, font=(app_fonts.UI, 9, "bold"))
 
     def _place_labels(self, items, x, anchor, y_min, y_max, gap=15):
         """วางป้ายเส้นราคาเรียงจากบนลงล่าง ดันลงเมื่อใกล้กันเกินไป + พื้นหลังทึบให้อ่านออกแม้ทับแท่งเทียน"""
@@ -1659,7 +1679,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
                 y = placed[-1] + gap
             y = min(y, y_max - 7)
             placed.append(y)
-            t = cv.create_text(x, y, text=txt, anchor=anchor, fill=col, font=("Segoe UI", 9, "bold"))
+            t = cv.create_text(x, y, text=txt, anchor=anchor, fill=col, font=(app_fonts.UI, 9, "bold"))
             x0, y0, x1, y1 = cv.bbox(t)
             r = cv.create_rectangle(x0 - 3, y0, x1 + 3, y1, fill=COLOR_CARD_BG, outline=col)
             cv.tag_raise(t, r)
@@ -1706,7 +1726,7 @@ class PnlHistoryDialog(ctk.CTkToplevel):
 
     @staticmethod
     def _f(size, weight="normal"):
-        return ctk.CTkFont(family="Segoe UI", size=size, weight=weight)
+        return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
 
     def _build(self):
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -1862,12 +1882,12 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         while v <= vmax + 1e-9:
             y = y_of(v)
             cv.create_line(left, y, W - right, y, fill="#20252F")
-            cv.create_text(left - 8, y, text=self._money(v, 0 if step >= 1 else 2), anchor="e", fill=COLOR_TEXT_MUTED, font=("Segoe UI", 9))
+            cv.create_text(left - 8, y, text=self._money(v, 0 if step >= 1 else 2), anchor="e", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
             v += step
         y0 = y_of(0)
         cv.create_line(left, y0, W - right, y0, fill="#4B5263")
         n = len(self.rows)
-        slot = (W - left - right) / n
+        slot = (W - left - right - 24) / n   # เว้น 24px ระหว่างแท่งสุดท้ายกับแถบราคา (ผู้ใช้ขอ 8 ต.ค. 2026)
         bw = max(2, min(38, slot * 0.68))
         label_every = max(1, int(round(n / max(1, (W - left - right) / 58))))
         for i, r in enumerate(self.rows):
@@ -1880,9 +1900,9 @@ class PnlHistoryDialog(ctk.CTkToplevel):
             else:
                 cv.create_rectangle(cx - bw / 2, min(y, y0), cx + bw / 2, max(y, y0), fill=color, outline="")
                 if slot >= 34:
-                    cv.create_text(cx, y - 9 if v > 0 else y + 9, text=self._money(v), fill=color, font=("Segoe UI", 8, "bold"))
+                    cv.create_text(cx, y - 9 if v > 0 else y + 9, text=self._money(v), fill=color, font=(app_fonts.UI, 8, "bold"))
             if i % label_every == 0:
-                cv.create_text(cx, H - bottom + 14, text=self._fmt_date(r["date"]), fill=COLOR_TEXT_MUTED, font=("Segoe UI", 9))
+                cv.create_text(cx, H - bottom + 14, text=self._fmt_date(r["date"]), fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
             self.bars.append((cx - slot / 2, cx + slot / 2, r))
 
     def _hover(self, event):
@@ -1936,14 +1956,14 @@ class UserStatsDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             hdr,
             text="📊 สถิติการเทรดรายบุคคลและประสิทธิภาพรายแผน",
-            font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=20, weight="bold"),
             text_color=COLOR_GOLD_PRIMARY
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             hdr,
             text=f"บัญชีผู้ใช้: {self.email} (ID: {self.user_id}) • อัปเดตข้อมูลแบบ Real-time",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12),
             text_color=COLOR_TEXT_MUTED
         ).pack(anchor="w", pady=(2, 0))
 
@@ -1974,9 +1994,9 @@ class UserStatsDialog(ctk.CTkToplevel):
             c_frame.grid(row=0, column=col, padx=5, sticky="nsew")
             c_inner = ctk.CTkFrame(c_frame, fg_color="transparent")
             c_inner.pack(padx=12, pady=10)
-            ctk.CTkLabel(c_inner, text=title, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
-            ctk.CTkLabel(c_inner, text=val, font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"), text_color=colr).pack(anchor="w", pady=(4, 2))
-            ctk.CTkLabel(c_inner, text=sub, font=ctk.CTkFont(family="Segoe UI", size=10), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
+            ctk.CTkLabel(c_inner, text=title, font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
+            ctk.CTkLabel(c_inner, text=val, font=ctk.CTkFont(family=app_fonts.UI, size=18, weight="bold"), text_color=colr).pack(anchor="w", pady=(4, 2))
+            ctk.CTkLabel(c_inner, text=sub, font=ctk.CTkFont(family=app_fonts.UI, size=10), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
 
         # ตารางเปรียบเทียบแต่ละแผน (Plan Breakdown Table)
         tbl_container = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
@@ -1991,7 +2011,7 @@ class UserStatsDialog(ctk.CTkToplevel):
         headers = [("แผนการเทรด (Trading Plan)", 0, "w"), ("เข้าไม้ (Trades)", 1, "center"), ("ชนะ / แพ้ (W/L)", 2, "center"),
                    ("Win Rate (%)", 3, "center"), ("กำไรสุทธิ ($ Profit)", 4, "center"), ("Profit Factor", 5, "center")]
         for title, col, anc in headers:
-            lbl = ctk.CTkLabel(th_frame, text=title, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=COLOR_GOLD_PRIMARY)
+            lbl = ctk.CTkLabel(th_frame, text=title, font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"), text_color=COLOR_GOLD_PRIMARY)
             lbl.grid(row=0, column=col, padx=8, pady=8, sticky="" if anc == "center" else anc)  # Tk ไม่รับ sticky="center"
 
         # รายการแต่ละแผน (Plan Rows)
@@ -2015,19 +2035,19 @@ class UserStatsDialog(ctk.CTkToplevel):
             row_frame.grid_columnconfigure((1, 2, 3, 4, 5), weight=2)
 
             # 1. ชื่อแผน
-            ctk.CTkLabel(row_frame, text=p_name, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=0, padx=8, pady=8, sticky="w")
+            ctk.CTkLabel(row_frame, text=p_name, font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=0, padx=8, pady=8, sticky="w")
             # 2. จำนวนเข้าไม้
-            ctk.CTkLabel(row_frame, text=f"{p_trades} ไม้", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=1, padx=8)
+            ctk.CTkLabel(row_frame, text=f"{p_trades} ไม้", font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_TEXT_PRIMARY).grid(row=0, column=1, padx=8)
             # 3. ชนะ/แพ้
-            ctk.CTkLabel(row_frame, text=f"{p_win}W / {p_loss}L", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_TEXT_MUTED).grid(row=0, column=2, padx=8)
+            ctk.CTkLabel(row_frame, text=f"{p_win}W / {p_loss}L", font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_TEXT_MUTED).grid(row=0, column=2, padx=8)
             # 4. Win Rate %
             wr_colr = COLOR_SUCCESS_GREEN if p_wr >= 50 else (COLOR_GOLD_WARM if p_wr >= 40 else COLOR_TEXT_MUTED)
-            ctk.CTkLabel(row_frame, text=f"{p_wr:.1f}%", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=wr_colr).grid(row=0, column=3, padx=8)
+            ctk.CTkLabel(row_frame, text=f"{p_wr:.1f}%", font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"), text_color=wr_colr).grid(row=0, column=3, padx=8)
             # 5. Profit USD
             prof_colr = COLOR_SUCCESS_GREEN if p_profit > 0 else (COLOR_DANGER_RED if p_profit < 0 else COLOR_TEXT_MUTED)
-            ctk.CTkLabel(row_frame, text=f"{p_profit:+,.2f}", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=prof_colr).grid(row=0, column=4, padx=8)
+            ctk.CTkLabel(row_frame, text=f"{p_profit:+,.2f}", font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"), text_color=prof_colr).grid(row=0, column=4, padx=8)
             # 6. Profit Factor
-            ctk.CTkLabel(row_frame, text=f"{p_pf:.2f}", font=ctk.CTkFont(family="Segoe UI", size=12), text_color=COLOR_GOLD_WARM if p_pf >= 1.5 else COLOR_TEXT_MUTED).grid(row=0, column=5, padx=8)
+            ctk.CTkLabel(row_frame, text=f"{p_pf:.2f}", font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_GOLD_WARM if p_pf >= 1.5 else COLOR_TEXT_MUTED).grid(row=0, column=5, padx=8)
 
         # ปุ่มปิดหน้าต่าง
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -2036,7 +2056,7 @@ class UserStatsDialog(ctk.CTkToplevel):
         ctk.CTkButton(
             btn_frame,
             text="ปิดหน้าต่าง",
-            font=ctk.CTkFont(family="Segoe UI", size=13),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13),
             fg_color="#252A35",
             hover_color="#323846",
             height=38,
@@ -2137,14 +2157,14 @@ class MainTradingApp(ctk.CTk):
         ctk.CTkLabel(
             inner,
             text="AI Gold Commander Pro",
-            font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=22, weight="bold"),
             text_color=COLOR_GOLD_PRIMARY
         ).pack()
 
         ctk.CTkLabel(
             inner,
             text="Next-Gen Autonomous Gold Specialist (XAUUSD) • GoldBot24",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12),
             text_color=COLOR_TEXT_MUTED
         ).pack(pady=(2, 4))
 
@@ -2153,7 +2173,7 @@ class MainTradingApp(ctk.CTk):
         ctk.CTkLabel(
             version_badge,
             text=f"v{APP_VERSION} • GoldBot24 Cloud Service (1.00 THB/hr)",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
             text_color=COLOR_GOLD_WARM
         ).pack(padx=10, pady=4)
 
@@ -2162,7 +2182,7 @@ class MainTradingApp(ctk.CTk):
         self.seg_auth = ctk.CTkSegmentedButton(
             inner,
             values=["🔑 เข้าสู่ระบบ (Sign In)", "✨ สมัครสมาชิกใหม่ (รับฟรี 48 ชม.)"],
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             selected_color=COLOR_GOLD_WARM,
             selected_hover_color=COLOR_GOLD_DARK,
             unselected_color="#1A1E27",
@@ -2181,12 +2201,12 @@ class MainTradingApp(ctk.CTk):
         self.lbl_reg_name = ctk.CTkLabel(
             self.form_frame,
             text="ชื่อแสดงผล (Display Name):",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
         self.entry_reg_name = ctk.CTkEntry(
             self.form_frame,
-            font=ctk.CTkFont(family="Segoe UI", size=13),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13),
             height=40,
             corner_radius=8,
             border_width=1,
@@ -2199,7 +2219,7 @@ class MainTradingApp(ctk.CTk):
         self.lbl_email = ctk.CTkLabel(
             self.form_frame,
             text="อีเมลสำหรับใช้งาน (Email):",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
         self.lbl_email.pack(anchor="w", pady=(0, 4))
@@ -2209,7 +2229,7 @@ class MainTradingApp(ctk.CTk):
         saved_user = remembered_email or license_mgr.session_data.get("email") or ""
         self.entry_email = ctk.CTkEntry(
             self.form_frame,
-            font=ctk.CTkFont(family="Segoe UI", size=13),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13),
             height=40,
             corner_radius=8,
             border_width=1,
@@ -2225,14 +2245,14 @@ class MainTradingApp(ctk.CTk):
         self.lbl_pwd = ctk.CTkLabel(
             self.form_frame,
             text="รหัสผ่าน (Password):",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
         self.lbl_pwd.pack(anchor="w", pady=(0, 4))
 
         self.entry_pwd = ctk.CTkEntry(
             self.form_frame,
-            font=ctk.CTkFont(family="Segoe UI", size=13),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13),
             height=40,
             corner_radius=8,
             border_width=1,
@@ -2251,7 +2271,7 @@ class MainTradingApp(ctk.CTk):
             text="แสดงรหัสผ่าน",
             variable=self.show_pwd_var,
             command=self._toggle_show_password,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=app_fonts.UI, size=11),
             text_color=COLOR_TEXT_MUTED,
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
@@ -2264,7 +2284,7 @@ class MainTradingApp(ctk.CTk):
         self.lbl_forgot = ctk.CTkLabel(
             self.form_frame,
             text="ลืมรหัสผ่าน?",
-            font=ctk.CTkFont(family="Segoe UI", size=11, underline=True),
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True),
             text_color=COLOR_CYAN_ACCENT,
             cursor="hand2",
         )
@@ -2275,12 +2295,12 @@ class MainTradingApp(ctk.CTk):
         self.lbl_reg_confirm = ctk.CTkLabel(
             self.form_frame,
             text="ยืนยันรหัสผ่านอีกครั้ง (Confirm Password):",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
         self.entry_reg_confirm = ctk.CTkEntry(
             self.form_frame,
-            font=ctk.CTkFont(family="Segoe UI", size=13),
+            font=ctk.CTkFont(family=app_fonts.UI, size=13),
             height=40,
             corner_radius=8,
             border_width=1,
@@ -2301,7 +2321,7 @@ class MainTradingApp(ctk.CTk):
         ctk.CTkLabel(
             self.bonus_frame,
             text="🎁 สิทธิพิเศษ: สมาชิกใหม่รับสิทธิ์ทดลองเทรดจริงฟรี 48 ชั่วโมงทันที!",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
             text_color="#FDE68A"
         ).pack(padx=10, pady=6)
 
@@ -2313,7 +2333,7 @@ class MainTradingApp(ctk.CTk):
             inner,
             text="จดจำการเข้าสู่ระบบในเครื่องนี้",
             variable=self.remember_var,
-            font=ctk.CTkFont(family="Segoe UI", size=12),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12),
             text_color=COLOR_TEXT_MUTED,
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK
@@ -2324,7 +2344,7 @@ class MainTradingApp(ctk.CTk):
         self.lbl_login_status = ctk.CTkLabel(
             inner,
             text="",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_DANGER_RED
         )
         self.lbl_login_status.pack(pady=(0, 10))
@@ -2333,7 +2353,7 @@ class MainTradingApp(ctk.CTk):
         self.btn_auth_submit = ctk.CTkButton(
             inner,
             text="🚀 เข้าสู่ระบบ (Sign In)",
-            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+            font=ctk.CTkFont(family=app_fonts.UI, size=14, weight="bold"),
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
             text_color="#1A1406",
@@ -2350,7 +2370,7 @@ class MainTradingApp(ctk.CTk):
         lbl_web = ctk.CTkLabel(
             link_frame,
             text="🌐 เติมชั่วโมงและดูเรดาร์สดผ่านเว็บ: GoldBot24 (goldbot24.vercel.app)",
-            font=ctk.CTkFont(family="Segoe UI", size=11, underline=True),
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True),
             text_color=COLOR_CYAN_ACCENT,
             cursor="hand2"
         )
@@ -2557,7 +2577,7 @@ class MainTradingApp(ctk.CTk):
     # ส่วนประกอบ UI ใช้ซ้ำ
     # ---------------------------------------------------------------------
     @staticmethod
-    def _font(size=12, weight="normal", family="Segoe UI"):
+    def _font(size=12, weight="normal", family=app_fonts.UI):
         return ctk.CTkFont(family=family, size=size, weight=weight)
 
     def _card(self, parent, **pack_kwargs):
@@ -2676,7 +2696,7 @@ class MainTradingApp(ctk.CTk):
         menu = tk.Menu(
             self, tearoff=0, bg="#1A1E27", fg=COLOR_TEXT_PRIMARY, activebackground="#2A303C",
             activeforeground=COLOR_GOLD_PRIMARY, disabledforeground=COLOR_TEXT_MUTED, bd=0, relief="flat",
-            font=("Segoe UI", 11),
+            font=(app_fonts.UI, 11),
         )
         if email:
             menu.add_command(label=f"  {email}", state="disabled")
@@ -2819,10 +2839,10 @@ class MainTradingApp(ctk.CTk):
         self._tf_tag(row, tf)
         val = ctk.CTkLabel(row, text="—", font=self._font(13, "bold"), text_color=COLOR_TEXT_MUTED, height=22)
         val.pack(side="left")
-        pct = ctk.CTkLabel(row, text="", font=self._font(11, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=22)
+        pct = ctk.CTkLabel(row, text="", font=self._font(11, "bold", app_fonts.MONO), text_color=COLOR_TEXT_MUTED, height=22)
         pct.pack(side="right")
         # ลำดับเส้น MA50 / MA100 / MA150 (แท่งปิด) เช่น 50<100<150 = ขาลง — อัปเดตทุก 30 วินาที (_ma_order_tick)
-        lt = ctk.CTkLabel(row, text="", font=self._font(10, "bold", "Consolas"), text_color=COLOR_TEXT_MUTED, height=22)
+        lt = ctk.CTkLabel(row, text="", font=self._font(10, "bold", app_fonts.MONO), text_color=COLOR_TEXT_MUTED, height=22)
         lt.pack(side="right", padx=(0, 6))
         return {"val": val, "pct": pct, "lt": lt}
 
@@ -2835,11 +2855,11 @@ class MainTradingApp(ctk.CTk):
         head.pack(fill="x")
         ctk.CTkLabel(head, text=tf, width=28, height=16, corner_radius=5, fg_color="#1F2430",
                      font=self._font(9, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(0, 6))
-        res = ctk.CTkLabel(head, text="▲ —", font=self._font(11, "bold", "Consolas"), text_color=COLOR_DANGER_RED, height=16)
+        res = ctk.CTkLabel(head, text="▲ —", font=self._font(11, "bold", app_fonts.MONO), text_color=COLOR_DANGER_RED, height=16)
         res.pack(side="left")
         bar = tk.Canvas(box, height=10, bg=COLOR_CARD_BG, highlightthickness=0, bd=0)
         bar.pack(fill="x", pady=(3, 3))
-        sup = ctk.CTkLabel(box, text="▼ —", font=self._font(11, "bold", "Consolas"), text_color=COLOR_SUCCESS_GREEN, height=16, anchor="w")
+        sup = ctk.CTkLabel(box, text="▼ —", font=self._font(11, "bold", app_fonts.MONO), text_color=COLOR_SUCCESS_GREEN, height=16, anchor="w")
         sup.pack(anchor="w", padx=(34, 0))
         state = {"sup": 0.0, "res": 0.0, "price": 0.0}
         bar.bind("<Configure>", lambda e, b=bar, st=state: self._draw_sr_bar(b, st))
@@ -3085,33 +3105,42 @@ class MainTradingApp(ctk.CTk):
     NEWS_PILL_BG = "#191D26"
 
     def _build_header_news(self, parent):
-        """ป้ายข่าว USD ผลกระทบสูงถัดไปบนแถบบน: วัน/เวลา + ป้ายผลกระทบ | ชื่อข่าว + นับถอยหลัง · คลิกเปิดแท็บปฏิทินข่าว"""
-        pill = ctk.CTkFrame(parent, fg_color=self.NEWS_PILL_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
-        pill.pack(side="right", padx=(0, 12))
-        inner = ctk.CTkFrame(pill, fg_color="transparent")
-        inner.pack(padx=12, pady=4)
-        top = ctk.CTkFrame(inner, fg_color="transparent")
-        top.pack(anchor="w")
-        head = ctk.CTkLabel(top, text="📅 ข่าวสำคัญ USD", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, height=16)
-        head.pack(side="left")
-        self.lbl_news_time = ctk.CTkLabel(top, text="", font=self._font(10), text_color=COLOR_TEXT_MUTED, height=16)
-        self.lbl_news_time.pack(side="left", padx=(6, 0))
-        self.lbl_news_badge = ctk.CTkLabel(top, text="", font=self._font(9, "bold"), text_color="#101218", fg_color=self.NEWS_PILL_BG, corner_radius=6, height=16)
-        self.lbl_news_badge.pack(side="left", padx=(8, 0))
-        bottom = ctk.CTkFrame(inner, fg_color="transparent")
-        bottom.pack(anchor="w")
-        self.lbl_news_title = ctk.CTkLabel(bottom, text="กำลังโหลดปฏิทินข่าว...", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY, height=20)
-        self.lbl_news_title.pack(side="left")
-        self.lbl_news_countdown = ctk.CTkLabel(bottom, text="", font=self._font(12, "bold"), text_color=COLOR_GOLD_PRIMARY, height=20)
-        self.lbl_news_countdown.pack(side="left", padx=(10, 0))
+        """ข้อความวิ่งข่าว USD ผลกระทบสูงที่กำลังจะมาถึง เต็มพื้นที่ว่างของแถบบน (ผู้ใช้ขอ 8 ต.ค. 2026) · คลิกเปิดแท็บปฏิทินข่าว"""
+        box = ctk.CTkFrame(parent, fg_color=self.NEWS_PILL_BG, corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER, height=34)
+        box.pack(side="right", fill="x", expand=True, padx=(24, 12))
+        box.pack_propagate(False)
+        ctk.CTkLabel(box, text="  ข่าวสำคัญ USD  ", font=self._font(10, "bold"), text_color="#101218", fg_color=self.IMPACT_COLORS["High"],
+                     corner_radius=6, height=20).pack(side="left", padx=(8, 6))
+        self._mq = tk.Canvas(box, bg=self.NEWS_PILL_BG, highlightthickness=0, height=24, cursor="hand2")
+        self._mq.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self._mq_item = self._mq.create_text(0, 12, text="กำลังโหลดปฏิทินข่าว...", anchor="w", fill=COLOR_TEXT_PRIMARY,
+                                             font=(app_fonts.UI, 11, "bold"))
+        self._mq_x = None
 
         def open_calendar(_e=None):
             if hasattr(self, "main_tabs"):
                 self.main_tabs.set(self.TAB_CALENDAR)
-        for w in (pill, inner, top, bottom, head, self.lbl_news_time, self.lbl_news_badge, self.lbl_news_title, self.lbl_news_countdown):
+        for w in (box, self._mq):
             w.bind("<Button-1>", open_calendar)
-            w.configure(cursor="hand2")
-        HoverTip(pill, lambda: "คลิกเพื่อดูปฏิทินข่าวทั้งหมด")
+        HoverTip(self._mq, lambda: "คลิกเพื่อดูปฏิทินข่าวทั้งหมด")
+        self.after(500, self._marquee_tick)
+
+    def _marquee_tick(self):
+        """เลื่อนข้อความวิ่งจากขวาไปซ้าย (~50 px/วินาที) · ชี้เมาส์ค้างไว้เพื่อหยุดอ่าน"""
+        try:
+            cv = self._mq
+            w = cv.winfo_width()
+            x0, _, x1, _ = cv.bbox(self._mq_item) or (0, 0, 0, 0)
+            tw = x1 - x0
+            if self._mq_x is None or self._mq_x + tw < 0:
+                self._mq_x = w
+            under = cv.winfo_containing(cv.winfo_pointerx(), cv.winfo_pointery()) is cv
+            if not under:
+                self._mq_x -= 1.5
+            cv.coords(self._mq_item, self._mq_x, 12)
+            self.after(30, self._marquee_tick)
+        except Exception:
+            pass   # หน้าต่างถูกปิด/สลับหน้า
 
     PLAN_ROWS = [
         ("📈", "P1 · MA M15", "Plan 1: MA-Cross-Trend"),
@@ -3375,7 +3404,7 @@ class MainTradingApp(ctk.CTk):
 
         self.txt_console = ctk.CTkTextbox(
             parent,
-            font=ctk.CTkFont(family="Consolas", size=12),
+            font=ctk.CTkFont(family=app_fonts.MONO, size=12),
             fg_color="#0B0D12",
             text_color=TAG_COLORS["text"],
             corner_radius=8,
@@ -3730,14 +3759,15 @@ class MainTradingApp(ctk.CTk):
             ctk.CTkLabel(top, text=f"คะแนน {a['score']:+.1f} · กำไร {'+' if pf >= 0 else '-'}{abs(pf):,.2f}", font=self._font(11),
                          text_color=COLOR_TEXT_MUTED).pack(side="right")
             ctk.CTkLabel(card, text=a["advice"], font=self._font(11, "bold"), text_color=fg, anchor="w").pack(fill="x", padx=12, pady=(2, 0))
-            for r in a["reasons"]:
+            for i, r in enumerate(a["reasons"]):
                 w = r["w"]
-                mark, col = ("✓", COLOR_SUCCESS_GREEN) if w > 0 else (("✗", COLOR_DANGER_RED) if w < 0 else ("•", COLOR_TEXT_MUTED))
-                row = ctk.CTkFrame(card, fg_color="transparent")
-                row.pack(fill="x", padx=14)
-                ctk.CTkLabel(row, text=mark, width=16, font=self._font(11, "bold"), text_color=col, height=18).pack(side="left")
+                ptxt, pfg, pbg = status_pill_style(w)
+                row = ctk.CTkFrame(card, fg_color="#171B23" if i % 2 == 0 else "transparent", corner_radius=6)
+                row.pack(fill="x", padx=8, pady=1)
+                ctk.CTkLabel(row, text=ptxt, width=58, font=self._font(10, "bold"), text_color=pfg, fg_color=pbg,
+                             corner_radius=6, height=20).pack(side="left", padx=(4, 8), pady=3)
                 ctk.CTkLabel(row, text=r["text"], font=self._font(11), text_color=COLOR_TEXT_PRIMARY if w else COLOR_TEXT_MUTED,
-                             anchor="w", height=18).pack(side="left", fill="x")
+                             anchor="w", height=20).pack(side="left", fill="x")
             ctk.CTkFrame(card, fg_color="transparent", height=4).pack()
 
     def _open_position_detail(self, ticket):
@@ -4055,7 +4085,7 @@ class MainTradingApp(ctk.CTk):
         upd = econ_calendar.datetime.fromisoformat(r["updated_at"]).astimezone(econ_calendar.BANGKOK)
         right = ctk.CTkFrame(hero, fg_color="transparent")
         right.grid(row=0, column=2, rowspan=2, padx=16)
-        ctk.CTkLabel(right, text=f"{r['price']:,.2f}", font=self._font(20, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY).pack(anchor="e")
+        ctk.CTkLabel(right, text=f"{r['price']:,.2f}", font=self._font(20, "bold", app_fonts.MONO), text_color=COLOR_TEXT_PRIMARY).pack(anchor="e")
         ctk.CTkLabel(right, text=f"อัปเดต {upd.strftime('%H:%M')} น. · ทุก 1 นาที", font=self._font(10), text_color=muted).pack(anchor="e")
 
         # ── 2) การ์ด 3 ช่วงเวลา
@@ -4276,20 +4306,23 @@ class MainTradingApp(ctk.CTk):
             return 0.0
 
     def _render_next_news(self):
-        ev = econ_calendar.next_high_impact(self._calendar_events)
-        if not ev:
-            self.lbl_news_title.configure(text="ไม่มีข่าว USD ผลกระทบสูงในสัปดาห์นี้" if self._calendar_events else "กำลังโหลดปฏิทินข่าว...")
-            self.lbl_news_time.configure(text="")
-            self.lbl_news_countdown.configure(text="")
-            self.lbl_news_badge.configure(text="", fg_color=self.NEWS_PILL_BG)
+        """ข้อความวิ่ง: ข่าว USD ผลกระทบสูงถัดไปสูงสุด 3 ข่าว + วัน/เวลา (ไทย) + นับถอยหลัง · เหลือไม่ถึง 1 ชม. เป็นสีแดง"""
+        if not hasattr(self, "_mq"):
             return
-        self.lbl_news_badge.configure(text=" ผลกระทบสูง ", fg_color=self.IMPACT_COLORS["High"])
-        self.lbl_news_title.configure(text=ev["title"] if len(ev["title"]) <= 28 else ev["title"][:27] + "…")
-        detail = f"· {econ_calendar.format_day(ev['time'])} {ev['time'].strftime('%H:%M')} น."
-        self.lbl_news_time.configure(text=detail)
-        countdown = econ_calendar.format_countdown(ev["time"])
-        soon = (ev["time"] - econ_calendar.datetime.now(econ_calendar.BANGKOK)).total_seconds() < 3600
-        self.lbl_news_countdown.configure(text=countdown, text_color=COLOR_DANGER_RED if soon else COLOR_GOLD_PRIMARY)
+        now = econ_calendar.datetime.now(econ_calendar.BANGKOK)
+        evs = [e for e in (self._calendar_events or []) if e["currency"] == "USD" and e["impact"] == "High"
+               and e["time"] > now - econ_calendar.timedelta(minutes=5)][:3]
+        if not evs:
+            text = "ไม่มีข่าว USD ผลกระทบสูงในสัปดาห์นี้" if self._calendar_events else "กำลังโหลดปฏิทินข่าว..."
+            color = COLOR_TEXT_MUTED
+        else:
+            parts = [f"{e['title']} · {econ_calendar.format_day(e['time'])} {e['time'].strftime('%H:%M')} น. · {econ_calendar.format_countdown(e['time'])}"
+                     for e in evs]
+            text = "        ◆        ".join(parts)
+            color = COLOR_DANGER_RED if (evs[0]["time"] - now).total_seconds() < 3600 else COLOR_GOLD_PRIMARY
+        if self._mq.itemcget(self._mq_item, "text") != text:
+            self._mq.itemconfigure(self._mq_item, text=text)
+        self._mq.itemconfigure(self._mq_item, fill=color)
 
     # =========================================================================
     # 3. การควบคุมบอท และเหตุการณ์ต่างๆ (BOT ACTIONS & EVENTS)
