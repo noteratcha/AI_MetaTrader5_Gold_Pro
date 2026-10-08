@@ -4146,8 +4146,42 @@ class MainTradingApp(ctk.CTk):
               f" · แม่นในอดีต {main['hist_acc']:.0f}%"
         ctk.CTkLabel(hero, text=sub, font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor="w").grid(row=1, column=1, sticky="nw", pady=(0, 14))
         upd = econ_calendar.datetime.fromisoformat(r["updated_at"]).astimezone(econ_calendar.BANGKOK)
+        # ภาพรวมเสียงปัจจัยทั้งหมด (ย้ายจากการ์ดปัจจัยมาไว้ในแถบสรุป — ผู้ใช้ขอ 8 ต.ค. 2026)
+        allf = r["factors"]
+        n_up = sum(1 for f in allf if f["dir"] > 0)
+        n_dn = sum(1 for f in allf if f["dir"] < 0)
+        n_mid = len(allf) - n_up - n_dn
+        if n_up > n_dn and n_up >= n_mid:
+            verdict, vcol = f"ส่วนใหญ่ชี้ขึ้น {n_up}/{len(allf)}", green
+        elif n_dn > n_up and n_dn >= n_mid:
+            verdict, vcol = f"ส่วนใหญ่ชี้ลง {n_dn}/{len(allf)}", red
+        else:
+            verdict, vcol = "ปัจจัยยังขัดกัน", gold
+        vote = ctk.CTkFrame(hero, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER, width=300)
+        vote.grid(row=0, column=2, rowspan=2, sticky="ns", padx=(8, 0), pady=10)
+        vh = ctk.CTkFrame(vote, fg_color="transparent")
+        vh.pack(fill="x", padx=12, pady=(8, 0))
+        ctk.CTkLabel(vh, text=f"ปัจจัยทั้งหมด {len(allf)} ตัว", font=self._font(10, "bold"), text_color=muted, height=16).pack(side="left")
+        ctk.CTkLabel(vh, text=verdict, font=self._font(13, "bold"), text_color=vcol, height=18).pack(side="right", padx=(16, 0))
+        vb = tk.Canvas(vote, width=276, height=12, bg="#101218", highlightthickness=0, bd=0)
+        vb.pack(fill="x", padx=12, pady=(5, 0))
+
+        def draw_votes(e, b=vb, u=n_up, dn=n_dn, m=n_mid):
+            b.delete("all")
+            w, tot = max(e.width, 20), max(u + dn + m, 1)
+            x = 0
+            for n, col_ in ((u, green), (m, "#3A4150"), (dn, red)):
+                if n:
+                    b.create_rectangle(x, 1, x + w * n / tot, 11, fill=col_, outline="#101218", width=2)
+                    x += w * n / tot
+        vb.bind("<Configure>", draw_votes)
+        lg = ctk.CTkFrame(vote, fg_color="transparent")
+        lg.pack(fill="x", padx=12, pady=(3, 8))
+        for txt, col_ in ((f"▲ ขึ้น {n_up}", green), (f"• กลาง {n_mid}", muted), (f"▼ ลง {n_dn}", red)):
+            ctk.CTkLabel(lg, text=txt, font=self._font(10, "bold"), text_color=col_, height=16).pack(side="left", padx=(0, 12))
+        HoverTip(vote, lambda: "นับเสียงอย่างเดียว ไม่ได้ถ่วงน้ำหนัก · ใช้ประกอบกับ AI")
         right = ctk.CTkFrame(hero, fg_color="transparent")
-        right.grid(row=0, column=2, rowspan=2, padx=16)
+        right.grid(row=0, column=3, rowspan=2, padx=16)
         ctk.CTkLabel(right, text=f"{r['price']:,.2f}", font=self._font(20, "bold", app_fonts.MONO), text_color=COLOR_TEXT_PRIMARY).pack(anchor="e")
         ctk.CTkLabel(right, text=f"อัปเดต {upd.strftime('%H:%M')} น. · ทุก 1 นาที", font=self._font(10), text_color=muted).pack(anchor="e")
 
@@ -4241,40 +4275,6 @@ class MainTradingApp(ctk.CTk):
                 ctk.CTkLabel(txtf, text=f["name"], font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY, anchor="w", height=18).pack(fill="x")
                 ctk.CTkLabel(txtf, text=f["detail"], font=self._font(10), text_color=muted, anchor="w", justify="left",
                              wraplength=300 if ncol == 1 else 200, height=16).pack(fill="x")
-            if gi == 0:
-                allf = r["factors"]
-                n_up = sum(1 for f in allf if f["dir"] > 0)
-                n_dn = sum(1 for f in allf if f["dir"] < 0)
-                n_mid = len(allf) - n_up - n_dn
-                sm = ctk.CTkFrame(fac, fg_color="#101218", corner_radius=10)
-                sm.pack(fill="x", padx=8, pady=(10, 0))
-                ctk.CTkLabel(sm, text=f"ภาพรวมปัจจัยทั้งหมด {len(allf)} ตัว", font=self._font(12, "bold"),
-                             text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=12, pady=(10, 0))
-                if n_up > n_dn and n_up >= n_mid:
-                    verdict, vcol = f"ส่วนใหญ่ชี้ขึ้น ({n_up}/{len(allf)})", green
-                elif n_dn > n_up and n_dn >= n_mid:
-                    verdict, vcol = f"ส่วนใหญ่ชี้ลง ({n_dn}/{len(allf)})", red
-                else:
-                    verdict, vcol = "ปัจจัยยังขัดกัน — ไม่มีฝั่งที่ชัด", gold
-                ctk.CTkLabel(sm, text=verdict, font=self._font(16, "bold"), text_color=vcol).pack(anchor="w", padx=12)
-                vb = tk.Canvas(sm, height=14, bg="#101218", highlightthickness=0, bd=0)
-                vb.pack(fill="x", padx=12, pady=(6, 0))
-
-                def draw_votes(e, b=vb, u=n_up, dn=n_dn, m=n_mid):
-                    b.delete("all")
-                    w, tot = max(e.width, 20), max(u + dn + m, 1)
-                    x = 0
-                    for n, col_ in ((u, green), (m, "#3A4150"), (dn, red)):
-                        if n:
-                            b.create_rectangle(x, 2, x + w * n / tot, 12, fill=col_, outline="#101218")
-                            x += w * n / tot
-                vb.bind("<Configure>", draw_votes)
-                lg = ctk.CTkFrame(sm, fg_color="transparent")
-                lg.pack(fill="x", padx=12, pady=(4, 10))
-                for txt, col_ in ((f"▲ ขึ้น {n_up}", green), (f"• กลาง {n_mid}", muted), (f"▼ ลง {n_dn}", red)):
-                    ctk.CTkLabel(lg, text=txt, font=self._font(11, "bold"), text_color=col_, height=18).pack(side="left", padx=(0, 14))
-                ctk.CTkLabel(sm, text="นับเสียงอย่างเดียว ไม่ได้ถ่วงน้ำหนัก · ใช้ประกอบกับ AI ด้านบน", font=self._font(10),
-                             text_color=muted).pack(anchor="w", padx=12, pady=(0, 10))
             ctk.CTkFrame(fac, height=8, fg_color="transparent").pack()
 
         row = 3
