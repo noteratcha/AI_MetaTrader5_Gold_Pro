@@ -4121,8 +4121,7 @@ class MainTradingApp(ctk.CTk):
             top = ctk.CTkFrame(c, fg_color="transparent")
             top.pack(fill="x", padx=14, pady=(12, 0))
             ctk.CTkLabel(top, text=f"อีก {h['label']}", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
-            ctk.CTkLabel(top, text=(" ▲ สัญญาณขึ้น " if d > 0 else " ▼ สัญญาณลง ") if d else " ยังไม่ชัด ", font=self._font(10, "bold"),
-                         corner_radius=6, height=20, fg_color=dark(d) if d else "#262B36", text_color=tone(d) if d else muted).pack(side="right")
+            # ไม่มีป้ายสถานะมุมขวา — สถานะแสดงที่ตัวใหญ่ด้านล่างแล้ว (ผู้ใช้ไม่ต้องการแสดงซ้ำ)
             if d:
                 ctk.CTkLabel(c, text=f"{'▲ ขึ้น' if d > 0 else '▼ ลง'} {pct:.0f}%", font=self._font(24, "bold"), text_color=tone(d), height=30
                              ).pack(anchor="w", padx=14, pady=(2, 0))
