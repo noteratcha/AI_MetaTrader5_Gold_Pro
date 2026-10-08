@@ -28,4 +28,5 @@ def _load(files) -> bool:
 
 
 UI = "Anuphan" if _load(("Anuphan-Regular.ttf", "Anuphan-Bold.ttf")) else "Segoe UI"
-MONO = "JetBrains Mono" if _load(("JetBrainsMono-Regular.ttf", "JetBrainsMono-Bold.ttf")) else "Consolas"
+# ผู้ใช้ขอให้ทั้งโปรแกรมเป็นฟอนต์เดียว (8 ต.ค. 2026) — ตัวเลข/Console ใช้ Anuphan ด้วย (JetBrains Mono ไม่มีอักษรไทย ทำให้ไทยใน Console เป็นฟอนต์ระบบ)
+MONO = UI
