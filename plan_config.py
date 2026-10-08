@@ -133,6 +133,9 @@ def get_margin_per_trade(email: str = None) -> float:
     return DEFAULT_MARGIN_PER_TRADE
 
 
+MIN_BALANCE_USD = 25.0   # ยอดเงินขั้นต่ำ (Equity) ที่ระบบยอมเริ่มบอท/เปิดไม้ใหม่ (ผู้ใช้กำหนด 8 ต.ค. 2026)
+
+
 def account_usd(acc) -> float:
     """Equity ของบัญชี MT5 เป็น USD (บัญชีเซ็นต์ USC/USc หาร 100) — 0 ถ้าอ่านไม่ได้"""
     if acc is None:
