@@ -4216,7 +4216,10 @@ class MainTradingApp(ctk.CTk):
                 x0, x1, y = 6, w - 6, 13
                 xp = lambda v: x0 + v * (x1 - x0)
                 b.create_line(x0, y, x1, y, fill="#3A2226" if not clear else red, width=8, capstyle="round")
-                b.create_line(x0, y, xp(up), y, fill="#1E3B30" if not clear else green, width=8, capstyle="round")
+                gcol = "#1E3B30" if not clear else green
+                # ปลายฝั่งขวาตัดตรง (butt) ให้รอยต่อเขียว/แดงตรงกับปลายเข็มพอดี — ปลายมนเดิมยื่นเกินไป 4px
+                b.create_oval(x0 - 4, y - 4, x0 + 4, y + 4, fill=gcol, outline="")
+                b.create_line(x0, y, xp(up), y, fill=gcol, width=8, capstyle="butt")
                 for v in (0.45, 0.55):   # เกณฑ์สัญญาณ
                     b.create_line(xp(v), y - 8, xp(v), y + 8, fill=COLOR_GOLD_PRIMARY, width=1, dash=(2, 2))
                 b.create_line(xp(0.5), y - 6, xp(0.5), y + 6, fill="#6E7687", width=1)
