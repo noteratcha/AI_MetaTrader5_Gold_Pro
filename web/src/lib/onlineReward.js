@@ -1,0 +1,4 @@
+/** กติการางวัลออนไลน์ (ใช้ทั้งฝั่ง Server และหน้าเว็บ) — โปรแกรมมีค่าเดียวกันใน gui_app (ONLINE_GOAL_HOURS) */
+export const ONLINE_GOAL_HOURS = 100;     // ออนไลน์ครบกี่ชั่วโมงใน 1 สัปดาห์ (อาทิตย์–เสาร์ เวลาไทย)
+export const ONLINE_DISCOUNT_PCT = 10;    // ส่วนลดซื้อชั่วโมงครั้งถัดไป 1 รายการ
+export const ONLINE_DISCOUNT_DAYS = 5;    // ใช้ได้ภายในกี่วันหลังได้รับ

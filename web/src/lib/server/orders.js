@@ -3,6 +3,7 @@ import { generateProductKey } from './keys';
 import { logActivity } from './activity';
 import { notifyPurchase } from './lineNotify';
 import { issueReceipt } from './receipts';
+import { markDiscountUsed } from './onlineReward';
 
 export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // เวลาชำระตาม QR 15 นาที + เวลาแนบสลิปต่ออีก 10 นาที (ตรงกับตัวนับถอยหลังหน้าร้าน) — เกินแล้วยกเลิกคำสั่งซื้อ
@@ -126,6 +127,7 @@ export async function fulfillOrder(order, paymentRef) {
       paid_at: new Date().toISOString(),
     })
     .eq('order_id', order.order_id);
+  await markDiscountUsed(order);   // ส่วนลดรางวัลออนไลน์ (ถ้ามี) ถูกใช้แล้ว
 
   await logActivity({
     userId: order.owner_user_id,

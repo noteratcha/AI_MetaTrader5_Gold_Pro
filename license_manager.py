@@ -289,6 +289,7 @@ class LicenseManager:
                 data = json.loads(resp.read().decode("utf-8"))
                 if data.get("success") and data.get("user"):
                     hrs = float(data["user"].get("hoursRemaining", 0.0))
+                    self.session_data["online"] = data["user"].get("online")   # รางวัลออนไลน์ครบ 100 ชม./สัปดาห์
                     # หักนาทีที่ใช้ไปแล้วแต่ยังไม่ได้ส่งขึ้น Server ออกด้วย
                     pending = int(self.session_data.get("pending_meter_minutes", 0))
                     self.session_data["hours_remaining_minutes"] = max(0, int(round(hrs * 60)) - pending)
@@ -298,6 +299,14 @@ class LicenseManager:
             self._handle_auth_error(he.code)
         except Exception:
             pass
+
+    def online_status(self):
+        """รางวัลออนไลน์ (จาก Server): {minutes, goalMinutes, weekStart, weekEnd, discount} หรือ None
+        นาทีที่ยังไม่ได้ส่งขึ้น Server บวกให้ด้วย เพื่อให้ตัวเลขขยับทันที"""
+        o = self.session_data.get("online")
+        if not isinstance(o, dict):
+            return None
+        return {**o, "minutes": int(o.get("minutes", 0)) + int(self.session_data.get("pending_meter_minutes", 0))}
 
     def deduct_trading_minute(self, minutes_elapsed: int = 1) -> tuple[bool, int, str]:
         """
@@ -334,6 +343,8 @@ class LicenseManager:
                     self.session_data["hours_remaining_minutes"] = int(round(hrs * 60))
                     self.session_data["pending_meter_minutes"] = 0
                     self.session_data["last_sync"] = int(time.time())
+                    if data.get("online") is not None:
+                        self.session_data["online"] = data["online"]
                     self.save_local_store()
         except urllib.error.HTTPError as he:
             self._handle_auth_error(he.code)

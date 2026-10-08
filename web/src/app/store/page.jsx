@@ -9,6 +9,7 @@ import { PACKAGES } from '../../lib/packages';
 import { formatThb } from '../../lib/format';
 import { LINE_ID, LINE_URL } from '../../lib/contact';
 import { markLocalKeyRedeemed, rememberLocalKey } from '../../lib/localKeys';
+import OnlineRewardCard from '../../components/OnlineRewardCard';
 
 const ACCENTS = {
   sky: { color: 'var(--sky)', icon: Zap },
@@ -50,6 +51,8 @@ export default function StorePage() {
       .catch(() => setPackages(PACKAGES));
   }, []);
 
+  const discountPct = user?.online?.discount?.percent || 0;   // ส่วนลดรางวัลออนไลน์ (ใช้ได้ 1 รายการ)
+
   const buy = (pkg) => {
     if (!user) {
       openAuthModal('login');
@@ -66,6 +69,8 @@ export default function StorePage() {
         title="เติมชั่วโมงใช้งาน"
         description={`${rateRange(packages)}ไม่มีรายเดือน · ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ`}
       />
+
+      {user && <OnlineRewardCard online={user.online} />}
 
       <div className="card card-pad row-between wrap" style={{ marginBottom: 18, gap: 12 }}>
         <span className="small">มีคีย์โปรโมชันหรือ Product Key อยู่แล้ว? เติมชั่วโมงเข้าบัญชีได้เองทันที</span>
@@ -124,9 +129,18 @@ export default function StorePage() {
               </p>
               <div className="row-between" style={{ marginTop: 'auto', marginBottom: 6 }}>
                 <span className="faint small">ราคา</span>
-                <span className="mono text-gold" style={{ fontSize: '1.35rem', fontWeight: 700 }}>
-                  {formatThb(pkg.price)}
-                </span>
+                {discountPct > 0 ? (
+                  <span className="row" style={{ gap: 8, alignItems: 'baseline' }}>
+                    <span className="mono faint" style={{ textDecoration: 'line-through' }}>{formatThb(pkg.price)}</span>
+                    <span className="mono text-green" style={{ fontSize: '1.35rem', fontWeight: 700 }}>
+                      {formatThb(Math.round(pkg.price * (100 - discountPct)) / 100)}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="mono text-gold" style={{ fontSize: '1.35rem', fontWeight: 700 }}>
+                    {formatThb(pkg.price)}
+                  </span>
+                )}
               </div>
               <div className="pkg-rate">
                 <span className="tiny faint mono">
@@ -447,6 +461,11 @@ function CheckoutModal({ pkg, onClose }) {
                     <div className="mono text-gold" style={{ fontSize: '1.45rem', fontWeight: 700 }}>
                       {formatThb(order.amount_thb)}
                     </div>
+                    {order.discount_pct > 0 && (
+                      <div className="tiny text-green">
+                        ส่วนลดออนไลน์ครบ {order.discount_pct}% จาก <span style={{ textDecoration: 'line-through' }}>{formatThb(order.original_amount_thb)}</span>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="tiny faint">{expired ? 'สถานะ' : inGrace ? 'แนบสลิปได้อีก' : 'ชำระภายใน'}</div>

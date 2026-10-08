@@ -2705,6 +2705,17 @@ class MainTradingApp(ctk.CTk):
         self.lbl_metering_status = ctk.CTkLabel(hours_box, text="⏸ หยุดนับเวลา", font=self._font(10), text_color=COLOR_TEXT_MUTED, height=14)
         self.lbl_metering_status.pack(anchor="w")
 
+        # รางวัลออนไลน์: ครบ 100 ชม./สัปดาห์ (อาทิตย์–เสาร์) → ส่วนลด 10% ซื้อชั่วโมงครั้งถัดไป (คลิกเปิดหน้าร้าน)
+        self.reward_box = ctk.CTkFrame(wallet, fg_color="transparent", cursor="hand2")
+        self.lbl_reward = ctk.CTkLabel(self.reward_box, text="", font=self._font(11, "bold"), text_color=COLOR_GOLD_PRIMARY, height=16)
+        self.lbl_reward.pack(anchor="w")
+        self.cv_reward = tk.Canvas(self.reward_box, width=118, height=6, bg=COLOR_GOLD_BG, highlightthickness=0, bd=0)
+        self.cv_reward.pack(anchor="w", pady=(4, 0))
+        for w in (self.reward_box, self.lbl_reward, self.cv_reward):
+            w.bind("<Button-1>", lambda e: webbrowser.open(self.STORE_URL))
+        HoverTip(self.reward_box, self._reward_tip)
+        self._reward_shown = None
+
         # ปุ่ม "เติมคีย์" ซ่อนไว้ (ผู้ใช้ซื้อชั่วโมงผ่านเว็บ — ระบบเติมเข้าบัญชีอัตโนมัติ)
         ctk.CTkButton(
             wallet, text="🛒 ซื้อชั่วโมง", font=self._font(12, "bold"), fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK,
@@ -4516,6 +4527,53 @@ class MainTradingApp(ctk.CTk):
             self.lbl_metering_status.configure(text="⏸ หยุดนับเวลา", text_color=COLOR_TEXT_MUTED)
             self.lbl_bot_state.configure(text="  ● หยุดทำงาน  ", text_color=COLOR_TEXT_MUTED, fg_color="#1F2430")
 
+    ONLINE_GOAL_HOURS = 100   # ค่าเดียวกับเว็บ web/src/lib/onlineReward.js
+
+    def _update_reward(self, low=False):
+        """ป้ายรางวัลออนไลน์ในกระเป๋าเวลา: ความคืบหน้าสัปดาห์นี้ หรือส่วนลดที่ได้รับ"""
+        if not hasattr(self, "reward_box"):
+            return
+        o = license_mgr.online_status()
+        key = (None if not o else (o["minutes"], bool(o.get("discount"))), low)
+        if key == self._reward_shown:
+            return
+        self._reward_shown = key
+        if not o:
+            self.reward_box.pack_forget()
+            return
+        if not self.reward_box.winfo_ismapped():
+            self.reward_box.pack(side="left", padx=(0, 12), before=self.reward_box.master.winfo_children()[-1])
+        goal = max(1, int(o.get("goalMinutes") or self.ONLINE_GOAL_HOURS * 60))
+        d = o.get("discount")
+        bg = "#2A1518" if low else COLOR_GOLD_BG
+        cv = self.cv_reward
+        cv.configure(bg=bg)
+        cv.delete("all")
+        cv.create_rectangle(0, 0, 118, 6, fill="#3A3220", outline="")
+        frac = 1.0 if d else min(1.0, o["minutes"] / goal)
+        cv.create_rectangle(0, 0, 118 * frac, 6, fill=COLOR_SUCCESS_GREEN if d or frac >= 1 else COLOR_GOLD_PRIMARY, outline="")
+        if d:
+            self.lbl_reward.configure(text=f"ส่วนลด {d['percent']}% พร้อมใช้ ›", text_color=COLOR_SUCCESS_GREEN)
+        else:
+            self.lbl_reward.configure(text=f"ออนไลน์ {o['minutes'] / 60:.1f}/{goal // 60} ชม.", text_color=COLOR_GOLD_PRIMARY)
+
+    def _reward_tip(self):
+        o = license_mgr.online_status()
+        if not o:
+            return ""
+        goal = int(o.get("goalMinutes") or self.ONLINE_GOAL_HOURS * 60) // 60
+        tip = (f"ออนไลน์ครบ {goal} ชม. ใน 1 สัปดาห์ (อาทิตย์–เสาร์) รับส่วนลด 10% ซื้อชั่วโมงครั้งถัดไป 1 รายการ\n"
+               f"นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมง · สัปดาห์นี้ {o['minutes'] / 60:.1f} ชม.")
+        d = o.get("discount")
+        if d:
+            try:
+                from datetime import datetime
+                exp = thai_time.from_epoch(datetime.fromisoformat(str(d["expiresAt"]).replace("Z", "+00:00")).timestamp(), "%d/%m %H:%M")
+            except Exception:
+                exp = "-"
+            tip += f"\nมีส่วนลด {d['percent']}% ใช้ได้ถึง {exp} น. (ภายใน 5 วัน) — คลิกเพื่อซื้อชั่วโมง"
+        return tip
+
     def _check_low_hours_alert(self, mins_left):
         """เตือนเวลาใกล้หมด: หน้าต่าง + เสียง + Console ครั้งเดียวต่อเกณฑ์ (เติมชั่วโมงจนเกินเกณฑ์แล้วจะเตือนใหม่ได้)"""
         warned = getattr(self, "_low_hours_warned", None)
@@ -4686,6 +4744,8 @@ class MainTradingApp(ctk.CTk):
                         fg_color="#2A1518" if low else COLOR_GOLD_BG,
                         border_color="#6B2A30" if low else "#5A4519",
                     )
+
+                self._update_reward(low)
 
                 # ตลาดปิด = ไม่นับชั่วโมง (แสดงสถานะให้ผู้ใช้เห็น)
                 if bot_ctrl.is_active and not bot_ctrl.is_paused:

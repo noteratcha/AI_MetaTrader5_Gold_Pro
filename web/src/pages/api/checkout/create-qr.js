@@ -3,6 +3,7 @@ import { allowMethods, requireUser } from '../../../lib/server/auth';
 import { generateOrderId } from '../../../lib/server/keys';
 import { getPackage } from '../../../lib/server/catalog';
 import { expireStaleOrders } from '../../../lib/server/orders';
+import { discountedPrice, reserveDiscount } from '../../../lib/server/onlineReward';
 
 const PROMPTPAY_ID = process.env.PROMPTPAY_ID || '';
 
@@ -24,7 +25,10 @@ export default async function handler(req, res) {
   }
 
   const orderId = generateOrderId();
-  const amount = pkg.price.toFixed(2);
+  // ส่วนลดรางวัลออนไลน์ (ครบ 100 ชม./สัปดาห์) — ผูกกับคำสั่งซื้อนี้ ใช้จริงเมื่อชำระสำเร็จ
+  const discount = await reserveDiscount(auth.user.id, orderId);
+  const price = discount ? discountedPrice(pkg.price, discount.percent) : pkg.price;
+  const amount = price.toFixed(2);
   const qrImageUrl = `https://promptpay.io/${encodeURIComponent(PROMPTPAY_ID)}/${amount}.png`;
   const createdAt = new Date().toISOString();
 
@@ -33,7 +37,7 @@ export default async function handler(req, res) {
     {
       order_id: orderId,
       package_id: pkg.id,
-      amount_thb: pkg.price,
+      amount_thb: price,
       hours_to_add: pkg.hours + pkg.bonus,
       status: 'PENDING',
       payment_method: 'PROMPTPAY',
@@ -41,6 +45,7 @@ export default async function handler(req, res) {
       created_at: createdAt,
       owner_user_id: auth.user.id,
       owner_email: auth.user.email,
+      ...(discount ? { discount_id: discount.id, discount_pct: discount.percent, original_amount_thb: pkg.price } : {}),
     },
     ['owner_user_id', 'owner_email']
   );
@@ -54,7 +59,9 @@ export default async function handler(req, res) {
     success: true,
     order_id: orderId,
     package_id: pkg.id,
-    amount_thb: pkg.price,
+    amount_thb: price,
+    original_amount_thb: pkg.price,
+    discount_pct: discount ? discount.percent : 0,
     hours_to_add: pkg.hours + pkg.bonus,
     qr_image_url: qrImageUrl,
     created_at: createdAt,
