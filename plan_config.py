@@ -129,27 +129,8 @@ DEFAULT_MARGIN_PER_TRADE = 400.0   # หลักประกันว่าง�
 
 
 def get_margin_per_trade(email: str = None) -> float:
-    """หลักประกันที่ต้องมีต่อ 1 ไม้ (ที่ Lot 0.01) ของผู้ใช้คนนี้ — ค่าเริ่มต้น 400 · บันทึกใน bot_settings.json คีย์ margin_per_trade[email]"""
-    try:
-        v = float((_settings().get("margin_per_trade") or {}).get((email or _current_email()) or "_local", DEFAULT_MARGIN_PER_TRADE))
-        return v if v >= 10 else DEFAULT_MARGIN_PER_TRADE
-    except Exception:
-        return DEFAULT_MARGIN_PER_TRADE
-
-
-def set_margin_per_trade(value: float, email: str = None):
-    key = (email or _current_email()) or "_local"
-    try:
-        with open(SETTINGS_FILE, encoding="utf-8") as f:
-            data = json.load(f) or {}
-    except Exception:
-        data = {}
-    data.setdefault("margin_per_trade", {})[key] = round(float(value), 2)
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f)
-
-
-MIN_BALANCE_USD = 25.0   # ยอดเงินขั้นต่ำ (Equity) ที่ระบบยอมเริ่มบอท/เปิดไม้ใหม่ (ผู้ใช้กำหนด 8 ต.ค. 2026)
+    """หลักประกันต่อ 1 ไม้ (ที่ Lot 0.01) — ล็อกไว้ 400 ผู้ใช้ตั้งเองไม่ได้ (ผู้ใช้สั่ง 8 ต.ค. 2026 · ค่าที่เคยบันทึกไว้ไม่ใช้แล้ว)"""
+    return DEFAULT_MARGIN_PER_TRADE
 
 
 def account_usd(acc) -> float:

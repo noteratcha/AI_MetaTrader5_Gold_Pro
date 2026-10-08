@@ -112,10 +112,9 @@ function Toc() {
 /** จำนวนไม้สูงสุด = หลักประกันว่าง ÷ (หลักประกันต่อไม้ × Lot/0.01) ปัดขึ้น อย่างน้อย 1 ไม้ — สูตรเดียวกับ plan_config.max_positions */
 function MarginCalc() {
   const [free, setFree] = useState('960');
-  const [per, setPer] = useState('400');
   const [lot, setLot] = useState('0.01');
   const f = parseFloat(free) || 0;
-  const perTrade = Math.max(parseFloat(per) || 0, 0) * Math.max(parseFloat(lot) || 0.01, 0.01) / 0.01;
+  const perTrade = 400 * Math.max(parseFloat(lot) || 0.01, 0.01) / 0.01;   // หลักประกันล็อก 400 ต่อไม้ (ที่ Lot 0.01)
   const n = perTrade > 0 ? Math.max(1, Math.ceil(f / perTrade - 1e-9)) : 1;
   const fmt = (v) => Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
   return (
@@ -125,10 +124,6 @@ function MarginCalc() {
           <span className="label">หลักประกันว่าง</span>
           <input id="calc-free" className="input mono" type="number" inputMode="decimal" min="0" step="1" value={free} onChange={(e) => setFree(e.target.value)} />
         </label>
-        <label className="field" htmlFor="calc-margin">
-          <span className="label">หลักประกันต่อไม้ (ที่ Lot 0.01)</span>
-          <input id="calc-margin" className="input mono" type="number" inputMode="decimal" min="10" step="10" value={per} onChange={(e) => setPer(e.target.value)} />
-        </label>
         <label className="field" htmlFor="calc-lot">
           <span className="label">Lot</span>
           <input id="calc-lot" className="input mono" type="number" inputMode="decimal" min="0.01" step="0.01" value={lot} onChange={(e) => setLot(e.target.value)} />
@@ -136,7 +131,7 @@ function MarginCalc() {
       </div>
       <div className="guide-calc-result">
         <span className="muted">บอทเปิดได้สูงสุด</span>
-        <output htmlFor="calc-free calc-margin calc-lot" className="text-green">{n} ไม้</output>
+        <output htmlFor="calc-free calc-lot" className="text-green">{n} ไม้</output>
         <span className="small faint">
           {fmt(f)} ÷ {fmt(perTrade)} ต่อไม้ (ปัดขึ้น)
         </span>
@@ -325,7 +320,7 @@ export default function GuideContent() {
                 { title: 'สมัครสมาชิก', body: 'สมัครที่เว็บนี้ (ปุ่มเข้าสู่ระบบมุมขวาบน) หรือที่หน้าเข้าสู่ระบบของโปรแกรม จากนั้นใส่รหัสยืนยัน 6 หลักที่ส่งไปทางอีเมล สมาชิกใหม่ได้เวลาใช้งานฟรี 48 ชม.' },
                 { title: 'ดาวน์โหลดตัวติดตั้ง', body: <>เปิดหน้า <Link href="/download">ดาวน์โหลด</Link> แล้วกดดาวน์โหลดไฟล์ <span className="mono">GoldBot24_Setup_v….exe</span> (ประมาณ 57 MB)</> },
                 { title: 'ติดตั้งโปรแกรม', body: <>ดับเบิลคลิกไฟล์ แล้วกด Next จนเสร็จ ไม่ต้องใช้สิทธิ์ Admin ถ้า Windows ขึ้น “Windows protected your PC” ให้กด <Ui>More info</Ui> แล้ว <Ui>Run anyway</Ui> ติดตั้งเสร็จจะมีไอคอนบน Desktop และใน Start Menu</> },
-                { title: 'เปิด MetaTrader 5', body: <>ล็อกอินบัญชี FBS ใน MT5 ทิ้งไว้ และกดปุ่ม <Ui>Algo Trading</Ui> บนแถบเครื่องมือให้เป็นสีเขียว</> },
+                { title: 'เปิด MetaTrader 5', body: <>ล็อกอินบัญชี FBS ใน MT5 ทิ้งไว้ ปุ่ม <Ui>Algo Trading</Ui> บนแถบเครื่องมือต้องเป็นสีเขียว — โปรแกรมกดเปิดให้อัตโนมัติตอนเปิดโปรแกรม ตอนเริ่มบอท และเมื่อสลับบัญชีใน MT5 (ถ้าเปิดให้ไม่ได้จะแจ้งให้กดเอง)</> },
                 { title: 'เข้าสู่ระบบโปรแกรม', body: <>เปิดโปรแกรม <strong>AI Gold Commander Pro</strong> แล้วเข้าสู่ระบบด้วยอีเมลและรหัสผ่านเดียวกับเว็บ ถ้าติ๊ก <Ui>จดจำการเข้าสู่ระบบในเครื่องนี้</Ui> ครั้งต่อไปไม่ต้องกรอกใหม่ ข้อมูลถูกเข้ารหัสเก็บไว้ในเครื่อง</> },
                 { title: 'ตั้งค่า แล้วเริ่มบอท', body: <>ตรวจขนาดไม้ (Lot) และแผนเทรดที่ติ๊กไว้ แล้วกด <Ui tone="gold">▶ เริ่มการทำงานบอท</Ui> ที่แผงควบคุมด้านขวา บอทจะเริ่มสแกนตลาดและเข้าไม้เองเมื่อเงื่อนไขครบ</> },
               ]}
@@ -366,7 +361,6 @@ export default function GuideContent() {
                   <tr><td className="nowrap">ยอดเงินในพอร์ต</td><td>กราฟแท่งกำไร/ขาดทุนรายวัน เลือกช่วง 7, 14, 30 วัน, เดือนนี้, 90 วัน หรือกำหนดวันที่เอง</td></tr>
                   <tr><td className="nowrap">ราคาทองคำ</td><td>กราฟแท่งเทียน M15 เรียลไทม์ เลือกได้ 16–500 แท่ง (ค่าเริ่มต้น 120) พร้อมเส้น MA5/MA13, Bid/Ask และไม้ที่เปิดอยู่</td></tr>
                   <tr><td className="nowrap">สภาวะตลาด</td><td>คำอธิบายว่าทำไมตอนนี้เป็น Uptrend, Downtrend หรือ Sideway และกฎที่แต่ละแผนใช้</td></tr>
-                  <tr><td className="nowrap">หลักประกันว่าง ›</td><td>ตั้งหลักประกันต่อ 1 ไม้ (ข้อ 6)</td></tr>
                   <tr><td className="nowrap">แถวในออเดอร์ที่เปิดอยู่</td><td>กราฟ M15 80 แท่งของไม้นั้นแบบเรียลไทม์ พร้อมอินดิเคเตอร์ของแผน (ข้อ 8)</td></tr>
                   <tr><td className="nowrap">แถวในประวัติการเทรด</td><td>กราฟและอินดิเคเตอร์ ณ ตอนที่ปิดไม้ (ข้อ 9)</td></tr>
                 </tbody>
@@ -389,7 +383,7 @@ export default function GuideContent() {
                   <tr><td className="nowrap">ปิดเมื่อกำไรถึง</td><td>ติ๊กเพื่อเปิดใช้แล้วใส่จำนวนเงิน เมื่อไม้ใดมีกำไร (รวม swap) ถึงค่าที่ตั้ง บอทจะปิดไม้นั้นทันที ใช้กับทุกแผนและไม้ที่เข้าเอง ค่าเริ่มต้นคือปิดใช้งาน</td></tr>
                   <tr><td className="nowrap">ออเดอร์ / สูงสุด</td><td>จำนวนไม้ที่เปิดอยู่เทียบกับจำนวนสูงสุดที่หลักประกันรองรับ ตัวเลขเป็นสีแดงเมื่อเต็ม</td></tr>
                   <tr><td className="nowrap">กำไรลอยตัว</td><td>กำไร/ขาดทุนรวมของไม้ที่ยังเปิดอยู่</td></tr>
-                  <tr><td className="nowrap">หลักประกันว่าง ›</td><td>หลักประกันที่เหลือ คลิกเพื่อตั้งหลักประกันต่อไม้ (ข้อ 6)</td></tr>
+                  <tr><td className="nowrap">หลักประกันว่าง</td><td>หลักประกันที่เหลือในบัญชี ใช้คิดจำนวนไม้สูงสุด (400 ต่อไม้ · ข้อ 6)</td></tr>
                   <tr><td className="nowrap">เวลาทำงาน</td><td>เวลาที่บอททำงานในรอบนี้</td></tr>
                   <tr><td className="nowrap"><Ui tone="buy">▲ BUY</Ui> <Ui tone="sell">▼ SELL</Ui></td><td>เข้าไม้เองทันที (ข้อ 7)</td></tr>
                   <tr><td className="nowrap">ปิดทั้งหมด (n)</td><td>ปิดทุกไม้ที่เปิดอยู่ ต้องกดยืนยันก่อน</td></tr>
@@ -429,11 +423,11 @@ export default function GuideContent() {
           </Section>
 
           <Section id="margin">
-            <p>บอทจำกัดจำนวนไม้ที่เปิดพร้อมกันตามหลักประกันว่าง ค่าเริ่มต้นคือ <strong>หลักประกัน 400 ต่อ 1 ไม้ที่ Lot 0.01</strong> นับแบบปัดเศษขึ้น และเปิดได้อย่างน้อย 1 ไม้เสมอ แต่ละแผนถือได้ครั้งละไม่เกิน 1 ไม้ ไม้ที่เข้าเองก็นับรวมในจำนวนนี้</p>
+            <p>บอทจำกัดจำนวนไม้ที่เปิดพร้อมกันตามหลักประกันว่าง ระบบล็อกไว้ที่ <strong>หลักประกัน 400 ต่อ 1 ไม้ที่ Lot 0.01</strong> (ผู้ใช้ปรับไม่ได้) นับแบบปัดเศษขึ้น และเปิดได้อย่างน้อย 1 ไม้เสมอ แต่ละแผนถือได้ครั้งละไม่เกิน 1 ไม้ ไม้ที่เข้าเองก็นับรวมในจำนวนนี้</p>
             <div className="table-wrap guide-table-wrap">
               <table className="table guide-table">
                 <thead>
-                  <tr><th>หลักประกันว่าง (ตั้งไว้ 400 ต่อไม้)</th><th className="num">เปิดได้สูงสุด</th></tr>
+                  <tr><th>หลักประกันว่าง (400 ต่อไม้)</th><th className="num">เปิดได้สูงสุด</th></tr>
                 </thead>
                 <tbody>
                   <tr><td>ไม่เกิน 400</td><td className="num">1 ไม้</td></tr>
@@ -445,16 +439,7 @@ export default function GuideContent() {
             <p>ถ้าใช้ Lot ใหญ่ขึ้น หลักประกันต่อไม้จะคูณตาม เช่น Lot 0.02 นับ 800 ต่อไม้</p>
             <h3>ลองคำนวณ</h3>
             <MarginCalc />
-            <h3>เปลี่ยนหลักประกันต่อไม้</h3>
-            <Steps
-              compact
-              items={[
-                { body: <>คลิกช่อง <Ui>หลักประกันว่าง ›</Ui> ในแผงควบคุม</> },
-                { body: 'พิมพ์ค่าเอง หรือกดปุ่มลัด 200, 300, 400, 500, 800 หน้าต่างจะคำนวณจำนวนไม้สูงสุดให้ทันที' },
-                { body: <>กด <Ui tone="gold">บันทึก</Ui> ระบบจำค่าแยกตามบัญชี</> },
-              ]}
-            />
-            <p className="muted">ตั้งค่าสูงขึ้น บอทจะเปิดพร้อมกันได้น้อยไม้ลงและปลอดภัยขึ้น ตั้งต่ำลงจะเปิดได้หลายไม้แต่เสี่ยงขึ้น หลักประกันว่างลดลงทุกครั้งที่เปิดไม้ จำนวนสูงสุดจึงลดลงตามได้</p>
+            <p className="muted">หลักประกันว่างลดลงทุกครั้งที่เปิดไม้ จำนวนไม้สูงสุดจึงลดลงตามได้</p>
           </Section>
 
           <Section id="manual">

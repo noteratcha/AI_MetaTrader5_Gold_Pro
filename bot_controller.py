@@ -5,6 +5,7 @@ import queue
 import re
 import MetaTrader5 as mt5
 import multi_asset_ai_bot as bot_core
+import mt5_algo
 from license_manager import license_mgr
 
 class OutputRedirector:
@@ -76,6 +77,11 @@ class BotController:
         if low:
             return False, low
 
+        # ปุ่ม Algo Trading ใน MT5 ต้องเปิด (ปิดอยู่ → กด Ctrl+E ให้อัตโนมัติ) — ไม่งั้นบอทส่งคำสั่ง/เลื่อน SL ไม่ได้
+        algo_ok, algo_msg = mt5_algo.ensure_enabled()
+        if not algo_ok:
+            return False, algo_msg
+
         # เปลี่ยนเส้นทาง stdout ไปยัง GUI
         sys.stdout = self.redirector
 
@@ -125,6 +131,10 @@ class BotController:
         low = self._min_balance_message()
         if low:
             return False, low
+
+        algo_ok, algo_msg = mt5_algo.ensure_enabled()
+        if not algo_ok:
+            return False, algo_msg
 
         bot_core.BOT_PAUSED_FLAG = False
         self.is_paused = False

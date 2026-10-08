@@ -13,6 +13,7 @@ import queue
 import threading
 import webbrowser
 import thai_time
+import mt5_algo
 import urllib.parse
 import tkinter as tk
 from tkinter import messagebox
@@ -642,113 +643,6 @@ class ContactDialog(ctk.CTkToplevel):
         self.clipboard_clear()
         self.clipboard_append(self.LINE_ID)
         self.btn_copy.configure(text="✓ แล้ว", text_color=COLOR_SUCCESS_GREEN)
-
-
-class MarginSettingDialog(ctk.CTkToplevel):
-    """ตั้งหลักประกันต่อ 1 ไม้ (จำแยกตามบัญชี) — ยิ่งตั้งสูง บอทยิ่งเปิดไม้พร้อมกันได้น้อยลง (ปลอดภัยขึ้น)"""
-
-    PRESETS = (200, 300, 400, 500, 800)
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.title("หลักประกันต่อไม้")
-        self.configure(fg_color=COLOR_BG_DARK)
-        self.transient(parent)
-        self.resizable(False, False)
-
-        def f(size, weight="normal", family="Segoe UI"):
-            return ctk.CTkFont(family=family, size=size, weight=weight)
-        self.f = f
-        t = bot_ctrl.get_telemetry()
-        self.free = float(t.get("free_margin", 0.0) or 0.0)
-        self.lot = float(parent._load_lot())
-        self.n_open = len(t.get("open_positions") or [])
-
-        ctk.CTkLabel(self, text="หลักประกันต่อ 1 ไม้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
-        for txt, color, pad in (("จำนวนไม้สูงสุด = หลักประกันว่าง ÷ หลักประกันต่อไม้ (เศษปัดขึ้น)", COLOR_TEXT_MUTED, (2, 0)),
-                                ("เช่น ตั้ง 400: ไม่เกิน 400 = 1 ไม้ · 401–800 = 2 ไม้ · 960 = 3 ไม้", COLOR_GOLD_PRIMARY, (0, 0)),
-                                ("ตั้งสูง = เปิดได้น้อยไม้ (ปลอดภัยขึ้น) · ตั้งต่ำ = เปิดได้หลายไม้ (เสี่ยงขึ้น)", COLOR_TEXT_MUTED, (0, 10))):
-            ctk.CTkLabel(self, text=txt, font=f(11), text_color=color, justify="left", height=20).pack(anchor="w", padx=20, pady=pad)
-
-        card = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
-        card.pack(fill="x", padx=18)
-        top = ctk.CTkFrame(card, fg_color="transparent")
-        top.pack(fill="x", padx=14, pady=(12, 6))
-        ctk.CTkLabel(top, text="หลักประกันว่างตอนนี้", font=f(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
-        ctk.CTkLabel(top, text=f"{self.free:,.2f}", font=f(15, "bold", "Consolas"), text_color=COLOR_TEXT_PRIMARY).pack(side="right")
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=14, pady=(2, 4))
-        ctk.CTkLabel(row, text="หลักประกันต่อ 1 ไม้ (ที่ Lot 0.01)", font=f(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
-        self.var = tk.StringVar(value=f"{plan_config.get_margin_per_trade():g}")
-        ent = ctk.CTkEntry(row, textvariable=self.var, width=100, height=32, justify="center", font=f(14, "bold", "Consolas"))
-        ent.pack(side="right")
-        chips = ctk.CTkFrame(card, fg_color="transparent")
-        chips.pack(fill="x", padx=14, pady=(4, 12))
-        for v in self.PRESETS:
-            ctk.CTkButton(chips, text=f"{v:,}" + (" (ค่าเริ่มต้น)" if v == 400 else ""), height=26,
-                          width=112 if v == 400 else 58, font=f(11, "bold"), corner_radius=13,
-                          fg_color="#1A1E27", hover_color="#262B36", border_width=1, border_color=COLOR_CARD_BORDER,
-                          text_color=COLOR_GOLD_PRIMARY if v == 400 else COLOR_TEXT_PRIMARY,
-                          command=lambda x=v: self.var.set(str(x))).pack(side="left", padx=2)
-
-        self.lbl_calc = ctk.CTkLabel(self, text="", font=f(13, "bold"), text_color=COLOR_SUCCESS_GREEN, justify="left")
-        self.lbl_calc.pack(anchor="w", padx=20, pady=(10, 0))
-        self.lbl_note = ctk.CTkLabel(self, text="", font=f(10), text_color=COLOR_TEXT_MUTED, justify="left")
-        self.lbl_note.pack(anchor="w", padx=20)
-        self.var.trace_add("write", lambda *_: self._refresh())
-
-        btns = ctk.CTkFrame(self, fg_color="transparent")
-        btns.pack(fill="x", padx=18, pady=(12, 18))
-        ctk.CTkButton(btns, text="ยกเลิก", width=100, height=40, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
-                      border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
-        self.btn_ok = ctk.CTkButton(btns, text="บันทึก", height=40, font=f(14, "bold"), fg_color=COLOR_GOLD_PRIMARY,
-                                    hover_color=COLOR_GOLD_WARM, text_color="#1A1406", command=self._save)
-        self.btn_ok.pack(side="right", fill="x", expand=True, padx=(0, 10))
-        self.bind("<Return>", lambda e: self._save())
-        self.bind("<Escape>", lambda e: self.destroy())
-        self._refresh()
-        self.update_idletasks()
-        w, h = 460, self.winfo_reqheight()
-        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
-        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
-        self.geometry(f"{w}x{h}+{x}+{y}")
-        self.grab_set()
-        ent.focus_set()
-
-    def _value(self):
-        try:
-            v = float(str(self.var.get()).replace(",", "").strip())
-            return v if 10 <= v <= 1000000 else None
-        except ValueError:
-            return None
-
-    def _refresh(self):
-        v = self._value()
-        if v is None:
-            self.lbl_calc.configure(text="ใส่ตัวเลข 10 ขึ้นไป", text_color=COLOR_DANGER_RED)
-            self.lbl_note.configure(text="")
-            self.btn_ok.configure(state="disabled")
-            return
-        per = v * max(self.lot, 0.01) / 0.01
-        n = plan_config.max_positions(self.free, self.lot, margin=v)
-        self.lbl_calc.configure(text=f"หลักประกันว่าง {self.free:,.2f} ÷ {per:,.0f} (ปัดขึ้น) → เปิดได้สูงสุด {n} ไม้ (เปิดอยู่ {self.n_open})",
-                                text_color=COLOR_SUCCESS_GREEN)
-        lot_note = f"Lot ตอนนี้ {self.lot:.2f} → ใช้ {per:,.0f} ต่อไม้" if abs(self.lot - 0.01) > 1e-9 else "Lot 0.01 → ใช้ตามค่าที่ตั้ง"
-        self.lbl_note.configure(text=f"{lot_note} · อย่างน้อยเปิดได้ 1 ไม้เสมอ · จำค่าแยกตามบัญชี")
-        self.btn_ok.configure(state="normal")
-
-    def _save(self):
-        v = self._value()
-        if v is None:
-            return
-        try:
-            plan_config.set_margin_per_trade(v)
-            print(f"[MARGIN SETTING] หลักประกันต่อไม้ = {v:,.0f} (ที่ Lot 0.01)")
-        except Exception as e:
-            self.lbl_calc.configure(text=f"บันทึกไม่สำเร็จ: {e}", text_color=COLOR_DANGER_RED)
-            return
-        self.destroy()
 
 
 class QuickOrderDialog(ctk.CTkToplevel):
@@ -2656,6 +2550,8 @@ class MainTradingApp(ctk.CTk):
         self._update_result = None
         self._last_update_check = 0.0
         self.after(800, self._start_update_check)
+        # เปิดปุ่ม Algo Trading ใน MT5 ให้อัตโนมัติถ้ายังปิดอยู่ (ผู้ใช้สั่ง 8 ต.ค. 2026)
+        self.after(2500, self._auto_algo_trading)
 
     # ---------------------------------------------------------------------
     # ส่วนประกอบ UI ใช้ซ้ำ
@@ -3138,11 +3034,10 @@ class MainTradingApp(ctk.CTk):
         stats.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="ctl_stats")
         self.ctl_stat_labels = {}
         for col, (key, title, init) in enumerate((("open", "ออเดอร์ / สูงสุด", "0 / 0"), ("float", "กำไรลอยตัว", "0.00"),
-                                                  ("margin", "หลักประกันว่าง ›", "0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
+                                                  ("margin", "หลักประกันว่าง", "0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
             box = ctk.CTkFrame(stats, fg_color="transparent")
             box.grid(row=0, column=col, sticky="nsew", pady=5)
-            ttl = ctk.CTkLabel(box, text=title, font=self._font(10), height=16,
-                               text_color=COLOR_GOLD_WARM if key == "margin" else COLOR_TEXT_MUTED)
+            ttl = ctk.CTkLabel(box, text=title, font=self._font(10), height=16, text_color=COLOR_TEXT_MUTED)
             ttl.pack()
             val = ctk.CTkLabel(box, text=init, font=self._font(14, "bold"), text_color=COLOR_TEXT_PRIMARY, height=22)
             val.pack()
@@ -3151,10 +3046,8 @@ class MainTradingApp(ctk.CTk):
                 for w in (box, val, ttl):
                     w.configure(cursor="hand2")
                     w.bind("<Button-1>", lambda e: self.main_tabs.set(self.TAB_POSITIONS))
-            if key == "margin":  # กดหลักประกัน → ตั้งหลักประกันต่อไม้
-                for w in (box, val, ttl):
-                    w.configure(cursor="hand2")
-                    w.bind("<Button-1>", lambda e: self._open_margin_setting())
+            if key == "margin":  # หลักประกันล็อก 400 ต่อไม้ (ตั้งเองไม่ได้) — ชี้ดูวิธีคิดจำนวนไม้
+                HoverTip(box, lambda: "จำนวนไม้สูงสุด = หลักประกันว่าง ÷ 400 ต่อไม้ (ที่ Lot 0.01 · เศษปัดขึ้น)")
 
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(8, 12))
@@ -3541,6 +3434,29 @@ class MainTradingApp(ctk.CTk):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f)
 
+    def _auto_algo_trading(self, reason=""):
+        """ตรวจปุ่ม Algo Trading ใน MT5 — ปิดอยู่ → กด Ctrl+E ให้ (เธรดเบื้องหลัง) แล้วแจ้งผลใน Console
+        เรียกตอนเปิดโปรแกรม และเมื่อ MT5 เปลี่ยนบัญชี (MT5 มักปิด Algo Trading เองเมื่อสลับบัญชี)"""
+        if getattr(self, "_algo_busy", False):
+            return
+        self._algo_busy = True
+
+        def worker():
+            try:
+                ok, msg = mt5_algo.ensure_enabled()
+            except Exception as e:
+                ok, msg = False, f"ตรวจ Algo Trading ไม่สำเร็จ ({e})"
+            def done():
+                self._algo_busy = False
+                try:
+                    self._append_console(self._console_formatter.feed(f"[ALGO TRADING] {reason}{msg}\n"))
+                except Exception:
+                    pass
+                if not ok:
+                    messagebox.showwarning("Algo Trading ใน MT5 ยังปิดอยู่", msg + "\nบอทเทรดไม่ได้จนกว่าปุ่ม Algo Trading ใน MT5 จะเป็นสีเขียว")
+            self.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
+
     def _append_console(self, entries):
         """เพิ่มข้อความที่จัดรูปแบบแล้วลงคอนโซล (เคารพตัวเลือก 'รายละเอียดการสแกน')"""
         show_detail = self.show_detail_var.get()
@@ -3846,7 +3762,8 @@ class MainTradingApp(ctk.CTk):
         (messagebox.showinfo if ok else messagebox.showwarning)("ผลการปิดออเดอร์", msg)
 
     # ---- ประวัติการเทรด (5 รายการต่อหน้า) ----
-    HISTORY_PAGE_SIZE = 10
+    HISTORY_PAGE_SIZE = 10                      # จำนวนแถวเริ่มต้น — ปรับตามพื้นที่จริงด้วย _fit_history()
+    HISTORY_MIN_ROWS, HISTORY_MAX_ROWS = 5, 40
     @staticmethod
     def _close_reason(r):
         """ไม้ปิดด้วยอะไร → (ข้อความ, สี) จาก reason ของ Deal ปิดใน MT5 + คอมเมนต์ที่บอทใส่"""
@@ -3890,6 +3807,9 @@ class MainTradingApp(ctk.CTk):
     ]
 
     def _build_history_tab(self, parent):
+        self._hist_parent = parent
+        self._hist_size = self.HISTORY_PAGE_SIZE
+        self._hist_fit_job = None
         top = ctk.CTkFrame(parent, fg_color="transparent")
         top.pack(fill="x", padx=6, pady=(0, 8))
         self.lbl_history_summary = ctk.CTkLabel(top, text="กำลังโหลดประวัติจาก MT5...", font=self._font(12), text_color=COLOR_TEXT_MUTED)
@@ -3898,8 +3818,20 @@ class MainTradingApp(ctk.CTk):
         ctk.CTkLabel(top, text="คลิกรายการเพื่อดูกราฟ M15 + อินดิเคเตอร์ ณ ตอนปิดไม้", font=self._font(10),
                      text_color=COLOR_TEXT_MUTED).pack(side="right", padx=10)
 
+        # แถบเปลี่ยนหน้าชิดขอบล่าง — พื้นที่ระหว่างตารางกับแถบนี้ใช้เพิ่มจำนวนแถว (ไม่ปล่อยว่าง)
+        pager = ctk.CTkFrame(parent, fg_color="transparent")
+        pager.pack(side="bottom", fill="x", padx=6, pady=(6, 4))
+        self._hist_pager = pager
+        self.btn_history_prev = self._small_button(pager, "◀ ใหม่กว่า", lambda: self._change_history_page(-1), width=90)
+        self.btn_history_prev.pack(side="left")
+        self.lbl_history_page = ctk.CTkLabel(pager, text="หน้า 1 / 1", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY)
+        self.lbl_history_page.pack(side="left", expand=True)
+        self.btn_history_next = self._small_button(pager, "เก่ากว่า ▶", lambda: self._change_history_page(1), width=90)
+        self.btn_history_next.pack(side="right")
+
         table = ctk.CTkFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
         table.pack(fill="x", padx=6)
+        self._hist_table = table
         for col, (_, width, _) in enumerate(self.HISTORY_COLUMNS):
             table.grid_columnconfigure(col, minsize=width, weight=1 if col == 2 else 0)
 
@@ -3909,14 +3841,23 @@ class MainTradingApp(ctk.CTk):
             )
         ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=1, column=0, columnspan=len(self.HISTORY_COLUMNS), sticky="ew", padx=6)
 
-        # สร้างแถวไว้ล่วงหน้า 10 แถว แล้วอัปเดตข้อความแทนการสร้างใหม่ (ลื่นกว่า) · สูงแถวละ 28 ให้พอดีจอ 1366×768
+        # แถวสร้างครั้งเดียวแล้วอัปเดตข้อความ (ลื่นกว่า) · จำนวนแถวที่แสดง = พื้นที่ที่เหลือ (_fit_history)
         self.history_cells = []
-        for r in range(self.HISTORY_PAGE_SIZE):
+        ctk.CTkFrame(table, fg_color="transparent", height=6, width=1).grid(row=999, column=0)   # ระยะขอบล่างของตาราง
+        self._ensure_history_rows(self._hist_size)
+
+        self.lbl_history_empty = ctk.CTkLabel(parent, text="", font=self._font(12), text_color=COLOR_TEXT_MUTED, height=20)
+        self.lbl_history_empty.pack(pady=(4, 0))
+        parent.bind("<Configure>", lambda e: self._schedule_history_fit(), add="+")
+
+    def _ensure_history_rows(self, n):
+        """ให้ตารางประวัติแสดง n แถว: สร้างแถวที่ยังไม่มี · ซ่อนแถวเกิน (grid_remove จำตำแหน่งเดิมไว้)"""
+        while len(self.history_cells) < n:
+            r = len(self.history_cells)
             cells = []
             for col, (_, _, anchor) in enumerate(self.HISTORY_COLUMNS):
-                lbl = ctk.CTkLabel(table, text="", font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor=anchor, height=28)
-                last = r == self.HISTORY_PAGE_SIZE - 1
-                lbl.grid(row=r + 2, column=col, sticky="ew", padx=6, pady=(0, 6) if last else 0)
+                lbl = ctk.CTkLabel(self._hist_table, text="", font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor=anchor, height=28)
+                lbl.grid(row=r + 2, column=col, sticky="ew", padx=6)
                 lbl.bind("<Button-1>", lambda e, i=r: self._open_history_detail(i), add="+")   # คลิกแถว → กราฟตอนปิดไม้
                 try:
                     lbl.configure(cursor="hand2")
@@ -3924,18 +3865,44 @@ class MainTradingApp(ctk.CTk):
                     pass
                 cells.append(lbl)
             self.history_cells.append(cells)
+        for r, cells in enumerate(self.history_cells):
+            for c in cells:
+                if r < n:
+                    c.grid()
+                else:
+                    c.grid_remove()
 
-        self.lbl_history_empty = ctk.CTkLabel(parent, text="", font=self._font(12), text_color=COLOR_TEXT_MUTED)
-        self.lbl_history_empty.pack(pady=(8, 0))
+    def _schedule_history_fit(self):
+        if self._hist_fit_job is not None:
+            try:
+                self.after_cancel(self._hist_fit_job)
+            except Exception:
+                pass
+        self._hist_fit_job = self.after(120, self._fit_history)
 
-        pager = ctk.CTkFrame(parent, fg_color="transparent")
-        pager.pack(fill="x", padx=6, pady=(6, 0))
-        self.btn_history_prev = self._small_button(pager, "◀ ใหม่กว่า", lambda: self._change_history_page(-1), width=90)
-        self.btn_history_prev.pack(side="left")
-        self.lbl_history_page = ctk.CTkLabel(pager, text="หน้า 1 / 1", font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY)
-        self.lbl_history_page.pack(side="left", expand=True)
-        self.btn_history_next = self._small_button(pager, "เก่ากว่า ▶", lambda: self._change_history_page(1), width=90)
-        self.btn_history_next.pack(side="right")
+    def _fit_history(self):
+        """ปรับจำนวนแถวให้เต็มพื้นที่ระหว่างตารางกับแถบเปลี่ยนหน้า (5–40 แถว) — คงไม้แรกของหน้าที่ดูอยู่"""
+        self._hist_fit_job = None
+        try:
+            if not self._hist_parent.winfo_ismapped() or not self.history_cells:
+                return
+            row_h = self.history_cells[0][0].winfo_height()
+            if row_h < 10:
+                return
+            table_bottom = self._hist_table.winfo_y() + self._hist_table.winfo_reqheight()   # ความสูงที่ต้องการจริง (ตอนล้น Tk จะบีบความสูงที่แสดง)
+            empty_h = self.lbl_history_empty.winfo_height() + 4 if self.lbl_history_empty.winfo_ismapped() else 0
+            free = self._hist_pager.winfo_y() - table_bottom - empty_h - 8
+            n = max(self.HISTORY_MIN_ROWS, min(self.HISTORY_MAX_ROWS, self._hist_size + int(free // row_h)))
+        except Exception:
+            return
+        if n == self._hist_size:
+            return
+        first = self._history_page * self._hist_size
+        self._hist_size = n
+        self._ensure_history_rows(n)
+        self._history_page = first // n
+        self._render_history()
+        self._schedule_history_fit()   # ตรวจซ้ำหลังจัดวางใหม่ (ขนาดแถวจริงอาจต่างเล็กน้อย)
 
     def _refresh_history_async(self, force=False):
         if self._history_loading and not force:
@@ -3952,7 +3919,7 @@ class MainTradingApp(ctk.CTk):
 
     def _open_history_detail(self, i):
         """คลิกแถวประวัติ: ไม้ที่ปิดแล้ว → ภาพ ณ ตอนปิด · ไม้ที่ยังเปิดอยู่ → กราฟเรียลไทม์ (1 หน้าต่างต่อ 1 ไม้)"""
-        idx = self._history_page * self.HISTORY_PAGE_SIZE + i
+        idx = self._history_page * self._hist_size + i
         if idx >= len(self._history_rows):
             return
         r = self._history_rows[idx]
@@ -3975,7 +3942,7 @@ class MainTradingApp(ctk.CTk):
         wins[key] = PositionDetailDialog(self, {"ticket": r["ticket"], "type": r.get("side"), "comment": r.get("plan")}, trade=r)
 
     def _change_history_page(self, delta):
-        pages = max(1, -(-len(self._history_rows) // self.HISTORY_PAGE_SIZE))
+        pages = max(1, -(-len(self._history_rows) // self._hist_size))
         self._history_page = min(max(0, self._history_page + delta), pages - 1)
         self._render_history()
 
@@ -3988,10 +3955,10 @@ class MainTradingApp(ctk.CTk):
     def _render_history(self):
         rows = self._history_rows
         total = len(rows)
-        pages = max(1, -(-total // self.HISTORY_PAGE_SIZE))
+        pages = max(1, -(-total // self._hist_size))
         self._history_page = min(self._history_page, pages - 1)
-        start = self._history_page * self.HISTORY_PAGE_SIZE
-        page_rows = rows[start:start + self.HISTORY_PAGE_SIZE]
+        start = self._history_page * self._hist_size
+        page_rows = rows[start:start + self._hist_size]
 
         closed = [r for r in rows if r.get("status") == "CLOSED"]
         wins = sum(1 for r in closed if r["profit"] > 0)
@@ -4003,7 +3970,7 @@ class MainTradingApp(ctk.CTk):
             text_color=COLOR_SUCCESS_GREEN if net > 0 else (COLOR_DANGER_RED if net < 0 else COLOR_TEXT_MUTED),
         )
 
-        for i, cells in enumerate(self.history_cells):
+        for i, cells in enumerate(self.history_cells[:self._hist_size]):
             if i >= len(page_rows):
                 for c in cells:
                     c.configure(text="")
@@ -4035,6 +4002,10 @@ class MainTradingApp(ctk.CTk):
                 c.configure(text=v, text_color=color)
 
         self.lbl_history_empty.configure(text="" if total else "ยังไม่มีประวัติการเทรด XAUUSD ใน 90 วันที่ผ่านมา")
+        if total:   # มีข้อมูล → ซ่อนป้ายว่าง ให้พื้นที่ไปเป็นแถว
+            self.lbl_history_empty.pack_forget()
+        elif not self.lbl_history_empty.winfo_ismapped():
+            self.lbl_history_empty.pack(pady=(4, 0), after=self._hist_table)
         self.lbl_history_page.configure(text=f"หน้า {self._history_page + 1} / {pages}  ·  ทั้งหมด {total} ไม้")
         self.btn_history_prev.configure(state="normal" if self._history_page > 0 else "disabled")
         self.btn_history_next.configure(state="normal" if self._history_page < pages - 1 else "disabled")
@@ -4433,16 +4404,6 @@ class MainTradingApp(ctk.CTk):
             pass
         self._quick_dialog = QuickOrderDialog(self, side)
 
-    def _open_margin_setting(self):
-        dlg = getattr(self, "_margin_dialog", None)
-        try:
-            if dlg is not None and dlg.winfo_exists():
-                dlg.lift()
-                return
-        except Exception:
-            pass
-        self._margin_dialog = MarginSettingDialog(self)
-
     def _on_click_close_all(self):
         """กดปุ่ม Emergency ปิดทุกออเดอร์ทันที"""
         n = len(bot_ctrl.get_telemetry().get("open_positions") or [])
@@ -4531,6 +4492,16 @@ class MainTradingApp(ctk.CTk):
                 if hasattr(self, "ai_box"):
                     self._render_ai_outlook()
                 telemetry = bot_ctrl.get_telemetry()
+
+                # MT5 เปลี่ยนบัญชี → ตรวจ/เปิด Algo Trading ให้บัญชีใหม่ (รอ MT5 สลับเสร็จ 3 วิ แล้วตรวจซ้ำที่ 10 วิ)
+                login_now = int(telemetry.get("login") or 0)
+                if login_now:
+                    prev_login = getattr(self, "_algo_login", None)
+                    self._algo_login = login_now
+                    if prev_login is not None and prev_login != login_now:
+                        why = f"เปลี่ยนเป็นบัญชี #{login_now} · "
+                        self.after(3000, lambda w=why: self._auto_algo_trading(w))
+                        self.after(10000, lambda w=why: self._auto_algo_trading(w))
 
                 # อัปเดตชั่วโมงคงเหลือ (ชั่วโมง.นาที)
                 hrs_str = telemetry.get("remaining_time", "0.00")
