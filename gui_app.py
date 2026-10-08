@@ -816,12 +816,20 @@ class QuickOrderDialog(ctk.CTkToplevel):
     def _tick(self):
         """อัปเดตราคา Bid/Ask ทุก 1 วินาที"""
         try:
+            if not self.winfo_exists():
+                return   # ปิดหน้าต่างแล้ว
+        except Exception:
+            return
+        try:
             import MetaTrader5 as _mt5
             t = _mt5.symbol_info_tick("XAUUSD")
             if t:
                 self.d["bid"], self.d["ask"] = float(t.bid), float(t.ask)
                 self._refresh()
-            self.after(1000, self._tick)
+        except Exception:
+            pass
+        try:
+            self.after(1000, self._tick)   # ตั้งรอบถัดไปเสมอ (เดิม error ครั้งเดียวทำให้ราคาในหน้าต่างยืนยันค้าง)
         except Exception:
             pass
 
@@ -1044,15 +1052,25 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
     def _tick(self, reschedule=True):
         try:
+            self._tick_once()
+        except Exception:
+            pass   # ข้อมูลชั่วคราวผิดพลาด — ไม่ให้กราฟค้างถาวร ลองใหม่รอบหน้า
+        if reschedule:
+            try:
+                self._job = self.after(self.REFRESH_MS, self._tick)
+            except Exception:
+                pass   # หน้าต่างถูกปิดแล้ว
+
+    def _tick_once(self):
+        try:
             n = int(self.bars_var.get())
         except Exception:
             n = self.BARS
         data = bot_ctrl.get_live_candles(n)
         if data:
             self.data = data
-            # เวลาเซิร์ฟเวอร์ MT5 → เวลาไทย (ปัดส่วนต่างเป็นชั่วโมง)
-            off = round((data["server_time"] - time.time()) / 3600) * 3600
-            self.offset = off if abs(off) <= 14 * 3600 else 0
+            # เวลาเซิร์ฟเวอร์ MT5 → เวลาไทย (thai_time: ตลาดปิด/tick เก่าก็ยังถูก)
+            self.offset = thai_time.server_offset()
             c = data["candles"]
             last = c[-1]
             chg = last["close"] - last["open"]
@@ -1073,8 +1091,6 @@ class GoldCandleDialog(ctk.CTkToplevel):
             self._draw()
         else:
             self.lbl_tip.configure(text="เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
-        if reschedule:
-            self._job = self.after(self.REFRESH_MS, self._tick)
 
     def _draw(self):
         cv = self.canvas
@@ -1298,6 +1314,17 @@ class PositionDetailDialog(ctk.CTkToplevel):
 
     def _tick(self):
         try:
+            self._tick_once()
+        except Exception:
+            pass   # เช่น ไม้ปิดระหว่างอัปเดต — ไม่ให้หน้าต่างค้างถาวร ลองใหม่รอบหน้า
+        if not self.closed:   # ไม้ที่ปิดแล้ว = ภาพนิ่ง ณ ตอนปิด
+            try:
+                self._job = self.after(self.REFRESH_MS, self._tick)
+            except Exception:
+                pass   # หน้าต่างถูกปิดแล้ว
+
+    def _tick_once(self):
+        try:
             if self.closed:
                 d = position_chart.get_closed(self.trade, self.BARS)
             else:
@@ -1320,8 +1347,6 @@ class PositionDetailDialog(ctk.CTkToplevel):
         else:
             self.lbl_tip.configure(text="ไม่พบข้อมูลราคาช่วงเวลาของไม้นี้ใน MT5" if self.closed
                                    else "เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
-        if not self.closed:   # ไม้ที่ปิดแล้ว = ภาพนิ่ง ณ ตอนปิด
-            self._job = self.after(self.REFRESH_MS, self._tick)
 
     # ---- ส่วนหัว + การ์ดตัวเลข ----
     def _update_header(self, d):
@@ -3123,24 +3148,38 @@ class MainTradingApp(ctk.CTk):
         for w in (box, self._mq):
             w.bind("<Button-1>", open_calendar)
         HoverTip(self._mq, lambda: "คลิกเพื่อดูปฏิทินข่าวทั้งหมด")
-        self.after(500, self._marquee_tick)
+        self._mq_gen = getattr(self, "_mq_gen", 0) + 1   # สร้างแถบหัวใหม่ → รอบวิ่งของตัวเก่าหยุดเอง (ไม่วิ่งซ้อนเร็วขึ้น 2 เท่า)
+        self.after(500, lambda g=self._mq_gen: self._marquee_tick(g))
 
-    def _marquee_tick(self):
+    def _marquee_tick(self, gen=None):
         """เลื่อนข้อความวิ่งจากขวาไปซ้าย (~50 px/วินาที) · ชี้เมาส์ค้างไว้เพื่อหยุดอ่าน"""
+        if gen != getattr(self, "_mq_gen", None):
+            return
+        cv = getattr(self, "_mq", None)
         try:
-            cv = self._mq
+            if cv is None or not cv.winfo_exists():
+                return   # แถบหัวถูกสร้างใหม่ (ออกจากระบบ/สลับหน้า) — ตัวใหม่เริ่มรอบของตัวเอง
+        except Exception:
+            return
+        try:
             w = cv.winfo_width()
             x0, _, x1, _ = cv.bbox(self._mq_item) or (0, 0, 0, 0)
             tw = x1 - x0
             if self._mq_x is None or self._mq_x + tw < 0:
                 self._mq_x = w
-            under = cv.winfo_containing(cv.winfo_pointerx(), cv.winfo_pointery()) is cv
+            try:
+                under = cv.winfo_containing(cv.winfo_pointerx(), cv.winfo_pointery()) is cv
+            except Exception:
+                under = False   # เมาส์อยู่บนเมนู dropdown/หน้าต่างอื่น — Tk หา widget ไม่เจอ (KeyError)
             if not under:
                 self._mq_x -= 1.5
             cv.coords(self._mq_item, self._mq_x, 12)
-            self.after(30, self._marquee_tick)
         except Exception:
-            pass   # หน้าต่างถูกปิด/สลับหน้า
+            pass
+        try:
+            self.after(30, lambda: self._marquee_tick(gen))   # ตั้งรอบถัดไปเสมอ (เดิม error ครั้งเดียวทำให้ข้อความหยุดวิ่งถาวร)
+        except Exception:
+            pass
 
     PLAN_ROWS = [
         ("📈", "P1 · MA M15", "Plan 1: MA-Cross-Trend"),
@@ -3275,8 +3314,11 @@ class MainTradingApp(ctk.CTk):
         (Tk ห้ามเรียกจากเธรดอื่น จึงส่งผลผ่านตัวแปรแทน self.after)"""
         st = self.__dict__.setdefault("_ma_state", {"data": None, "busy": False, "next": 0.0})
         if st["data"] is not None:
-            self._apply_ma_order(st["data"])
-            st["data"] = None
+            data, st["data"] = st["data"], None
+            try:
+                self._apply_ma_order(data)
+            except Exception:
+                pass   # ค่า MA ไม่ครบ (ข้อมูลแท่งไม่พอ) — ไม่ให้ลูปหยุด
         if not st["busy"] and time.time() >= st["next"]:
             st["busy"], st["next"] = True, time.time() + 30
 
@@ -3479,7 +3521,7 @@ class MainTradingApp(ctk.CTk):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f)
 
-    def _auto_algo_trading(self, reason=""):
+    def _auto_algo_trading(self, reason="", warn=True):
         """ตรวจปุ่ม Algo Trading ใน MT5 — ปิดอยู่ → กด Ctrl+E ให้ (เธรดเบื้องหลัง) แล้วแจ้งผลใน Console
         เรียกตอนเปิดโปรแกรม และเมื่อ MT5 เปลี่ยนบัญชี (MT5 มักปิด Algo Trading เองเมื่อสลับบัญชี)"""
         if getattr(self, "_algo_busy", False):
@@ -3497,7 +3539,7 @@ class MainTradingApp(ctk.CTk):
                     self._append_console(self._console_formatter.feed(f"[ALGO TRADING] {reason}{msg}\n"))
                 except Exception:
                     pass
-                if not ok:
+                if not ok and warn:
                     messagebox.showwarning("Algo Trading ใน MT5 ยังปิดอยู่", msg + "\nบอทเทรดไม่ได้จนกว่าปุ่ม Algo Trading ใน MT5 จะเป็นสีเขียว")
             self.after(0, done)
         threading.Thread(target=worker, daemon=True).start()
@@ -4624,7 +4666,7 @@ class MainTradingApp(ctk.CTk):
                     self._algo_login = login_now
                     if prev_login is not None and prev_login != login_now:
                         why = f"เปลี่ยนเป็นบัญชี #{login_now} · "
-                        self.after(3000, lambda w=why: self._auto_algo_trading(w))
+                        self.after(3000, lambda w=why: self._auto_algo_trading(w, warn=False))   # MT5 อาจยังสลับไม่เสร็จ — ไม่เตือน
                         self.after(10000, lambda w=why: self._auto_algo_trading(w))
 
                 # อัปเดตชั่วโมงคงเหลือ (ชั่วโมง.นาที)

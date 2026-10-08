@@ -15,6 +15,7 @@ import MetaTrader5 as mt5
 import pandas as pd
 
 import multi_asset_ai_bot as bot
+import thai_time
 
 SYMBOL = "XAUUSD"
 CTX_TTL = 15
@@ -47,13 +48,9 @@ def _f(v):
         return None
 
 
-def _server_offset():
-    """เวลาเซิร์ฟเวอร์ MT5 − เวลาจริง (วินาที ปัดเป็นชั่วโมง)"""
-    tick = mt5.symbol_info_tick(SYMBOL)
-    if not tick:
-        return 0
-    off = round((tick.time - time.time()) / 3600) * 3600
-    return off if abs(off) <= 14 * 3600 else 0
+def _server_offset(server_ts=None):
+    """เวลาเซิร์ฟเวอร์ MT5 − เวลาจริง (วินาที) ณ เวลานั้น — ใช้ thai_time (ตลาดปิด/tick เก่าก็ยังถูก)"""
+    return thai_time.server_offset_at(server_ts)
 
 
 def _rates_df(rates):
@@ -478,7 +475,7 @@ def get_closed(trade, count=80):
     ctx = _context_from(h1, h4, exit_px)
     _map_h1(m, ctx)
 
-    offset = _server_offset()
+    offset = _server_offset(close_t)
     sl, tp, path = _sl_tp_at_close(pid, open_t, close_t, trade.get("close_reason"), offset)
 
     # กำไรสูงสุด / ติดลบสูงสุดระหว่างถือ (จากแท่ง M1 — ถ้าไม่มีใช้ M15)

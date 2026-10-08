@@ -235,8 +235,7 @@ def _web_extras():
         c = bot_ctrl.get_live_candles(16)
         if c:
             from datetime import timezone as _tz
-            off = round((c["server_time"] - time.time()) / 3600) * 3600
-            off = off if abs(off) <= 14 * 3600 else 0
+            off = thai_time.server_offset()   # ตลาดปิด/tick เก่าก็ยังถูก
             th = _tz(timedelta(hours=7))
             extra["candles"] = [{**{k: (round(v, 2) if isinstance(v, float) else v) for k, v in x.items()},
                                  "label": datetime.fromtimestamp(x["time"] - off, th).strftime("%H:%M")} for x in c["candles"]]

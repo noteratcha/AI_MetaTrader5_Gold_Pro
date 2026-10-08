@@ -6,6 +6,7 @@ import re
 import MetaTrader5 as mt5
 import multi_asset_ai_bot as bot_core
 import mt5_algo
+import thai_time
 from license_manager import license_mgr
 
 class OutputRedirector:
@@ -521,18 +522,14 @@ class BotController:
         try:
             if mt5.terminal_info() is None and not mt5.initialize():
                 return list(days.values())
-            # เวลา Deal ของ MT5 = เวลาเซิร์ฟเวอร์ → หาส่วนต่างกับ UTC จาก tick ล่าสุด (ปัดเป็นชั่วโมง)
-            tick = mt5.symbol_info_tick("XAUUSD")
-            offset = round((tick.time - time.time()) / 3600) * 3600 if tick and tick.time else 0
-            if abs(offset) > 14 * 3600:
-                offset = 0  # ตลาดปิดนาน (tick เก่า) — ถือว่าเป็น UTC
+            # เวลา Deal ของ MT5 = เวลาเซิร์ฟเวอร์ → แปลงเป็นเวลาจริงด้วย thai_time (ตลาดปิดก็ยังถูก · คิดตาม DST ของวันนั้น)
             th = timezone(timedelta(hours=7))
             deals = mt5.history_deals_get(datetime.combine(start_date, datetime.min.time()) - timedelta(days=1),
                                           datetime.combine(end_date, datetime.min.time()) + timedelta(days=2)) or []
             for dl in deals:
                 if dl.type not in (0, 1):  # เฉพาะ Deal ซื้อ/ขาย (ไม่นับฝาก-ถอน/โบนัส)
                     continue
-                day = datetime.fromtimestamp(int(dl.time) - offset, th).date()
+                day = datetime.fromtimestamp(thai_time.server_to_epoch(int(dl.time)), th).date()
                 if day not in days:
                     continue
                 days[day]["profit"] += float(dl.profit) + float(getattr(dl, "commission", 0.0)) + float(getattr(dl, "swap", 0.0))

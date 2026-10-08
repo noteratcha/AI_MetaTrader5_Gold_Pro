@@ -181,7 +181,7 @@ def _popular_factors(bot, h1, h4):
     elif kv <= 20:
         d, t = 1, "Oversold"
     else:
-        d, t = (1 if kv > dv else -1), ("%K ตัดขึ้นเหนือ %D" if kv > dv else "%K อยู่ใต้ %D")
+        d, t = (1 if kv > dv else -1), ("%K อยู่เหนือ %D" if kv > dv else "%K อยู่ใต้ %D")
     out.append(("Stochastic H1 (14,3,3)", d, f"%K {kv:.0f} · %D {dv:.0f} · {t}"))
     # 8) Bollinger Bands H1 (20, 2)
     mid, sd = c1.rolling(20).mean(), c1.rolling(20).std()

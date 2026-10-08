@@ -16,6 +16,7 @@ import json
 import MetaTrader5 as mt5
 
 from app_paths import data_path
+import thai_time
 
 SYMBOL = "XAUUSD"
 WINDOW_MIN = 60
@@ -78,11 +79,6 @@ def _nth_sunday(year, month, n):
     return d + timedelta(weeks=n - 1)
 
 
-def _last_sunday(year, month):
-    d = datetime(year, month + 1, 1) - timedelta(days=1) if month < 12 else datetime(year, 12, 31)
-    return d - timedelta(days=(d.weekday() + 1) % 7)
-
-
 def ny_offset_hours(utc_dt: datetime) -> int:
     """เวลานิวยอร์ก: -4 ช่วง DST (อาทิตย์ที่ 2 มี.ค. – อาทิตย์แรก พ.ย.) ไม่งั้น -5"""
     y = utc_dt.year
@@ -92,25 +88,14 @@ def ny_offset_hours(utc_dt: datetime) -> int:
     return -4 if start <= naive < end else -5
 
 
-def eu_server_offset_hours(utc_dt: datetime) -> int:
-    """เวลาเซิร์ฟเวอร์โบรกเกอร์ส่วนใหญ่ (EET/EEST): +3 ช่วง DST ยุโรป ไม่งั้น +2"""
-    y = utc_dt.year
-    start = _last_sunday(y, 3) + timedelta(hours=1)
-    end = _last_sunday(y, 10) + timedelta(hours=1)
-    naive = utc_dt.replace(tzinfo=None)
-    return 3 if start <= naive < end else 2
-
-
 # ---------------------------------------------------------------- สถิติราคาทองจาก MT5
-_stats = {"at": 0.0, "slots": {}, "server_mode": "eu", "fixed_offset": 0, "rates": None}
+_stats = {"at": 0.0, "slots": {}, "rates": None}
 _lock = threading.Lock()
 
 
 def _server_to_utc(ts: int) -> datetime:
-    raw = datetime.fromtimestamp(ts, timezone.utc)
-    if _stats["server_mode"] == "eu":
-        return raw - timedelta(hours=eu_server_offset_hours(raw - timedelta(hours=3)))
-    return raw - timedelta(seconds=_stats["fixed_offset"])
+    # แหล่งเดียวกับทั้งโปรแกรม (thai_time) — เดิมวัดจาก tick ตอนโหลดสถิติ ถ้าโหลดตอนตลาดปิด tick เก่า → ส่วนต่างผิดค้าง 6 ชม.
+    return datetime.fromtimestamp(thai_time.server_to_epoch(ts), timezone.utc)
 
 
 def _ensure_stats():
@@ -121,18 +106,9 @@ def _ensure_stats():
         try:
             if mt5.terminal_info() is None and not mt5.initialize():
                 return False
-            tick = mt5.symbol_info_tick(SYMBOL)
             rates = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M15, 0, HISTORY_BARS)
             if rates is None or len(rates) < 1000:
                 return False
-            # ตรวจว่าเวลาเซิร์ฟเวอร์ตรงกฎ EET/EEST หรือไม่ ไม่ตรงใช้ส่วนต่างคงที่
-            if tick and tick.time and abs(tick.time - time.time()) < 3 * 86400:
-                measured = round((tick.time - time.time()) / 3600)
-                now_utc = datetime.now(timezone.utc)
-                if measured == eu_server_offset_hours(now_utc):
-                    _stats["server_mode"] = "eu"
-                else:
-                    _stats["server_mode"], _stats["fixed_offset"] = "fixed", measured * 3600
             slots = {}
             n = len(rates)
             for i in range(n - 4):
