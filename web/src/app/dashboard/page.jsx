@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { BarChart3, Clock, Key, Lock, RefreshCw, ShoppingBag, Sparkles, Target, TrendingUp, Trophy } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import RedeemCard from '../../components/RedeemCard';
+import OnlineRewardCard from '../../components/OnlineRewardCard';
 import { Alert, AuthGate, PageHeader, PageLoading, Spinner, StatCard } from '../../components/ui';
 import { formatHHMM, formatKeyInput, formatUsd } from '../../lib/format';
 import { planDisplay } from '../../lib/plans';
@@ -60,6 +61,8 @@ function Dashboard() {
           </button>
         }
       />
+
+      {user?.online && <OnlineRewardCard online={user.online} />}
 
       <div className="grid grid-2">
         <div className={`card card-pad ${out ? '' : 'card-gold'}`}>

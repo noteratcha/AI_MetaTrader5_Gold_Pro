@@ -9,7 +9,7 @@ const fmtDate = (iso, withTime = false) =>
     ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
   });
 
-/** รางวัลออนไลน์: ความคืบหน้าสัปดาห์นี้ (อาทิตย์–เสาร์) + ส่วนลดที่ได้รับ (online จาก /api/auth/me) */
+/** รางวัลออนไลน์: ความคืบหน้ารอบปัจจุบัน (ครบ 100 ชม. เริ่มรอบใหม่ทันที) + ส่วนลดที่ได้รับ (online จาก /api/auth/me) */
 export default function OnlineRewardCard({ online }) {
   if (!online) return null;
   const hours = online.minutes / 60;
@@ -26,11 +26,11 @@ export default function OnlineRewardCard({ online }) {
           </span>
           <div>
             <div style={{ fontWeight: 700 }}>
-              ออนไลน์ครบ {ONLINE_GOAL_HOURS} ชม. ใน 1 สัปดาห์ รับส่วนลด {ONLINE_DISCOUNT_PCT}%
+              ออนไลน์ครบ {ONLINE_GOAL_HOURS} ชม. รับส่วนลด {ONLINE_DISCOUNT_PCT}%
             </div>
             <div className="tiny muted">
-              นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมง · สัปดาห์ อาทิตย์–เสาร์ ({fmtDate(`${online.weekStart}T00:00:00+07:00`)} – {fmtDate(online.weekEnd)}) ·
-              ใช้ได้กับการซื้อครั้งถัดไป 1 รายการ ภายใน {ONLINE_DISCOUNT_DAYS} วัน
+              นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมง · ใช้ได้กับการซื้อครั้งถัดไป 1 รายการ ภายใน {ONLINE_DISCOUNT_DAYS} วัน
+              (เมื่อได้รับส่วนลดเก็บเพื่อรอใช้งานแล้ว ระบบจะเริ่มนับชั่วโมงใหม่ทันที)
             </div>
           </div>
         </div>
@@ -41,7 +41,7 @@ export default function OnlineRewardCard({ online }) {
         )}
       </div>
       <div className="row-between tiny" style={{ marginBottom: 6 }}>
-        <span className="muted">สัปดาห์นี้</span>
+        <span className="muted">{d ? 'ความคืบหน้ารอบใหม่' : 'ความคืบหน้ารอบปัจจุบัน'}</span>
         <span className="mono" style={{ fontWeight: 700, color: reached ? 'var(--green)' : 'var(--gold)' }}>
           {hours.toFixed(1)} / {goal} ชม.{reached ? ' · ครบแล้ว' : ` · อีก ${(goal - hours).toFixed(1)} ชม.`}
         </span>

@@ -2705,7 +2705,7 @@ class MainTradingApp(ctk.CTk):
         self.lbl_metering_status = ctk.CTkLabel(hours_box, text="⏸ หยุดนับเวลา", font=self._font(10), text_color=COLOR_TEXT_MUTED, height=14)
         self.lbl_metering_status.pack(anchor="w")
 
-        # รางวัลออนไลน์: ครบ 100 ชม./สัปดาห์ (อาทิตย์–เสาร์) → ส่วนลด 10% ซื้อชั่วโมงครั้งถัดไป (คลิกเปิดหน้าร้าน)
+        # รางวัลออนไลน์: สะสมครบ 100 ชม. → ส่วนลด 10% ซื้อชั่วโมงครั้งถัดไป (ใช้ได้ 3 วัน · เริ่มรอบใหม่ทันที) คลิกเปิดหน้าร้าน
         self.reward_box = ctk.CTkFrame(wallet, fg_color="transparent", cursor="hand2")
         self.lbl_reward = ctk.CTkLabel(self.reward_box, text="", font=self._font(11, "bold"), text_color=COLOR_GOLD_PRIMARY, height=16)
         self.lbl_reward.pack(anchor="w")
@@ -4530,7 +4530,7 @@ class MainTradingApp(ctk.CTk):
     ONLINE_GOAL_HOURS = 100   # ค่าเดียวกับเว็บ web/src/lib/onlineReward.js
 
     def _update_reward(self, low=False):
-        """ป้ายรางวัลออนไลน์ในกระเป๋าเวลา: ความคืบหน้าสัปดาห์นี้ หรือส่วนลดที่ได้รับ"""
+        """ป้ายรางวัลออนไลน์ในกระเป๋าเวลา: ความคืบหน้ารอบปัจจุบัน หรือส่วนลดที่ได้รับ"""
         if not hasattr(self, "reward_box"):
             return
         o = license_mgr.online_status()
@@ -4550,8 +4550,8 @@ class MainTradingApp(ctk.CTk):
         cv.configure(bg=bg)
         cv.delete("all")
         cv.create_rectangle(0, 0, 118, 6, fill="#3A3220", outline="")
-        frac = 1.0 if d else min(1.0, o["minutes"] / goal)
-        cv.create_rectangle(0, 0, 118 * frac, 6, fill=COLOR_SUCCESS_GREEN if d or frac >= 1 else COLOR_GOLD_PRIMARY, outline="")
+        frac = min(1.0, o["minutes"] / goal)
+        cv.create_rectangle(0, 0, 118 * frac, 6, fill=COLOR_SUCCESS_GREEN if frac >= 1 else COLOR_GOLD_PRIMARY, outline="")
         if d:
             self.lbl_reward.configure(text=f"ส่วนลด {d['percent']}% พร้อมใช้ ›", text_color=COLOR_SUCCESS_GREEN)
         else:
@@ -4562,8 +4562,8 @@ class MainTradingApp(ctk.CTk):
         if not o:
             return ""
         goal = int(o.get("goalMinutes") or self.ONLINE_GOAL_HOURS * 60) // 60
-        tip = (f"ออนไลน์ครบ {goal} ชม. ใน 1 สัปดาห์ (อาทิตย์–เสาร์) รับส่วนลด 10% ซื้อชั่วโมงครั้งถัดไป 1 รายการ\n"
-               f"นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมง · สัปดาห์นี้ {o['minutes'] / 60:.1f} ชม.")
+        tip = (f"ออนไลน์ครบ {goal} ชม. รับส่วนลด 10% ซื้อชั่วโมงครั้งถัดไป 1 รายการ\n"
+               f"นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมง · รอบปัจจุบัน {o['minutes'] / 60:.1f} ชม.")
         d = o.get("discount")
         if d:
             try:
@@ -4571,7 +4571,7 @@ class MainTradingApp(ctk.CTk):
                 exp = thai_time.from_epoch(datetime.fromisoformat(str(d["expiresAt"]).replace("Z", "+00:00")).timestamp(), "%d/%m %H:%M")
             except Exception:
                 exp = "-"
-            tip += f"\nมีส่วนลด {d['percent']}% ใช้ได้ถึง {exp} น. (ภายใน 5 วัน) — คลิกเพื่อซื้อชั่วโมง"
+            tip += f"\nมีส่วนลด {d['percent']}% ใช้ได้ถึง {exp} น. (ภายใน 3 วัน) — คลิกเพื่อซื้อชั่วโมง\nเมื่อได้รับส่วนลดแล้ว ระบบจะเริ่มนับชั่วโมงใหม่ทันที"
         return tip
 
     def _check_low_hours_alert(self, mins_left):
