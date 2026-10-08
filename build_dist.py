@@ -163,6 +163,13 @@ def build_gui_app(mode="pyinstaller"):
             shutil.copytree(os.path.join(PROJECT_ROOT, "sounds"), target_sounds)
             print("🔊 คัดลอกโฟลเดอร์เสียง sounds ไปยังไดเรกทอรีปลายทางเรียบร้อย")
 
+        # ตรวจสอบและคัดลอก .exe หาก PyInstaller วางไว้ใน workpath
+        exe_workpath = os.path.join(BUILD_DIR, APP_NAME, f"{APP_NAME}.exe")
+        target_exe = os.path.join(output_app_dir, f"{APP_NAME}.exe")
+        if not os.path.exists(target_exe) and os.path.exists(exe_workpath):
+            shutil.copy2(exe_workpath, target_exe)
+            print(f"📦 คัดลอก {APP_NAME}.exe ไปยัง {output_app_dir}")
+
         # สร้าง Quick Start Guide
         create_quickstart_guide(output_app_dir)
         print("📄 สร้าง QUICK_START_GUIDE.txt เรียบร้อย")
