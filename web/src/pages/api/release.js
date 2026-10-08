@@ -44,6 +44,25 @@ async function fromGitHub() {
   };
 }
 
+// สำรองเมื่อ GitHub API ใช้ไม่ได้ (เช่น ติด rate limit 60 ครั้ง/ชม. ต่อ IP ที่ Vercel ใช้ร่วมกัน):
+// อ่านแท็กล่าสุดจาก redirect ของหน้า releases/latest (ไม่นับ rate limit) แล้วสร้างลิงก์จากชื่อไฟล์มาตรฐานของ build_dist.py
+async function fromGitHubRedirect() {
+  const r = await fetch(RELEASES_PAGE, { method: 'HEAD', redirect: 'manual', headers: { 'User-Agent': 'GoldBot24' } });
+  const tag = /\/releases\/tag\/([^/?#]+)/.exec(r.headers.get('location') || '')?.[1];
+  if (!tag) return null;
+  const v = decodeURIComponent(tag).replace(/^v/i, '');
+  const base = `https://github.com/${GITHUB_REPO}/releases/download/v${v}`;
+  return {
+    version: v,
+    download_url: `${base}/GoldBot24_Setup_v${v}.exe`,
+    file_name: `GoldBot24_Setup_v${v}.exe`,
+    is_installer: true,
+    zip_url: `${base}/AI_Gold_Commander_Pro_v${v}.zip`,
+    changelog: '',
+    page_url: `https://github.com/${GITHUB_REPO}/releases/tag/v${v}`,
+  };
+}
+
 async function fromDatabase() {
   const { data } = await getAdminClient()
     .from('app_releases')
@@ -59,11 +78,13 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
   if (!cache.release || Date.now() - cache.at > CACHE_MS) {
-    const [gh, db] = await Promise.all([fromGitHub().catch(() => null), fromDatabase().catch(() => null)]);
+    const [api, db] = await Promise.all([fromGitHub().catch(() => null), fromDatabase().catch(() => null)]);
+    const gh = api || (await fromGitHubRedirect().catch(() => null));
     const candidates = [gh, db].filter((r) => r && isPublicUrl(r.download_url));
     candidates.sort((a, b) => (versionKey(b.version) > versionKey(a.version) ? 1 : -1));
     const best = candidates[0] || (gh || db ? { ...(gh || db), download_url: RELEASES_PAGE } : null);
-    if (best) cache = { release: { ...best, releases_page: RELEASES_PAGE }, at: Date.now() };
+    // ได้จาก API เต็ม → แคช 10 นาที · ได้จากทางสำรอง → แคชสั้น 1 นาที (รอบหน้าลองดึง changelog เต็มอีกครั้ง)
+    if (best) cache = { release: { ...best, releases_page: RELEASES_PAGE }, at: api ? Date.now() : Date.now() - CACHE_MS + 60 * 1000 };
   }
 
   res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600');
