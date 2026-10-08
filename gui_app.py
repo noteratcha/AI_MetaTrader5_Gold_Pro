@@ -3866,8 +3866,8 @@ class MainTradingApp(ctk.CTk):
             table.grid_columnconfigure(col, minsize=width, weight=1 if col == 2 else 0)
 
         for col, (title, _, anchor) in enumerate(self.HISTORY_COLUMNS):
-            ctk.CTkLabel(table, text=title, font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor).grid(
-                row=0, column=col, sticky="ew", padx=6, pady=(10, 6)
+            ctk.CTkLabel(table, text=f"  {title}  ", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor).grid(
+                row=0, column=col, sticky="ew", padx=(6 if col == 0 else 0, 6 if col == len(self.HISTORY_COLUMNS) - 1 else 0), pady=(10, 6)
             )
         ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=1, column=0, columnspan=len(self.HISTORY_COLUMNS), sticky="ew", padx=6)
 
@@ -3886,8 +3886,10 @@ class MainTradingApp(ctk.CTk):
             r = len(self.history_cells)
             cells = []
             for col, (_, _, anchor) in enumerate(self.HISTORY_COLUMNS):
-                lbl = ctk.CTkLabel(self._hist_table, text="", font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor=anchor, height=28)
-                lbl.grid(row=r + 2, column=col, sticky="ew", padx=6)
+                # แถวสลับสีอ่อน/เข้มทั้งแถว (ช่องชิดกัน padx=0 · เว้นขอบด้วยช่องว่างในข้อความ)
+                lbl = ctk.CTkLabel(self._hist_table, text="", font=self._font(12), text_color=COLOR_TEXT_PRIMARY, anchor=anchor, height=28,
+                                   fg_color="#1A1F29" if r % 2 == 0 else "#101218", corner_radius=0)
+                lbl.grid(row=r + 2, column=col, sticky="ew", padx=(6 if col == 0 else 0, 6 if col == len(self.HISTORY_COLUMNS) - 1 else 0))
                 lbl.bind("<Button-1>", lambda e, i=r: self._open_history_detail(i), add="+")   # คลิกแถว → กราฟตอนปิดไม้
                 try:
                     lbl.configure(cursor="hand2")
@@ -4028,6 +4030,7 @@ class MainTradingApp(ctk.CTk):
                 COLOR_CYAN_ACCENT if is_open else self._close_reason(r)[1],
                 COLOR_SUCCESS_GREEN if profit > 0 else (COLOR_DANGER_RED if profit < 0 else COLOR_TEXT_MUTED),
             ]
+            values = [f"  {v}  " for v in values]   # ระยะห่างในช่อง (ช่องติดกันเพื่อให้สีพื้นต่อเนื่องทั้งแถว)
             for c, v, color in zip(cells, values, colors):
                 c.configure(text=v, text_color=color)
 
@@ -4088,65 +4091,91 @@ class MainTradingApp(ctk.CTk):
         ctk.CTkLabel(right, text=f"{r['price']:,.2f}", font=self._font(20, "bold", app_fonts.MONO), text_color=COLOR_TEXT_PRIMARY).pack(anchor="e")
         ctk.CTkLabel(right, text=f"อัปเดต {upd.strftime('%H:%M')} น. · ทุก 1 นาที", font=self._font(10), text_color=muted).pack(anchor="e")
 
-        # ── 2) การ์ด 3 ช่วงเวลา
+        # ── 2) การ์ด 3 ช่วงเวลา (ดีไซน์ใหม่ 8 ต.ค. 2026: ไม่ชัด = สีเทาล้วน · แถบมีเข็ม + ขีดเกณฑ์ 45/55%)
         for col, h in enumerate(r["horizons"]):
             d = h["direction"]
             lean = h["lean"]
+            pu = h["p_up"]
+            pct = pu * 100 if lean > 0 else (1 - pu) * 100
             c = ctk.CTkFrame(box, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1,
                              border_color=tone(d) if d else COLOR_CARD_BORDER)
             c.grid(row=1, column=col, sticky="nsew", padx=4, pady=4)
             top = ctk.CTkFrame(c, fg_color="transparent")
             top.pack(fill="x", padx=14, pady=(12, 0))
-            ctk.CTkLabel(top, text=f"อีก {h['label']}", font=self._font(12, "bold"), text_color=muted).pack(side="left")
-            ctk.CTkLabel(top, text=" ชัด " if d else " ไม่ชัด ", font=self._font(10, "bold"), corner_radius=6, height=18,
-                         fg_color=dark(d) if d else "#262B36", text_color=tone(d) if d else muted).pack(side="right")
-            pct = h["p_up"] * 100 if lean > 0 else (1 - h["p_up"]) * 100
-            ctk.CTkLabel(c, text=f"{'▲' if lean > 0 else '▼'} {pct:.0f}%", font=self._font(26, "bold"),
-                         text_color=tone(lean) if d else gold).pack(anchor="w", padx=14, pady=(2, 0))
-            ctk.CTkLabel(c, text=f"โอกาส{'ขึ้น' if lean > 0 else 'ลง'}" + ("" if d else " (ยังไม่ถึง 55%)"), font=self._font(11),
-                         text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=14)
-            bar = tk.Canvas(c, height=8, bg=COLOR_CARD_BG, highlightthickness=0, bd=0)
-            bar.pack(fill="x", padx=14, pady=(8, 2))
+            ctk.CTkLabel(top, text=f"อีก {h['label']}", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+            ctk.CTkLabel(top, text=(" ▲ สัญญาณขึ้น " if d > 0 else " ▼ สัญญาณลง ") if d else " ยังไม่ชัด ", font=self._font(10, "bold"),
+                         corner_radius=6, height=20, fg_color=dark(d) if d else "#262B36", text_color=tone(d) if d else muted).pack(side="right")
+            if d:
+                ctk.CTkLabel(c, text=f"{'▲ ขึ้น' if d > 0 else '▼ ลง'} {pct:.0f}%", font=self._font(28, "bold"), text_color=tone(d)
+                             ).pack(anchor="w", padx=14, pady=(4, 0))
+                ctk.CTkLabel(c, text=f"AI มั่นใจเกินเกณฑ์ 55% · โอกาส{'ขึ้น' if d > 0 else 'ลง'}", font=self._font(11),
+                             text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=14)
+            else:
+                ctk.CTkLabel(c, text="ยังไม่ชัด", font=self._font(24, "bold"), text_color=muted).pack(anchor="w", padx=14, pady=(4, 0))
+                ctk.CTkLabel(c, text=f"เอียง{'ขึ้น' if lean > 0 else 'ลง'} {pct:.0f}% · ต้องถึง 55% จึงนับเป็นสัญญาณ",
+                             font=self._font(11), text_color=muted).pack(anchor="w", padx=14)
+            bar = tk.Canvas(c, height=24, bg=COLOR_CARD_BG, highlightthickness=0, bd=0)
+            bar.pack(fill="x", padx=14, pady=(10, 0))
 
-            def draw(e, b=bar, up=h["p_up"]):
+            def draw(e, b=bar, up=pu, clear=d):
                 b.delete("all")
-                w = max(e.width, 10)
-                x = 4 + up * (w - 8)
-                b.create_line(4, 4, w - 4, 4, fill=red, width=8, capstyle="round")
-                b.create_line(4, 4, x, 4, fill=green, width=8, capstyle="round")
+                w = max(e.width, 40)
+                x0, x1, y = 6, w - 6, 13
+                xp = lambda v: x0 + v * (x1 - x0)
+                b.create_line(x0, y, x1, y, fill="#3A2226" if not clear else red, width=8, capstyle="round")
+                b.create_line(x0, y, xp(up), y, fill="#1E3B30" if not clear else green, width=8, capstyle="round")
+                for v in (0.45, 0.55):   # เกณฑ์สัญญาณ
+                    b.create_line(xp(v), y - 8, xp(v), y + 8, fill=COLOR_GOLD_PRIMARY, width=1, dash=(2, 2))
+                b.create_line(xp(0.5), y - 6, xp(0.5), y + 6, fill="#6E7687", width=1)
+                xm = xp(up)   # เข็ม
+                b.create_polygon(xm - 6, y - 12, xm + 6, y - 12, xm, y - 4, fill=COLOR_TEXT_PRIMARY, outline="")
             bar.bind("<Configure>", draw)
             leg = ctk.CTkFrame(c, fg_color="transparent")
-            leg.pack(fill="x", padx=14)
-            ctk.CTkLabel(leg, text=f"ขึ้น {h['p_up'] * 100:.0f}%", font=self._font(10), text_color=green).pack(side="left")
-            ctk.CTkLabel(leg, text=f"ลง {(1 - h['p_up']) * 100:.0f}%", font=self._font(10), text_color=red).pack(side="right")
-            foot = ctk.CTkFrame(c, fg_color="#101218", corner_radius=8)
-            foot.pack(fill="x", padx=10, pady=(8, 10))
-            ctk.CTkLabel(foot, text=f"แม่นในอดีต {h['hist_acc']:.0f}%", font=self._font(10, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left", padx=8, pady=4)
-            if h["trend_agree"] and d:
-                ctk.CTkLabel(foot, text="✓ เทรนด์ยืนยัน", font=self._font(10, "bold"), text_color=green).pack(side="right", padx=8)
+            leg.pack(fill="x", padx=14, pady=(2, 0))
+            ctk.CTkLabel(leg, text=f"ขึ้น {pu * 100:.0f}%", font=self._font(10, "bold"), text_color=green, height=16).pack(side="left")
+            ctk.CTkLabel(leg, text=f"ลง {(1 - pu) * 100:.0f}%", font=self._font(10, "bold"), text_color=red, height=16).pack(side="right")
+            foot = ctk.CTkFrame(c, fg_color="transparent")
+            foot.pack(fill="x", padx=12, pady=(8, 12))
+            ctk.CTkLabel(foot, text=f" แม่นในอดีต {h['hist_acc']:.0f}% ", font=self._font(10, "bold"), corner_radius=6, height=20,
+                         fg_color="#101218", text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+            if d:
+                ok = h["trend_agree"]
+                ctk.CTkLabel(foot, text=" ✓ เทรนด์ยืนยัน " if ok else " เทรนด์ไม่ยืนยัน ", font=self._font(10, "bold"), corner_radius=6,
+                             height=20, fg_color="#0F2A20" if ok else "#2A2210", text_color=green if ok else gold).pack(side="right")
 
-        # ── 3) ปัจจัยที่นำมาวิเคราะห์
-        fac = ctk.CTkFrame(box, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
-        fac.grid(row=2, column=0, columnspan=3, sticky="ew", padx=4, pady=(8, 4))
-        ups = sum(1 for f in r["factors"] if f["dir"] > 0)
-        dns = sum(1 for f in r["factors"] if f["dir"] < 0)
-        mids = len(r["factors"]) - ups - dns
-        fh = ctk.CTkFrame(fac, fg_color="transparent")
-        fh.pack(fill="x", padx=14, pady=(12, 6))
-        ctk.CTkLabel(fh, text="ปัจจัยที่นำมาวิเคราะห์", font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
-        for txt, n, col_ in (("กลาง", mids, muted), ("กดลง", dns, red), ("หนุนขึ้น", ups, green)):  # pack ขวา → เรียงกลับ
-            ctk.CTkLabel(fh, text=f" {txt} {n} ", font=self._font(10, "bold"), corner_radius=6, height=20,
-                         fg_color="#101218", text_color=col_).pack(side="right", padx=(6, 0))
-        for i, f in enumerate(r["factors"]):
-            d = f["dir"]
-            rowf = ctk.CTkFrame(fac, fg_color="#171B23" if i % 2 == 0 else "transparent", corner_radius=8)
-            rowf.pack(fill="x", padx=10, pady=1)
-            ctk.CTkLabel(rowf, text=" ▲ ขึ้น " if d > 0 else " ▼ ลง " if d < 0 else " • กลาง ", font=self._font(10, "bold"),
-                         width=62, corner_radius=6, height=20, fg_color=dark(d) if d else "#262B36",
-                         text_color=tone(d) if d else muted).pack(side="left", padx=(6, 10), pady=5)
-            ctk.CTkLabel(rowf, text=f["name"], font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY, width=220, anchor="w").pack(side="left")
-            ctk.CTkLabel(rowf, text=f["detail"], font=self._font(11), text_color=muted, anchor="w").pack(side="left", padx=(6, 8))
-        ctk.CTkFrame(fac, height=8, fg_color="transparent").pack()
+        # ── 3) ปัจจัยที่นำมาวิเคราะห์ — 2 การ์ด: ปัจจัยหลักของบอท | อินดิเคเตอร์ยอดนิยม (แสดงประกอบ)
+        core_keys = ("เทรนด์", "ราคาเทียบ", "โมเมนตัม", "แนวรับ")
+        groups = (("ปัจจัยหลักของบอท", "ใช้คิดเทรนด์ยืนยันและคำแนะนำถือ/ปิดไม้", [f for f in r["factors"] if f["name"].startswith(core_keys)]),
+                  ("อินดิเคเตอร์ยอดนิยม", "นักเทรดนิยมใช้ · แสดงประกอบ", [f for f in r["factors"] if not f["name"].startswith(core_keys)]))
+        pair = ctk.CTkFrame(box, fg_color="transparent")
+        pair.grid(row=2, column=0, columnspan=3, sticky="ew", padx=0, pady=(8, 4))
+        pair.grid_columnconfigure((0, 1), weight=1, uniform="fac")
+        for gi, (title, sub, items) in enumerate(groups):
+            fac = ctk.CTkFrame(pair, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+            fac.grid(row=0, column=gi, sticky="nsew", padx=4)
+            ups = sum(1 for f in items if f["dir"] > 0)
+            dns = sum(1 for f in items if f["dir"] < 0)
+            mids = len(items) - ups - dns
+            fh = ctk.CTkFrame(fac, fg_color="transparent")
+            fh.pack(fill="x", padx=12, pady=(10, 0))
+            ctk.CTkLabel(fh, text=title, font=self._font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+            for txt, n, col_ in (("กลาง", mids, muted), ("ลง", dns, red), ("ขึ้น", ups, green)):  # pack ขวา → เรียงกลับ
+                ctk.CTkLabel(fh, text=f" {txt} {n} ", font=self._font(10, "bold"), corner_radius=6, height=20,
+                             fg_color="#101218", text_color=col_).pack(side="right", padx=(4, 0))
+            ctk.CTkLabel(fac, text=sub, font=self._font(10), text_color=muted, anchor="w").pack(fill="x", padx=12, pady=(0, 6))
+            for i, f in enumerate(items):
+                d = f["dir"]
+                rowf = ctk.CTkFrame(fac, fg_color="#171B23" if i % 2 == 0 else "transparent", corner_radius=8)
+                rowf.pack(fill="x", padx=8, pady=1)
+                ctk.CTkLabel(rowf, text=" ▲ ขึ้น " if d > 0 else " ▼ ลง " if d < 0 else " • กลาง ", font=self._font(10, "bold"),
+                             width=58, corner_radius=6, height=20, fg_color=dark(d) if d else "#262B36",
+                             text_color=tone(d) if d else muted).pack(side="left", padx=(6, 8), pady=4, anchor="n")
+                txtf = ctk.CTkFrame(rowf, fg_color="transparent")
+                txtf.pack(side="left", fill="x", expand=True, pady=2)
+                ctk.CTkLabel(txtf, text=f["name"], font=self._font(12, "bold"), text_color=COLOR_TEXT_PRIMARY, anchor="w", height=18).pack(fill="x")
+                ctk.CTkLabel(txtf, text=f["detail"], font=self._font(10), text_color=muted, anchor="w", justify="left",
+                             wraplength=300, height=16).pack(fill="x")
+            ctk.CTkFrame(fac, height=8, fg_color="transparent").pack()
 
         row = 3
         if r["news"]:
