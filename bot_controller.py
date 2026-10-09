@@ -417,12 +417,12 @@ class BotController:
         rows.sort(key=lambda t: t["close_time"] or t["open_time"], reverse=True)
         return rows
 
-    def get_live_candles(self, count: int = 16, symbol: str = "XAUUSD", extra: int = 13):
-        """แท่ง M15 ล่าสุด count แท่ง (แท่งสุดท้าย = แท่งที่กำลังวิ่ง) + MA5/MA13 + Bid/Ask ปัจจุบัน — None ถ้าเชื่อม MT5 ไม่ได้"""
+    def get_live_candles(self, count: int = 16, symbol: str = "XAUUSD", extra: int = 50):
+        """แท่ง M15 ล่าสุด count แท่ง (แท่งสุดท้าย = แท่งที่กำลังวิ่ง) + MA5/MA13/MA50 + อินดิเคเตอร์ H1 ตามแผน + Bid/Ask ปัจจุบัน — None ถ้าเชื่อม MT5 ไม่ได้"""
         try:
             if mt5.terminal_info() is None and not mt5.initialize():
                 return None
-            rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, count + extra)
+            rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, count + max(extra, 50))
             tick = mt5.symbol_info_tick(symbol)
             if rates is None or len(rates) == 0:
                 return None
@@ -433,15 +433,36 @@ class BotController:
             def ma(n, i):
                 return sum(closes[i - n + 1:i + 1]) / n if i - n + 1 >= 0 else None
 
+            # ดึงบริบท H1 (MA5/10/20, BB, SAR, EMA100, S&R) จาก position_chart
+            ctx = None
+            h1_dict = {}
+            try:
+                import position_chart
+                ctx = position_chart._context()
+                if ctx and "h1s" in ctx:
+                    h1s = ctx["h1s"]
+                    idx_sec = [int(t.timestamp()) for t in h1s.index]
+                    records = h1s.to_dict("records")
+                    h1_dict = dict(zip(idx_sec, records))
+            except Exception:
+                pass
+
             candles = []
             for i in range(max(0, len(rates) - count), len(rates)):
                 r = rates[i]
                 c = closes[i]
-                candles.append({
-                    "time": int(r["time"]), "open": float(r["open"]),
+                bar_t = int(r["time"])
+                cd = {
+                    "time": bar_t, "open": float(r["open"]),
                     "high": max(float(r["high"]), c), "low": min(float(r["low"]), c), "close": c,
-                    "ma5": ma(5, i), "ma13": ma(13, i),
-                })
+                    "ma5": ma(5, i), "ma13": ma(13, i), "ma50": ma(50, i),
+                }
+                h1_row = h1_dict.get((bar_t // 3600) * 3600)
+                if h1_row:
+                    for col in ("ma5", "ma10", "ma20", "bb_up", "bb_mid", "bb_lo", "sar", "ema100"):
+                        v = h1_row.get(col)
+                        cd["h1_" + col] = float(v) if v is not None and not (isinstance(v, float) and (v != v)) else None
+                candles.append(cd)
             info = mt5.symbol_info(symbol)
             point = float(info.point) if info and info.point else 0.01
             positions = [{
@@ -455,6 +476,8 @@ class BotController:
                 "bid": float(tick.bid) if tick else candles[-1]["close"],
                 "ask": float(tick.ask) if tick else candles[-1]["close"],
                 "server_time": int(tick.time) if tick else candles[-1]["time"],
+                "support": ctx.get("sup") if ctx else None,
+                "resistance": ctx.get("res") if ctx else None,
             }
         except Exception:
             return None
