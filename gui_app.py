@@ -2943,7 +2943,21 @@ class MainTradingApp(ctk.CTk):
 
         top_row = ctk.CTkFrame(inner, fg_color="transparent")
         top_row.pack(fill="x")
-        ctk.CTkLabel(top_row, text=icon, font=ctk.CTkFont(size=15)).pack(side="left", padx=(0, 6))
+
+        # ตรวจสอบฟอนต์สำหรับไอคอนการ์ด (ใช้ Segoe MDL2 Assets เพื่อให้ไอคอนเปลี่ยนสีเขียว/แดง/ขาวตามสถานะตลาดได้คมชัด)
+        try:
+            has_mdl2 = "Segoe MDL2 Assets" in self.tk.call("font", "families")
+        except Exception:
+            has_mdl2 = False
+        if icon == "🖥" and has_mdl2:
+            icon_char = "\uE7F4"
+            icon_font = ctk.CTkFont(family="Segoe MDL2 Assets", size=15)
+        else:
+            icon_char = icon
+            icon_font = ctk.CTkFont(size=15)
+
+        icon_lbl = ctk.CTkLabel(top_row, text=icon_char, font=icon_font, text_color=COLOR_TEXT_PRIMARY)
+        icon_lbl.pack(side="left", padx=(0, 6))
         ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
         badge = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED,
                              fg_color="transparent", corner_radius=8, height=18)
@@ -2953,7 +2967,7 @@ class MainTradingApp(ctk.CTk):
         val_label.pack(anchor="w", pady=(2, 0))
         sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
         sub_label.pack(anchor="w")
-        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge}
+        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "icon_lbl": icon_lbl}
 
     def _make_clickable(self, card_info, command, hint=""):
         """ทำให้ทั้งการ์ดกดได้ (เคอร์เซอร์มือ + ขอบสีทองเมื่อชี้)"""
@@ -4862,13 +4876,22 @@ class MainTradingApp(ctk.CTk):
                     if is_conn:
                         self.card_mt5["val_lbl"].configure(text=f"#{acc_num}", text_color=COLOR_SUCCESS_GREEN)
                         self.card_mt5["sub_lbl"].configure(text=f"● เชื่อมต่อแล้ว · {srv}")
-                        if not is_mkt_open:
-                            self._set_badge(self.card_mt5.get("badge"), "⏸ ตลาดปิด", "#2E2410", COLOR_GOLD_PRIMARY)
+                        if is_mkt_open:
+                            # ตลาดเปิดปกติ: ไอคอนสีเขียว + ป้าย "● ตลาดเปิด" สีเขียว
+                            if "icon_lbl" in self.card_mt5:
+                                self.card_mt5["icon_lbl"].configure(text_color=COLOR_SUCCESS_GREEN)
+                            self._set_badge(self.card_mt5.get("badge"), "● ตลาดเปิด", "#12301F", COLOR_SUCCESS_GREEN)
                         else:
-                            self._set_badge(self.card_mt5.get("badge"), "")
+                            # ตลาดปิด: ไอคอนสีแดง + ป้าย "⏸ ตลาดปิด" สีทอง/แดง
+                            if "icon_lbl" in self.card_mt5:
+                                self.card_mt5["icon_lbl"].configure(text_color=COLOR_DANGER_RED)
+                            self._set_badge(self.card_mt5.get("badge"), "⏸ ตลาดปิด", "#2E2410", COLOR_GOLD_PRIMARY)
                     else:
+                        # ยังไม่ได้เชื่อมต่อ MT5: ไอคอนสีขาว (สีดั้งเดิม) + ซ่อนป้าย
                         self.card_mt5["val_lbl"].configure(text="ไม่ได้เชื่อมต่อ", text_color=COLOR_DANGER_RED)
                         self.card_mt5["sub_lbl"].configure(text="กรุณาเปิด MT5 Terminal")
+                        if "icon_lbl" in self.card_mt5:
+                            self.card_mt5["icon_lbl"].configure(text_color=COLOR_TEXT_PRIMARY)
                         self._set_badge(self.card_mt5.get("badge"), "")
 
                 # อัปเดต Balance & Equity
