@@ -2609,6 +2609,11 @@ class MainTradingApp(ctk.CTk):
         # เปิดปุ่ม Algo Trading ใน MT5 ให้อัตโนมัติถ้ายังปิดอยู่ (ผู้ใช้สั่ง 8 ต.ค. 2026)
         self.after(2500, self._auto_algo_trading)
 
+        # เริ่มนับถอยหลัง 20 วินาทีเมื่อเปิดโปรแกรมครั้งแรก เพื่อเริ่มการทำงานบอทอัตโนมัติ
+        if not getattr(self, "_autostart_done", False):
+            self._autostart_done = True
+            self.after(500, lambda: self._start_autostart_countdown(20))
+
     # ---------------------------------------------------------------------
     # ส่วนประกอบ UI ใช้ซ้ำ
     # ---------------------------------------------------------------------
@@ -3098,6 +3103,7 @@ class MainTradingApp(ctk.CTk):
             text_color=COLOR_TEXT_MUTED, fg_color="#1F2430", corner_radius=10, height=22,
         )
         self.lbl_bot_state.pack(side="right")
+        self.lbl_bot_state.bind("<Button-1>", self._cancel_autostart_manual)
 
         self.btn_master_toggle = ctk.CTkButton(
             card,
@@ -4572,8 +4578,78 @@ class MainTradingApp(ctk.CTk):
     # =========================================================================
     # 3. การควบคุมบอท และเหตุการณ์ต่างๆ (BOT ACTIONS & EVENTS)
     # =========================================================================
+    # ---------------------------------------------------------------------
+    # การนับถอยหลัง 20 วินาทีเพื่อเริ่มการทำงานบอทอัตโนมัติเมื่อเปิดโปรแกรมครั้งแรก
+    # ---------------------------------------------------------------------
+    def _start_autostart_countdown(self, seconds=20):
+        """นับถอยหลังเมื่อเปิดโปรแกรมครั้งแรก เพื่อเริ่มการทำงานบอทอัตโนมัติ"""
+        if bot_ctrl.is_active:
+            return
+        self._cancel_autostart_countdown()
+        self._autostart_seconds_left = seconds
+        self._autostart_tick()
+
+    def _autostart_tick(self):
+        """ทิกเกอร์นับถอยหลังทุก 1 วินาที"""
+        self._autostart_timer_id = None
+        if not hasattr(self, "btn_master_toggle") or bot_ctrl.is_active:
+            self._cancel_autostart_countdown()
+            return
+
+        if getattr(self, "_autostart_seconds_left", 0) > 0:
+            secs = self._autostart_seconds_left
+            self.btn_master_toggle.configure(
+                text=f"▶  เริ่มการทำงานบอท ({secs}s)",
+                fg_color=COLOR_SUCCESS_GREEN,
+                hover_color="#10A374",
+                text_color="#06281C",
+            )
+            if hasattr(self, "lbl_bot_state") and not bot_ctrl.is_active:
+                self.lbl_bot_state.configure(
+                    text=f"  ⏳ เริ่มอัตโนมัติ {secs}s  ",
+                    text_color=COLOR_GOLD_PRIMARY,
+                    fg_color="#2E2410",
+                )
+            self._autostart_seconds_left -= 1
+            self._autostart_timer_id = self.after(1000, self._autostart_tick)
+        else:
+            # ครบ 20 วินาที → เริ่มการทำงานบอทอัตโนมัติ
+            self._cancel_autostart_countdown()
+            if not bot_ctrl.is_active:
+                self._on_toggle_bot()
+
+    def _cancel_autostart_countdown(self):
+        """ยกเลิกตัวจับเวลานับถอยหลัง"""
+        tid = getattr(self, "_autostart_timer_id", None)
+        if tid is not None:
+            try:
+                self.after_cancel(tid)
+            except Exception:
+                pass
+            self._autostart_timer_id = None
+        self._autostart_seconds_left = 0
+
+    def _cancel_autostart_manual(self, _e=None):
+        """ผู้ใช้กดยกเลิกการเริ่มบอทอัตโนมัติ (คลิกที่ป้ายสถานะ)"""
+        if getattr(self, "_autostart_seconds_left", 0) > 0:
+            self._cancel_autostart_countdown()
+            if hasattr(self, "btn_master_toggle") and not bot_ctrl.is_active:
+                self.btn_master_toggle.configure(
+                    text="▶  เริ่มการทำงานบอท",
+                    fg_color=COLOR_SUCCESS_GREEN,
+                    hover_color="#10A374",
+                    text_color="#06281C",
+                )
+            if hasattr(self, "lbl_bot_state") and not bot_ctrl.is_active:
+                self.lbl_bot_state.configure(
+                    text="  ● หยุดทำงาน  ",
+                    text_color=COLOR_TEXT_MUTED,
+                    fg_color="#1F2430",
+                )
+
     def _on_toggle_bot(self):
         """กดปุ่ม Start/Pause บอท"""
+        self._cancel_autostart_countdown()
         if not license_mgr.is_authenticated:
             messagebox.showwarning("ยังไม่ได้เข้าสู่ระบบ", "กรุณาเข้าสู่ระบบก่อนเริ่มต้นใช้งานบอท")
             self.show_login_view()
