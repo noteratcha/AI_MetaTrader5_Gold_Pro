@@ -578,89 +578,89 @@ def manual_tp_pts_config():
 _last_volatility_alert_time = 0.0
 _volatility_active_until = 0.0
 _last_volatility_reason = ""
+_price_tick_buffer = []  # [(timestamp, price)] เก็บบันทึกประวัติราคาสดช่วง 45 วินาทีล่าสุด
 
 
-def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val):
+def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val, sym="XAUUSD"):
     """
     ตรวจจับสภาวะราคาผันผวนแรงผิดปกติ (Abnormal Market Volatility)
-    จำแนกจาก 5 มิติหลักตามสถิติตลาดทองคำ XAUUSD แบบสัมพัทธ์ (Relative Statistics):
-    1. ATR Volatility Spike: ATR(14) M15 พุ่งสูง >= 1.8 เท่าของค่าเฉลี่ย 30 แท่ง หรือผันผวนเกิน 0.35% ของราคาทอง
-    2. Extreme Candle Expansion: แท่ง M15 ล่าสุดแกว่งตัวกว้าง >= 2.2 เท่าของ ATR(14)
-    3. Flash Price Surge: ราคาสดในแท่งปัจจุบันกระชากห่างจากราคาเปิด >= 1.8 เท่าของ ATR(14)
-    4. Spread Blowout: สเปรดถ่างรุนแรง >= 80 จุด (สะท้อนสภาพคล่องแห้ง หรือข่าวด่วนรุนแรง)
-    5. High-Impact USD News Window: ช่วงข่าวสำคัญกล่องแดง USD (+/- 15 นาที)
+    จำแนกจาก "การขึ้นลงของราคาเร็วผิดปกติในช่วงเวลานั้น" (Rapid Price Velocity & Acceleration):
+    1. Real-time Tick Surge (ความเร็วราคาสดใน 30 วินาที): ราคาแกว่งตัว >= 200 จุด ($2.00) ภายใน <= 45 วินาที
+    2. M1 Bar Velocity (ความเร็วใน 1 นาที): แท่ง M1 ล่าสุดแกว่งตัวกว้าง >= 250 จุด ($2.50) หรือ >= 2.5 เท่าของค่าเฉลี่ย M1
+    3. 3-Minute Whiplash (การเหวี่ยงสะบัดสลับไปมาใน 3 นาที): ช่วงราคา High - Low ใน 3 นาทีล่าสุด กว้าง >= 450 จุด ($4.50)
+    4. Flash Price Surge M15: ราคาสดในแท่งปัจจุบันกระชากห่างจากราคาเปิด >= 1.8 เท่าของ ATR(14)
+    5. Spread Blowout: สเปรดถ่างรุนแรง >= 80 จุด (สะท้อนสภาพคล่องแห้งเฉียบพลันจากแรงเหวี่ยง)
 
     พร้อมระบบ Anti-Flapping Hysteresis: หน่วงเวลาถือสภาวะผันผวนอย่างน้อย 45 วินาที
-    เพื่อป้องกันเสียงไซเลนติดๆ ดับๆ สลับไปมา
+    เพื่อให้เสียงไซเลนเตือนภัยทำงานอย่างต่อเนื่องจนกว่าราคาจะสงบลงจริง
     """
-    global _volatility_active_until, _last_volatility_reason
+    global _volatility_active_until, _last_volatility_reason, _price_tick_buffer
     now = time.time()
-
-    if df_m15 is None or len(df_m15) == 0:
-        if now < _volatility_active_until:
-            return True, _last_volatility_reason
-        return False, ""
-
-    close_price = float(df_m15.iloc[-1]['close']) if 'close' in df_m15.columns else 4000.0
     detected = False
     reason = ""
 
-    # 1. ATR Volatility Spike (เทียบค่าเฉลี่ย 30 แท่ง หรือเกิน 0.35% ของราคา)
-    if 'atr' in df_m15.columns and len(df_m15) >= 20:
-        atr_hist = df_m15['atr'].iloc[-31:-1].dropna()
-        if len(atr_hist) >= 10:
-            avg_atr = float(atr_hist.mean())
-            if avg_atr > 0 and atr_val >= 1.8 * avg_atr:
+    # บันทึกประวัติราคาสดระดับ Tick (วินาที)
+    if tick is not None and getattr(tick, 'bid', 0) > 0:
+        curr_bid = float(tick.bid)
+        _price_tick_buffer.append((now, curr_bid))
+        # เก็บเฉพาะข้อมูลไม่เกิน 45 วินาทีล่าสุด
+        _price_tick_buffer = [(t, p) for t, p in _price_tick_buffer if (now - t) <= 45.0]
+
+        # 1. Real-time Tick Surge: วัดความเร็วการขึ้นลงของราคาสดในระดับวินาที
+        if len(_price_tick_buffer) >= 3:
+            p_values = [p for _, p in _price_tick_buffer]
+            p_span = max(p_values) - min(p_values)
+            dt_span = now - _price_tick_buffer[0][0]
+            # ถ้าในเวลา 10-45 วินาที ราคาวิ่งสะบัดไป-มาเกิน $2.00 (200 จุด)
+            if dt_span >= 5.0 and p_span >= 2.00:
                 detected = True
-                reason = f"ATR M15 พุ่งสูง {atr_val:.2f} (เฉลี่ย {avg_atr:.2f})"
-    if not detected and close_price > 0 and atr_val > 0:
-        atr_pct = (atr_val / close_price) * 100.0
-        if atr_pct >= 0.35:
-            detected = True
-            reason = f"ATR M15 พุ่งสูง {atr_pct:.2f}% ของราคา (ATR {atr_val:.2f})"
+                velocity_pts_sec = (p_span * 100.0) / max(1.0, dt_span)
+                reason = f"ราคากระชากสดเร็วจัด {p_span:.2f} จุด ภายใน {int(dt_span)} วินาที ({velocity_pts_sec:.1f} จุด/วิ)"
 
-    # 2. Extreme Candle Expansion (แท่งปิดล่าสุด M15 แกว่งกว้างผิดปกติ >= 2.2x ATR)
-    if not detected and len(df_m15) >= 2:
-        last_bar = df_m15.iloc[-2]
-        bar_rng = float(last_bar['high'] - last_bar['low'])
-        if atr_val > 0 and bar_rng >= 2.2 * atr_val:
-            detected = True
-            reason = f"แท่ง M15 ล่าสุดแกว่ง {bar_rng:.2f} จุด (>= 2.2x ATR)"
+    # 2. M1 Bar Velocity & 3. 3-Minute Whiplash: วัดความเร็วการขยับของราคาจากแท่งเทียน M1 สดๆ ในช่วงเวลานั้น
+    if not detected and sym:
+        try:
+            m1_rates = mt5.copy_rates_from_pos(sym, mt5.TIMEFRAME_M1, 0, 10)
+            if m1_rates is not None and len(m1_rates) >= 4:
+                # แท่ง M1 ล่าสุด
+                curr_m1 = m1_rates[-1]
+                curr_m1_rng = float(curr_m1['high'] - curr_m1['low'])
+                
+                # ค่าเฉลี่ยความกว้างแท่ง M1 ช่วง 9 แท่งก่อนหน้า (ปกติทองจะแกว่งแท่งละ $0.60 - $1.00)
+                prior_m1_rngs = [float(r['high'] - r['low']) for r in m1_rates[:-1]]
+                avg_m1_rng = float(np.mean(prior_m1_rngs)) if prior_m1_rngs else 1.0
 
-    # 3. Flash Price Surge (ราคาสดในแท่งปัจจุบันกระชากห่างจากราคาเปิด >= 1.8x ATR)
-    if not detected and tick is not None and len(df_m15) >= 1:
+                # 2.1 M1 Bar Velocity: แท่ง 1 นาทีเดียว แกว่งเกิน 250 จุด ($2.50) หรือเร็วกว่าค่าเฉลี่ย 2.5 เท่า
+                if curr_m1_rng >= 2.50 or (avg_m1_rng > 0 and curr_m1_rng >= 2.5 * avg_m1_rng):
+                    detected = True
+                    reason = f"ราคาขึ้นลงเร็วผิดปกติใน 1 นาที (แท่ง M1 แกว่ง {curr_m1_rng:.2f} จุด, เฉลี่ย {avg_m1_rng:.2f})"
+
+                # 2.2 3-Minute Whiplash: ในรอบ 3 นาทีล่าสุด ราคาเหวี่ยงสะบัดขึ้นลงรวมเกิน 450 จุด ($4.50)
+                if not detected and len(m1_rates) >= 3:
+                    high_3m = max(float(r['high']) for r in m1_rates[-3:])
+                    low_3m = min(float(r['low']) for r in m1_rates[-3:])
+                    rng_3m = high_3m - low_3m
+                    if rng_3m >= 4.50:
+                        detected = True
+                        reason = f"ราคาเหวี่ยงขึ้นลงเร็วจัดใน 3 นาที ({rng_3m:.2f} จุด ใน 3 แท่ง M1)"
+        except Exception:
+            pass
+
+    # 4. Flash Price Surge M15 (ราคาสดในแท่ง M15 ปัจจุบันกระชากห่างจากราคาเปิด >= 1.8x ATR)
+    if not detected and tick is not None and df_m15 is not None and len(df_m15) >= 1:
         curr_open = float(df_m15.iloc[-1]['open'])
         live_move = abs(float(tick.bid) - curr_open)
         if atr_val > 0 and live_move >= 1.8 * atr_val:
             detected = True
             reason = f"ราคากระชากสด {live_move:.2f} จุด จากราคาเปิดแท่ง (>= 1.8x ATR)"
 
-    # 4. Spread Blowout (สเปรดถ่างรุนแรง >= 80 จุด)
+    # 5. Spread Blowout (สเปรดถ่างรุนแรง >= 80 จุด จากสภาพคล่องหดตัวฉับพลัน)
     if not detected and tick is not None and symbol_info is not None:
         pt = float(symbol_info.point) if getattr(symbol_info, 'point', 0) else 0.01
         spread_pts = (float(tick.ask) - float(tick.bid)) / pt
         if spread_pts >= 80.0:
             detected = True
             reason = f"สเปรดถ่างผิดปกติ {spread_pts:.0f} จุด (>= 80 จุด)"
-
-    # 5. High-Impact USD News Window (+/- 15 นาที)
-    if not detected:
-        try:
-            import econ_calendar
-            events = econ_calendar._load_disk_cache()
-            if events:
-                now_dt = datetime.now(timezone(timedelta(hours=7)))
-                for ev in events:
-                    if str(ev.get("currency", "")).upper() == "USD" and str(ev.get("impact", "")).capitalize() == "High":
-                        dt_str = str(ev.get("date", "")).replace("Z", "+00:00")
-                        ev_dt = datetime.fromisoformat(dt_str).astimezone(timezone(timedelta(hours=7)))
-                        diff_mins = (ev_dt - now_dt).total_seconds() / 60.0
-                        if -15.0 <= diff_mins <= 15.0:
-                            detected = True
-                            reason = f"ข่าวสำคัญ USD: {ev.get('title')} ({diff_mins:+.0f} นาที)"
-                            break
-        except Exception:
-            pass
 
     # ระบบ Anti-Flapping Hysteresis: หน่วงเวลาถือสภาวะผันผวนอย่างน้อย 45 วินาที
     if detected:
@@ -2028,7 +2028,7 @@ def main():
                     continue  # ถ้าเป็นคู่เงินโหมดดูเฉยๆ ให้ข้ามการยิงคำสั่งเทรดไปเลย
                 
                 # ตรวจจับสภาวะราคาผันผวนแรงผิดปกติ (ทุกรอบสแกน ไม่ว่าจะถือไม้อยู่หรือไม่) -> เล่นเสียงไซเลนเตือนต่อเนื่อง
-                is_volatile, vol_reason = check_abnormal_volatility(df, df_h1, tick, mt5.symbol_info(sym), atr_val)
+                is_volatile, vol_reason = check_abnormal_volatility(df, df_h1, tick, mt5.symbol_info(sym), atr_val, sym=sym)
                 if is_volatile:
                     if not sound_manager.is_volatility_siren_active():
                         sound_manager.start_volatility_siren(vol_reason)
