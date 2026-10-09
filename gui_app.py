@@ -2125,6 +2125,7 @@ class MainTradingApp(ctk.CTk):
         # ผูก Callback กับ Bot Controller
         bot_ctrl.set_status_callback(self._on_bot_status_changed)
         bot_ctrl.set_time_expired_callback(self._on_time_expired)
+        self.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
         # สร้าง Container หลักสำหรับการสลับหน้าระหว่าง Login กับ Dashboard
         self.container = ctk.CTkFrame(self, fg_color="transparent")
@@ -2141,6 +2142,16 @@ class MainTradingApp(ctk.CTk):
 
         # เริ่มต้นลูปอัปเดต UI เรียลไทม์
         self.after(500, self._realtime_ui_loop)
+
+    def _on_window_close(self):
+        """เมื่อผู้ใช้ปิดหน้าต่างโปรแกรม"""
+        try:
+            sound_manager.stop_volatility_siren()
+            if bot_ctrl.is_active:
+                bot_ctrl.stop_bot()
+        except Exception:
+            pass
+        self.destroy()
 
     # =========================================================================
     # 1. หน้าจอเข้าสู่ระบบและสมัครสมาชิก (LOGIN & REGISTER VIEW)
@@ -4716,9 +4727,12 @@ class MainTradingApp(ctk.CTk):
     def _on_toggle_sound(self):
         """เปิดหรือปิดเสียงแจ้งเตือน"""
         bot_ctrl.sound_enabled = not bot_ctrl.sound_enabled
+        sound_manager.set_sound_enabled(bot_ctrl.sound_enabled)
         self._style_sound_button()
         if bot_ctrl.sound_enabled:
             sound_manager.play_tp_hit()
+        else:
+            sound_manager.stop_volatility_siren()
 
     def _style_sound_button(self):
         if bot_ctrl.sound_enabled:

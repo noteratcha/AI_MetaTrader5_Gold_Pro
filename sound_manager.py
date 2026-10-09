@@ -46,6 +46,7 @@ FILE_TP_BELL    = os.path.join(SOUND_DIR, "tp_bell.wav")            # 2. ชน 
 FILE_SL_BUZZER  = os.path.join(SOUND_DIR, "sl_buzzer.wav")          # 3. ชน SL -> อ๊อด
 FILE_UPDATE_BELL= os.path.join(SOUND_DIR, "update_bell.wav")        # 4. อัปเดตข้อมูล -> กระดิ่ง
 FILE_BIRD       = os.path.join(SOUND_DIR, "move_sl_bird.wav")       # 5. ขยับ SL -> นกร้อง
+FILE_SIREN      = os.path.join(SOUND_DIR, "abnormal_volatility_siren.wav") # 6. ผันผวนแรงผิดปกติ -> เสียงไซเลน 🚨
 
 SAMPLE_RATE = 44100
 
@@ -272,8 +273,42 @@ def generate_move_sl_bird():
     return output
 
 
+def generate_volatility_siren():
+    """6. สร้างเสียงไซเลนเตือนภัยสภาวะผันผวนรุนแรงผิดปกติ (Abnormal Volatility Siren 🚨)
+    เสียงหวูดไซเลนฉุกเฉินความถี่กวาดขึ้น-ลง (Pitch Modulation 600 Hz <-> 1150 Hz)
+    คาบเวลา 1.2 วินาที วนลูปได้อย่างต่อเนื่อง ไร้รอยต่อ (Seamless Loop)"""
+    total_duration = 1.20
+    total_samples = int(SAMPLE_RATE * total_duration)
+    t = np.linspace(0, total_duration, total_samples, endpoint=False)
+    
+    # ความถี่พื้นฐานกวาดคลื่นไซน์: กวาดระหว่าง 600 Hz ถึง 1150 Hz
+    f_center = 875.0
+    f_dev = 275.0
+    phase = 2 * np.pi * (f_center * t - (f_dev * total_duration / (2 * np.pi)) * np.cos(2 * np.pi * t / total_duration))
+    
+    # คลื่นเสียงไซเลน: ผสมฮาร์โมนิกให้เสียงกังวานและสมจริง
+    siren_wave = (
+        np.sin(phase) * 0.70 +
+        np.sin(2 * phase) * 0.20 +
+        np.sin(3 * phase) * 0.10
+    )
+    
+    # ซองเสียง Envelope นุ่มนวลหัว-ท้าย 15ms เพื่อให้ตอนวนลูปไร้รอยต่อ ไม่คลิก
+    taper = int(SAMPLE_RATE * 0.015)
+    env = np.ones(total_samples)
+    if taper > 0:
+        env[:taper] = np.linspace(0.90, 1.0, taper)
+        env[-taper:] = np.linspace(1.0, 0.90, taper)
+        
+    output = siren_wave * env
+    max_val = np.max(np.abs(output))
+    if max_val > 0:
+        output = output / max_val * 0.88
+    return output
+
+
 def ensure_all_sound_files():
-    """ตรวจสอบและสร้างไฟล์เสียงทั้ง 5 แบบอัตโนมัติหากยังไม่มี"""
+    """ตรวจสอบและสร้างไฟล์เสียงทั้ง 6 แบบอัตโนมัติหากยังไม่มี"""
     os.makedirs(SOUND_DIR, exist_ok=True)
     
     creators = [
@@ -282,6 +317,7 @@ def ensure_all_sound_files():
         (FILE_SL_BUZZER, generate_sl_buzzer, "3. เสียงอ๊อด (ชน SL)"),
         (FILE_UPDATE_BELL, generate_update_bell, "4. เสียงกระดิ่งนุ่มนวล (อัปเดตข้อมูล)"),
         (FILE_BIRD, generate_move_sl_bird, "5. เสียงนกร้อง (ขยับ SL)"),
+        (FILE_SIREN, generate_volatility_siren, "6. เสียงไซเลน (ผันผวนแรงผิดปกติ)"),
     ]
     
     for filepath, func, label in creators:
@@ -294,8 +330,107 @@ def ensure_all_sound_files():
                 print(f"[AUDIO ERROR] Failed to create {label}: {e}")
 
 
+# ==============================================================================
+# ตัวควบคุมเสียงและไซเลนต่อเนื่อง (Continuous Siren Controller)
+# ==============================================================================
+_SOUND_ENABLED = True
+_siren_thread = None
+_siren_stop_event = threading.Event()
+_siren_active = False
+_siren_lock = threading.Lock()
+_siren_reason = ""
+
+
+def set_sound_enabled(enabled: bool):
+    """เปิดหรือปิดระบบเสียงแจ้งเตือนทั้งหมด"""
+    global _SOUND_ENABLED
+    _SOUND_ENABLED = bool(enabled)
+    if not _SOUND_ENABLED:
+        stop_volatility_siren()
+
+
+def is_sound_enabled() -> bool:
+    """ตรวจสอบว่าระบบเสียงเปิดอยู่หรือไม่"""
+    return bool(_SOUND_ENABLED)
+
+
+def _siren_loop_worker():
+    """เธรดเบื้องหลังเล่นเสียงไซเลนวนลูปต่อเนื่องจนกว่าสภาวะผันผวนจะคลี่คลาย"""
+    ensure_all_sound_files()
+    while not _siren_stop_event.is_set():
+        if not _SOUND_ENABLED:
+            time.sleep(0.3)
+            continue
+            
+        if HAS_WINSOUND and os.path.exists(FILE_SIREN):
+            try:
+                # เล่นแบบ Synchronous ภายใน worker thread นี้ (1.2 วินาที)
+                # เมื่อจบรอบ จะวนลูปเล่นต่อทันที ทำให้เสียงดังต่อเนื่อง
+                winsound.PlaySound(FILE_SIREN, winsound.SND_FILENAME)
+            except Exception:
+                time.sleep(0.3)
+        else:
+            # Fallback Beep สำหรับระบบที่ไม่มี winsound.PlaySound
+            try:
+                for f in (650, 850, 1100, 850):
+                    if _siren_stop_event.is_set() or not _SOUND_ENABLED:
+                        break
+                    winsound.Beep(f, 250)
+            except Exception:
+                time.sleep(0.5)
+
+
+def start_volatility_siren(reason=""):
+    """เริ่มส่งเสียงไซเลนเตือนภัยผันผวนแรงแบบต่อเนื่อง (Continuous Siren Alarm 🚨)"""
+    global _siren_thread, _siren_active, _siren_reason
+    if not _SOUND_ENABLED:
+        return
+    with _siren_lock:
+        if _siren_active and _siren_thread and _siren_thread.is_alive():
+            return  # ไซเลนกำลังดังอยู่แล้ว ไม่ต้องเริ่มใหม่
+        _siren_reason = reason
+        _siren_stop_event.clear()
+        _siren_active = True
+        ensure_all_sound_files()
+        _siren_thread = threading.Thread(target=_siren_loop_worker, daemon=True, name="VolatilitySirenThread")
+        _siren_thread.start()
+        reason_tag = f" ({reason})" if reason else ""
+        print(f"\033[91m\033[1m[SIREN ALARM] 🚨 เสียงไซเลนเตือนภัยตลาดผันผวนแรงเริ่มทำงาน!{reason_tag}\033[0m")
+
+
+def stop_volatility_siren():
+    """หยุดเสียงไซเลนทันทีเมื่อสภาวะผันผวนคลี่คลาย (Stop Siren Alarm)"""
+    global _siren_active, _siren_reason
+    with _siren_lock:
+        if not _siren_active:
+            return
+        _siren_active = False
+        _siren_reason = ""
+        _siren_stop_event.set()
+        if HAS_WINSOUND:
+            try:
+                # SND_PURGE หยุดเสียงที่กำลังเล่นอยู่ทันที
+                winsound.PlaySound(None, winsound.SND_PURGE)
+            except Exception:
+                pass
+        print(f"\033[92m\033[1m[SIREN CLEARED] ✅ สภาวะผันผวนกลับสู่ปกติ — ปิดเสียงไซเลนเตือนภัยแล้ว\033[0m")
+
+
+def is_volatility_siren_active() -> bool:
+    """ตรวจสอบว่าเสียงไซเลนกำลังทำงานอยู่หรือไม่"""
+    return bool(_siren_active)
+
+
+def get_volatility_siren_reason() -> str:
+    """ดึงเหตุผลที่ตรวจพบความผันผวนผิดปกติล่าสุด"""
+    return str(_siren_reason)
+
+
 def _play_wav_async(filepath, fallback_beep=None):
     """เล่นไฟล์เสียง WAV ในพื้นหลังแบบไม่สะดุดการทำงานของบอท"""
+    if not _SOUND_ENABLED:
+        return
+        
     if not os.path.exists(filepath):
         ensure_all_sound_files()
         
@@ -310,6 +445,8 @@ def _play_wav_async(filepath, fallback_beep=None):
     # กรณีฉุกเฉิน: Fallback ด้วย winsound.Beep
     if HAS_WINSOUND and fallback_beep:
         def _beep():
+            if not _SOUND_ENABLED:
+                return
             for freq, dur in fallback_beep:
                 try:
                     winsound.Beep(freq, dur)
@@ -319,7 +456,7 @@ def _play_wav_async(filepath, fallback_beep=None):
 
 
 # ==============================================================================
-# ฟังก์ชันเรียกใช้งานเสียงทั้ง 5 เหตุการณ์ (นำไปใช้ในบอทได้ทันที)
+# ฟังก์ชันเรียกใช้งานเสียงแต่ละเหตุการณ์ (นำไปใช้ในบอทได้ทันที)
 # ==============================================================================
 
 def play_order_entry():
@@ -357,27 +494,30 @@ ensure_all_sound_files()
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🔊 ทดสอบระบบเสียงทั้ง 5 แบบสำหรับ AI MetaTrader 5 Bot")
+    print("🔊 ทดสอบระบบเสียงรวมถึงไซเลนเตือนภัยสำหรับ AI MetaTrader 5 Bot")
     print("=" * 60)
     
     print("\n1. 🎺 กำลังเล่น: เสียงดีใจ (เมื่อเข้าไม้)...")
     play_order_entry()
-    time.sleep(2.0)
+    time.sleep(1.5)
     
     print("2. 🔔 กำลังเล่น: เสียงกระดิ่ง (เมื่อชน TP)...")
     play_tp_hit()
-    time.sleep(2.0)
+    time.sleep(1.5)
     
-    print("3. 🚨 กำลังเล่น: เสียงอ๊อด (เมื่อชน SL)...")
+    print("3. 🛑 กำลังเล่น: เสียงอ๊อด (เมื่อชน SL)...")
     play_sl_hit()
-    time.sleep(1.5)
+    time.sleep(1.2)
     
-    print("4. 🔔 กำลังเล่น: เสียงกระดิ่งนุ่มนวล (เมื่ออัปเดตข้อมูล)...")
-    play_data_update()
-    time.sleep(1.5)
-    
-    print("5. 🐦 กำลังเล่น: เสียงนกร้อง (เมื่อมีการขยับ SL)...")
+    print("4. 🐦 กำลังเล่น: เสียงนกร้อง (เมื่อมีการขยับ SL)...")
     play_sl_moved()
-    time.sleep(1.5)
+    time.sleep(1.2)
+
+    print("\n5. 🚨 กำลังทดสอบ: เสียงไซเลนเตือนภัยผันผวนแรง (ดังต่อเนื่อง 3.5 วินาที)...")
+    start_volatility_siren("ทดสอบ ATR Spike พุ่งสูง")
+    time.sleep(3.5)
+    print("⏹ กำลังสั่งหยุดไซเลน...")
+    stop_volatility_siren()
+    time.sleep(0.5)
     
-    print("\n✅ ทดสอบครบทั้ง 5 เสียงเรียบร้อยแล้ว!")
+    print("\n✅ ทดสอบครบถ้วนทุกระบบเสียงเรียบร้อยแล้ว!")

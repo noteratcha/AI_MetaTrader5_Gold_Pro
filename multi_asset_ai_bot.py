@@ -1995,6 +1995,15 @@ def main():
                 if sym not in TRADE_SYMBOLS:
                     continue  # ถ้าเป็นคู่เงินโหมดดูเฉยๆ ให้ข้ามการยิงคำสั่งเทรดไปเลย
                 
+                # ตรวจจับสภาวะราคาผันผวนแรงผิดปกติ (ทุกรอบสแกน ไม่ว่าจะถือไม้อยู่หรือไม่) -> เล่นเสียงไซเลนเตือนต่อเนื่อง
+                is_volatile, vol_reason = check_abnormal_volatility(df, df_h1, tick, mt5.symbol_info(sym), atr_val)
+                if is_volatile:
+                    if not sound_manager.is_volatility_siren_active():
+                        sound_manager.start_volatility_siren(vol_reason)
+                else:
+                    if sound_manager.is_volatility_siren_active():
+                        sound_manager.stop_volatility_siren()
+
                 # โหมดไม่สนสเปรด (ตามคำขอ): เข้าเทรดได้ทุกสภาวะตลาดโดยไม่มีข้อจำกัดเรื่องสเปรด
                 
                 # เข้าไม้ใหม่ (7 ต.ค. 2026): เปิดได้แม้มีไม้ค้าง — ไม่เกินจำนวนไม้ตามหลักประกัน และแผนละไม่เกิน 1 ไม้ (เหมือน Backtest)
@@ -2540,10 +2549,12 @@ def main():
             print("\r" + " " * 85 + "\r", end="", flush=True)
             
         except KeyboardInterrupt:
+            sound_manager.stop_volatility_siren()
             print("\n[STOP] Bot stopped by user (Ctrl+C). Shutting down cleanly.")
             break
         except Exception as e:
             scan_errors += 1
+            sound_manager.stop_volatility_siren()
             import traceback
             where = traceback.extract_tb(e.__traceback__)[-1]
             print(f"{Colors.RED}[BOT ENGINE ERROR] {e} (บรรทัด {where.lineno}) — ครั้งที่ {scan_errors}/3{Colors.RESET}")
@@ -2555,6 +2566,7 @@ def main():
                     break
                 time.sleep(1)
             
+    sound_manager.stop_volatility_siren()
     mt5.shutdown()
 
 if __name__ == "__main__":

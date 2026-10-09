@@ -7,6 +7,7 @@ import MetaTrader5 as mt5
 import multi_asset_ai_bot as bot_core
 import mt5_algo
 import thai_time
+import sound_manager
 from license_manager import license_mgr
 
 class OutputRedirector:
@@ -112,6 +113,7 @@ class BotController:
 
         bot_core.BOT_PAUSED_FLAG = True
         self.is_paused = True
+        sound_manager.stop_volatility_siren()
 
         if self.status_callback:
             self.status_callback("PAUSED")
@@ -151,6 +153,7 @@ class BotController:
         bot_core.BOT_PAUSED_FLAG = False
         self.is_active = False
         self.is_paused = False
+        sound_manager.stop_volatility_siren()
 
         # คืนค่า stdout เดิม
         sys.stdout = self.orig_stdout
