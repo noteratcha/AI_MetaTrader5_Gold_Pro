@@ -19,7 +19,7 @@ import stats_manager
 import plan_config
 import thai_time
 from license_manager import license_mgr
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # เริ่มต้นระบบสี Colorama สำหรับ Windows Console ให้แสดงสีจริง ไม่ขึ้น [96m [1m
 colorama.init(autoreset=False)
@@ -559,6 +559,87 @@ def take_profit_usd():
     except Exception:
         pass
     return None
+
+
+def manual_tp_pts_config():
+    """ปิดไม้เข้าเองเมื่อกำไรถึง X จุด (ตั้งที่แผงควบคุม) → (enabled: bool, pts: float)
+    ค่าเริ่มต้น: enabled=False, pts=100.0 จุด (ตัวเลือก: 100, 150, 200, 250, 300, 350, 400, 450, 500 หรือระบุอิสระ)
+    """
+    try:
+        with open(BOT_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            s = json.load(f)
+        enabled = bool(s.get("manual_tp_pts_enabled", False))
+        pts = float(s.get("manual_tp_pts", 100.0))
+        return enabled, max(10.0, pts)
+    except Exception:
+        return False, 100.0
+
+
+_last_volatility_alert_time = 0.0
+
+
+def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val):
+    """
+    ตรวจจับสภาวะราคาผันผวนแรงผิดปกติ (Abnormal Market Volatility)
+    เงื่อนไข:
+    1. ATR Spike: ATR(14) M15 ปัจจุบัน >= 1.8 เท่าของค่าเฉลี่ย 20 แท่ง หรือ >= 6.0 ($6.00 / 600 จุด)
+    2. Candle Range Explosion: แท่ง M15 ล่าสุดมีช่วงราคา (High - Low) >= 2.0 * ATR หรือ >= 8.0 ($8.00 / 800 จุด)
+    3. Live Price Surge: ราคาสดกระชากห่างจากราคาเปิดแท่งปัจจุบัน >= 1.5 * ATR หรือ >= 6.0 ($6.00 / 600 จุด)
+    4. Abnormal Spread Widening: สเปรดปัจจุบันถ่างเกิน 75 จุด (สภาวะสภาพคล่องแห้ง/ข่าวกระชาก)
+    5. High-Impact USD News Window: อยู่ในช่วงข่าวสำคัญ USD (+/- 15 นาที)
+    คืนค่า: (is_volatile: bool, reason: str)
+    """
+    if df_m15 is None or len(df_m15) == 0:
+        return False, ""
+
+    # 1. ATR Spike
+    if 'atr' in df_m15.columns and len(df_m15) >= 20:
+        atr_hist = df_m15['atr'].iloc[-21:-1].dropna()
+        if len(atr_hist) >= 10:
+            avg_atr = float(atr_hist.mean())
+            if avg_atr > 0 and atr_val >= 1.8 * avg_atr:
+                return True, f"ATR M15 พุ่งสูง {atr_val:.2f} (เฉลี่ย {avg_atr:.2f})"
+    if atr_val >= 6.0:
+        return True, f"ATR M15 สูงผิดปกติ ({atr_val:.2f} >= 6.00)"
+
+    # 2. Candle Range Explosion (แท่งปิดล่าสุด)
+    if len(df_m15) >= 2:
+        last_bar = df_m15.iloc[-2]
+        bar_rng = float(last_bar['high'] - last_bar['low'])
+        if (atr_val > 0 and bar_rng >= 2.0 * atr_val) or bar_rng >= 8.0:
+            return True, f"แท่ง M15 ล่าสุดแกว่ง {bar_rng:.2f} จุด (>= 2x ATR)"
+
+    # 3. Live Price Surge (แท่งปัจจุบัน)
+    if tick is not None and len(df_m15) >= 1:
+        curr_open = float(df_m15.iloc[-1]['open'])
+        live_move = abs(float(tick.bid) - curr_open)
+        if (atr_val > 0 and live_move >= 1.5 * atr_val) or live_move >= 6.0:
+            return True, f"ราคากระชากสด {live_move:.2f} จุด จากราคาเปิดแท่ง"
+
+    # 4. Abnormal Spread Widening
+    if tick is not None and symbol_info is not None:
+        pt = float(symbol_info.point) if getattr(symbol_info, 'point', 0) else 0.01
+        spread_pts = (float(tick.ask) - float(tick.bid)) / pt
+        if spread_pts >= 75.0:
+            return True, f"สเปรดถ่างผิดปกติ {spread_pts:.0f} จุด"
+
+    # 5. ข่าวสำคัญ USD
+    try:
+        import econ_calendar
+        events = econ_calendar._load_disk_cache()
+        if events:
+            now_dt = datetime.now(timezone(timedelta(hours=7)))
+            for ev in events:
+                if str(ev.get("currency", "")).upper() == "USD" and str(ev.get("impact", "")).capitalize() == "High":
+                    dt_str = str(ev.get("date", "")).replace("Z", "+00:00")
+                    ev_dt = datetime.fromisoformat(dt_str).astimezone(timezone(timedelta(hours=7)))
+                    diff_mins = (ev_dt - now_dt).total_seconds() / 60.0
+                    if -15.0 <= diff_mins <= 15.0:
+                        return True, f"ข่าวสำคัญ USD: {ev.get('title')} ({diff_mins:+.0f} นาที)"
+    except Exception:
+        pass
+
+    return False, ""
 
 
 def current_lot():
@@ -2231,6 +2312,12 @@ def main():
                             p4_trail_steps.pop(t, None)
                         _save_p4_trail_state(p4_trail_steps)
                     tp_usd = take_profit_usd()
+                    tp_pts_enabled, target_pts = manual_tp_pts_config()
+                    is_volatile, vol_reason = check_abnormal_volatility(df, df_h1, tick, mt5.symbol_info(sym), atr_val)
+                    if is_volatile and (time.time() - _last_volatility_alert_time >= 60.0):
+                        _last_volatility_alert_time = time.time()
+                        print(f"{Colors.YELLOW}[VOLATILITY ALERT] {sym} ตลาดผันผวนแรงผิดปกติ ({vol_reason}) -> บังคับเปิด Take Profit {target_pts:g} จุด สำหรับทุกแผน!{Colors.RESET}")
+
                     for pos in positions:
                         # 0.0 ปิดไม้เมื่อกำไรถึงเป้าเงิน $ ที่ผู้ใช้ตั้ง (ทุกแผน · เฉพาะไม้ของบอท)
                         if tp_usd and pos.magic == 888999:
@@ -2241,6 +2328,35 @@ def main():
                                                  tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask, prob[1], prob[0], h4_cloud_status, div_name,
                                                  'TAKE_PROFIT_USD', f'Profit ${net:.2f} >= target ${tp_usd:.2f}')
                                 close_position(pos, comment=f"Take Profit ${tp_usd:g}")
+                                continue
+
+                        # 0.05 ปิดไม้ตามเป้าจุด (Points Take Profit)
+                        # - สภาวะปกติ: ใช้กับไม้ที่เข้าเอง (manual / magic 0) เมื่อเปิดใช้งาน (manual_tp_pts_enabled)
+                        # - สภาวะผันผวนแรงผิดปกติ: ต้องเปิดใช้เสมอและมีผลต่อทุกแผน (ทั้งไม้เข้าเองและไม้ของบอท)
+                        is_manual_pos = (pos.magic == 0 or (pos.comment or "").startswith("Manual") or pos.magic != 888999)
+                        should_check_pts = is_volatile or (tp_pts_enabled and is_manual_pos)
+
+                        if should_check_pts:
+                            si = mt5.symbol_info(sym)
+                            pt = float(si.point) if (si and getattr(si, 'point', 0)) else 0.01
+                            pts_profit = ((tick.bid - pos.price_open) if pos.type == mt5.ORDER_TYPE_BUY else (pos.price_open - tick.ask)) / pt
+                            if pts_profit >= target_pts:
+                                if is_volatile and not (is_manual_pos and tp_pts_enabled):
+                                    tag = "[VOLATILITY TP]"
+                                    reason_text = f"Volatility TP {target_pts:g} pts ({vol_reason})"
+                                    cm_text = f"Vol TP {target_pts:g}pts"
+                                else:
+                                    tag = "[MANUAL TP PTS]"
+                                    reason_text = f"Manual TP {target_pts:g} pts target reached"
+                                    cm_text = f"Manual TP {target_pts:g}pts"
+
+                                print(f"{Colors.GREEN}{tag} {sym} #{pos.ticket} ({pos.comment or 'Manual'}) กำไร {pts_profit:.1f} จุด >= เป้า {target_pts:g} จุด — ปิดไม้นี้ทันที!{Colors.RESET}")
+                                log_signal_event(sym, 'POSITION_MGMT', pos.comment or 'Manual',
+                                                 'SELL' if pos.type == mt5.ORDER_TYPE_BUY else 'BUY',
+                                                 tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask,
+                                                 prob[1], prob[0], h4_cloud_status, div_name,
+                                                 'TP_POINTS_HIT', f'Profit {pts_profit:.1f} pts >= target {target_pts:g} pts ({reason_text})')
+                                close_position(pos, comment=cm_text)
                                 continue
                         # 0.1 Plan 1 Opposite MA Cross Exit (เงื่อนไขปิดไม้เฉพาะ Plan 1: MA5 ตัดกลับขั้วตรงข้าม M15)
                         # - ถ้าถือ BUY: เมื่อ MA 5 ตัดลง MA 10 บนแท่ง M15 ให้ปิดไม้ทันที

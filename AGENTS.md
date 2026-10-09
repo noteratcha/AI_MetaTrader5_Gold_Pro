@@ -1,10 +1,15 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1008.2245 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1009.0723 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1008.2245): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1009.0723): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
 > โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.2244`  
 > **ทุกครั้งที่แก้โค้ด ต้องอัปเดตเลขเวอร์ชันก่อน commit** ด้วย `python tools/bump_version.py` (แหล่งเดียวคือ `version.py` — ห้ามพิมพ์เลขเวอร์ชันลงไฟล์โค้ดอื่นโดยตรง)
+
+> 🔄 **กฎการซิงค์ความรู้และบริบทข้าม AI อัตโนมัติ (Claude Code ↔ Gemini Memory Auto-Sync Rule)**:  
+> AI ทุกตัว (Claude Code และ Gemini / Antigravity) ต้องเชื่อมโยงสมองและใช้ฐานความรู้เดียวกัน 100%:  
+> 1. ทุกครั้งที่เริ่มการพัฒนาโปรเจกต์ ให้ตรวจสอบ Memory และ Context จาก Claude ที่ `C:\Users\AomNote\.claude\projects\d---------AI-MetaTrader5-FBS\memory\` หรือรัน `python tools/sync_claude_memory.py` อัตโนมัติ  
+> 2. ถือปฏิบัติตามกฎเหล็กเดียวกันเสมอ: ภาษาไทย 100% (`user-language-thai`), โฟกัสเฉพาะ Plan 1 (`project-plan1-focus`), ห้าม MT5 login หลุดตอน Dry-run (`feedback-dryrun-mt5-login`), อัปเดตเวอร์ชันทุกครั้ง (`feedback-bump-version-every-change`), และระบบชำระเงิน SlipOK (`project-beam-payment-pending`)
 
 ---
 
@@ -76,6 +81,10 @@
 44. **Low-Hours Alerts (≤ 5 ชม.)**: โปรแกรม: ป้ายเวลาสีแดง (`LOW_HOURS_MINUTES`) + หน้าต่างเตือนพร้อมเสียงและข้อความ Console เมื่อเหลือ **5 ชม. และ 1 ชม.** ครั้งละครั้ง (`LOW_HOURS_ALERTS`, `_check_low_hours_alert` — เติมจนเกินเกณฑ์แล้วเตือนใหม่ได้ · เปิดโปรแกรมตอนต่ำกว่าเกณฑ์เตือนครั้งเดียว) ปุ่ม "ซื้อชั่วโมง" เปิดหน้าร้าน · หมดแล้ว = บอทหยุด + หน้าต่างเดิม · เว็บ: `LowHoursBanner` แถบเตือนใต้เมนูทุกหน้า (ทอง = ใกล้หมด, แดง = หมด, ปุ่มซื้อชั่วโมง/เติมคีย์) · ตัวเลขชั่วโมงบนเมนูเป็นสีแดง · เกณฑ์ร่วม `web/src/lib/hours.js` (`LOW_HOURS = 5`) · อีเมลเตือน 1 ครั้งเมื่อการหักเวลา (`/api/auth/meter`) ลดลงข้าม 5 ชม. (`sendLowHoursEmail`)
 45. **Online Reward (ออนไลน์ครบ 100 ชม. → ส่วนลด 10%)**: นาทีที่หักจริงจาก `/api/auth/meter` สะสมใน `online_progress` (RPC `add_online_minutes` atomic: ครบ 6,000 นาทีตัดเป็นรอบ เศษยกไป · ไม่มีกรอบสัปดาห์ — ผู้ใช้กำหนด 8 ต.ค. 2026) · แต่ละรอบ → แถว `online_discounts` (`cycle_no` ไม่ซ้ำ (ส่วนลด 10%, หมดอายุ 3 วันนับจากตอนที่ได้รับ) และ**เมื่อได้รับส่วนลดเก็บเพื่อรอใช้งานแล้ว จะเริ่มนับชั่วโมงใหม่ทันที** (รีเซ็ตนาทีสะสมเริ่มรอบใหม่) · `create-qr` ผูกส่วนลดกับคำสั่งซื้อ (`RESERVED`, ย้ายจากคำสั่งซื้อที่ยังไม่ชำระได้) ราคา = ราคาแพ็กเกจ × 0.9 (`orders.discount_id/discount_pct/original_amount_thb`) · ชำระสำเร็จ (`fulfillOrder`) → `USED` · `/api/auth/me` และ meter ส่ง `online` → หน้าร้าน `OnlineRewardCard` + ราคาขีดฆ่า/ยอดชำระในหน้าต่างชำระเงิน · โปรแกรม: ป้ายในกระเป๋าเวลา "ออนไลน์ x/100 ชม." / "ส่วนลด 10% พร้อมใช้ ›" (`_update_reward`, `license_mgr.online_status`) คลิกเปิดหน้าร้าน · กติกาที่ `web/src/lib/onlineReward.js` · Migration `supabase_online_reward_patch_07.sql` (ผู้ใช้รันเอง) · หน้าร้าน + `/dashboard` แสดง `OnlineRewardCard`
 32. **Styled Update Dialog**: แจ้งเวอร์ชันใหม่ด้วย `UpdateDialog` (ป้าย ใช้งานอยู่ → ใหม่, Release notes แยกหัวข้อ `###`, ปุ่มดาวน์โหลด) แทน messagebox
+46. **Manual Points Take Profit & Abnormal Volatility Guard (`manual_tp_pts_config`, `check_abnormal_volatility`)**:
+   - **ไม้ที่เข้าไม้เอง (Manual / Magic 0 / Quick BUY/SELL)**: ถ้ากำไร >= จำนวนจุดที่ตั้งไว้ (คำนวณจากราคาเข้าไม้) บอทจะปิดไม้นั้นทันที
+   - **ตั้งค่าได้ในแผงควบคุม**: สวิตช์เปิด/ปิด `ปิดไม้เข้าเองกำไรถึง` + ComboBox ตัวเลือกจุด `100, 150, 200, 250, 300, 350, 400, 450, 500` และพิมพ์ระบุอิสระได้ (ค่าเริ่มต้น 100 จุด บันทึกใน `bot_settings.json` คีย์ `manual_tp_pts` และ `manual_tp_pts_enabled`)
+   - **ระบบป้องกันตลาดผันผวนแรงผิดปกติ (Abnormal Volatility Guard)**: ตรวจจับสภาวะผันผวน 5 มิติ (ATR M15 Spike >= 1.8x หรือ >= 6.0, แท่ง M15 แกว่ง >= 2.0x ATR หรือ >= 8.0 จุด, ราคากระชากสด >= 1.5x ATR, สเปรดถ่าง >= 75 จุด, หรือมีข่าวสำคัญ USD ในกรอบ +/- 15 นาที) — **เมื่อเข้าเงื่อนไขนี้ ระบบจะบังคับเปิดใช้เป้าจุดนี้เสมออัตโนมัติ และมีผลต่อทุกแผนการเทรด (All Plans รวมทั้งไม้ของบอท)** เพื่อปิดล็อกกำไรด่วนทันที
 
 ---
 

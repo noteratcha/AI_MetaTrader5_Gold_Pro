@@ -3006,6 +3006,38 @@ class MainTradingApp(ctk.CTk):
         except Exception:
             self.lbl_tp_hint.configure(text="บันทึกไม่สำเร็จ", text_color=COLOR_DANGER_RED)
 
+    def _save_manual_tp_pts(self, value=None):
+        """บันทึกเป้ากำไรเป็นจุดสำหรับไม้เข้าเอง (100-500 จุด หรือระบุอิสระ)"""
+        val_str = str(value if value is not None else self.manual_tp_pts_var.get()).replace("จุด", "").replace(",", "").strip()
+        try:
+            pts = float(val_str)
+            if not (10 <= pts <= 50000):
+                raise ValueError
+        except ValueError:
+            pts = float(self._load_setting("manual_tp_pts", 100))
+            self.manual_tp_pts_var.set(f"{int(pts) if pts.is_integer() else pts:g}")
+            if hasattr(self, "lbl_manual_tp_hint"):
+                self.lbl_manual_tp_hint.configure(text="10 จุดขึ้นไป", text_color=COLOR_DANGER_RED)
+            return
+
+        pts_clean = int(pts) if pts.is_integer() else pts
+        self.manual_tp_pts_var.set(f"{pts_clean:g}")
+        enabled = bool(self.manual_tp_pts_enabled_var.get())
+        if pts == float(self._load_setting("manual_tp_pts", -1)) and enabled == bool(self._load_setting("manual_tp_pts_enabled", False)):
+            return
+        try:
+            self._save_setting("manual_tp_pts", pts)
+            self._save_setting("manual_tp_pts_enabled", enabled)
+            if hasattr(self, "lbl_manual_tp_hint"):
+                self.lbl_manual_tp_hint.configure(
+                    text="บันทึกแล้ว ✓" if enabled else "ปิดใช้งาน",
+                    text_color=COLOR_SUCCESS_GREEN if enabled else COLOR_TEXT_MUTED
+                )
+                self.after(2500, lambda: self.lbl_manual_tp_hint.configure(text=""))
+        except Exception:
+            if hasattr(self, "lbl_manual_tp_hint"):
+                self.lbl_manual_tp_hint.configure(text="บันทึกไม่สำเร็จ", text_color=COLOR_DANGER_RED)
+
     def _save_lot(self, value):
         """ตรวจและบันทึกขนาดไม้ — บอทอ่านค่าใหม่ทันทีตอนเปิดออเดอร์ถัดไป"""
         try:
@@ -3082,6 +3114,40 @@ class MainTradingApp(ctk.CTk):
         self.lbl_tp_hint = _HintProxy(chk_tp, "ปิดเมื่อกำไรถึง")
         ent.bind("<Return>", lambda e: self._save_tp_usd())
         ent.bind("<FocusOut>", lambda e: self._save_tp_usd())
+
+        # แถวเป้ากำไรเป็นจุด: ☐ ปิดไม้เข้าเองกำไรถึง [ 100 ▾ ] จุด
+        #   ค่าเริ่มต้น 100 จุด (ตัวเลือก 100, 150, 200, 250, 300, 350, 400, 450, 500 หรือพิมพ์ระบุอิสระ)
+        #   *หากราคาผันผวนแรงผิดปกติ ระบบจะบังคับเปิดใช้เสมอและมีผลต่อทุกแผน
+        opt_row_pts = ctk.CTkFrame(card, fg_color="transparent")
+        opt_row_pts.pack(fill="x", padx=14, pady=(5, 0))
+
+        self.manual_tp_pts_enabled_var = tk.BooleanVar(value=bool(self._load_setting("manual_tp_pts_enabled", False)))
+        chk_manual_tp = ctk.CTkCheckBox(
+            opt_row_pts, text="ปิดไม้เข้าเองกำไรถึง", variable=self.manual_tp_pts_enabled_var,
+            font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED,
+            fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=18, checkbox_height=18,
+            command=self._save_manual_tp_pts,
+        )
+        chk_manual_tp.pack(side="left")
+        self.lbl_manual_tp_hint = _HintProxy(chk_manual_tp, "ปิดไม้เข้าเองกำไรถึง")
+
+        lbl_pts_unit = ctk.CTkLabel(opt_row_pts, text="จุด", font=self._font(12, "bold"), text_color=COLOR_TEXT_MUTED)
+        lbl_pts_unit.pack(side="right", padx=(4, 0))
+
+        cur_pts = float(self._load_setting("manual_tp_pts", 100))
+        cur_pts_str = f"{int(cur_pts) if cur_pts.is_integer() else cur_pts:g}"
+        self.manual_tp_pts_var = tk.StringVar(value=cur_pts_str)
+        self.cmb_manual_tp_pts = ctk.CTkComboBox(
+            opt_row_pts, width=82, height=28, variable=self.manual_tp_pts_var,
+            values=["100", "150", "200", "250", "300", "350", "400", "450", "500"],
+            command=lambda v: self._save_manual_tp_pts(v), font=self._font(12, "bold"),
+        )
+        self.cmb_manual_tp_pts.pack(side="right")
+        self.cmb_manual_tp_pts.bind("<Return>", lambda e: self._save_manual_tp_pts(self.manual_tp_pts_var.get()))
+        self.cmb_manual_tp_pts.bind("<FocusOut>", lambda e: self._save_manual_tp_pts(self.manual_tp_pts_var.get()))
+
+        HoverTip(chk_manual_tp, lambda: "ปิดไม้ที่เข้าเองทันทีเมื่อกำไรถึงจำนวนจุดที่ตั้ง (คำนวณจากราคาเข้าไม้)\n*ถ้าราคาผันผวนแรงผิดปกติ ระบบจะบังคับเปิดใช้เสมอและมีผลต่อทุกแผน")
+        HoverTip(self.cmb_manual_tp_pts, lambda: "เลือกจำนวนจุดเป้าหมาย (100–500) หรือพิมพ์ระบุอิสระตามต้องการ")
 
 
         # สถิติย่อ 3 ช่อง: ออเดอร์เปิดอยู่ / กำไรลอยตัว / เวลาทำงาน
@@ -3880,6 +3946,10 @@ class MainTradingApp(ctk.CTk):
             low = cm.lower()
             if "take profit $" in low:
                 return "💰 ถึงเป้ากำไร $", COLOR_SUCCESS_GREEN
+            if "manual tp" in low:
+                return "🎯 ถึงเป้าจุด (เข้าเอง)", COLOR_SUCCESS_GREEN
+            if "vol tp" in low or "volatility tp" in low:
+                return "⚡ ปิดช่วงผันผวนแรง", COLOR_SUCCESS_GREEN
             if "cross" in low:
                 return "🤖 บอทปิด · MA ตัดกลับ", COLOR_GOLD_PRIMARY
             if "reversal" in low:
