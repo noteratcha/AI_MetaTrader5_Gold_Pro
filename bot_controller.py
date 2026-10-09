@@ -194,18 +194,31 @@ class BotController:
     MARKET_IDLE_SECONDS = 120  # ไม่มี tick ใหม่เกิน 2 นาที = ตลาดปิด (เสาร์-อาทิตย์/วันหยุด/ช่วงพักรายวัน)
 
     def _check_market_open(self) -> bool:
-        """ตลาดเปิด = ราคามี tick ใหม่ภายใน 2 นาที (ทองมี tick หลายครั้งต่อนาทีเมื่อตลาดเปิด)"""
+        """ตลาดเปิด = โบรกเกอร์เปิดการเทรด และราคามี tick ใหม่อยู่ภายใน 2 นาที (ทองมี tick ตลอดเมื่อตลาดเปิด)"""
         try:
             tick = mt5.symbol_info_tick(self.MARKET_SYMBOL)
+            sym = mt5.symbol_info(self.MARKET_SYMBOL)
         except Exception:
             tick = None
+            sym = None
+        if not tick or not sym:
+            return False
+
+        trade_mode = getattr(sym, "trade_mode", 4)
+        if trade_mode == 0:  # SYMBOL_TRADE_MODE_DISABLED (ปิดเทรด)
+            return False
+
         now = time.time()
-        stamp = int(getattr(tick, "time_msc", 0) or 0) if tick else 0
+        tick_epoch = thai_time.server_to_epoch(tick.time) if getattr(tick, "time", 0) else 0
+        tick_age = (now - tick_epoch) if tick_epoch else 999999.0
+
+        stamp = int(getattr(tick, "time_msc", 0) or 0)
         if stamp and stamp != self._last_tick_msc:
-            if self._last_tick_msc:  # เห็นราคาขยับจริง (ไม่ใช่ค่าแรกที่อ่านได้ ซึ่งอาจเป็น tick เก่าตอนตลาดปิด)
+            if self._last_tick_msc or tick_age < self.MARKET_IDLE_SECONDS:
                 self._last_tick_change = now
             self._last_tick_msc = stamp
-        return (now - self._last_tick_change) < self.MARKET_IDLE_SECONDS
+
+        return (tick_age < self.MARKET_IDLE_SECONDS) and ((now - self._last_tick_change) < self.MARKET_IDLE_SECONDS)
 
     def _run_metering_loop(self):
         """
@@ -259,15 +272,17 @@ class BotController:
             "open_positions": [],
             "radar": bot_core.latest_radar_cache.get("XAUUSD", {}),
             "remaining_time": license_mgr.get_remaining_time_display(),
-            "has_time": license_mgr.has_active_hours()
+            "has_time": license_mgr.has_active_hours(),
+            "is_market_open": False
         }
 
         try:
             if not mt5.initialize():
                 return data
 
+            term = mt5.terminal_info()
             acc = mt5.account_info()
-            if acc:
+            if acc and term and term.connected:
                 data["is_connected"] = True
                 data["login"] = acc.login
                 data["server"] = acc.server
@@ -275,6 +290,11 @@ class BotController:
                 data["equity"] = acc.equity
                 data["free_margin"] = acc.margin_free
                 data["floating_profit"] = acc.profit
+                self.market_open = self._check_market_open()
+                data["is_market_open"] = self.market_open
+            else:
+                self.market_open = False
+                data["is_market_open"] = False
 
             tick = mt5.symbol_info_tick("XAUUSD")
             if tick:

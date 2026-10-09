@@ -2945,12 +2945,15 @@ class MainTradingApp(ctk.CTk):
         top_row.pack(fill="x")
         ctk.CTkLabel(top_row, text=icon, font=ctk.CTkFont(size=15)).pack(side="left", padx=(0, 6))
         ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        badge = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED,
+                             fg_color="transparent", corner_radius=8, height=18)
+        badge.pack(side="right")
 
         val_label = ctk.CTkLabel(inner, text=val_text, font=self._font(19, "bold"), text_color=accent_color, height=26)
         val_label.pack(anchor="w", pady=(2, 0))
         sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
         sub_label.pack(anchor="w")
-        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label}
+        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge}
 
     def _make_clickable(self, card_info, command, hint=""):
         """ทำให้ทั้งการ์ดกดได้ (เคอร์เซอร์มือ + ขอบสีทองเมื่อชี้)"""
@@ -4854,13 +4857,19 @@ class MainTradingApp(ctk.CTk):
                 is_conn = telemetry.get("is_connected", False)
                 acc_num = telemetry.get("login", 0)
                 srv = telemetry.get("server", "N/A")
+                is_mkt_open = telemetry.get("is_market_open", False)
                 if hasattr(self, 'card_mt5'):
                     if is_conn:
                         self.card_mt5["val_lbl"].configure(text=f"#{acc_num}", text_color=COLOR_SUCCESS_GREEN)
                         self.card_mt5["sub_lbl"].configure(text=f"● เชื่อมต่อแล้ว · {srv}")
+                        if not is_mkt_open:
+                            self._set_badge(self.card_mt5.get("badge"), "⏸ ตลาดปิด", "#2E2410", COLOR_GOLD_PRIMARY)
+                        else:
+                            self._set_badge(self.card_mt5.get("badge"), "")
                     else:
                         self.card_mt5["val_lbl"].configure(text="ไม่ได้เชื่อมต่อ", text_color=COLOR_DANGER_RED)
                         self.card_mt5["sub_lbl"].configure(text="กรุณาเปิด MT5 Terminal")
+                        self._set_badge(self.card_mt5.get("badge"), "")
 
                 # อัปเดต Balance & Equity
                 bal = telemetry.get("balance", 0.0)
