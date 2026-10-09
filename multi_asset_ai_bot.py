@@ -606,16 +606,16 @@ def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val, sym="XA
         # เก็บเฉพาะข้อมูลไม่เกิน 45 วินาทีล่าสุด
         _price_tick_buffer = [(t, p) for t, p in _price_tick_buffer if (now - t) <= 45.0]
 
-        # 1. Real-time Tick Surge: วัดความเร็วการขึ้นลงของราคาสดในระดับวินาที
+        # 1. Real-time Tick Surge: วัดความเร็วการขึ้นลงของราคาสดในระดับวินาที (ต้องกระชากแรงจริง >= 450 จุด หรือความเร็ว >= 12 จุด/วิ)
         if len(_price_tick_buffer) >= 3:
             p_values = [p for _, p in _price_tick_buffer]
             p_span = max(p_values) - min(p_values)
             dt_span = now - _price_tick_buffer[0][0]
-            # ถ้าในเวลา 10-45 วินาที ราคาวิ่งสะบัดไป-มาเกิน $2.00 (200 จุด)
-            if dt_span >= 5.0 and p_span >= 2.00:
+            velocity_pts_sec = (p_span * 100.0) / max(1.0, dt_span)
+            # เงื่อนไข: แกว่ง >= $4.50 (450 จุด) ในเวลา <= 40 วิ หรือพุ่งสะบัดสั้นๆ >= $3.50 (350 จุด) ด้วยความเร็ว >= 18 จุด/วิ
+            if dt_span >= 3.0 and ((p_span >= 4.50 and velocity_pts_sec >= 12.0) or (p_span >= 3.50 and velocity_pts_sec >= 18.0)):
                 detected = True
-                velocity_pts_sec = (p_span * 100.0) / max(1.0, dt_span)
-                reason = f"ราคากระชากสดเร็วจัด {p_span:.2f} จุด ภายใน {int(dt_span)} วินาที ({velocity_pts_sec:.1f} จุด/วิ)"
+                reason = f"ราคากระชากสดเร็วจัด ${p_span:.2f} ({int(p_span*100)} จุด) ภายใน {int(dt_span)} วินาที ({velocity_pts_sec:.1f} จุด/วิ)"
 
     # 2. M1 Bar Velocity & 3. 3-Minute Whiplash: วัดความเร็วการขยับของราคาจากแท่งเทียน M1 สดๆ ในช่วงเวลานั้น
     if not detected and sym:
@@ -626,23 +626,23 @@ def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val, sym="XA
                 curr_m1 = m1_rates[-1]
                 curr_m1_rng = float(curr_m1['high'] - curr_m1['low'])
                 
-                # ค่าเฉลี่ยความกว้างแท่ง M1 ช่วง 9 แท่งก่อนหน้า (ปกติทองจะแกว่งแท่งละ $0.60 - $1.00)
+                # ค่าเฉลี่ยความกว้างแท่ง M1 ช่วง 9 แท่งก่อนหน้า (ปกติทองจะแกว่งแท่งละ $1.00 - $1.50)
                 prior_m1_rngs = [float(r['high'] - r['low']) for r in m1_rates[:-1]]
-                avg_m1_rng = float(np.mean(prior_m1_rngs)) if prior_m1_rngs else 1.0
+                avg_m1_rng = float(np.mean(prior_m1_rngs)) if prior_m1_rngs else 1.50
 
-                # 2.1 M1 Bar Velocity: แท่ง 1 นาทีเดียว แกว่งเกิน 250 จุด ($2.50) หรือเร็วกว่าค่าเฉลี่ย 2.5 เท่า
-                if curr_m1_rng >= 2.50 or (avg_m1_rng > 0 and curr_m1_rng >= 2.5 * avg_m1_rng):
+                # 2.1 M1 Bar Velocity: แท่ง 1 นาทีเดียว แกว่งเกิน 480 จุด ($4.80) หรือเร็วกว่าค่าเฉลี่ย 3.0 เท่า
+                if curr_m1_rng >= 4.80 or (avg_m1_rng > 0 and curr_m1_rng >= 3.0 * avg_m1_rng):
                     detected = True
-                    reason = f"ราคาขึ้นลงเร็วผิดปกติใน 1 นาที (แท่ง M1 แกว่ง {curr_m1_rng:.2f} จุด, เฉลี่ย {avg_m1_rng:.2f})"
+                    reason = f"ราคาขึ้นลงเร็วผิดปกติใน 1 นาที (แท่ง M1 แกว่ง ${curr_m1_rng:.2f} / {int(curr_m1_rng*100)} จุด, เฉลี่ย ${avg_m1_rng:.2f})"
 
-                # 2.2 3-Minute Whiplash: ในรอบ 3 นาทีล่าสุด ราคาเหวี่ยงสะบัดขึ้นลงรวมเกิน 450 จุด ($4.50)
+                # 2.2 3-Minute Whiplash: ในรอบ 3 นาทีล่าสุด ราคาเหวี่ยงสะบัดขึ้นลงรวมเกิน 750 จุด ($7.50)
                 if not detected and len(m1_rates) >= 3:
                     high_3m = max(float(r['high']) for r in m1_rates[-3:])
                     low_3m = min(float(r['low']) for r in m1_rates[-3:])
                     rng_3m = high_3m - low_3m
-                    if rng_3m >= 4.50:
+                    if rng_3m >= 7.50:
                         detected = True
-                        reason = f"ราคาเหวี่ยงขึ้นลงเร็วจัดใน 3 นาที ({rng_3m:.2f} จุด ใน 3 แท่ง M1)"
+                        reason = f"ราคาเหวี่ยงขึ้นลงเร็วจัดใน 3 นาที (${rng_3m:.2f} / {int(rng_3m*100)} จุด ใน 3 แท่ง M1)"
         except Exception:
             pass
 
@@ -652,7 +652,7 @@ def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val, sym="XA
         live_move = abs(float(tick.bid) - curr_open)
         if atr_val > 0 and live_move >= 1.8 * atr_val:
             detected = True
-            reason = f"ราคากระชากสด {live_move:.2f} จุด จากราคาเปิดแท่ง (>= 1.8x ATR)"
+            reason = f"ราคากระชากสด ${live_move:.2f} ({int(live_move*100)} จุด) จากราคาเปิดแท่ง (>= 1.8x ATR)"
 
     # 5. Spread Blowout (สเปรดถ่างรุนแรง >= 80 จุด จากสภาพคล่องหดตัวฉับพลัน)
     if not detected and tick is not None and symbol_info is not None:
