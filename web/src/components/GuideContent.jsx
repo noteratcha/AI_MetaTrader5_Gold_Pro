@@ -111,10 +111,10 @@ function Toc() {
 
 /** จำนวนไม้สูงสุด = หลักประกันว่าง ÷ (หลักประกันต่อไม้ × Lot/0.01) ปัดขึ้น อย่างน้อย 1 ไม้ — สูตรเดียวกับ plan_config.max_positions */
 function MarginCalc() {
-  const [free, setFree] = useState('960');
+  const [free, setFree] = useState('250');
   const [lot, setLot] = useState('0.01');
   const f = parseFloat(free) || 0;
-  const perTrade = 400 * Math.max(parseFloat(lot) || 0.01, 0.01) / 0.01;   // หลักประกันล็อก 400 ต่อไม้ (ที่ Lot 0.01)
+  const perTrade = 100 * Math.max(parseFloat(lot) || 0.01, 0.01) / 0.01;   // หลักประกันล็อก 100 ต่อไม้ (ที่ Lot 0.01)
   const n = perTrade > 0 ? Math.max(1, Math.ceil(f / perTrade - 1e-9)) : 1;
   const fmt = (v) => Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
   return (
@@ -383,7 +383,7 @@ export default function GuideContent() {
                   <tr><td className="nowrap">ปิดเมื่อกำไรถึง</td><td>ติ๊กเพื่อเปิดใช้แล้วใส่จำนวนเงิน เมื่อไม้ใดมีกำไร (รวม swap) ถึงค่าที่ตั้ง บอทจะปิดไม้นั้นทันที ใช้กับทุกแผนและไม้ที่เข้าเอง ค่าเริ่มต้นคือปิดใช้งาน</td></tr>
                   <tr><td className="nowrap">ออเดอร์ / สูงสุด</td><td>จำนวนไม้ที่เปิดอยู่เทียบกับจำนวนสูงสุดที่หลักประกันรองรับ ตัวเลขเป็นสีแดงเมื่อเต็ม</td></tr>
                   <tr><td className="nowrap">กำไรลอยตัว</td><td>กำไร/ขาดทุนรวมของไม้ที่ยังเปิดอยู่</td></tr>
-                  <tr><td className="nowrap">หลักประกันว่าง</td><td>หลักประกันที่เหลือในบัญชี ใช้คิดจำนวนไม้สูงสุด (400 ต่อไม้ · ข้อ 6)</td></tr>
+                  <tr><td className="nowrap">หลักประกันว่าง</td><td>หลักประกันที่เหลือในบัญชี ใช้คิดจำนวนไม้สูงสุด (100 ต่อไม้ · ข้อ 6)</td></tr>
                   <tr><td className="nowrap">เวลาทำงาน</td><td>เวลาที่บอททำงานในรอบนี้</td></tr>
                   <tr><td className="nowrap"><Ui tone="buy">▲ BUY</Ui> <Ui tone="sell">▼ SELL</Ui></td><td>เข้าไม้เองทันที (ข้อ 7)</td></tr>
                   <tr><td className="nowrap">ปิดทั้งหมด (n)</td><td>ปิดทุกไม้ที่เปิดอยู่ ต้องกดยืนยันก่อน</td></tr>
@@ -423,20 +423,20 @@ export default function GuideContent() {
           </Section>
 
           <Section id="margin">
-            <p>บอทจำกัดจำนวนไม้ที่เปิดพร้อมกันตามหลักประกันว่าง ระบบล็อกไว้ที่ <strong>หลักประกัน 400 ต่อ 1 ไม้ที่ Lot 0.01</strong> (ผู้ใช้ปรับไม่ได้) นับแบบปัดเศษขึ้น และเปิดได้อย่างน้อย 1 ไม้เสมอ แต่ละแผนถือได้ครั้งละไม่เกิน 1 ไม้ ไม้ที่เข้าเองก็นับรวมในจำนวนนี้</p>
+            <p>บอทจำกัดจำนวนไม้ที่เปิดพร้อมกันตามหลักประกันว่าง ระบบล็อกไว้ที่ <strong>หลักประกัน 100 ต่อ 1 ไม้ที่ Lot 0.01</strong> (ผู้ใช้ปรับไม่ได้) นับแบบปัดเศษขึ้น และเปิดได้อย่างน้อย 1 ไม้เสมอ แต่ละแผนถือได้ครั้งละไม่เกิน 1 ไม้ ไม้ที่เข้าเองก็นับรวมในจำนวนนี้</p>
             <div className="table-wrap guide-table-wrap">
               <table className="table guide-table">
                 <thead>
-                  <tr><th>หลักประกันว่าง (400 ต่อไม้)</th><th className="num">เปิดได้สูงสุด</th></tr>
+                  <tr><th>หลักประกันว่าง (100 ต่อไม้)</th><th className="num">เปิดได้สูงสุด</th></tr>
                 </thead>
                 <tbody>
-                  <tr><td>ไม่เกิน 400</td><td className="num">1 ไม้</td></tr>
-                  <tr><td>401 – 800</td><td className="num">2 ไม้</td></tr>
-                  <tr><td>801 – 1,200 (เช่น 960)</td><td className="num">3 ไม้</td></tr>
+                  <tr><td>ไม่เกิน 100</td><td className="num">1 ไม้</td></tr>
+                  <tr><td>101 – 200</td><td className="num">2 ไม้</td></tr>
+                  <tr><td>201 – 300 (เช่น 250)</td><td className="num">3 ไม้</td></tr>
                 </tbody>
               </table>
             </div>
-            <p>ถ้าใช้ Lot ใหญ่ขึ้น หลักประกันต่อไม้จะคูณตาม เช่น Lot 0.02 นับ 800 ต่อไม้</p>
+            <p>ถ้าใช้ Lot ใหญ่ขึ้น หลักประกันต่อไม้จะคูณตาม เช่น Lot 0.02 นับ 200 ต่อไม้</p>
             <h3>ลองคำนวณ</h3>
             <MarginCalc />
             <p className="muted">หลักประกันว่างลดลงทุกครั้งที่เปิดไม้ จำนวนไม้สูงสุดจึงลดลงตามได้</p>

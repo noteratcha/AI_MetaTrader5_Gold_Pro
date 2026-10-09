@@ -129,7 +129,7 @@ LOCK_SL_THROTTLE_SECS = 60       # [Priority 2] ห้าม modify position ซ
 SAME_PLAN_COOLDOWN_MINUTES = 60  # [Priority 4] ห้ามเข้าแผนเดิม + สกุลเดิม (ทิศเดิม) ภายใน 60 นาที
 MAX_CONSECUTIVE_LOSS = 2          # [Priority 1] Circuit Breaker: ขาดทุนติดกันกี่ไม้ถึงหยุด
 CIRCUIT_BREAKER_MINUTES = 60     # [Priority 1] Circuit Breaker: หยุดกี่นาทีหลังโดน Circuit Breaker
-MARGIN_PER_TRADE = 400            # (ค่าเริ่มต้นเดิม) ตอนนี้ใช้ plan_config.get_margin_per_trade() — ผู้ใช้ตั้งเองได้ จำแยกตามบัญชี
+MARGIN_PER_TRADE = 100            # (ค่าเริ่มต้นเดิม) ตอนนี้ใช้ plan_config.get_margin_per_trade()
 
 # State variables สำหรับระบบ Risk Management
 consecutive_loss = {}             # {sym: int} นับขาดทุนติดต่อกัน
@@ -2057,7 +2057,7 @@ def main():
                             break
 
                         # ---- Max Positions by Free Margin ----
-                        # หลักประกันว่าง (Free Margin) ทุก 400 เปิดได้ 1 ไม้ (เศษปัดขึ้น)
+                        # หลักประกันว่าง (Free Margin) ทุก 100 เปิดได้ 1 ไม้ (เศษปัดขึ้น)
                         acc_info = mt5.account_info()
                         # ยอดเงินขั้นต่ำ 25 USD (Equity) — ต่ำกว่านี้ไม่เปิดไม้ใหม่ (ยังดูแลไม้ที่เปิดอยู่ตามปกติ)
                         if acc_info is not None and plan_config.account_usd(acc_info) < plan_config.MIN_BALANCE_USD:
@@ -2068,7 +2068,7 @@ def main():
                         all_open_pos = mt5.positions_get()
                         total_open_pos = len(all_open_pos) if all_open_pos else 0
                         free_margin = float(acc_info.margin_free) if acc_info else 0.0
-                        # หลักประกันต่อไม้: ผู้ใช้ตั้งเองได้ (ค่าเริ่มต้น 400 ที่ Lot 0.01 · จำแยกตามบัญชี) ปรับตามขนาดไม้
+                        # หลักประกันต่อไม้: 100 USD ที่ Lot 0.01 ปรับตามขนาดไม้
                         max_allowed = plan_config.max_positions(free_margin, current_lot())  # อย่างน้อย 1 ไม้
                         if total_open_pos >= max_allowed:
                             if is_in_zone:

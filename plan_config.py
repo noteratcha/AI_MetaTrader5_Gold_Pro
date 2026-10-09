@@ -125,11 +125,11 @@ def set_user_enabled(plan_name: str, enabled: bool, email: str = None):
         json.dump(data, f)
 
 
-DEFAULT_MARGIN_PER_TRADE = 400.0   # หลักประกันว่างทุก 400 เปิดได้ 1 ไม้ (ที่ Lot 0.01)
+DEFAULT_MARGIN_PER_TRADE = 100.0   # หลักประกันว่างทุก 100 เปิดได้ 1 ไม้ (ที่ Lot 0.01)
 
 
 def get_margin_per_trade(email: str = None) -> float:
-    """หลักประกันต่อ 1 ไม้ (ที่ Lot 0.01) — ล็อกไว้ 400 ผู้ใช้ตั้งเองไม่ได้ (ผู้ใช้สั่ง 8 ต.ค. 2026 · ค่าที่เคยบันทึกไว้ไม่ใช้แล้ว)"""
+    """หลักประกันต่อ 1 ไม้ (ที่ Lot 0.01) — ล็อกไว้ 100 USD (ผู้ใช้กำหนด 9 ต.ค. 2026)"""
     return DEFAULT_MARGIN_PER_TRADE
 
 
@@ -148,7 +148,7 @@ def account_usd(acc) -> float:
 def max_positions(free_margin: float, lot: float, email: str = None, margin: float = None) -> int:
     """จำนวนไม้สูงสุดที่เปิดได้ = หลักประกันว่าง ÷ (หลักประกันต่อไม้ × Lot/0.01) ปัดเศษขึ้น — อย่างน้อย 1 ไม้"""
     per = (margin or get_margin_per_trade(email)) * max(float(lot or 0.01), 0.01) / 0.01
-    # ทุก `per` ปัดเศษขึ้น: ไม่เกิน 400 = 1 ไม้, 401–800 = 2 ไม้, 960 = 3 ไม้
+    # ทุก `per` ปัดเศษขึ้น: ไม่เกิน 100 = 1 ไม้, 101–200 = 2 ไม้, 201–300 = 3 ไม้
     return max(1, math.ceil(float(free_margin or 0) / per - 1e-9)) if per > 0 else 1
 
 
