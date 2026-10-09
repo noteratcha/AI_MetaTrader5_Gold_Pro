@@ -576,70 +576,101 @@ def manual_tp_pts_config():
 
 
 _last_volatility_alert_time = 0.0
+_volatility_active_until = 0.0
+_last_volatility_reason = ""
 
 
 def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val):
     """
     ตรวจจับสภาวะราคาผันผวนแรงผิดปกติ (Abnormal Market Volatility)
-    เงื่อนไข:
-    1. ATR Spike: ATR(14) M15 ปัจจุบัน >= 1.8 เท่าของค่าเฉลี่ย 20 แท่ง หรือ >= 6.0 ($6.00 / 600 จุด)
-    2. Candle Range Explosion: แท่ง M15 ล่าสุดมีช่วงราคา (High - Low) >= 2.0 * ATR หรือ >= 8.0 ($8.00 / 800 จุด)
-    3. Live Price Surge: ราคาสดกระชากห่างจากราคาเปิดแท่งปัจจุบัน >= 1.5 * ATR หรือ >= 6.0 ($6.00 / 600 จุด)
-    4. Abnormal Spread Widening: สเปรดปัจจุบันถ่างเกิน 75 จุด (สภาวะสภาพคล่องแห้ง/ข่าวกระชาก)
-    5. High-Impact USD News Window: อยู่ในช่วงข่าวสำคัญ USD (+/- 15 นาที)
-    คืนค่า: (is_volatile: bool, reason: str)
+    จำแนกจาก 5 มิติหลักตามสถิติตลาดทองคำ XAUUSD แบบสัมพัทธ์ (Relative Statistics):
+    1. ATR Volatility Spike: ATR(14) M15 พุ่งสูง >= 1.8 เท่าของค่าเฉลี่ย 30 แท่ง หรือผันผวนเกิน 0.35% ของราคาทอง
+    2. Extreme Candle Expansion: แท่ง M15 ล่าสุดแกว่งตัวกว้าง >= 2.2 เท่าของ ATR(14)
+    3. Flash Price Surge: ราคาสดในแท่งปัจจุบันกระชากห่างจากราคาเปิด >= 1.8 เท่าของ ATR(14)
+    4. Spread Blowout: สเปรดถ่างรุนแรง >= 80 จุด (สะท้อนสภาพคล่องแห้ง หรือข่าวด่วนรุนแรง)
+    5. High-Impact USD News Window: ช่วงข่าวสำคัญกล่องแดง USD (+/- 15 นาที)
+
+    พร้อมระบบ Anti-Flapping Hysteresis: หน่วงเวลาถือสภาวะผันผวนอย่างน้อย 45 วินาที
+    เพื่อป้องกันเสียงไซเลนติดๆ ดับๆ สลับไปมา
     """
+    global _volatility_active_until, _last_volatility_reason
+    now = time.time()
+
     if df_m15 is None or len(df_m15) == 0:
+        if now < _volatility_active_until:
+            return True, _last_volatility_reason
         return False, ""
 
-    # 1. ATR Spike
+    close_price = float(df_m15.iloc[-1]['close']) if 'close' in df_m15.columns else 4000.0
+    detected = False
+    reason = ""
+
+    # 1. ATR Volatility Spike (เทียบค่าเฉลี่ย 30 แท่ง หรือเกิน 0.35% ของราคา)
     if 'atr' in df_m15.columns and len(df_m15) >= 20:
-        atr_hist = df_m15['atr'].iloc[-21:-1].dropna()
+        atr_hist = df_m15['atr'].iloc[-31:-1].dropna()
         if len(atr_hist) >= 10:
             avg_atr = float(atr_hist.mean())
             if avg_atr > 0 and atr_val >= 1.8 * avg_atr:
-                return True, f"ATR M15 พุ่งสูง {atr_val:.2f} (เฉลี่ย {avg_atr:.2f})"
-    if atr_val >= 6.0:
-        return True, f"ATR M15 สูงผิดปกติ ({atr_val:.2f} >= 6.00)"
+                detected = True
+                reason = f"ATR M15 พุ่งสูง {atr_val:.2f} (เฉลี่ย {avg_atr:.2f})"
+    if not detected and close_price > 0 and atr_val > 0:
+        atr_pct = (atr_val / close_price) * 100.0
+        if atr_pct >= 0.35:
+            detected = True
+            reason = f"ATR M15 พุ่งสูง {atr_pct:.2f}% ของราคา (ATR {atr_val:.2f})"
 
-    # 2. Candle Range Explosion (แท่งปิดล่าสุด)
-    if len(df_m15) >= 2:
+    # 2. Extreme Candle Expansion (แท่งปิดล่าสุด M15 แกว่งกว้างผิดปกติ >= 2.2x ATR)
+    if not detected and len(df_m15) >= 2:
         last_bar = df_m15.iloc[-2]
         bar_rng = float(last_bar['high'] - last_bar['low'])
-        if (atr_val > 0 and bar_rng >= 2.0 * atr_val) or bar_rng >= 8.0:
-            return True, f"แท่ง M15 ล่าสุดแกว่ง {bar_rng:.2f} จุด (>= 2x ATR)"
+        if atr_val > 0 and bar_rng >= 2.2 * atr_val:
+            detected = True
+            reason = f"แท่ง M15 ล่าสุดแกว่ง {bar_rng:.2f} จุด (>= 2.2x ATR)"
 
-    # 3. Live Price Surge (แท่งปัจจุบัน)
-    if tick is not None and len(df_m15) >= 1:
+    # 3. Flash Price Surge (ราคาสดในแท่งปัจจุบันกระชากห่างจากราคาเปิด >= 1.8x ATR)
+    if not detected and tick is not None and len(df_m15) >= 1:
         curr_open = float(df_m15.iloc[-1]['open'])
         live_move = abs(float(tick.bid) - curr_open)
-        if (atr_val > 0 and live_move >= 1.5 * atr_val) or live_move >= 6.0:
-            return True, f"ราคากระชากสด {live_move:.2f} จุด จากราคาเปิดแท่ง"
+        if atr_val > 0 and live_move >= 1.8 * atr_val:
+            detected = True
+            reason = f"ราคากระชากสด {live_move:.2f} จุด จากราคาเปิดแท่ง (>= 1.8x ATR)"
 
-    # 4. Abnormal Spread Widening
-    if tick is not None and symbol_info is not None:
+    # 4. Spread Blowout (สเปรดถ่างรุนแรง >= 80 จุด)
+    if not detected and tick is not None and symbol_info is not None:
         pt = float(symbol_info.point) if getattr(symbol_info, 'point', 0) else 0.01
         spread_pts = (float(tick.ask) - float(tick.bid)) / pt
-        if spread_pts >= 75.0:
-            return True, f"สเปรดถ่างผิดปกติ {spread_pts:.0f} จุด"
+        if spread_pts >= 80.0:
+            detected = True
+            reason = f"สเปรดถ่างผิดปกติ {spread_pts:.0f} จุด (>= 80 จุด)"
 
-    # 5. ข่าวสำคัญ USD
-    try:
-        import econ_calendar
-        events = econ_calendar._load_disk_cache()
-        if events:
-            now_dt = datetime.now(timezone(timedelta(hours=7)))
-            for ev in events:
-                if str(ev.get("currency", "")).upper() == "USD" and str(ev.get("impact", "")).capitalize() == "High":
-                    dt_str = str(ev.get("date", "")).replace("Z", "+00:00")
-                    ev_dt = datetime.fromisoformat(dt_str).astimezone(timezone(timedelta(hours=7)))
-                    diff_mins = (ev_dt - now_dt).total_seconds() / 60.0
-                    if -15.0 <= diff_mins <= 15.0:
-                        return True, f"ข่าวสำคัญ USD: {ev.get('title')} ({diff_mins:+.0f} นาที)"
-    except Exception:
-        pass
+    # 5. High-Impact USD News Window (+/- 15 นาที)
+    if not detected:
+        try:
+            import econ_calendar
+            events = econ_calendar._load_disk_cache()
+            if events:
+                now_dt = datetime.now(timezone(timedelta(hours=7)))
+                for ev in events:
+                    if str(ev.get("currency", "")).upper() == "USD" and str(ev.get("impact", "")).capitalize() == "High":
+                        dt_str = str(ev.get("date", "")).replace("Z", "+00:00")
+                        ev_dt = datetime.fromisoformat(dt_str).astimezone(timezone(timedelta(hours=7)))
+                        diff_mins = (ev_dt - now_dt).total_seconds() / 60.0
+                        if -15.0 <= diff_mins <= 15.0:
+                            detected = True
+                            reason = f"ข่าวสำคัญ USD: {ev.get('title')} ({diff_mins:+.0f} นาที)"
+                            break
+        except Exception:
+            pass
 
-    return False, ""
+    # ระบบ Anti-Flapping Hysteresis: หน่วงเวลาถือสภาวะผันผวนอย่างน้อย 45 วินาที
+    if detected:
+        _volatility_active_until = now + 45.0
+        _last_volatility_reason = reason
+        return True, reason
+    elif now < _volatility_active_until:
+        return True, _last_volatility_reason
+    else:
+        return False, ""
 
 
 def current_lot():
@@ -1353,10 +1384,11 @@ def main():
     last_train_time = time.time() # จดจำเวลาที่เทรน AI ล่าสุด
     last_tick_time = {} # เอาไว้เช็คว่าตลาดเปิดไหม (ถ้า tick.time ไม่เปลี่ยนแสดงว่าตลาดปิด)
     last_pos_count = {} # เอาไว้เช็คว่ามีออเดอร์ปิดไปเอง (ชน SL/TP) หรือไม่ เพื่อเริ่มนับ Cooldown
-    global consecutive_loss, last_lock_time, last_loss_plan
+    global consecutive_loss, last_lock_time, last_loss_plan, _last_volatility_alert_time
     consecutive_loss = {sym: 0 for sym in SYMBOLS}
     last_lock_time = {}
     last_loss_plan = {}
+    _last_volatility_alert_time = 0.0
     
     for sym in SYMBOLS:
         mt5.symbol_select(sym, True)
@@ -2322,7 +2354,6 @@ def main():
                         _save_p4_trail_state(p4_trail_steps)
                     tp_usd = take_profit_usd()
                     tp_pts_enabled, target_pts = manual_tp_pts_config()
-                    is_volatile, vol_reason = check_abnormal_volatility(df, df_h1, tick, mt5.symbol_info(sym), atr_val)
                     if is_volatile and (time.time() - _last_volatility_alert_time >= 60.0):
                         _last_volatility_alert_time = time.time()
                         print(f"{Colors.YELLOW}[VOLATILITY ALERT] {sym} ตลาดผันผวนแรงผิดปกติ ({vol_reason}) -> บังคับเปิด Take Profit {target_pts:g} จุด สำหรับทุกแผน!{Colors.RESET}")
