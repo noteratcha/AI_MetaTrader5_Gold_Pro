@@ -5045,7 +5045,7 @@ class MainTradingApp(ctk.CTk):
                         meter = ("● กำลังนับเวลา", COLOR_SUCCESS_GREEN)
                         pill = ("  ● กำลังทำงาน  ", COLOR_SUCCESS_GREEN, "#12301F")
                     else:
-                        meter = ("⏸ ตลาดปิด · ไม่นับเวลา", COLOR_GOLD_PRIMARY)
+                        meter = ("⏸ ตลาดปิด · ไม่นับเวลา", COLOR_DANGER_RED)
                         pill = ("  ⏸ รอตลาดเปิด  ", COLOR_GOLD_PRIMARY, "#2E2410")
                     if self.lbl_metering_status.cget("text") != meter[0]:
                         self.lbl_metering_status.configure(text=meter[0], text_color=meter[1])
@@ -5073,10 +5073,10 @@ class MainTradingApp(ctk.CTk):
                                 self.card_mt5["icon_lbl"].configure(text_color=COLOR_SUCCESS_GREEN)
                             self._set_badge(self.card_mt5.get("badge"), "● ตลาดเปิด", "#12301F", COLOR_SUCCESS_GREEN)
                         else:
-                            # ตลาดปิด: ไอคอนสีแดง + ป้าย "⏸ ตลาดปิด" สีทอง/แดง
+                            # ตลาดปิด: ไอคอนสีแดง + ป้าย "⏸ ตลาดปิด" สีแดง
                             if "icon_lbl" in self.card_mt5:
                                 self.card_mt5["icon_lbl"].configure(text_color=COLOR_DANGER_RED)
-                            self._set_badge(self.card_mt5.get("badge"), "⏸ ตลาดปิด", "#2E2410", COLOR_GOLD_PRIMARY)
+                            self._set_badge(self.card_mt5.get("badge"), "⏸ ตลาดปิด", "#2A1414", COLOR_DANGER_RED)
                     else:
                         # ยังไม่ได้เชื่อมต่อ MT5: ไอคอนสีขาว (สีดั้งเดิม) + ซ่อนป้าย
                         self.card_mt5["val_lbl"].configure(text="ไม่ได้เชื่อมต่อ", text_color=COLOR_DANGER_RED)
