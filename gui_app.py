@@ -6,6 +6,7 @@ AI MetaTrader 5 (FBS) Gold Pro - Desktop GUI Application
 """
 
 import os
+import re
 import json
 import sys
 import ctypes
@@ -110,6 +111,25 @@ def _get_monitor_work_area(x, y):
     return None
 
 
+def _format_tip_commas(s: str) -> str:
+    """จัดรูปแบบตัวเลข 4 หลักขึ้นไปให้มี comma (เช่น 4195.69 -> 4,195.69) ยกเว้นปี ค.ศ. เช่น 2026"""
+    if not s or not isinstance(s, str):
+        return str(s or "")
+    def _repl(m):
+        raw = m.group(0)
+        if raw.startswith("202") and len(raw) == 4:
+            return raw
+        parts = raw.split(".")
+        try:
+            int_fmt = "{:,}".format(int(parts[0]))
+            if len(parts) > 1:
+                return f"{int_fmt}.{parts[1]}"
+            return int_fmt
+        except Exception:
+            return raw
+    return re.sub(r'(?<![\w,])\d{4,}(?:\.\d+)?(?!\w)', _repl, s)
+
+
 class HoverTip:
     """กล่องข้อความลอยเมื่อชี้เมาส์ (ควบคุมตำแหน่งให้อยู่ในหน้าต่างโปรแกรมและจอภาพเสมอ ไม่ล้นทะลุออกนอกจอ)"""
 
@@ -132,9 +152,118 @@ class HoverTip:
                 pass
             self.job = None
 
+    def _build_plan_card(self, tw, data):
+        """สร้างการ์ด Tooltip เงื่อนไขแผนเทรดแบบโมเดิร์น สวยงามระดับพรีเมียม สไตล์ AI Gold Commander Pro"""
+        # Outer Border Frame (สีทองหรูหรา 1px)
+        border_frame = tk.Frame(tw, bg=COLOR_GOLD_PRIMARY, bd=0)
+        border_frame.pack(fill="both", expand=True)
+
+        card = tk.Frame(border_frame, bg="#111622", bd=0)
+        card.pack(fill="both", expand=True, padx=1, pady=1)
+
+        # 1. Header Frame
+        header = tk.Frame(card, bg="#161D2C", padx=12, pady=7)
+        header.pack(fill="x")
+
+        label = data.get("label", "แผนเทรด")
+        lbl_title = tk.Label(header, text=f"⚡ {label}", font=(app_fonts.UI, 11, "bold"), fg="#FCD34D", bg="#161D2C")
+        lbl_title.pack(side="left")
+
+        # Side Pill (BUY / SELL)
+        side = data.get("side", "BUY")
+        is_buy = side == "BUY"
+        side_bg = "#064E3B" if is_buy else "#4C0519"
+        side_fg = "#34D399" if is_buy else "#FB7185"
+        side_text = "▲ BUY" if is_buy else "▼ SELL"
+        pill = tk.Frame(header, bg=side_bg, bd=0, padx=6, pady=1)
+        pill.pack(side="left", padx=(10, 8))
+        tk.Label(pill, text=side_text, font=(app_fonts.UI, 9, "bold"), fg=side_fg, bg=side_bg).pack()
+
+        # Score Status Badge
+        matched = data.get("matched", 0)
+        total = data.get("total", 4)
+        pct = data.get("pct", int(matched / max(total, 1) * 100))
+        if matched == total:
+            sc_bg = "#064E3B"
+            sc_fg = "#10B981"
+            sc_text = f"✓ พร้อมเข้าไม้ {matched}/{total} (100%)"
+        elif pct >= 50:
+            sc_bg = "#3B2605"
+            sc_fg = "#FBBF24"
+            sc_text = f"เข้าเงื่อนไข {matched}/{total} ({pct}%)"
+        else:
+            sc_bg = "#1E293B"
+            sc_fg = "#94A3B8"
+            sc_text = f"เข้าเงื่อนไข {matched}/{total} ({pct}%)"
+
+        sc_pill = tk.Frame(header, bg=sc_bg, bd=0, padx=7, pady=1)
+        sc_pill.pack(side="right")
+        tk.Label(sc_pill, text=sc_text, font=(app_fonts.UI, 9, "bold"), fg=sc_fg, bg=sc_bg).pack()
+
+        # Divider 1
+        tk.Frame(card, bg="#232C3E", height=1).pack(fill="x")
+
+        # 2. Checklist Items Table
+        body = tk.Frame(card, bg="#111622", padx=12, pady=8)
+        body.pack(fill="both", expand=True)
+
+        items = data.get("items", [])
+        if not items:
+            msg = data.get("msg", "รอข้อมูลเงื่อนไขจากระบบ...")
+            tk.Label(body, text=msg, font=(app_fonts.UI, 9), fg="#94A3B8", bg="#111622", justify="left").pack(anchor="w")
+        else:
+            for r, it in enumerate(items):
+                ok = bool(it.get("ok"))
+                name = str(it.get("name", ""))
+                raw_desc = str(it.get("desc", ""))
+                desc = _format_tip_commas(raw_desc)
+
+                row = tk.Frame(body, bg="#111622")
+                row.pack(fill="x", pady=2)
+
+                # Status Badge
+                st_bg = "#064E3B" if ok else "#33141B"
+                st_fg = "#34D399" if ok else "#F87171"
+                st_text = "✓ ผ่าน" if ok else "✗ ไม่ผ่าน"
+                badge = tk.Frame(row, bg=st_bg, padx=5, pady=1)
+                badge.pack(side="left")
+                tk.Label(badge, text=st_text, font=(app_fonts.UI, 8, "bold"), fg=st_fg, bg=st_bg).pack()
+
+                # Name
+                name_fg = "#F1F5F9" if ok else "#94A3B8"
+                tk.Label(row, text=f" {name}:", font=(app_fonts.UI, 9, "bold"), fg=name_fg, bg="#111622").pack(side="left")
+
+                # Description with commas
+                desc_fg = "#CBD5E1" if ok else "#64748B"
+                tk.Label(row, text=f" {desc}", font=(app_fonts.UI, 9), fg=desc_fg, bg="#111622").pack(side="left")
+
+        # Divider 2
+        tk.Frame(card, bg="#232C3E", height=1).pack(fill="x")
+
+        # 3. Footer Hint
+        footer = tk.Frame(card, bg="#0D111A", padx=12, pady=5)
+        footer.pack(fill="x")
+        tk.Label(footer, text="💡", font=(app_fonts.UI, 9), fg="#FBBF24", bg="#0D111A").pack(side="left")
+        hint_text = data.get("hint", "คลิกที่ป้ายนี้เพื่อเปิดดูกราฟแท่งเทียนสดของแผนนี้")
+        tk.Label(footer, text=f" {hint_text}", font=(app_fonts.UI, 9), fg="#38BDF8", bg="#0D111A").pack(side="left")
+
+    def _build_simple_tip(self, tw, text):
+        """สร้างกล่องข้อความทูลทิปแบบเรียบหรู คมชัด สไตล์โมเดิร์น"""
+        border_frame = tk.Frame(tw, bg="#2D3748", bd=0)
+        border_frame.pack(fill="both", expand=True)
+
+        card = tk.Frame(border_frame, bg="#141824", bd=0)
+        card.pack(fill="both", expand=True, padx=1, pady=1)
+
+        formatted_text = _format_tip_commas(str(text))
+        tk.Label(
+            card, text=formatted_text, justify="left", bg="#141824", fg=COLOR_TEXT_PRIMARY,
+            font=(app_fonts.UI, 10), padx=10, pady=6, wraplength=420
+        ).pack()
+
     def _show(self):
-        text = self.text_fn() if callable(self.text_fn) else self.text_fn
-        if not text or self.tip:
+        content = self.text_fn() if callable(self.text_fn) else self.text_fn
+        if not content or self.tip:
             return
 
         self.tip = tw = tk.Toplevel(self.widget)
@@ -142,10 +271,11 @@ class HoverTip:
         tw.attributes("-topmost", True)
         tw.wm_geometry("+9999+9999")  # วางไว้นอกจอก่อนเพื่อวัดขนาด ป้องกันกระพริบที่ตำแหน่ง (0, 0)
 
-        frame = tk.Frame(tw, bg=COLOR_GOLD_DARK, bd=0)
-        frame.pack()
-        tk.Label(frame, text=text, justify="left", bg="#1A1E27", fg=COLOR_TEXT_PRIMARY, font=(app_fonts.UI, 10),
-                 padx=10, pady=6, wraplength=400).pack(padx=1, pady=1)
+        # ตรวจสอบว่าเป็น Card แบบ Plan Status หรือข้อความทั่วไป
+        if isinstance(content, dict) and content.get("type") == "plan_card":
+            self._build_plan_card(tw, content)
+        else:
+            self._build_simple_tip(tw, content)
 
         tw.update_idletasks()
         tip_w = tw.winfo_reqwidth()
@@ -4960,25 +5090,28 @@ class MainTradingApp(ctk.CTk):
         self._candle_dialog = GoldCandleDialog(self, default_plan=plan_code)
 
     def _plan_badge_tooltip(self, plan_code):
-        """ข้อความ Tooltip อธิบายเงื่อนไขการเข้าไม้ของแต่ละแผนเมื่อชี้เมาส์"""
+        """ข้อมูล Tooltip อธิบายเงื่อนไขการเข้าไม้ของแต่ละแผนเมื่อชี้เมาส์"""
         status = getattr(self, "_last_card_plans_status", {}) or {}
         pinfo = status.get(plan_code)
         if not pinfo:
-            return f"แผน {plan_code}: รอการอัปเดตข้อมูลเงื่อนไขจาก MT5..."
-        m, tot, pct = pinfo["matched"], pinfo["total"], pinfo["pct"]
-        side = pinfo["side"]
-        side_icon = "▲ BUY" if side == "BUY" else "▼ SELL"
-        lines = [
-            f"⚡ {pinfo['label']} ({side_icon})",
-            f"สถานะ: เข้าเงื่อนไขแล้ว {m}/{tot} ข้อ ({pct}%)",
-            "─" * 32,
-        ]
-        for it in pinfo.get("items", []):
-            mark = "✓" if it.get("ok") else "✗"
-            lines.append(f"{mark} {it.get('name')}: {it.get('desc')}")
-        lines.append("─" * 32)
-        lines.append("💡 คลิกที่ป้ายนี้เพื่อเปิดดูกราฟแท่งเทียนสดของแผนนี้")
-        return "\n".join(lines)
+            return {
+                "type": "plan_card",
+                "plan_code": plan_code,
+                "label": f"แผน {plan_code}",
+                "waiting": True,
+                "msg": f"แผน {plan_code}: กำลังรอการอัปเดตข้อมูลเงื่อนไขจาก MT5...",
+            }
+        return {
+            "type": "plan_card",
+            "plan_code": plan_code,
+            "label": pinfo.get("label", plan_code),
+            "side": pinfo.get("side", "BUY"),
+            "matched": pinfo.get("matched", 0),
+            "total": pinfo.get("total", 4),
+            "pct": pinfo.get("pct", 0),
+            "items": pinfo.get("items", []),
+            "hint": "คลิกที่ป้ายนี้เพื่อเปิดดูกราฟแท่งเทียนสดของแผนนี้",
+        }
 
     def _build_plans_card(self, parent):
         card = self._card(parent, fill="both", expand=True)

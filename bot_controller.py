@@ -988,20 +988,20 @@ class BotController:
                 c1 = h1_stack_dir == 1
                 p1_items.append({"name": "เทรนด์ H1", "ok": c1, "desc": "MA100>150>200 เรียงตัวขาขึ้น" if c1 else "ยังไม่เรียงตัวขาขึ้น (MA100>150>200)"})
                 c2 = (prev_m15_ma5 <= prev_m15_ma13 and m15_ma5 > m15_ma13) or (m15_ma5 > m15_ma13)
-                p1_items.append({"name": "MA5/13 M15", "ok": c2, "desc": f"MA5 ({m15_ma5:.2f}) > MA13 ({m15_ma13:.2f})" if c2 else f"MA5 ({m15_ma5:.2f}) < MA13 ({m15_ma13:.2f})"})
+                p1_items.append({"name": "MA5/13 M15", "ok": c2, "desc": f"MA5 ({m15_ma5:,.2f}) > MA13 ({m15_ma13:,.2f})" if c2 else f"MA5 ({m15_ma5:,.2f}) < MA13 ({m15_ma13:,.2f})"})
                 c3 = 50 < rsi_m15 < 70
                 p1_items.append({"name": "RSI M15", "ok": c3, "desc": f"RSI อยู่ช่วง 50–70 ({rsi_m15:.1f})" if c3 else f"RSI ({rsi_m15:.1f}) ไม่อยู่ใน 50–70"})
                 c4 = m15_close > m15_ma50
-                p1_items.append({"name": "MA50 M15", "ok": c4, "desc": f"ราคา {m15_close:.2f} > MA50 {m15_ma50:.2f}" if c4 else f"ราคา {m15_close:.2f} < MA50 {m15_ma50:.2f}"})
+                p1_items.append({"name": "MA50 M15", "ok": c4, "desc": f"ราคา {m15_close:,.2f} > MA50 {m15_ma50:,.2f}" if c4 else f"ราคา {m15_close:,.2f} < MA50 {m15_ma50:,.2f}"})
             else:
                 c1 = h1_stack_dir == -1
                 p1_items.append({"name": "เทรนด์ H1", "ok": c1, "desc": "MA100<150<200 เรียงตัวขาลง" if c1 else "ยังไม่เรียงตัวขาลง (MA100<150<200)"})
                 c2 = (prev_m15_ma5 >= prev_m15_ma13 and m15_ma5 < m15_ma13) or (m15_ma5 < m15_ma13)
-                p1_items.append({"name": "MA5/13 M15", "ok": c2, "desc": f"MA5 ({m15_ma5:.2f}) < MA13 ({m15_ma13:.2f})" if c2 else f"MA5 ({m15_ma5:.2f}) > MA13 ({m15_ma13:.2f})"})
+                p1_items.append({"name": "MA5/13 M15", "ok": c2, "desc": f"MA5 ({m15_ma5:,.2f}) < MA13 ({m15_ma13:,.2f})" if c2 else f"MA5 ({m15_ma5:,.2f}) > MA13 ({m15_ma13:,.2f})"})
                 c3 = 30 < rsi_m15 < 50
                 p1_items.append({"name": "RSI M15", "ok": c3, "desc": f"RSI อยู่ช่วง 30–50 ({rsi_m15:.1f})" if c3 else f"RSI ({rsi_m15:.1f}) ไม่อยู่ใน 30–50"})
                 c4 = m15_close < m15_ma50
-                p1_items.append({"name": "MA50 M15", "ok": c4, "desc": f"ราคา {m15_close:.2f} < MA50 {m15_ma50:.2f}" if c4 else f"ราคา {m15_close:.2f} > MA50 {m15_ma50:.2f}"})
+                p1_items.append({"name": "MA50 M15", "ok": c4, "desc": f"ราคา {m15_close:,.2f} < MA50 {m15_ma50:,.2f}" if c4 else f"ราคา {m15_close:,.2f} > MA50 {m15_ma50:,.2f}"})
 
             m1 = sum(1 for it in p1_items if it["ok"])
             results["P1"] = {
@@ -1016,20 +1016,20 @@ class BotController:
                 c1 = is_uptrend_h4
                 p2_items.append({"name": "เทรนด์ H4", "ok": c1, "desc": f"H4 MA10>MA30 (+{h4_diff_pct:.2f}%)" if c1 else f"H4 ยังไม่ใช่ขาขึ้น ({h4_diff_pct:.2f}%)"})
                 c2 = (prev_h1_ma5 <= prev_h1_ma10 and h1_ma5 > h1_ma10) or (h1_ma5 > h1_ma10)
-                p2_items.append({"name": "MA5/10 H1", "ok": c2, "desc": f"H1 MA5 ({h1_ma5:.2f}) > MA10 ({h1_ma10:.2f})" if c2 else f"H1 MA5 ({h1_ma5:.2f}) < MA10 ({h1_ma10:.2f})"})
+                p2_items.append({"name": "MA5/10 H1", "ok": c2, "desc": f"H1 MA5 ({h1_ma5:,.2f}) > MA10 ({h1_ma10:,.2f})" if c2 else f"H1 MA5 ({h1_ma5:,.2f}) < MA10 ({h1_ma10:,.2f})"})
                 c3 = h4_ma5_slope > 0
                 p2_items.append({"name": "ความชัน H4", "ok": c3, "desc": f"MA5 H4 ชันขึ้น (+{h4_ma5_slope:.2f})" if c3 else f"MA5 H4 ชันลง ({h4_ma5_slope:.2f})"})
                 c4 = h4_lt_dir == 1
-                p2_items.append({"name": "MA200 H4", "ok": c4, "desc": f"ราคา {h4_close:.2f} > MA200 {h4_ma200:.2f}" if c4 else f"ราคาต่ำกว่า MA200 H4 ({h4_ma200:.2f})"})
+                p2_items.append({"name": "MA200 H4", "ok": c4, "desc": f"ราคา {h4_close:,.2f} > MA200 {h4_ma200:,.2f}" if c4 else f"ราคาต่ำกว่า MA200 H4 ({h4_ma200:,.2f})"})
             else:
                 c1 = not is_uptrend_h4
                 p2_items.append({"name": "เทรนด์ H4", "ok": c1, "desc": f"H4 MA10<MA30 ({h4_diff_pct:.2f}%)" if c1 else f"H4 ยังไม่ใช่ขาลง (+{h4_diff_pct:.2f}%)"})
                 c2 = (prev_h1_ma5 >= prev_h1_ma10 and h1_ma5 < h1_ma10) or (h1_ma5 < h1_ma10)
-                p2_items.append({"name": "MA5/10 H1", "ok": c2, "desc": f"H1 MA5 ({h1_ma5:.2f}) < MA10 ({h1_ma10:.2f})" if c2 else f"H1 MA5 ({h1_ma5:.2f}) > MA10 ({h1_ma10:.2f})"})
+                p2_items.append({"name": "MA5/10 H1", "ok": c2, "desc": f"H1 MA5 ({h1_ma5:,.2f}) < MA10 ({h1_ma10:,.2f})" if c2 else f"H1 MA5 ({h1_ma5:,.2f}) > MA10 ({h1_ma10:,.2f})"})
                 c3 = h4_ma5_slope < 0
                 p2_items.append({"name": "ความชัน H4", "ok": c3, "desc": f"MA5 H4 ชันลง ({h4_ma5_slope:.2f})" if c3 else f"MA5 H4 ชันขึ้น (+{h4_ma5_slope:.2f})"})
                 c4 = h4_lt_dir == -1
-                p2_items.append({"name": "MA200 H4", "ok": c4, "desc": f"ราคา {h4_close:.2f} < MA200 {h4_ma200:.2f}" if c4 else f"ราคาสูงกว่า MA200 H4 ({h4_ma200:.2f})"})
+                p2_items.append({"name": "MA200 H4", "ok": c4, "desc": f"ราคา {h4_close:,.2f} < MA200 {h4_ma200:,.2f}" if c4 else f"ราคาสูงกว่า MA200 H4 ({h4_ma200:,.2f})"})
 
             m2 = sum(1 for it in p2_items if it["ok"])
             results["P2"] = {
@@ -1044,7 +1044,7 @@ class BotController:
             p3_items = []
             if p3_side == "BUY":
                 c1 = m15_low < support and m15_close >= support
-                p3_items.append({"name": "กวาดแนวรับ (Sweep)", "ok": c1, "desc": f"Low กวาดแนวรับ {support:.2f} แล้วดึงกลับ" if c1 else f"ยังไม่กวาดแนวรับ {support:.2f}"})
+                p3_items.append({"name": "กวาดแนวรับ (Sweep)", "ok": c1, "desc": f"Low กวาดแนวรับ {support:,.2f} แล้วดึงกลับ" if c1 else f"ยังไม่กวาดแนวรับ {support:,.2f}"})
                 c2 = 0.25 <= lower_wick_ratio <= 2.50
                 p3_items.append({"name": "ไส้ล่างปฏิเสธ", "ok": c2, "desc": f"ไส้ล่างยาว {lower_wick_ratio:.2f} ATR (≥0.25)" if c2 else f"ไส้ล่าง {lower_wick_ratio:.2f} ATR (<0.25)"})
                 c3 = is_uptrend_h1 and h1_stack_dir == 1
@@ -1053,7 +1053,7 @@ class BotController:
                 p3_items.append({"name": "AI ทายขึ้น ≥50%", "ok": c4, "desc": f"AI UP {ai_prob_up:.1%}" if c4 else f"AI UP {ai_prob_up:.1%} (<50%)"})
             else:
                 c1 = m15_high > resistance and m15_close <= resistance
-                p3_items.append({"name": "กวาดแนวต้าน (Sweep)", "ok": c1, "desc": f"High กวาดแนวต้าน {resistance:.2f} แล้วดึงกลับ" if c1 else f"ยังไม่กวาดแนวต้าน {resistance:.2f}"})
+                p3_items.append({"name": "กวาดแนวต้าน (Sweep)", "ok": c1, "desc": f"High กวาดแนวต้าน {resistance:,.2f} แล้วดึงกลับ" if c1 else f"ยังไม่กวาดแนวต้าน {resistance:,.2f}"})
                 c2 = 0.25 <= upper_wick_ratio <= 2.50
                 p3_items.append({"name": "ไส้บนปฏิเสธ", "ok": c2, "desc": f"ไส้บนยาว {upper_wick_ratio:.2f} ATR (≥0.25)" if c2 else f"ไส้บน {upper_wick_ratio:.2f} ATR (<0.25)"})
                 c3 = (not is_uptrend_h1) and h1_stack_dir == -1
@@ -1072,7 +1072,7 @@ class BotController:
             p4_items = []
             if p4_side == "BUY":
                 c1 = (abs(cur_price - support) <= (atr_m15 * 1.0)) and (cur_price >= support)
-                p4_items.append({"name": "ประชิดแนวรับ (≤1 ATR)", "ok": c1, "desc": f"ห่างแนวรับ {dist_sup:.2f} (≤{atr_m15:.2f})" if c1 else f"ห่างแนวรับ {dist_sup:.2f} (>1 ATR)"})
+                p4_items.append({"name": "ประชิดแนวรับ (≤1 ATR)", "ok": c1, "desc": f"ห่างแนวรับ {dist_sup:,.2f} (≤{atr_m15:,.2f})" if c1 else f"ห่างแนวรับ {dist_sup:,.2f} (>1 ATR)"})
                 c2 = (lower_wick_ratio >= 0.20) or (m15_close > m15_open)
                 p4_items.append({"name": "แท่งเด้งกลับ / ไส้ล่าง", "ok": c2, "desc": "แท่งเขียวหรือมีไส้ล่างปฏิเสธราคา" if c2 else "ยังไม่มีแท่งปฏิเสธราคา"})
                 c3 = bull_div
@@ -1081,7 +1081,7 @@ class BotController:
                 p4_items.append({"name": "AI ยืนยัน ≥51%", "ok": c4, "desc": f"AI UP {ai_prob_up:.1%} และ H1 ไม่ใช่ขาลง" if c4 else f"AI UP {ai_prob_up:.1%} หรือ H1 ขาลง"})
             else:
                 c1 = (abs(resistance - cur_price) <= (atr_m15 * 1.0)) and (cur_price <= resistance)
-                p4_items.append({"name": "ประชิดแนวต้าน (≤1 ATR)", "ok": c1, "desc": f"ห่างแนวต้าน {dist_res:.2f} (≤{atr_m15:.2f})" if c1 else f"ห่างแนวต้าน {dist_res:.2f} (>1 ATR)"})
+                p4_items.append({"name": "ประชิดแนวต้าน (≤1 ATR)", "ok": c1, "desc": f"ห่างแนวต้าน {dist_res:,.2f} (≤{atr_m15:,.2f})" if c1 else f"ห่างแนวต้าน {dist_res:,.2f} (>1 ATR)"})
                 c2 = (upper_wick_ratio >= 0.20) or (m15_close < m15_open)
                 p4_items.append({"name": "แท่งเด้งกลับ / ไส้บน", "ok": c2, "desc": "แท่งแดงหรือมีไส้บนปฏิเสธราคา" if c2 else "ยังไม่มีแท่งปฏิเสธราคา"})
                 c3 = bear_div
@@ -1102,7 +1102,7 @@ class BotController:
             p5_items = []
             if p5_side == "BUY":
                 c1 = m15_low < bb_lower_h1 and m15_close >= bb_lower_h1
-                p5_items.append({"name": "หลุด BB ล่างแล้วดีดกลับ", "ok": c1, "desc": f"Low หลุด {bb_lower_h1:.2f} แล้วปิดกลับขึ้นมา" if c1 else f"ยังไม่หลุดกรอบ BB ล่าง ({bb_lower_h1:.2f})"})
+                p5_items.append({"name": "หลุด BB ล่างแล้วดีดกลับ", "ok": c1, "desc": f"Low หลุด {bb_lower_h1:,.2f} แล้วปิดกลับขึ้นมา" if c1 else f"ยังไม่หลุดกรอบ BB ล่าง ({bb_lower_h1:,.2f})"})
                 c2 = lower_wick_ratio >= 0.20
                 p5_items.append({"name": "ไส้ล่างปฏิเสธ", "ok": c2, "desc": f"ไส้ล่างยาว {lower_wick_ratio:.2f} ATR (≥0.20)" if c2 else f"ไส้ล่าง {lower_wick_ratio:.2f} (<0.20)"})
                 c3 = macd_hist_h1 >= prev_macd_hist_h1
@@ -1113,7 +1113,7 @@ class BotController:
                 p5_items.append({"name": "AI ทายขึ้น ≥50%", "ok": c5, "desc": f"AI UP {ai_prob_up:.1%}" if c5 else f"AI UP {ai_prob_up:.1%} (<50%)"})
             else:
                 c1 = m15_high > bb_upper_h1 and m15_close <= bb_upper_h1
-                p5_items.append({"name": "หลุด BB บนแล้วดึงกลับ", "ok": c1, "desc": f"High ทะลุ {bb_upper_h1:.2f} แล้วปิดกลับลงมา" if c1 else f"ยังไม่หลุดกรอบ BB บน ({bb_upper_h1:.2f})"})
+                p5_items.append({"name": "หลุด BB บนแล้วดึงกลับ", "ok": c1, "desc": f"High ทะลุ {bb_upper_h1:,.2f} แล้วปิดกลับลงมา" if c1 else f"ยังไม่หลุดกรอบ BB บน ({bb_upper_h1:,.2f})"})
                 c2 = upper_wick_ratio >= 0.20
                 p5_items.append({"name": "ไส้บนปฏิเสธ", "ok": c2, "desc": f"ไส้บนยาว {upper_wick_ratio:.2f} ATR (≥0.20)" if c2 else f"ไส้บน {upper_wick_ratio:.2f} (<0.20)"})
                 c3 = macd_hist_h1 <= prev_macd_hist_h1
@@ -1134,18 +1134,18 @@ class BotController:
             p6_items = []
             if p6_side == "BUY":
                 c1 = sar_dir == 1
-                p6_items.append({"name": "SAR อยู่ใต้ราคา", "ok": c1, "desc": f"SAR {sar_val:.2f} อยู่ใต้ราคา (ขาขึ้น)" if c1 else f"SAR อยู่เหนือราคา ({sar_val:.2f})"})
+                p6_items.append({"name": "SAR อยู่ใต้ราคา", "ok": c1, "desc": f"SAR {sar_val:,.2f} อยู่ใต้ราคา (ขาขึ้น)" if c1 else f"SAR อยู่เหนือราคา ({sar_val:,.2f})"})
                 c2 = is_uptrend_h4
                 p6_items.append({"name": "เทรนด์ H4", "ok": c2, "desc": f"H4 ขาขึ้น (MA10>MA30 +{h4_diff_pct:.2f}%)" if c2 else "H4 ไม่ใช่ขาขึ้น"})
                 c3 = h4_lt_dir == 1
-                p6_items.append({"name": "เหนือ MA200 H4", "ok": c3, "desc": f"ราคา {h4_close:.2f} > MA200 {h4_ma200:.2f}" if c3 else "ราคาต่ำกว่า MA200 H4"})
+                p6_items.append({"name": "เหนือ MA200 H4", "ok": c3, "desc": f"ราคา {h4_close:,.2f} > MA200 {h4_ma200:,.2f}" if c3 else f"ราคาต่ำกว่า MA200 H4 ({h4_ma200:,.2f})"})
             else:
                 c1 = sar_dir == -1
-                p6_items.append({"name": "SAR อยู่เหนือราคา", "ok": c1, "desc": f"SAR {sar_val:.2f} อยู่เหนือราคา (ขาลง)" if c1 else f"SAR อยู่ใต้ราคา ({sar_val:.2f})"})
+                p6_items.append({"name": "SAR อยู่เหนือราคา", "ok": c1, "desc": f"SAR {sar_val:,.2f} อยู่เหนือราคา (ขาลง)" if c1 else f"SAR อยู่ใต้ราคา ({sar_val:,.2f})"})
                 c2 = not is_uptrend_h4
                 p6_items.append({"name": "เทรนด์ H4", "ok": c2, "desc": f"H4 ขาลง (MA10<MA30 {h4_diff_pct:.2f}%)" if c2 else "H4 ไม่ใช่ขาลง"})
                 c3 = h4_lt_dir == -1
-                p6_items.append({"name": "ใต้ MA200 H4", "ok": c3, "desc": f"ราคา {h4_close:.2f} < MA200 {h4_ma200:.2f}" if c3 else "ราคาสูงกว่า MA200 H4"})
+                p6_items.append({"name": "ใต้ MA200 H4", "ok": c3, "desc": f"ราคา {h4_close:,.2f} < MA200 {h4_ma200:,.2f}" if c3 else f"ราคาสูงกว่า MA200 H4 ({h4_ma200:,.2f})"})
 
             m6 = sum(1 for it in p6_items if it["ok"])
             results["P6"] = {
