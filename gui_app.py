@@ -1472,6 +1472,11 @@ class GoldCandleDialog(ctk.CTkToplevel):
         else:
             plans_status = getattr(self, "_last_plans_status", {}) or {}
 
+        sig = (self.selected_plan, tuple((k, (plans_status.get(k) or {}).get("matched"), (plans_status.get(k) or {}).get("total")) for k in sorted(self.plan_buttons.keys())))
+        if sig == getattr(self, "_last_plan_btns_sig", None):
+            return
+        self._last_plan_btns_sig = sig
+
         for plan_key, btn in self.plan_buttons.items():
             is_active = (self.selected_plan == plan_key)
             spec = next((item for item in self.PLAN_SPECS if item[0] == plan_key), None)
@@ -1529,16 +1534,55 @@ class GoldCandleDialog(ctk.CTkToplevel):
             self.lbl_cond_score.configure(text=" กำลังวิเคราะห์สัญญาณ... ", fg_color="#18202F", text_color=COLOR_TEXT_MUTED)
             return
 
-        for w in self.cond_chips_box.winfo_children():
-            w.destroy()
-
         cur_plan = self.selected_plan
+
+        # Signature ตรวจจับความเปลี่ยนแปลง ป้องกันการ Re-render ซ้ำซากที่ทำให้ข้อความกระพริบ
+        if cur_plan == "ALL":
+            raw_sig = ("ALL", tuple((pk, (plans_status.get(pk) or {}).get("matched"), (plans_status.get(pk) or {}).get("total"), (plans_status.get(pk) or {}).get("side")) for pk in ("P1", "P2", "P3", "P4", "P5", "P6")))
+        elif cur_plan in ("P1", "P2", "P3", "P4", "P5", "P6"):
+            pinfo = plans_status.get(cur_plan) or {}
+            items_sig = tuple((it.get("ok"), it.get("name"), it.get("desc")) for it in pinfo.get("items", []))
+            raw_sig = (cur_plan, pinfo.get("matched"), pinfo.get("total"), pinfo.get("side"), items_sig)
+        elif cur_plan == "H4":
+            p2_info = plans_status.get("P2") or {}
+            items_sig = tuple((it.get("ok"), it.get("name"), it.get("desc")) for it in p2_info.get("items", []) if "H4" in it.get("name", ""))
+            raw_sig = ("H4", items_sig)
+        else:
+            raw_sig = (cur_plan,)
+
+        if raw_sig == getattr(self, "_last_cond_sig", None):
+            return
+        self._last_cond_sig = raw_sig
+
+        if not hasattr(self, "_cond_chip_widgets"):
+            self._cond_chip_widgets = []
 
         if cur_plan == "ALL":
             self.lbl_cond_title.configure(text="⚡ สถานะทุกแผน:", text_color=COLOR_GOLD_PRIMARY)
             self.lbl_cond_score.configure(text=" (คลิกดูรายละเอียด) ", fg_color="transparent", text_color=COLOR_TEXT_MUTED)
 
-            for pk in ("P1", "P2", "P3", "P4", "P5", "P6"):
+            plan_keys = ("P1", "P2", "P3", "P4", "P5", "P6")
+            if getattr(self, "_last_cond_mode", None) != "ALL" or len(self._cond_chip_widgets) != len(plan_keys):
+                for w in self.cond_chips_box.winfo_children():
+                    w.destroy()
+                self._cond_chip_widgets = []
+                self._last_cond_mode = "ALL"
+
+                for pk in plan_keys:
+                    btn = ctk.CTkButton(
+                        self.cond_chips_box,
+                        text="",
+                        height=22,
+                        width=0,
+                        corner_radius=6,
+                        hover_color=COLOR_CARD_HOVER,
+                        border_width=1,
+                        command=lambda p=pk: self._select_plan(p)
+                    )
+                    btn.pack(side="left", padx=(0, 6))
+                    self._cond_chip_widgets.append(btn)
+
+            for i, pk in enumerate(plan_keys):
                 pinfo = plans_status.get(pk)
                 if not pinfo:
                     continue
@@ -1564,21 +1608,14 @@ class GoldCandleDialog(ctk.CTkToplevel):
                     chip_text = "#94A3B8"
                     label_txt = f"{pk} {side_tag}: {m}/{tot}"
 
-                btn = ctk.CTkButton(
-                    self.cond_chips_box,
+                btn = self._cond_chip_widgets[i]
+                btn.configure(
                     text=label_txt,
-                    height=22,
-                    width=0,
-                    corner_radius=6,
                     fg_color=chip_fg,
-                    hover_color=COLOR_CARD_HOVER,
-                    border_width=1,
                     border_color=chip_border,
                     text_color=chip_text,
-                    font=ctk.CTkFont(family=app_fonts.UI, size=10, weight="bold" if (is_ready or pct >= 50) else "normal"),
-                    command=lambda p=pk: self._select_plan(p)
+                    font=ctk.CTkFont(family=app_fonts.UI, size=10, weight="bold" if (is_ready or pct >= 50) else "normal")
                 )
-                btn.pack(side="left", padx=(0, 6))
 
         elif cur_plan in ("P1", "P2", "P3", "P4", "P5", "P6"):
             pinfo = plans_status.get(cur_plan)
@@ -1610,24 +1647,38 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
             self.lbl_cond_score.configure(text=score_txt, fg_color=score_bg, text_color=score_text_col)
 
-            for it in pinfo.get("items", []):
+            items = pinfo.get("items", [])
+            if getattr(self, "_last_cond_mode", None) != cur_plan or len(self._cond_chip_widgets) != len(items):
+                for w in self.cond_chips_box.winfo_children():
+                    w.destroy()
+                self._cond_chip_widgets = []
+                self._last_cond_mode = cur_plan
+
+                for _ in items:
+                    lbl = ctk.CTkLabel(
+                        self.cond_chips_box,
+                        text="",
+                        height=22,
+                        corner_radius=6,
+                        padx=7,
+                    )
+                    lbl.pack(side="left", padx=(0, 6))
+                    self._cond_chip_widgets.append(lbl)
+
+            for i, it in enumerate(items):
                 ok = it["ok"]
                 mark = "✓" if ok else "✗"
                 chip_bg = "#0D2818" if ok else "#251215"
                 chip_text_col = "#34D399" if ok else "#F87171"
                 chip_label = f"{mark} {it['name']}: {it['desc']}"
 
-                lbl = ctk.CTkLabel(
-                    self.cond_chips_box,
+                lbl = self._cond_chip_widgets[i]
+                lbl.configure(
                     text=chip_label,
-                    height=22,
-                    corner_radius=6,
                     fg_color=chip_bg,
                     text_color=chip_text_col,
                     font=ctk.CTkFont(family=app_fonts.UI, size=10, weight="bold" if ok else "normal"),
-                    padx=7,
                 )
-                lbl.pack(side="left", padx=(0, 6))
                 lbl.bind("<Enter>", lambda e, d=it["desc"], n=it["name"]: self.lbl_tip.configure(text=f"📌 {n}: {d}"))
                 lbl.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
 
@@ -1635,23 +1686,37 @@ class GoldCandleDialog(ctk.CTkToplevel):
             self.lbl_cond_title.configure(text="⚡ วิเคราะห์เทรนด์ H4:", text_color=COLOR_GOLD_PRIMARY)
             self.lbl_cond_score.configure(text=" (กรอบใหญ่ H4) ", fg_color="transparent", text_color=COLOR_TEXT_MUTED)
             p2_info = plans_status.get("P2", {})
-            for it in p2_info.get("items", []):
-                if "H4" in it.get("name", ""):
-                    ok = it["ok"]
-                    mark = "✓" if ok else "✗"
+            h4_items = [it for it in p2_info.get("items", []) if "H4" in it.get("name", "")]
+
+            if getattr(self, "_last_cond_mode", None) != "H4" or len(self._cond_chip_widgets) != len(h4_items):
+                for w in self.cond_chips_box.winfo_children():
+                    w.destroy()
+                self._cond_chip_widgets = []
+                self._last_cond_mode = "H4"
+
+                for _ in h4_items:
                     lbl = ctk.CTkLabel(
                         self.cond_chips_box,
-                        text=f"{mark} {it['name']}: {it['desc']}",
+                        text="",
                         height=22,
                         corner_radius=6,
-                        fg_color="#0D2818" if ok else "#251215",
-                        text_color="#34D399" if ok else "#F87171",
                         font=ctk.CTkFont(family=app_fonts.UI, size=10),
                         padx=7,
                     )
                     lbl.pack(side="left", padx=(0, 6))
-                    lbl.bind("<Enter>", lambda e, d=it["desc"], n=it["name"]: self.lbl_tip.configure(text=f"📌 {n}: {d}"))
-                    lbl.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
+                    self._cond_chip_widgets.append(lbl)
+
+            for i, it in enumerate(h4_items):
+                ok = it["ok"]
+                mark = "✓" if ok else "✗"
+                lbl = self._cond_chip_widgets[i]
+                lbl.configure(
+                    text=f"{mark} {it['name']}: {it['desc']}",
+                    fg_color="#0D2818" if ok else "#251215",
+                    text_color="#34D399" if ok else "#F87171",
+                )
+                lbl.bind("<Enter>", lambda e, d=it["desc"], n=it["name"]: self.lbl_tip.configure(text=f"📌 {n}: {d}"))
+                lbl.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
 
     def _select_plan(self, plan_key):
         self.selected_plan = plan_key
@@ -1683,6 +1748,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.title(f"XAUUSD · {cur_tf} เรียลไทม์{plan_desc}")
 
         # 4. รีเฟรชปุ่มแผน, ชิปอินดิเคเตอร์, แถบเงื่อนไข และวาดใหม่
+        self._last_plan_btns_sig = None
+        self._last_cond_sig = None
         self._refresh_plan_buttons()
         self._rebuild_legend_chips()
         self._update_condition_bar()
@@ -1882,8 +1949,12 @@ class GoldCandleDialog(ctk.CTkToplevel):
         focus_res_price = self.data.get("focus_res_price") or self.data.get("resistance") or 0.0
         focus_sup_price = self.data.get("focus_sup_price") or self.data.get("support") or 0.0
         focus_res_score = self.data.get("focus_res_score") or float(self.data.get("res_stars", 6.0) or 6.0)
-        focus_sup_score = self.data.get("focus_sup_score") or float(self.data.get("sup_stars", 6.0) or 6.0)
         action = self.data.get("focus_action") or ""
+
+        sig = (focus_res, focus_res_price, focus_res_score, focus_sup, focus_sup_price, focus_sup_score, action)
+        if sig == getattr(self, "_last_ai_sr_sig", None):
+            return
+        self._last_ai_sr_sig = sig
 
         if focus_res_price > 0:
             self.lbl_ai_res_badge.configure(text=f" 🎯 ต้าน {focus_res}: {focus_res_price:,.2f} (★ {focus_res_score:.2f}) ")
