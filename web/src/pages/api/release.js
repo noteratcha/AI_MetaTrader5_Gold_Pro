@@ -4,7 +4,7 @@ import { getAdminClient } from '../../lib/server/supabaseAdmin';
 // แหล่งหลัก: GitHub Releases (อัปโหลด ZIP ที่นั่นที่เดียวพอ) — สำรอง: ตาราง app_releases
 const GITHUB_REPO = process.env.GITHUB_RELEASES_REPO || 'noteratcha/AI_MetaTrader5_Gold_Pro';
 const RELEASES_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
-const CACHE_MS = 10 * 60 * 1000;
+const CACHE_MS = 60 * 1000; // แคชสั้น 60 วินาที เพื่อให้ผู้ใช้เห็นแพตช์ใหม่ได้รวดเร็วทันใจ
 
 let cache = { release: null, at: 0 };
 
@@ -77,16 +77,16 @@ async function fromDatabase() {
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
-  if (!cache.release || Date.now() - cache.at > CACHE_MS) {
+  const force = req.query.force || req.query.t || req.headers['cache-control']?.includes('no-cache');
+  if (force || !cache.release || Date.now() - cache.at > CACHE_MS) {
     const [api, db] = await Promise.all([fromGitHub().catch(() => null), fromDatabase().catch(() => null)]);
     const gh = api || (await fromGitHubRedirect().catch(() => null));
     const candidates = [gh, db].filter((r) => r && isPublicUrl(r.download_url));
     candidates.sort((a, b) => (versionKey(b.version) > versionKey(a.version) ? 1 : -1));
     const best = candidates[0] || (gh || db ? { ...(gh || db), download_url: RELEASES_PAGE } : null);
-    // ได้จาก API เต็ม → แคช 10 นาที · ได้จากทางสำรอง → แคชสั้น 1 นาที (รอบหน้าลองดึง changelog เต็มอีกครั้ง)
-    if (best) cache = { release: { ...best, releases_page: RELEASES_PAGE }, at: api ? Date.now() : Date.now() - CACHE_MS + 60 * 1000 };
+    if (best) cache = { release: { ...best, releases_page: RELEASES_PAGE }, at: Date.now() };
   }
 
-  res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600');
+  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
   return res.status(200).json({ success: true, release: cache.release || { download_url: RELEASES_PAGE, releases_page: RELEASES_PAGE } });
 }
