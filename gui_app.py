@@ -345,13 +345,14 @@ class RedeemKeyDialog(ctk.CTkToplevel):
 
 
 class UpdateDialog(ctk.CTkToplevel):
-    """แจ้งเวอร์ชันใหม่: เวอร์ชันเดิม → ใหม่ · สิ่งที่เปลี่ยนแยกหัวข้อ · ปุ่มดาวน์โหลด"""
+    """แจ้งเวอร์ชันใหม่: เวอร์ชันเดิม → ใหม่ · สิ่งที่เปลี่ยนแยกหัวข้อ · ระบบอัปเดตแพตช์ทับ Path เดิมอัตโนมัติ (1-Click In-App Updater)"""
 
     def __init__(self, parent, info, download_url):
         super().__init__(parent)
         import re
+        import threading
         self.title("มีเวอร์ชันใหม่ - AI Gold Commander Pro")
-        w, h = 560, 560
+        w, h = 580, 600
         self.configure(fg_color=COLOR_BG_DARK)
         self.transient(parent)
         self.resizable(False, False)
@@ -359,7 +360,14 @@ class UpdateDialog(ctk.CTkToplevel):
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
+        self.info = info or {}
         self.url = download_url
+        self.direct_url = self.info.get("direct_download_url") or download_url
+        self.is_installer = bool(self.info.get("is_installer", True))
+        self.file_name = self.info.get("file_name") or ("GoldBot24_Setup.exe" if self.is_installer else "update.zip")
+        self._download_thread = None
+        self._is_updating = False
+        self._cancel_event = threading.Event()
 
         def f(size, weight="normal"):
             return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
@@ -369,14 +377,14 @@ class UpdateDialog(ctk.CTkToplevel):
         head.pack(fill="x")
         inner = ctk.CTkFrame(head, fg_color="transparent")
         inner.pack(fill="x", padx=22, pady=16)
-        # ไอคอนลูกศรวาดเอง (อักขระ ⬆ บางเครื่องไม่มีฟอนต์ → ขึ้นเป็นกล่อง □)
+        # ไอคอนลูกศรวาดเอง
         icon = tk.Canvas(inner, width=46, height=46, bg=COLOR_GOLD_BG, highlightthickness=0, bd=0)
         icon.create_oval(1, 1, 45, 45, fill="#3A2E14", outline="")
         icon.create_polygon(23, 10, 35, 24, 27, 24, 27, 35, 19, 35, 19, 24, 11, 24, fill=COLOR_GOLD_PRIMARY, outline="")
         icon.pack(side="left")
         txt = ctk.CTkFrame(inner, fg_color="transparent")
         txt.pack(side="left", padx=14)
-        ctk.CTkLabel(txt, text="มีเวอร์ชันใหม่พร้อมติดตั้ง", font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w")
+        ctk.CTkLabel(txt, text="มีเวอร์ชันใหม่พร้อมอัปเดต", font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w")
         chips = ctk.CTkFrame(txt, fg_color="transparent")
         chips.pack(anchor="w", pady=(4, 0))
         ctk.CTkLabel(chips, text=f"  ใช้งานอยู่ v{APP_VERSION}  ", font=f(11), text_color=COLOR_TEXT_MUTED,
@@ -384,9 +392,12 @@ class UpdateDialog(ctk.CTkToplevel):
         ctk.CTkLabel(chips, text="→", font=f(13, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(side="left", padx=6)
         ctk.CTkLabel(chips, text=f"  ใหม่ v{info.get('latest_version')}  ", font=f(11, "bold"), text_color="#1A1406",
                      fg_color=COLOR_GOLD_PRIMARY, corner_radius=6, height=22).pack(side="left")
+        size_mb = (self.info.get("size_bytes", 0) or 0) / (1024 * 1024)
+        if size_mb > 0:
+            ctk.CTkLabel(chips, text=f"({size_mb:.1f} MB)", font=f(11), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(6, 0))
 
         # มีอะไรใหม่ — แยกตามหัวข้อ ### ใน Release notes
-        ctk.CTkLabel(self, text="มีอะไรใหม่", font=f(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=22, pady=(14, 6))
+        ctk.CTkLabel(self, text="มีอะไรใหม่", font=f(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=22, pady=(12, 6))
         box = ctk.CTkScrollableFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
         box.pack(fill="both", expand=True, padx=22)
         sections, cur = [], None
@@ -402,26 +413,111 @@ class UpdateDialog(ctk.CTkToplevel):
         sections = [x for x in sections if x[1]][:6] or [["ปรับปรุง", ["ปรับปรุงประสิทธิภาพและแก้ไขข้อผิดพลาด"]]]
         for i, (title, items) in enumerate(sections):
             ctk.CTkLabel(box, text=title, font=f(12, "bold"), text_color=COLOR_GOLD_PRIMARY, anchor="w", justify="left",
-                         wraplength=470).pack(anchor="w", padx=12, pady=(12 if i == 0 else 12, 4))
+                         wraplength=490).pack(anchor="w", padx=12, pady=(12 if i == 0 else 12, 4))
             for it in items[:6]:
                 row = ctk.CTkFrame(box, fg_color="transparent")
                 row.pack(fill="x", padx=12, pady=1)
                 ctk.CTkLabel(row, text="•", font=f(12, "bold"), text_color=COLOR_SUCCESS_GREEN, width=14).pack(side="left", anchor="n")
                 ctk.CTkLabel(row, text=it, font=f(12), text_color=COLOR_TEXT_PRIMARY, anchor="w", justify="left",
-                             wraplength=450).pack(side="left", fill="x")
+                             wraplength=470).pack(side="left", fill="x")
 
-        ctk.CTkLabel(self, text="ปิดโปรแกรมก่อนติดตั้งทับ · การตั้งค่าและบัญชีของคุณจะยังอยู่ครบ",
-                     font=f(11), text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=22, pady=(10, 0))
+        # แถบ Progress Bar สำหรับดาวน์โหลด (ซ่อนไว้ก่อน)
+        self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.progress_lbl = ctk.CTkLabel(self.progress_frame, text="กำลังเตรียมดาวน์โหลดแพตช์...", font=f(11), text_color=COLOR_GOLD_PRIMARY)
+        self.progress_lbl.pack(anchor="w", pady=(0, 4))
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame, height=10, corner_radius=5,
+                                              progress_color=COLOR_GOLD_PRIMARY, fg_color="#1E232C")
+        self.progress_bar.set(0)
+        self.progress_bar.pack(fill="x")
+
+        self.tip_lbl = ctk.CTkLabel(self, text="⚡ อัปเดตทับ Path เดิมอัตโนมัติ · การตั้งค่าและประวัติพอร์ตยังอยู่ครบ 100%",
+                                    font=f(11), text_color=COLOR_TEXT_MUTED)
+        self.tip_lbl.pack(anchor="w", padx=22, pady=(8, 0))
+
         btns = ctk.CTkFrame(self, fg_color="transparent")
-        btns.pack(fill="x", padx=22, pady=(10, 18))
-        ctk.CTkButton(btns, text="ภายหลัง", width=110, height=38, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
-                      border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self.destroy).pack(side="right")
-        ctk.CTkButton(btns, text="ดาวน์โหลดเวอร์ชันใหม่", height=38, font=f(13, "bold"), fg_color=COLOR_GOLD_PRIMARY,
-                      hover_color=COLOR_GOLD_WARM, text_color="#1A1406", command=self._download
-                      ).pack(side="right", fill="x", expand=True, padx=(0, 10))
+        btns.pack(fill="x", padx=22, pady=(8, 16))
+        self.btn_cancel = ctk.CTkButton(btns, text="ภายหลัง", width=90, height=38, font=f(12), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
+                                        border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED, command=self._on_cancel)
+        self.btn_cancel.pack(side="right")
 
-    def _download(self):
-        webbrowser.open(self.url)
+        self.btn_web = ctk.CTkButton(btns, text="เปิดหน้าเว็บ", width=95, height=38, font=f(12), fg_color="#1A2232", hover_color="#243048",
+                                     border_width=1, border_color="#2E3C54", text_color=COLOR_CYAN_ACCENT, command=lambda: webbrowser.open(self.url))
+        self.btn_web.pack(side="right", padx=(0, 8))
+
+        self.btn_update = ctk.CTkButton(btns, text="🚀 อัปเดตแพตช์ทันที (1-Click)", height=38, font=f(13, "bold"), fg_color=COLOR_GOLD_PRIMARY,
+                                        hover_color=COLOR_GOLD_WARM, text_color="#1A1406", command=self._start_in_place_update)
+        self.btn_update.pack(side="right", fill="x", expand=True, padx=(0, 8))
+
+    def _start_in_place_update(self):
+        if self._is_updating:
+            return
+        self._is_updating = True
+        self.btn_update.configure(state="disabled", text="กำลังดาวน์โหลด...")
+        self.btn_web.configure(state="disabled")
+        self.btn_cancel.configure(text="ยกเลิก")
+        self.tip_lbl.pack_forget()
+        self.progress_frame.pack(fill="x", padx=22, pady=(6, 2))
+
+        def _worker():
+            import tempfile
+            import in_place_updater
+
+            url = self.direct_url
+            fname = self.file_name or "update_package.exe"
+            tmp_dir = tempfile.gettempdir()
+            dest_file = os.path.join(tmp_dir, f"goldbot_update_{int(time.time())}_{fname}")
+
+            def _on_prog(dl, tot, pct, spd):
+                dl_mb = dl / (1024 * 1024)
+                tot_mb = tot / (1024 * 1024) if tot > 0 else dl_mb
+                txt = f"กำลังดาวน์โหลดแพตช์... {dl_mb:.1f} MB / {tot_mb:.1f} MB ({pct:.0f}%) · {spd:.1f} MB/s"
+                self.after(0, lambda: self._update_progress_ui(pct / 100.0, txt))
+
+            ok = in_place_updater.download_file_with_progress(url, dest_file, _on_prog, self._cancel_event)
+            if not ok:
+                if not self._cancel_event.is_set():
+                    self.after(0, lambda: self._update_failed("ดาวน์โหลดแพตช์ไม่สำเร็จ กรุณาลองใหม่หรือดาวน์โหลดผ่านหน้าเว็บ"))
+                return
+
+            self.after(0, lambda: self._update_complete_and_launch(dest_file))
+
+        self._download_thread = threading.Thread(target=_worker, daemon=True)
+        self._download_thread.start()
+
+    def _update_progress_ui(self, fraction, text):
+        try:
+            self.progress_bar.set(fraction)
+            self.progress_lbl.configure(text=text)
+        except Exception:
+            pass
+
+    def _update_failed(self, msg):
+        self._is_updating = False
+        self.progress_frame.pack_forget()
+        self.tip_lbl.pack(anchor="w", padx=22, pady=(8, 0))
+        self.btn_update.configure(state="normal", text="ลองใหม่อีกครั้ง")
+        self.btn_web.configure(state="normal")
+        self.btn_cancel.configure(text="ปิด")
+        messagebox.showerror("อัปเดตแพตช์ล้มเหลว", msg)
+
+    def _update_complete_and_launch(self, dest_file):
+        import in_place_updater
+        self.progress_bar.set(1.0)
+        self.progress_lbl.configure(text="✓ ดาวน์โหลดสมบูรณ์ กำลังเริ่มอัปเดตทับ Path เดิมและรีสตาร์ทโปรแกรม...")
+        self.btn_update.configure(text="กำลังรีสตาร์ท...")
+
+        def _do_launch():
+            ok, msg = in_place_updater.launch_in_place_patch(dest_file, self.is_installer)
+            if ok:
+                os._exit(0)
+            else:
+                self._update_failed(msg)
+
+        self.after(1200, _do_launch)
+
+    def _on_cancel(self):
+        if self._is_updating:
+            self._cancel_event.set()
         self.destroy()
 
 

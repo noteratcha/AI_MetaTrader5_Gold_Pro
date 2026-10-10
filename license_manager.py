@@ -462,6 +462,11 @@ def fetch_app_version_info(current_version: str) -> dict:
         "latest_version": latest.get("version"),
         # หน้าเว็บดาวน์โหลดมีวิธีติดตั้ง + checksum
         "download_url": f"{API_BASE_URL.rstrip('/')}/download",
+        "direct_download_url": latest.get("download_url"),
+        "zip_url": latest.get("zip_url"),
+        "file_name": latest.get("file_name"),
+        "size_bytes": latest.get("size_bytes", 0),
+        "is_installer": bool(latest.get("is_installer", True)),
         "changelog": latest.get("changelog"),
         "mandatory": bool(latest.get("mandatory")),
     }

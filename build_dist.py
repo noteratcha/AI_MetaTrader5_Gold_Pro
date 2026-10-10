@@ -148,6 +148,7 @@ def build_gui_app(mode="pyinstaller"):
             "--hidden-import=bot_controller",
             "--hidden-import=supabase_sync",
             "--hidden-import=multi_asset_ai_bot",
+            "--hidden-import=in_place_updater",
             f"--name={APP_NAME}",
             "gui_app.py"
         ]
