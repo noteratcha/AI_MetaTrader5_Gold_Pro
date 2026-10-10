@@ -85,6 +85,9 @@ description: Knowledge, skills, techniques, execution style, the 5 XAUUSD tradin
 - **กฎสไตล์**:
   - สี Hex `#RRGGBB` เท่านั้น (ห้าม `rgba()`) · ห้าม `sticky="center"` · พอดีจอ 1366×768 (เช็กว่าการ์ดขวาไม่โดนตัด)
   - หน้าต่างย่อยทุกอันได้โลโก้โปรแกรมผ่าน patch `CTkToplevel.__init__` · หน้าต่างกราฟไม่ใช้ `transient()` เพื่อให้ขยายเต็มจอได้
+  - บังคับใช้ไตเติ้ลบาร์สีเข้ม (Dark Theme / Immersive Dark Mode) ทุกหน้าต่างย่อยและป๊อปอัปผ่าน `apply_dark_title_bar(window)` ป้องกัน Windows รีเซ็ตไตเติ้ลบาร์เป็นสีขาวเมื่อถูกสั่ง `self.transient(parent)`
+  - ดูกราฟสด H4 มีการแสดงผลเส้นแนวนอนแนวรับ–แนวต้านระดับ H4 (เส้นประสีแดง/เขียว พร้อมป้ายราคา) สอดคล้องกับ H1
+  - มีระบบตรวจจับและนับถอยหลังเวลาเปิด-ปิดตลาด พร้อมป้องกันข้อความแจ้งเตือนซ้ำซ้อนในคอนโซล (Duplicate Suppression)
   - คำเทรนด์ภาษาอังกฤษ (Uptrend/Downtrend/Sideway) · ชื่อแผน `P1 · MA M15` … · เรียก "โปรแกรม AI Gold Commander Pro" · ค่าบริการ "บาท/ชม."
   - ตัวเลขมีคอมมา · การ์ดแผนเทรดไม่ใส่ $ · ข้อความแจ้งเวอร์ชันใหม่ใช้ `UpdateDialog`
   - ค่าตั้งของผู้ใช้เก็บใน `%APPDATA%\GoldBot24\bot_settings.json` ผ่าน `_save_setting` (รวมค่า ไม่ทับ) — คีย์: `lot`, `tp_usd_enabled`, `tp_usd`, `console_autoclear`, `user_plans`
