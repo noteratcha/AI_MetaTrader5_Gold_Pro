@@ -969,43 +969,53 @@ class GoldCandleDialog(ctk.CTkToplevel):
     BAR_CHOICES = ("16", "30", "50", "80", "120", "200", "300", "500")
     REFRESH_MS = 1000
 
+    PLAN_SPECS = [
+        ("ALL", "รวมทุกแผน", None, None),
+        ("P1", "P1 · M15", "M15", ["ma5", "ma13", "ma50"]),
+        ("P2", "P2 · H1", "H1", ["h1_ma5", "h1_ma10", "h1_ma20"]),
+        ("P3", "P3 · H1 (SMC)", "H1", ["resistance", "support"]),
+        ("P4", "P4 · H1 (SR)", "H1", ["resistance", "support"]),
+        ("P5", "P5 · H1 (BB)", "H1", ["h1_bb"]),
+        ("P6", "P6 · H1 (PSAR)", "H1", ["h1_sar", "h1_ema100"]),
+        ("H4", "เทรนด์ H4", "H4", ["h4_ma10", "h4_ma30", "h4_ma200"]),
+    ]
+
     INDICATOR_DEFS = {
         "M15": [
-            ("ma5", "━ MA5", COLOR_CYAN_ACCENT),
-            ("ma13", "━ MA13", COLOR_GOLD_WARM),
-            ("ma50", "┅ MA50", "#A78BFA"),
+            ("ma5", "P1 · ━ MA5", COLOR_CYAN_ACCENT),
+            ("ma13", "P1 · ━ MA13", COLOR_GOLD_WARM),
+            ("ma50", "P1 · ┅ MA50", "#A78BFA"),
             ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
         ],
         "H1": [
-            ("h1_ma5", "━ MA5 H1", "#34D399"),
-            ("h1_ma10", "━ MA10 H1", "#FBBF24"),
-            ("h1_ma20", "┅ MA20 H1", "#818CF8"),
-            ("resistance", "┅ แนวต้าน H1", COLOR_DANGER_RED),
-            ("support", "┅ แนวรับ H1", COLOR_SUCCESS_GREEN),
-            ("h1_bb", "━ BB H1", "#C084FC"),
-            ("h1_sar", "• SAR H1", "#FB7185"),
-            ("h1_ema100", "┅ EMA100", "#60A5FA"),
+            ("h1_ma5", "P2 · ━ MA5", "#34D399"),
+            ("h1_ma10", "P2 · ━ MA10", "#FBBF24"),
+            ("h1_ma20", "P2 · ┅ MA20", "#818CF8"),
+            ("resistance", "P3/P4 · ┅ แนวต้าน", COLOR_DANGER_RED),
+            ("support", "P3/P4 · ┅ แนวรับ", COLOR_SUCCESS_GREEN),
+            ("h1_bb", "P5 · ━ BB H1", "#C084FC"),
+            ("h1_sar", "P6 · • SAR H1", "#FB7185"),
+            ("h1_ema100", "P6 · ┅ EMA100", "#60A5FA"),
             ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
         ],
         "H4": [
-            ("h4_ma10", "━ MA10 H4", "#FBBF24"),
-            ("h4_ma30", "━ MA30 H4", "#FB923C"),
-            ("h4_ma200", "┅ MA200 H4", "#A78BFA"),
+            ("h4_ma10", "H4 · ━ MA10", "#FBBF24"),
+            ("h4_ma30", "H4 · ━ MA30", "#FB923C"),
+            ("h4_ma200", "H4 · ┅ MA200", "#A78BFA"),
             ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
         ],
     }
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("XAUUSD · M15 เรียลไทม์")
-        w, h = 1080, 640
+        w, h = 1100, 680
         self.configure(fg_color=COLOR_BG_DARK)
         self.after(10, self.lift)
         self.update_idletasks()
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
-        self.minsize(680, 420)
+        self.minsize(720, 460)
         self.data, self.slots, self._job = None, [], None
 
         # สถานะเปิด/ปิดแสดงผลของแต่ละอินดิเคเตอร์ตามแผนที่เปิดใช้งานจริง
@@ -1016,8 +1026,33 @@ class GoldCandleDialog(ctk.CTkToplevel):
         p5 = plan_config.is_enabled("BB-H1-Reversion")
         p6 = plan_config.is_enabled("PSAR-H1-Trend")
 
+        # เลือกแผนเริ่มต้นตามแผนที่เปิดใช้งาน (โฟกัส P1 ก่อน)
+        if p1:
+            self.selected_plan = "P1"
+            init_tf = "M15"
+        elif p2:
+            self.selected_plan = "P2"
+            init_tf = "H1"
+        elif p3:
+            self.selected_plan = "P3"
+            init_tf = "H1"
+        elif p4:
+            self.selected_plan = "P4"
+            init_tf = "H1"
+        elif p5:
+            self.selected_plan = "P5"
+            init_tf = "H1"
+        elif p6:
+            self.selected_plan = "P6"
+            init_tf = "H1"
+        else:
+            self.selected_plan = "ALL"
+            init_tf = "M15"
+
+        self.title(f"XAUUSD · {init_tf} เรียลไทม์ ({self.selected_plan})")
+
         self.ind_toggles = {
-            "ma5": p1, "ma13": p1, "ma50": p1,
+            "ma5": True, "ma13": True, "ma50": True,
             "h1_ma5": p2, "h1_ma10": p2, "h1_ma20": p2,
             "resistance": (p3 or p4), "support": (p3 or p4),
             "h1_bb": p5,
@@ -1025,18 +1060,16 @@ class GoldCandleDialog(ctk.CTkToplevel):
             "h4_ma10": True, "h4_ma30": True, "h4_ma200": True,
             "orders": True,
         }
-        if not any([p1, p2, p3, p4, p5, p6]):
-            for k in self.ind_toggles:
-                self.ind_toggles[k] = True
 
+        self.plan_buttons = {}
         self.ind_buttons = {}
         self.ind_colors = {}
-        self.tf_var = tk.StringVar(value="M15")
+        self.tf_var = tk.StringVar(value=init_tf)
         self.bars_var = tk.StringVar(value=str(self.BARS))
 
         # --- แถวบน: สัญลักษณ์, Timeframe, ราคา, จำนวนแท่ง, ไม้เปิด, เต็มจอ ---
         top = ctk.CTkFrame(self, fg_color="transparent")
-        top.pack(fill="x", padx=18, pady=(12, 4))
+        top.pack(fill="x", padx=18, pady=(10, 4))
 
         # กลุ่มซ้าย: XAUUSD + เลือก Timeframe + ราคา Live + การเปลี่ยนแปลง
         left_grp = ctk.CTkFrame(top, fg_color="transparent")
@@ -1085,7 +1118,19 @@ class GoldCandleDialog(ctk.CTkToplevel):
                                command=lambda v: self._tick(reschedule=False)).pack(side="right", padx=(4, 0))
         ctk.CTkLabel(right_grp, text="แท่ง:", font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=COLOR_TEXT_MUTED).pack(side="right")
 
-        # --- แถวสอง: แถบอินดิเคเตอร์แบบคลิกเปิด/ปิดได้ (Indicator Toolbar) ---
+        # --- แถวสอง: แถบเลือกตามแผน (Plan Selector Bar) ---
+        plan_bar = ctk.CTkFrame(self, fg_color="transparent")
+        plan_bar.pack(fill="x", padx=18, pady=(2, 3))
+
+        ctk.CTkLabel(plan_bar, text="เลือกดูตามแผน:", font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+                     text_color=COLOR_GOLD_PRIMARY).pack(side="left", padx=(0, 8))
+
+        self.plan_box = ctk.CTkFrame(plan_bar, fg_color="transparent")
+        self.plan_box.pack(side="left", fill="x", expand=True)
+
+        self._build_plan_buttons()
+
+        # --- แถวสาม: แถบอินดิเคเตอร์แบบคลิกเปิด/ปิดได้ (Indicator Toolbar) ---
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.pack(fill="x", padx=18, pady=(2, 6))
 
@@ -1116,11 +1161,106 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.canvas.bind("<Configure>", lambda e: self._draw())
         self.canvas.bind("<Motion>", self._hover)
         self.canvas.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
-        self.tip_default = "อัปเดตทุก 1 วินาที · คลิกปุ่มอินดิเคเตอร์ด้านบนเพื่อเปิด/ปิด · ชี้ที่แท่งเพื่อดูราคาและค่าอินดิเคเตอร์"
+        self.tip_default = "อัปเดตทุก 1 วินาที · เลือกดูตามแผน (P1-P6) หรือคลิกเปิด/ปิดแต่ละอินดิเคเตอร์ · ชี้ที่แท่งเพื่อดูราคาและค่า"
         self.lbl_tip = ctk.CTkLabel(self, text=self.tip_default, font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_TEXT_MUTED)
         self.lbl_tip.pack(pady=(2, 8))
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._tick()
+
+    def _build_plan_buttons(self):
+        for w in self.plan_box.winfo_children():
+            w.destroy()
+        self.plan_buttons = {}
+
+        for plan_key, label, tf, _ in self.PLAN_SPECS:
+            is_active = (self.selected_plan == plan_key)
+            btn = ctk.CTkButton(
+                self.plan_box,
+                text=label,
+                width=0,
+                height=24,
+                corner_radius=6,
+                font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold" if is_active else "normal"),
+                fg_color="#3B2E15" if is_active else COLOR_CARD_BG,
+                hover_color=COLOR_CARD_HOVER,
+                border_width=1.5 if is_active else 1,
+                border_color=COLOR_GOLD_PRIMARY if is_active else COLOR_CARD_BORDER,
+                text_color=COLOR_GOLD_PRIMARY if is_active else COLOR_TEXT_MUTED,
+                command=lambda pk=plan_key: self._select_plan(pk)
+            )
+            btn.pack(side="left", padx=(0, 5))
+            self.plan_buttons[plan_key] = btn
+
+    def _refresh_plan_buttons(self):
+        for plan_key, btn in self.plan_buttons.items():
+            is_active = (self.selected_plan == plan_key)
+            if is_active:
+                btn.configure(
+                    fg_color="#3B2E15",
+                    border_color=COLOR_GOLD_PRIMARY,
+                    border_width=1.5,
+                    text_color=COLOR_GOLD_PRIMARY,
+                    font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold")
+                )
+            else:
+                btn.configure(
+                    fg_color=COLOR_CARD_BG,
+                    border_color=COLOR_CARD_BORDER,
+                    border_width=1,
+                    text_color=COLOR_TEXT_MUTED,
+                    font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="normal")
+                )
+
+    def _select_plan(self, plan_key):
+        self.selected_plan = plan_key
+        target_spec = next((item for item in self.PLAN_SPECS if item[0] == plan_key), None)
+        if not target_spec:
+            return
+
+        _, label, target_tf, ind_keys = target_spec
+
+        # 1. สลับ Timeframe ให้ตรงกับแผน
+        if target_tf and self.tf_var.get() != target_tf:
+            self.tf_var.set(target_tf)
+            self.seg_tf.set(target_tf)
+
+        cur_tf = self.tf_var.get()
+
+        # 2. ปรับการเปิด/ปิดอินดิเคเตอร์
+        if plan_key == "ALL":
+            for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, []):
+                self.ind_toggles[k] = True
+        else:
+            tf_keys = [k for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, []) if k != "orders"]
+            for k in tf_keys:
+                self.ind_toggles[k] = (k in (ind_keys or []))
+            self.ind_toggles["orders"] = True
+
+        # 3. อัปเดต Title
+        plan_desc = f" ({label})" if plan_key != "ALL" else " (รวมทุกแผน)"
+        self.title(f"XAUUSD · {cur_tf} เรียลไทม์{plan_desc}")
+
+        # 4. รีเฟรชปุ่มแผน, ชิปอินดิเคเตอร์ และวาดใหม่
+        self._refresh_plan_buttons()
+        self._rebuild_legend_chips()
+        self._tick(reschedule=False)
+
+    def _sync_selected_plan_from_toggles(self):
+        cur_tf = self.tf_var.get()
+        active_keys = set(k for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, [])
+                          if k != "orders" and self.ind_toggles.get(k, False))
+        all_keys = set(k for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, []) if k != "orders")
+
+        if active_keys == all_keys:
+            self.selected_plan = "ALL"
+            return
+
+        for pk, _, ptf, pkeys in self.PLAN_SPECS:
+            if ptf == cur_tf and pkeys and set(pkeys) == active_keys:
+                self.selected_plan = pk
+                return
+
+        self.selected_plan = "CUSTOM"
 
     def _toggle_full(self):
         """ขยายเต็มจอ ↔ ขนาดปกติ (F11 / Esc)"""
@@ -1140,7 +1280,30 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.destroy()
 
     def _on_tf_change(self, new_tf):
-        self.title(f"XAUUSD · {new_tf} เรียลไทม์")
+        cur_spec = next((item for item in self.PLAN_SPECS if item[0] == self.selected_plan), None)
+        if cur_spec and cur_spec[2] and cur_spec[2] != new_tf:
+            if new_tf == "M15":
+                self.selected_plan = "P1"
+                self.ind_toggles["ma5"] = True
+                self.ind_toggles["ma13"] = True
+                self.ind_toggles["ma50"] = True
+            elif new_tf == "H4":
+                self.selected_plan = "H4"
+                self.ind_toggles["h4_ma10"] = True
+                self.ind_toggles["h4_ma30"] = True
+                self.ind_toggles["h4_ma200"] = True
+            elif new_tf == "H1":
+                self.selected_plan = "ALL"
+                for k, _, _ in self.INDICATOR_DEFS.get("H1", []):
+                    self.ind_toggles[k] = True
+
+        plan_desc = ""
+        for pk, plabel, ptf, _ in self.PLAN_SPECS:
+            if pk == self.selected_plan:
+                plan_desc = f" ({plabel})"
+                break
+        self.title(f"XAUUSD · {new_tf} เรียลไทม์{plan_desc}")
+        self._refresh_plan_buttons()
         self._rebuild_legend_chips()
         self._tick(reschedule=False)
 
@@ -1173,6 +1336,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
     def _toggle_indicator(self, key):
         self.ind_toggles[key] = not self.ind_toggles.get(key, True)
+        self._sync_selected_plan_from_toggles()
+        self._refresh_plan_buttons()
         self._refresh_chip_style(key)
         self._draw()
 
@@ -1192,6 +1357,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
         for key, _, _ in self.INDICATOR_DEFS.get(tf, []):
             self.ind_toggles[key] = state
             self._refresh_chip_style(key)
+        self.selected_plan = "ALL" if state else "NONE"
+        self._refresh_plan_buttons()
         self._draw()
 
     @staticmethod
