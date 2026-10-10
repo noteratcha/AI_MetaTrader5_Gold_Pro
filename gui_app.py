@@ -89,8 +89,29 @@ def status_pill_style(d, up="▲ หนุน", down="▼ สวน", mid="• �
     return f" {mid} ", COLOR_TEXT_MUTED, "#262B36"
 
 
+def _get_monitor_work_area(x, y):
+    """หาขอบเขตพื้นที่ทำงานของจอภาพ (Work Area ไม่รวม Taskbar) ที่จุด (x, y) อยู่"""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            import ctypes.wintypes as w
+            class RECT(ctypes.Structure):
+                _fields_ = [('left', ctypes.c_long), ('top', ctypes.c_long), ('right', ctypes.c_long), ('bottom', ctypes.c_long)]
+            class MONITORINFO(ctypes.Structure):
+                _fields_ = [('cbSize', ctypes.c_ulong), ('rcMonitor', RECT), ('rcWork', RECT), ('dwFlags', ctypes.c_ulong)]
+            mi = MONITORINFO()
+            mi.cbSize = ctypes.sizeof(MONITORINFO)
+            pt = w.POINT(int(x), int(y))
+            hMon = ctypes.windll.user32.MonitorFromPoint(pt, 2)  # MONITOR_DEFAULTTONEAREST
+            if hMon and ctypes.windll.user32.GetMonitorInfoW(hMon, ctypes.byref(mi)):
+                return (mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom)
+        except Exception:
+            pass
+    return None
+
+
 class HoverTip:
-    """กล่องข้อความลอยเมื่อชี้เมาส์ (เช่น คำแปลชื่อข่าวภาษาไทย)"""
+    """กล่องข้อความลอยเมื่อชี้เมาส์ (ควบคุมตำแหน่งให้อยู่ในหน้าต่างโปรแกรมและจอภาพเสมอ ไม่ล้นทะลุออกนอกจอ)"""
 
     def __init__(self, widget, text_fn, delay=350):
         self.widget, self.text_fn, self.delay = widget, text_fn, delay
@@ -115,16 +136,87 @@ class HoverTip:
         text = self.text_fn() if callable(self.text_fn) else self.text_fn
         if not text or self.tip:
             return
-        x = self.widget.winfo_pointerx() + 14
-        y = self.widget.winfo_pointery() + 18
+
         self.tip = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
         tw.attributes("-topmost", True)
+        tw.wm_geometry("+9999+9999")  # วางไว้นอกจอก่อนเพื่อวัดขนาด ป้องกันกระพริบที่ตำแหน่ง (0, 0)
+
         frame = tk.Frame(tw, bg=COLOR_GOLD_DARK, bd=0)
         frame.pack()
         tk.Label(frame, text=text, justify="left", bg="#1A1E27", fg=COLOR_TEXT_PRIMARY, font=(app_fonts.UI, 10),
-                 padx=10, pady=6, wraplength=420).pack(padx=1, pady=1)
-        tw.wm_geometry(f"+{x}+{y}")
+                 padx=10, pady=6, wraplength=400).pack(padx=1, pady=1)
+
+        tw.update_idletasks()
+        tip_w = tw.winfo_reqwidth()
+        tip_h = tw.winfo_reqheight()
+
+        px = self.widget.winfo_pointerx()
+        py = self.widget.winfo_pointery()
+
+        mon_rect = _get_monitor_work_area(px, py)
+        if mon_rect:
+            mon_left, mon_top, mon_right, mon_bottom = mon_rect
+        else:
+            mon_left, mon_top = 0, 0
+            mon_right = self.widget.winfo_screenwidth()
+            mon_bottom = self.widget.winfo_screenheight() - 40
+
+        try:
+            top_win = self.widget.winfo_toplevel()
+            win_left = top_win.winfo_rootx()
+            win_top = top_win.winfo_rooty()
+            win_right = win_left + top_win.winfo_width()
+            win_bottom = win_top + top_win.winfo_height()
+            has_win = True
+        except Exception:
+            has_win = False
+
+        # กำหนดขอบเขตปลอดภัย: ต้องอยู่ทั้งในจอภาพ และอยู่ในหน้าต่างโปรแกรม (หากหน้าต่างกว้างพอ)
+        if has_win and (win_right - win_left) >= tip_w + 16:
+            max_right = min(win_right - 8, mon_right - 8)
+            min_left = max(win_left + 8, mon_left + 8)
+        else:
+            max_right = mon_right - 8
+            min_left = mon_left + 8
+
+        if has_win and (win_bottom - win_top) >= tip_h + 16:
+            max_bottom = min(win_bottom - 8, mon_bottom - 8)
+            min_top = max(win_top + 8, mon_top + 8)
+        else:
+            max_bottom = mon_bottom - 8
+            min_top = mon_top + 8
+
+        x = px + 14
+        y = py + 18
+
+        # 1. แนวนอน: ถ้าล้นขอบขวา ให้พลิกมาแสดงทางซ้ายของเมาส์
+        if x + tip_w > max_right:
+            x_left = px - tip_w - 14
+            if x_left >= min_left:
+                x = x_left
+            else:
+                x = max(min_left, max_right - tip_w)
+
+        if x + tip_w > max_right:
+            x = max_right - tip_w
+        if x < min_left:
+            x = min_left
+
+        # 2. แนวตั้ง: ถ้าล้นขอบล่าง ให้พลิกขึ้นด้านบนของเมาส์
+        if y + tip_h > max_bottom:
+            y_above = py - tip_h - 10
+            if y_above >= min_top:
+                y = y_above
+            else:
+                y = max(min_top, max_bottom - tip_h)
+
+        if y + tip_h > max_bottom:
+            y = max_bottom - tip_h
+        if y < min_top:
+            y = min_top
+
+        tw.wm_geometry(f"+{int(x)}+{int(y)}")
 
     def _hide(self, _e=None):
         self._cancel()
