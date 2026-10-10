@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Download, ExternalLink, FileArchive, MonitorDown, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Download, FileArchive, MonitorDown, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { CopyButton, PageHeader } from '../../components/ui';
 import { formatThaiDateTime } from '../../lib/format';
@@ -95,11 +95,6 @@ export default function DownloadPage() {
                       onClick={() => trackDownload('ZIP')}
                     >
                       <FileArchive size={16} /> แบบ ZIP
-                    </a>
-                  )}
-                  {release.releases_page && (
-                    <a className="btn btn-secondary btn-lg" href={release.releases_page} target="_blank" rel="noopener noreferrer">
-                      ทุกเวอร์ชัน <ExternalLink size={16} />
                     </a>
                   )}
                 </div>
