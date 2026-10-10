@@ -4840,6 +4840,48 @@ class MainTradingApp(ctk.CTk):
         ("◆", "P6 · SAR H1", "Plan 6: PSAR-H1-Trend"),
     ]
 
+    PLAN_CODE_MAP = {
+        "Plan 1: MA-Cross-Trend": "P1",
+        "Plan 2: MA-Cross-H1-Trend": "P2",
+        "Plan 3: SMC-LiquidityHunt": "P3",
+        "Plan 4: SR-SwingBounce": "P4",
+        "Plan 5: BB-H1-Reversion": "P5",
+        "Plan 6: PSAR-H1-Trend": "P6",
+    }
+
+    def _open_plan_candle_dialog(self, plan_code):
+        """เปิดหน้าต่างกราฟแท่งเทียนสด และสลับไปยังแผนที่คลิกทันที"""
+        try:
+            dlg = getattr(self, "_candle_dialog", None)
+            if dlg is not None and dlg.winfo_exists():
+                dlg.lift()
+                dlg._select_plan(plan_code)
+                return
+        except Exception:
+            pass
+        self._candle_dialog = GoldCandleDialog(self, default_plan=plan_code)
+
+    def _plan_badge_tooltip(self, plan_code):
+        """ข้อความ Tooltip อธิบายเงื่อนไขการเข้าไม้ของแต่ละแผนเมื่อชี้เมาส์"""
+        status = getattr(self, "_last_card_plans_status", {}) or {}
+        pinfo = status.get(plan_code)
+        if not pinfo:
+            return f"แผน {plan_code}: รอการอัปเดตข้อมูลเงื่อนไขจาก MT5..."
+        m, tot, pct = pinfo["matched"], pinfo["total"], pinfo["pct"]
+        side = pinfo["side"]
+        side_icon = "▲ BUY" if side == "BUY" else "▼ SELL"
+        lines = [
+            f"⚡ {pinfo['label']} ({side_icon})",
+            f"สถานะ: เข้าเงื่อนไขแล้ว {m}/{tot} ข้อ ({pct}%)",
+            "─" * 32,
+        ]
+        for it in pinfo.get("items", []):
+            mark = "✓" if it.get("ok") else "✗"
+            lines.append(f"{mark} {it.get('name')}: {it.get('desc')}")
+        lines.append("─" * 32)
+        lines.append("💡 คลิกที่ป้ายนี้เพื่อเปิดดูกราฟแท่งเทียนสดของแผนนี้")
+        return "\n".join(lines)
+
     def _build_plans_card(self, parent):
         card = self._card(parent, fill="both", expand=True)
         head = ctk.CTkFrame(card, fg_color="transparent")
@@ -4855,21 +4897,24 @@ class MainTradingApp(ctk.CTk):
         table = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)
         table.pack(fill="x", padx=14, pady=(0, 6))
         table.grid_columnconfigure(0, weight=1)
-        for col, (title, anchor) in enumerate((("แผน", "w"), ("ไม้", "e"), ("WR", "e"), ("กำไร", "e"))):
+        table.grid_columnconfigure(1, weight=0)
+        for col, (title, anchor) in enumerate((("แผน", "w"), ("เงื่อนไข", "center"), ("ไม้", "e"), ("WR", "e"), ("กำไร", "e"))):
             ctk.CTkLabel(table, text=title, font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor, height=18).grid(
-                row=0, column=col, sticky="ew", padx=(12 if col == 0 else 4, 12 if col == 3 else 4), pady=(4, 0)
+                row=0, column=col, sticky="ew", padx=(12 if col == 0 else 4, 12 if col == 4 else 4), pady=(4, 0)
             )
 
         # plan_stat_badges: {ชื่อแผนเต็ม: (label ไม้, label WR, label กำไร)}
         self.plan_stat_badges = {}
         self.plan_checks = {}
         self.plan_live_badges = {}
-        self._plan_row_bg = {}   # สีพื้นแถว (สลับอ่อน/เข้ม) — ใช้คืนสีป้าย ● BUY/SELL ตอนไม่มีไม้
+        self._plan_row_bg = {}   # สีพื้นแถว (สลับอ่อน/เข้ม)
+        self._last_plan_live_sig = None
+        self._last_card_plans_status = None
 
         def stripe(row):
             """พื้นสลับสีทีละแถว: แถวคี่มีแถบเต็มแถวด้านหลัง (ช่องในแถวใช้สีเดียวกันให้ต่อเนื่อง)"""
             if row % 2 == 1:
-                ctk.CTkFrame(table, fg_color="#1A1F29", corner_radius=6, height=20).grid(row=row, column=0, columnspan=4, sticky="nsew", padx=6)
+                ctk.CTkFrame(table, fg_color="#1A1F29", corner_radius=6, height=20).grid(row=row, column=0, columnspan=5, sticky="nsew", padx=6)
                 return "#1A1F29"
             return "#101218"
 
@@ -4887,18 +4932,27 @@ class MainTradingApp(ctk.CTk):
             )
             chk.grid(row=r, column=0, sticky="w", padx=(10, 4), pady=pady)
             self.plan_checks[full] = (chk, var)
-            # ป้ายไม้ที่เปิดอยู่ของแผนนี้ (เช่น "● SELL") — อัปเดตทุก 2 วินาที
-            live = ctk.CTkLabel(table, text="", font=self._font(10, "bold"), text_color=COLOR_GOLD_PRIMARY, corner_radius=6, height=16,
-                                fg_color=bg, bg_color=bg)
-            live.grid(row=r, column=0, sticky="e", padx=(4, 0), pady=pady)
+
+            # ป้ายสถานะเงื่อนไขการเข้าไม้เรียลไทม์ / ไม้ที่เปิดอยู่ของแผนนี้ — อัปเดตทุก 2 วินาที
+            pcode = self.PLAN_CODE_MAP.get(full)
+            live = ctk.CTkLabel(
+                table, text="", font=self._font(10, "bold"), text_color=COLOR_GOLD_PRIMARY, corner_radius=6, height=18,
+                fg_color=bg, bg_color=bg, padx=6, cursor="hand2" if pcode else ""
+            )
+            live.grid(row=r, column=1, sticky="ew", padx=4, pady=pady)
+            if pcode:
+                live.bind("<Button-1>", lambda e, pk=pcode: self._open_plan_candle_dialog(pk))
+                HoverTip(live, lambda pk=pcode: self._plan_badge_tooltip(pk), delay=250)
             self.plan_live_badges[full] = live
+
             cells = []
-            for col in (1, 2, 3):
-                lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=17, width=40 if col < 3 else 64,
+            for col in (2, 3, 4):
+                lbl = ctk.CTkLabel(table, text="0" if col == 2 else ("—" if col == 3 else "0.00"), font=self._font(11), text_color=COLOR_TEXT_MUTED, anchor="e", height=17, width=36 if col < 4 else 58,
                                    fg_color=bg)
-                lbl.grid(row=r, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=pady)
+                lbl.grid(row=r, column=col, sticky="e", padx=(2, 12 if col == 4 else 2), pady=pady)
                 cells.append(lbl)
             self.plan_stat_badges[full] = tuple(cells)
+
         # แถวไม้ที่เข้าเอง (ปุ่ม BUY/SELL ในแผงควบคุม → comment "Manual-Quick") — ไม่มีช่องติ๊ก
         n = len(self.PLAN_ROWS) + 1
         mkey = bot_ctrl.QUICK_PLAN
@@ -4907,46 +4961,63 @@ class MainTradingApp(ctk.CTk):
         self.manual_plan_label = ctk.CTkLabel(table, text="✋  เข้าไม้เอง", font=self._font(11, "bold"), text_color=COLOR_TEXT_PRIMARY,
                                               anchor="w", height=18, fg_color=mbg)
         self.manual_plan_label.grid(row=n, column=0, sticky="w", padx=(31, 4), pady=(0, 2))
-        live = ctk.CTkLabel(table, text="", font=self._font(10, "bold"), text_color=COLOR_GOLD_PRIMARY, corner_radius=6, height=16,
-                            fg_color=mbg, bg_color=mbg)
-        live.grid(row=n, column=0, sticky="e", padx=(4, 0), pady=(0, 4))
+        live = ctk.CTkLabel(table, text="—", font=self._font(10), text_color="#64748B", corner_radius=6, height=18,
+                            fg_color=mbg, bg_color=mbg, padx=6)
+        live.grid(row=n, column=1, sticky="ew", padx=4, pady=(0, 4))
         self.plan_live_badges[mkey] = live
         cells = []
-        for col in (1, 2, 3):
-            lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11),
-                               text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64, fg_color=mbg)
-            lbl.grid(row=n, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=(0, 4))
+        for col in (2, 3, 4):
+            lbl = ctk.CTkLabel(table, text="0" if col == 2 else ("—" if col == 3 else "0.00"), font=self._font(11),
+                               text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=36 if col < 4 else 58, fg_color=mbg)
+            lbl.grid(row=n, column=col, sticky="e", padx=(2, 12 if col == 4 else 2), pady=(0, 4))
             cells.append(lbl)
         self.plan_stat_badges[mkey] = tuple(cells)
+
         # แถวผลรวมทุกแผน (รวมไม้ที่เข้าเอง)
-        ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=n + 1, column=0, columnspan=4, sticky="ew", padx=10, pady=(1, 1))
+        ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).grid(row=n + 1, column=0, columnspan=5, sticky="ew", padx=10, pady=(1, 1))
         ctk.CTkLabel(table, text="รวมทุกแผน", font=self._font(11, "bold"), text_color=COLOR_GOLD_PRIMARY, anchor="w", height=18).grid(
-            row=n + 2, column=0, sticky="ew", padx=(12, 4), pady=(0, 3))
+            row=n + 2, column=0, columnspan=2, sticky="ew", padx=(12, 4), pady=(0, 3))
         self.plan_total_labels = []
-        for col in (1, 2, 3):
-            lbl = ctk.CTkLabel(table, text="0" if col == 1 else ("—" if col == 2 else "0.00"), font=self._font(11, "bold"),
-                               text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=40 if col < 3 else 64)
-            lbl.grid(row=n + 2, column=col, sticky="e", padx=(4, 12 if col == 3 else 4), pady=(0, 3))
+        for col in (2, 3, 4):
+            lbl = ctk.CTkLabel(table, text="0" if col == 2 else ("—" if col == 3 else "0.00"), font=self._font(11, "bold"),
+                               text_color=COLOR_TEXT_MUTED, anchor="e", height=18, width=36 if col < 4 else 58)
+            lbl.grid(row=n + 2, column=col, sticky="e", padx=(2, 12 if col == 4 else 2), pady=(0, 3))
             self.plan_total_labels.append(lbl)
         self.after(300, self._plan_checks_tick)
         self.after(1000, self._plan_live_tick)
 
     def _plan_live_tick(self):
-        """แสดงป้าย ● BUY / ● SELL ที่แผนที่มีไม้เปิดอยู่ตอนนี้"""
+        """แสดงป้ายสถานะเงื่อนไขการเข้าไม้เรียลไทม์ และป้าย ● BUY / ● SELL ที่แผนที่มีไม้เปิดอยู่ตอนนี้"""
         try:
             import MetaTrader5 as _mt5
             open_by_plan = {}
             for p in _mt5.positions_get(symbol="XAUUSD") or []:
                 base = plan_config.base_plan(p.comment)
                 open_by_plan.setdefault(base, []).append(("BUY" if p.type == 0 else "SELL", float(p.profit)))
+
+            # ดึงสถานะเงื่อนไขการเข้าไม้เรียลไทม์ครบทั้ง 6 แผน
+            plans_status = bot_ctrl.get_plans_condition_status("XAUUSD") or {}
+            self._last_card_plans_status = plans_status
+
+            sig = (
+                tuple((k, tuple(v)) for k, v in sorted(open_by_plan.items())),
+                tuple((pk, (plans_status.get(pk) or {}).get("matched"), (plans_status.get(pk) or {}).get("total"), (plans_status.get(pk) or {}).get("side")) for pk in ("P1", "P2", "P3", "P4", "P5", "P6"))
+            )
+            if sig == getattr(self, "_last_plan_live_sig", None):
+                self.after(2000, self._plan_live_tick)
+                return
+            self._last_plan_live_sig = sig
+
             for full, lbl in self.plan_live_badges.items():
                 items = open_by_plan.get(full.split(": ", 1)[-1], [])
                 if full in self.plan_checks:
                     chk, var = self.plan_checks[full]
                     if plan_config.admin_enabled(full.split(": ", 1)[-1]):
-                        chk.configure(text_color=COLOR_SUCCESS_GREEN if items else (COLOR_TEXT_PRIMARY if var.get() else COLOR_TEXT_MUTED))
+                        is_user_on = var.get() if var is not None else True
+                        chk.configure(text_color=COLOR_SUCCESS_GREEN if items else (COLOR_TEXT_PRIMARY if is_user_on else COLOR_TEXT_MUTED))
                 elif getattr(self, "manual_plan_label", None) is not None:   # แถวเข้าไม้เอง
                     self.manual_plan_label.configure(text_color=COLOR_SUCCESS_GREEN if items else COLOR_TEXT_PRIMARY)
+
                 if items:
                     side = items[0][0] if len({i[0] for i in items}) == 1 else "BUY/SELL"
                     prof = sum(i[1] for i in items)
@@ -4954,25 +5025,19 @@ class MainTradingApp(ctk.CTk):
                                   fg_color="#0F2A20" if side == "BUY" else "#2A1215" if side == "SELL" else COLOR_GOLD_BG,
                                   text_color=COLOR_SUCCESS_GREEN if prof >= 0 else COLOR_DANGER_RED)
                 else:
-                    plan_code = None
-                    if "Plan 1" in full: plan_code = "P1"
-                    elif "Plan 2" in full: plan_code = "P2"
-                    elif "Plan 3" in full: plan_code = "P3"
-                    elif "Plan 4" in full: plan_code = "P4"
-                    elif "Plan 5" in full: plan_code = "P5"
-                    elif "Plan 6" in full: plan_code = "P6"
+                    plan_code = self.PLAN_CODE_MAP.get(full)
                     pinfo = plans_status.get(plan_code) if plan_code else None
                     if pinfo:
-                        m, tot = pinfo["matched"], pinfo["total"]
+                        m, tot, pct = pinfo["matched"], pinfo["total"], pinfo["pct"]
                         side_s = "▲" if pinfo["side"] == "BUY" else "▼"
                         if m == tot and tot > 0:
-                            lbl.configure(text=f" ★ {side_s} {m}/{tot} ", fg_color="#064E3B", text_color=COLOR_SUCCESS_GREEN)
-                        elif pinfo["pct"] >= 50:
-                            lbl.configure(text=f" {side_s} {m}/{tot} ข้อ ", fg_color=getattr(self, "_plan_row_bg", {}).get(full, "transparent"), text_color=COLOR_GOLD_PRIMARY)
+                            lbl.configure(text=f"★ {side_s} {m}/{tot} (ครบ)", fg_color="#064E3B", text_color=COLOR_SUCCESS_GREEN)
+                        elif pct >= 50:
+                            lbl.configure(text=f"{side_s} {m}/{tot} ({pct}%)", fg_color="#231F10", text_color=COLOR_GOLD_PRIMARY)
                         else:
-                            lbl.configure(text=f" {side_s} {m}/{tot} ข้อ ", fg_color=getattr(self, "_plan_row_bg", {}).get(full, "transparent"), text_color=COLOR_TEXT_MUTED)
+                            lbl.configure(text=f"{side_s} {m}/{tot}", fg_color="#141722", text_color="#94A3B8")
                     else:
-                        lbl.configure(text="", fg_color=getattr(self, "_plan_row_bg", {}).get(full, "transparent"))
+                        lbl.configure(text="—" if full == bot_ctrl.QUICK_PLAN else "", fg_color=getattr(self, "_plan_row_bg", {}).get(full, "transparent"), text_color=COLOR_TEXT_MUTED)
         except Exception:
             pass
         self.after(2000, self._plan_live_tick)
