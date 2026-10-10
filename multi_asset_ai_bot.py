@@ -848,10 +848,14 @@ def touches_to_stars(touches: int, is_extreme: bool = False) -> float:
 
 
 def stars_to_text(stars: float) -> str:
-    """แปลงคะแนนดาวเป็นสตริงแสดงผล เช่น 2.5 -> '★★½', 3.0 -> '★★★'"""
-    full = int(stars)
-    has_half = (stars - full) >= 0.5
-    return ("★" * full) + ("½" if has_half else "")
+    """แปลงคะแนนดาวความแข็งแกร่งเป็นตัวเลขแสดงผล เช่น 2.5 -> '★ 2.5', 3.0 -> '★ 3.0'"""
+    if not stars or stars <= 0:
+        return ""
+    try:
+        val = float(stars)
+        return f"★ {val:.1f}" if val > 0 else ""
+    except Exception:
+        return ""
 
 
 def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):

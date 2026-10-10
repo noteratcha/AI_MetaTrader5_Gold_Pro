@@ -4171,12 +4171,14 @@ class MainTradingApp(ctk.CTk):
 
     @staticmethod
     def _format_sr_stars(stars: float) -> str:
-        """แปลงคะแนนดาวเป็นสตริงแสดงผล เช่น 2.5 -> '★★½', 3.0 -> '★★★'"""
+        """แปลงคะแนนดาวความแข็งแกร่งเป็นตัวเลขแสดงผล เช่น 2.5 -> '★ 2.5', 3.0 -> '★ 3.0'"""
         if not stars or stars <= 0:
             return ""
-        full = int(stars)
-        has_half = (stars - full) >= 0.5
-        return ("★" * full) + ("½" if has_half else "")
+        try:
+            val = float(stars)
+            return f"★ {val:.1f}" if val > 0 else ""
+        except Exception:
+            return ""
 
     def _create_sr_row(self, parent, tf, col=0):
         """คอลัมน์ต่อ Timeframe (H1 ซ้าย · H4 ขวา): ▲ ต้าน / บาร์ระยะห่าง / ▼ รับ
