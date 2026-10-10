@@ -1328,10 +1328,11 @@ class GoldCandleDialog(ctk.CTkToplevel):
                                     corner_radius=8, height=26)
         self.lbl_pnl.pack(side="right", padx=(8, 4))
 
-        ctk.CTkSegmentedButton(right_grp, values=list(self.BAR_CHOICES), variable=self.bars_var,
-                               font=ctk.CTkFont(family=app_fonts.UI, size=11), height=26,
-                               selected_color=COLOR_GOLD_WARM, selected_hover_color=COLOR_GOLD_DARK,
-                               command=lambda v: self._tick(reschedule=False)).pack(side="right", padx=(4, 0))
+        self.seg_bars = ctk.CTkSegmentedButton(right_grp, values=list(self.BAR_CHOICES), variable=self.bars_var,
+                                               font=ctk.CTkFont(family=app_fonts.UI, size=11), height=26,
+                                               selected_color=COLOR_GOLD_WARM, selected_hover_color=COLOR_GOLD_DARK,
+                                               command=self._on_bars_change)
+        self.seg_bars.pack(side="right", padx=(4, 0))
         ctk.CTkLabel(right_grp, text="แท่ง:", font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=COLOR_TEXT_MUTED).pack(side="right")
 
         # --- แถวสอง: แถบเลือกตามแผน (Plan Selector Bar) ---
@@ -1819,6 +1820,10 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self._rebuild_legend_chips()
         self._tick(reschedule=False)
 
+    def _on_bars_change(self, new_bars):
+        self.bars_var.set(str(new_bars))
+        self._tick(reschedule=False)
+
     def _rebuild_legend_chips(self):
         for w in self.legend_box.winfo_children():
             w.destroy()
@@ -1949,6 +1954,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         focus_res_price = self.data.get("focus_res_price") or self.data.get("resistance") or 0.0
         focus_sup_price = self.data.get("focus_sup_price") or self.data.get("support") or 0.0
         focus_res_score = self.data.get("focus_res_score") or float(self.data.get("res_stars", 6.0) or 6.0)
+        focus_sup_score = self.data.get("focus_sup_score") or float(self.data.get("sup_stars", 6.0) or 6.0)
         action = self.data.get("focus_action") or ""
 
         sig = (focus_res, focus_res_price, focus_res_score, focus_sup, focus_sup_price, focus_sup_score, action)
