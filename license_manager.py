@@ -438,23 +438,55 @@ def _version_tuple(v: str) -> tuple:
 
 def fetch_app_version_info(current_version: str) -> dict:
     """
-    ตรวจสอบเวอร์ชันล่าสุด: GoldBot24 API (/api/release ← GitHub Releases) แล้ว fallback ตาราง app_releases
+    ตรวจสอบเวอร์ชันล่าสุด: GitHub Releases โดยตรง (Realtime ไม่ติดแคช) -> GoldBot24 API (/api/release) -> Supabase app_releases
     """
     latest = None
+    # 1. ลองดึงจาก GitHub Releases โดยตรง เพื่อให้ได้เวอร์ชันล่าสุดทันที
     try:
-        req = urllib.request.Request(f"{API_BASE_URL.rstrip('/')}/api/release", headers={"User-Agent": "GoldBot24-Desktop"})
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            latest = (json.loads(resp.read().decode("utf-8")) or {}).get("release")
+        gh_req = urllib.request.Request(
+            "https://api.github.com/repos/noteratcha/AI_MetaTrader5_Gold_Pro/releases/latest",
+            headers={"User-Agent": "GoldBot24-Desktop", "Accept": "application/vnd.github+json"}
+        )
+        with urllib.request.urlopen(gh_req, timeout=4) as resp:
+            gh_d = json.loads(resp.read().decode("utf-8"))
+            if gh_d and gh_d.get("tag_name"):
+                v = str(gh_d["tag_name"]).lstrip("v")
+                assets = gh_d.get("assets", [])
+                zip_asset = next((a for a in assets if str(a.get("name", "")).endswith(".zip")), None)
+                exe_asset = next((a for a in assets if "setup" in str(a.get("name", "")).lower() and str(a.get("name", "")).endswith(".exe")), None) or zip_asset or (assets[0] if assets else None)
+                if exe_asset:
+                    latest = {
+                        "version": v,
+                        "download_url": exe_asset.get("browser_download_url"),
+                        "file_name": exe_asset.get("name"),
+                        "size_bytes": exe_asset.get("size", 0),
+                        "is_installer": str(exe_asset.get("name", "")).endswith(".exe"),
+                        "zip_url": zip_asset.get("browser_download_url") if zip_asset else None,
+                        "changelog": gh_d.get("body", ""),
+                    }
     except Exception:
         latest = None
 
+    # 2. สำรอง: GoldBot24 API (/api/release)
     if not latest or not latest.get("version"):
-        url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/app_releases?select=version,download_url,changelog,mandatory&order=released_at.desc&limit=1"
-        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-        req = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            rows = json.loads(resp.read().decode("utf-8"))
-        latest = rows[0] if rows else None
+        try:
+            req = urllib.request.Request(f"{API_BASE_URL.rstrip('/')}/api/release", headers={"User-Agent": "GoldBot24-Desktop"})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                latest = (json.loads(resp.read().decode("utf-8")) or {}).get("release")
+        except Exception:
+            latest = None
+
+    # 3. สำรอง: Supabase app_releases
+    if not latest or not latest.get("version"):
+        try:
+            url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/app_releases?select=version,download_url,changelog,mandatory&order=released_at.desc&limit=1"
+            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+            req = urllib.request.Request(url, headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                rows = json.loads(resp.read().decode("utf-8"))
+            latest = rows[0] if rows else None
+        except Exception:
+            latest = None
 
     if not latest:
         return {"has_update": False, "latest_version": current_version}
