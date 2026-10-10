@@ -2676,17 +2676,44 @@ class PositionDetailDialog(ctk.CTkToplevel):
 
 
 class PnlHistoryDialog(ctk.CTkToplevel):
-    """กราฟแท่งกำไร/ขาดทุนสุทธิรายวันของพอร์ต (ดึงจาก MT5) พร้อมเลือกช่วงวันที่"""
+    """กราฟแท่งกำไร/ขาดทุนสุทธิรายวัน และกราฟวงกลมวิเคราะห์ความสำเร็จรายแผน (ดึงจาก MT5)"""
 
     PRESETS = (("7 วัน", 7), ("14 วัน", 14), ("30 วัน", 30), ("เดือนนี้", "month"), ("90 วัน", 90))
     TH_MONTHS = ("ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.")
+
+    PLAN_META = {
+        "MA-Cross-Trend": {"label": "Plan 1 (MA M15)", "icon": "📈", "color": "#06B6D4"},
+        "MA-Cross-H1-Trend": {"label": "Plan 2 (MA H1)", "icon": "👑", "color": "#8B5CF6"},
+        "SMC-LiquidityHunt": {"label": "Plan 3 (SMC Hunt)", "icon": "⚡", "color": "#F59E0B"},
+        "SR-SwingBounce": {"label": "Plan 4 (SR Bounce)", "icon": "🎯", "color": "#10B981"},
+        "BB-H1-Reversion": {"label": "Plan 5 (BB Reversion)", "icon": "🌊", "color": "#3B82F6"},
+        "PSAR-H1-Trend": {"label": "Plan 6 (PSAR H1)", "icon": "◆", "color": "#EC4899"},
+        "เข้าเอง": {"label": "เข้าเอง (Manual)", "icon": "✋", "color": "#F97316"},
+        "Manual-Quick": {"label": "เข้าเอง (Manual)", "icon": "✋", "color": "#F97316"},
+    }
+
+    @classmethod
+    def _plan_info(cls, p_name: str) -> dict:
+        if p_name in cls.PLAN_META:
+            return cls.PLAN_META[p_name]
+        if "Bounce" in p_name:
+            return {"label": p_name, "icon": "🎯", "color": "#10B981"}
+        if "Breakout" in p_name or "Trend" in p_name:
+            return {"label": p_name, "icon": "📈", "color": "#06B6D4"}
+        if "SMC" in p_name:
+            return {"label": p_name, "icon": "⚡", "color": "#F59E0B"}
+        if "BB" in p_name:
+            return {"label": p_name, "icon": "🌊", "color": "#3B82F6"}
+        if "PSAR" in p_name or "SAR" in p_name:
+            return {"label": p_name, "icon": "◆", "color": "#EC4899"}
+        return {"label": p_name, "icon": "🏷️", "color": "#64748B"}
 
     def __init__(self, parent):
         super().__init__(parent)
         from datetime import date, timedelta
         self._date, self._td = date, timedelta
-        self.title("ประวัติกำไร / ขาดทุนรายวัน")
-        w, h = 900, 560
+        self.title("ประวัติกำไร / ขาดทุนรายวัน และสถิติความสำเร็จรายแผน")
+        w, h = 980, 640
         self.configure(fg_color=COLOR_BG_DARK)
         # ไม่ใช้ transient เพื่อให้มีปุ่มขยายเต็มจอ/ย่อ บนแถบหัวหน้าต่าง
         self.after(10, self.lift)
@@ -2694,9 +2721,14 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
-        self.minsize(720, 460)
+        self.minsize(800, 520)
         apply_dark_title_bar(self)
         self.rows, self.bars, self.weekly = [], [], False
+        self.daily = []
+        self.plans_stats = {"overall": {}, "plans": {}}
+        self.overall_plans_dict = {}
+        self.cur_hover_idx = None
+        self.view_mode = "bar"  # "bar" | "pie"
         self._build()
         self.after(50, lambda: self._apply_preset(14))
 
@@ -2707,8 +2739,8 @@ class PnlHistoryDialog(ctk.CTkToplevel):
     def _build(self):
         top = ctk.CTkFrame(self, fg_color="transparent")
         top.pack(fill="x", padx=20, pady=(16, 6))
-        ctk.CTkLabel(top, text="ประวัติกำไร / ขาดทุนรายวัน", font=self._f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(side="left")
-        ctk.CTkLabel(top, text="ทั้งบัญชี MT5 · รวม commission/swap · เวลาไทย", font=self._f(11), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=12)
+        ctk.CTkLabel(top, text="ประวัติกำไร / ขาดทุน และสถิติความสำเร็จรายแผน", font=self._f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(side="left")
+        ctk.CTkLabel(top, text="ทั้งบัญชี MT5 · รวม commission/swap · เวลาไทย · แยกตามแผนการเทรด", font=self._f(11), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=12)
 
         bar = ctk.CTkFrame(self, fg_color="transparent")
         bar.pack(fill="x", padx=20, pady=(0, 8))
@@ -2720,13 +2752,29 @@ class PnlHistoryDialog(ctk.CTkToplevel):
             b.pack(side="left", padx=(0, 6))
             self.preset_btns[key] = b
         ctk.CTkLabel(bar, text="จาก", font=self._f(12), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(14, 4))
-        self.ent_from = ctk.CTkEntry(bar, width=100, height=28, font=self._f(12), placeholder_text="YYYY-MM-DD")
+        self.ent_from = ctk.CTkEntry(bar, width=96, height=28, font=self._f(12), placeholder_text="YYYY-MM-DD")
         self.ent_from.pack(side="left")
         ctk.CTkLabel(bar, text="ถึง", font=self._f(12), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=6)
-        self.ent_to = ctk.CTkEntry(bar, width=100, height=28, font=self._f(12), placeholder_text="YYYY-MM-DD")
+        self.ent_to = ctk.CTkEntry(bar, width=96, height=28, font=self._f(12), placeholder_text="YYYY-MM-DD")
         self.ent_to.pack(side="left")
-        ctk.CTkButton(bar, text="แสดง", width=60, height=28, font=self._f(12, "bold"), fg_color=COLOR_GOLD_PRIMARY,
+        ctk.CTkButton(bar, text="แสดง", width=56, height=28, font=self._f(12, "bold"), fg_color=COLOR_GOLD_PRIMARY,
                       text_color="#111111", hover_color=COLOR_GOLD_WARM, command=self._apply_custom).pack(side="left", padx=8)
+
+        # สลับมุมมอง: กราฟแท่งรายวัน vs กราฟวงกลมความสำเร็จ
+        view_box = ctk.CTkFrame(bar, fg_color=COLOR_CARD_BG, corner_radius=8, border_width=1, border_color=COLOR_CARD_BORDER)
+        view_box.pack(side="right")
+        self.btn_view_bar = ctk.CTkButton(
+            view_box, text="📊 กราฟแท่งรายวัน", width=110, height=26, font=self._f(11, "bold"),
+            fg_color=COLOR_GOLD_PRIMARY, text_color="#111111", hover_color=COLOR_GOLD_WARM, corner_radius=6,
+            command=lambda: self._set_view_mode("bar")
+        )
+        self.btn_view_bar.pack(side="left", padx=2, pady=2)
+        self.btn_view_pie = ctk.CTkButton(
+            view_box, text="🍩 กราฟวงกลมความสำเร็จ", width=140, height=26, font=self._f(11),
+            fg_color="transparent", text_color=COLOR_TEXT_MUTED, hover_color=COLOR_CARD_HOVER, corner_radius=6,
+            command=lambda: self._set_view_mode("pie")
+        )
+        self.btn_view_pie.pack(side="left", padx=2, pady=2)
 
         self.summary = ctk.CTkFrame(self, fg_color="transparent")
         self.summary.pack(fill="x", padx=20, pady=(0, 8))
@@ -2735,12 +2783,13 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         for i, title in enumerate(("กำไรสุทธิช่วงนี้", "วันกำไร / ขาดทุน", "วันที่ดีที่สุด", "วันที่แย่ที่สุด")):
             c = ctk.CTkFrame(self.summary, fg_color=COLOR_CARD_BG, corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
             c.grid(row=0, column=i, padx=4, sticky="nsew")
-            ctk.CTkLabel(c, text=title, font=self._f(11), text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=12, pady=(8, 0))
+            lbl_title = ctk.CTkLabel(c, text=title, font=self._f(11), text_color=COLOR_TEXT_MUTED)
+            lbl_title.pack(anchor="w", padx=12, pady=(8, 0))
             v = ctk.CTkLabel(c, text="—", font=self._f(17, "bold"), text_color=COLOR_TEXT_PRIMARY)
             v.pack(anchor="w", padx=12)
             s = ctk.CTkLabel(c, text="", font=self._f(10), text_color=COLOR_TEXT_MUTED)
             s.pack(anchor="w", padx=12, pady=(0, 8))
-            self.sum_lbls.append((v, s))
+            self.sum_lbls.append((lbl_title, v, s))
 
         box = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
         box.pack(fill="both", expand=True, padx=20, pady=(0, 6))
@@ -2748,10 +2797,18 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         self.canvas.pack(fill="both", expand=True, padx=8, pady=8)
         self.canvas.bind("<Configure>", lambda e: self._draw())
         self.canvas.bind("<Motion>", self._hover)
-        self.canvas.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default, text_color=COLOR_TEXT_MUTED))
-        self.tip_default = "ชี้ที่แท่งเพื่อดูรายละเอียด"
-        self.lbl_tip = ctk.CTkLabel(self, text=self.tip_default, font=self._f(12), text_color=COLOR_TEXT_MUTED)
-        self.lbl_tip.pack(pady=(0, 10))
+        self.canvas.bind("<Leave>", self._leave)
+
+        # แถบด้านล่าง: สรุปข้อมูล และ Badges แผนการเทรดในแท่ง
+        bot_frame = ctk.CTkFrame(self, fg_color="transparent")
+        bot_frame.pack(fill="x", padx=20, pady=(0, 8))
+
+        self.tip_default = "ชี้ที่แท่งเพื่อดูแผนการเทรดและจำนวนเหรียญในแท่งนั้น"
+        self.lbl_tip = ctk.CTkLabel(bot_frame, text=self.tip_default, font=self._f(12, "bold"), text_color=COLOR_TEXT_MUTED)
+        self.lbl_tip.pack(anchor="center", pady=(0, 3))
+
+        self.pills_container = ctk.CTkFrame(bot_frame, fg_color="transparent")
+        self.pills_container.pack(anchor="center")
 
     @staticmethod
     def _money(v, dp=2):
@@ -2762,6 +2819,22 @@ class PnlHistoryDialog(ctk.CTkToplevel):
 
     def _fmt_date(self, d, year=False):
         return f"{d.day} {self.TH_MONTHS[d.month - 1]}" + (f" {d.year + 543}" if year else "")
+
+    def _set_view_mode(self, mode):
+        self.view_mode = mode
+        if mode == "bar":
+            self.btn_view_bar.configure(fg_color=COLOR_GOLD_PRIMARY, text_color="#111111", font=self._f(11, "bold"))
+            self.btn_view_pie.configure(fg_color="transparent", text_color=COLOR_TEXT_MUTED, font=self._f(11))
+            self.pills_container.pack(anchor="center")
+            self._render_plan_pills(self.overall_plans_dict, title="ภาพรวมรายแผนทั้งช่วง:")
+        else:
+            self.btn_view_pie.configure(fg_color=COLOR_GOLD_PRIMARY, text_color="#111111", font=self._f(11, "bold"))
+            self.btn_view_bar.configure(fg_color="transparent", text_color=COLOR_TEXT_MUTED, font=self._f(11))
+            self.lbl_tip.configure(text="🍩 กราฟวงกลมความสำเร็จภาพรวม และสถิติวิเคราะห์รายแผนการเทรด", text_color=COLOR_GOLD_PRIMARY)
+            self._render_plan_pills({}, title=None)
+
+        self._summary(self.daily, self.plans_stats)
+        self._draw()
 
     def _apply_preset(self, key):
         today = self._date.today()
@@ -2794,43 +2867,136 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         self.lbl_tip.configure(text="กำลังโหลดข้อมูลจาก MT5...", text_color=COLOR_TEXT_MUTED)
         self.update_idletasks()
         daily = bot_ctrl.get_daily_pnl(start, end)
+        stats = bot_ctrl.get_plans_summary_stats(start, end)
+        self.daily = daily
+        self.plans_stats = stats
+
+        # รวมรายแผนทั้งช่วง
+        overall_plans = {}
+        for r in daily:
+            for p_name, p_stat in r.get("plans", {}).items():
+                op = overall_plans.setdefault(p_name, {"profit": 0.0, "closed": 0, "wins": 0, "losses": 0})
+                op["profit"] += p_stat.get("profit", 0.0)
+                op["closed"] += p_stat.get("closed", 0)
+                op["wins"] += p_stat.get("wins", 0)
+                op["losses"] += p_stat.get("losses", 0)
+        self.overall_plans_dict = overall_plans
+
         # ช่วงยาวเกิน 62 วัน → รวมเป็นรายสัปดาห์ให้แท่งอ่านง่าย
         if len(daily) > 62:
             weeks = {}
             for r in daily:
                 k = r["date"] - self._td(days=r["date"].weekday())
-                w = weeks.setdefault(k, {"date": k, "end": k + self._td(days=6), "profit": 0.0, "closed": 0})
+                w = weeks.setdefault(k, {"date": k, "end": k + self._td(days=6), "profit": 0.0, "closed": 0, "plans": {}})
                 w["profit"] += r["profit"]
                 w["closed"] += r["closed"]
+                for p_name, p_stat in r.get("plans", {}).items():
+                    wp = w["plans"].setdefault(p_name, {"profit": 0.0, "closed": 0, "wins": 0, "losses": 0})
+                    wp["profit"] += p_stat.get("profit", 0.0)
+                    wp["closed"] += p_stat.get("closed", 0)
+                    wp["wins"] += p_stat.get("wins", 0)
+                    wp["losses"] += p_stat.get("losses", 0)
             self.rows, self.weekly = list(weeks.values()), True
         else:
             self.rows, self.weekly = daily, False
+
         self.tip_default = (f"{self._fmt_date(start, True)} – {self._fmt_date(end, True)} · "
-                            + ("รวมรายสัปดาห์" if self.weekly else "รายวัน") + " · ชี้ที่แท่งเพื่อดูรายละเอียด")
-        self.lbl_tip.configure(text=self.tip_default, text_color=COLOR_TEXT_MUTED)
-        self._summary(daily)
+                            + ("รวมรายสัปดาห์" if self.weekly else "รายวัน") + " · ชี้ที่แท่งเพื่อดูแผนและจำนวนเหรียญ")
+        if self.view_mode == "bar":
+            self.lbl_tip.configure(text=self.tip_default, text_color=COLOR_TEXT_MUTED)
+            self._render_plan_pills(self.overall_plans_dict, title="ภาพรวมรายแผนทั้งช่วง:")
+        self._summary(daily, stats)
         self._draw()
 
-    def _summary(self, daily):
+    def _summary(self, daily, stats):
         total = sum(r["profit"] for r in daily)
         pos = [r for r in daily if r["profit"] > 0.005]
         neg = [r for r in daily if r["profit"] < -0.005]
         best = max(daily, key=lambda r: r["profit"], default=None)
         worst = min(daily, key=lambda r: r["profit"], default=None)
-        (v0, s0), (v1, s1), (v2, s2), (v3, s3) = self.sum_lbls
+        (c0, v0, s0), (c1, v1, s1), (c2, v2, s2), (c3, v3, s3) = self.sum_lbls
+
+        c0.configure(text="กำไรสุทธิช่วงนี้")
         v0.configure(text=self._money(total), text_color=COLOR_SUCCESS_GREEN if total >= 0 else COLOR_DANGER_RED)
         s0.configure(text=f"ปิดไม้ {sum(r['closed'] for r in daily)} ไม้")
-        v1.configure(text=f"{len(pos)} / {len(neg)} วัน", text_color=COLOR_TEXT_PRIMARY)
-        s1.configure(text=f"ไม่มีกำไร/ขาดทุน {len(daily) - len(pos) - len(neg)} วัน")
-        for v, s, r, good in ((v2, s2, best, True), (v3, s3, worst, False)):
-            if r and ((good and r["profit"] > 0.005) or (not good and r["profit"] < -0.005)):
-                v.configure(text=self._money(r["profit"]), text_color=COLOR_SUCCESS_GREEN if good else COLOR_DANGER_RED)
-                s.configure(text=self._fmt_date(r["date"], True))
+
+        if self.view_mode == "bar":
+            c1.configure(text="วันกำไร / ขาดทุน")
+            v1.configure(text=f"{len(pos)} / {len(neg)} วัน", text_color=COLOR_TEXT_PRIMARY)
+            s1.configure(text=f"ไม่มีกำไร/ขาดทุน {len(daily) - len(pos) - len(neg)} วัน")
+
+            c2.configure(text="วันที่ดีที่สุด")
+            if best and best["profit"] > 0.005:
+                v2.configure(text=self._money(best["profit"]), text_color=COLOR_SUCCESS_GREEN)
+                s2.configure(text=self._fmt_date(best["date"], True))
             else:
-                v.configure(text="—", text_color=COLOR_TEXT_MUTED)
-                s.configure(text="")
+                v2.configure(text="—", text_color=COLOR_TEXT_MUTED)
+                s2.configure(text="")
+
+            c3.configure(text="วันที่แย่ที่สุด")
+            if worst and worst["profit"] < -0.005:
+                v3.configure(text=self._money(worst["profit"]), text_color=COLOR_DANGER_RED)
+                s3.configure(text=self._fmt_date(worst["date"], True))
+            else:
+                v3.configure(text="—", text_color=COLOR_TEXT_MUTED)
+                s3.configure(text="")
+        else:
+            ov = stats.get("overall", {})
+            c1.configure(text="Win Rate รวม")
+            v1.configure(text=f"{ov.get('win_rate', 0.0):.1f}%", text_color=COLOR_GOLD_PRIMARY)
+            s1.configure(text=f"ชนะ {ov.get('wins', 0)} / แพ้ {ov.get('losses', 0)} ไม้")
+
+            c2.configure(text="Profit Factor (PF)")
+            pf = ov.get("profit_factor", 0.0)
+            v2.configure(text=f"{pf:.2f}", text_color=COLOR_SUCCESS_GREEN if pf >= 1.0 else COLOR_DANGER_RED)
+            s2.configure(text=f"กำไร +{ov.get('gross_profit', 0):.2f} / ขาดทุน -{ov.get('gross_loss', 0):.2f}")
+
+            c3.configure(text="แผนยอดกำไรสูงสุด")
+            plans = stats.get("plans", {})
+            best_plan = max(plans.items(), key=lambda x: x[1].get("profit", 0.0), default=(None, {}))
+            if best_plan[0] and best_plan[1].get("profit", 0.0) > 0.005:
+                bp_info = self._plan_info(best_plan[0])
+                v3.configure(text=f"{self._money(best_plan[1]['profit'])} $", text_color=COLOR_SUCCESS_GREEN)
+                s3.configure(text=f"{bp_info['icon']} {bp_info['label']}")
+            else:
+                v3.configure(text="—", text_color=COLOR_TEXT_MUTED)
+                s3.configure(text="")
+
+    def _render_plan_pills(self, plans_dict, title=None):
+        for w in self.pills_container.winfo_children():
+            w.destroy()
+        if not plans_dict:
+            return
+        if title:
+            ctk.CTkLabel(self.pills_container, text=title, font=self._f(10, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(0, 6))
+
+        # เรียงตามกำไรสุทธิสูงสุดก่อน
+        sorted_plans = sorted(plans_dict.items(), key=lambda x: x[1].get("profit", 0.0), reverse=True)
+        for p_name, p_stat in sorted_plans[:6]:
+            p = p_stat.get("profit", 0.0)
+            closed = p_stat.get("closed", 0)
+            wins = p_stat.get("wins", 0)
+            info = self._plan_info(p_name)
+
+            pill = ctk.CTkFrame(self.pills_container, fg_color="#181C26", corner_radius=6, border_width=1, border_color="#242B38")
+            pill.pack(side="left", padx=3, pady=2)
+
+            p_color = COLOR_SUCCESS_GREEN if p > 0.005 else (COLOR_DANGER_RED if p < -0.005 else COLOR_TEXT_MUTED)
+            txt = f"{info['icon']} {info['label']}: {self._money(p)} $"
+            if closed > 0:
+                txt += f" ({wins}/{closed} ชนะ)"
+            lbl = ctk.CTkLabel(pill, text=txt, font=self._f(10, "bold"), text_color=p_color)
+            lbl.pack(padx=8, pady=2)
 
     def _draw(self):
+        cv = self.canvas
+        cv.delete("all")
+        if self.view_mode == "bar":
+            self._draw_bar_chart()
+        else:
+            self._draw_pie_charts()
+
+    def _draw_bar_chart(self):
         cv = self.canvas
         cv.delete("all")
         self.bars = []
@@ -2863,34 +3029,182 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         y0 = y_of(0)
         cv.create_line(left, y0, W - right, y0, fill="#4B5263")
         n = len(self.rows)
-        slot = (W - left - right - 24) / n   # เว้น 24px ระหว่างแท่งสุดท้ายกับแถบราคา (ผู้ใช้ขอ 8 ต.ค. 2026)
+        slot = (W - left - right - 24) / n
         bw = max(2, min(38, slot * 0.68))
         label_every = max(1, int(round(n / max(1, (W - left - right) / 58))))
+
         for i, r in enumerate(self.rows):
             cx = left + slot * (i + 0.5)
             v = r["profit"]
             y = y_of(v)
+            is_hovered = (i == self.cur_hover_idx)
             color = COLOR_SUCCESS_GREEN if v > 0 else COLOR_DANGER_RED
+
             if abs(v) < 0.005:
-                cv.create_line(cx - bw / 2, y0, cx + bw / 2, y0, fill="#3A4050", width=2)
+                cv.create_line(cx - bw / 2, y0, cx + bw / 2, y0, fill="#FFFFFF" if is_hovered else "#3A4050", width=3 if is_hovered else 2)
             else:
-                cv.create_rectangle(cx - bw / 2, min(y, y0), cx + bw / 2, max(y, y0), fill=color, outline="")
-                if slot >= 34:
-                    cv.create_text(cx, y - 9 if v > 0 else y + 9, text=self._money(v), fill=color, font=(app_fonts.UI, 8, "bold"))
+                rect_outline = "#FFFFFF" if is_hovered else ""
+                rect_width = 2 if is_hovered else 0
+                cv.create_rectangle(cx - bw / 2, min(y, y0), cx + bw / 2, max(y, y0), fill=color, outline=rect_outline, width=rect_width)
+                if slot >= 34 or is_hovered:
+                    lbl_y = y - 11 if v > 0 else y + 11
+                    cv.create_text(cx, lbl_y, text=self._money(v), fill="#FFFFFF" if is_hovered else color, font=(app_fonts.UI, 8, "bold"))
+
             if i % label_every == 0:
-                cv.create_text(cx, H - bottom + 14, text=self._fmt_date(r["date"]), fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
+                cv.create_text(cx, H - bottom + 14, text=self._fmt_date(r["date"]), fill="#FFFFFF" if is_hovered else COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
             self.bars.append((cx - slot / 2, cx + slot / 2, r))
 
+    def _draw_pie_charts(self):
+        cv = self.canvas
+        cv.delete("all")
+        W, H = cv.winfo_width(), cv.winfo_height()
+        if W < 100 or H < 100:
+            return
+
+        ov = self.plans_stats.get("overall", {})
+        plans = self.plans_stats.get("plans", {})
+
+        # 1. ฝั่งซ้าย: ภาพรวมความสำเร็จ (Overall Success Donut)
+        card1_w = int(W * 0.40)
+        cv.create_rectangle(8, 8, card1_w, H - 8, fill="#12151D", outline="#1F2430", width=1)
+        cv.create_text(24, 28, text="🍩 ภาพรวมความสำเร็จ (Overall Win Rate)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 12, "bold"))
+        cv.create_text(24, 46, text="อัตราส่วนไม้ชนะ / แพ้ และ Profit Factor ของพอร์ต", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
+
+        cx1 = card1_w // 2
+        cy1 = int(H * 0.38)
+        R1 = min(card1_w // 2 - 30, int(H * 0.22), 85)
+        r1 = int(R1 * 0.62)
+
+        closed = ov.get("closed", 0)
+        wins = ov.get("wins", 0)
+        losses = ov.get("losses", 0)
+
+        if closed > 0:
+            cur = 90.0
+            ext_win = (wins / closed) * 360.0
+            cv.create_arc(cx1 - R1, cy1 - R1, cx1 + R1, cy1 + R1, start=cur, extent=-ext_win, fill=COLOR_SUCCESS_GREEN, outline="", style="pieslice")
+            cur -= ext_win
+            ext_loss = (losses / closed) * 360.0
+            cv.create_arc(cx1 - R1, cy1 - R1, cx1 + R1, cy1 + R1, start=cur, extent=-ext_loss, fill=COLOR_DANGER_RED, outline="", style="pieslice")
+        else:
+            cv.create_oval(cx1 - R1, cy1 - R1, cx1 + R1, cy1 + R1, fill="#1E222D", outline="")
+
+        cv.create_oval(cx1 - r1, cy1 - r1, cx1 + r1, cy1 + r1, fill="#12151D", outline="")
+        cv.create_text(cx1, cy1 - 10, text=f"{ov.get('win_rate', 0.0):.1f}%", fill="#FFFFFF", font=(app_fonts.UI, 16, "bold"))
+        cv.create_text(cx1, cy1 + 8, text="Win Rate รวม", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
+        p_val = ov.get("profit", 0.0)
+        p_color = COLOR_SUCCESS_GREEN if p_val >= 0 else COLOR_DANGER_RED
+        cv.create_text(cx1, cy1 + 22, text=f"{self._money(p_val)} $", fill=p_color, font=(app_fonts.UI, 9, "bold"))
+
+        # Left Metrics Box
+        my = cy1 + R1 + 22
+        bw = (card1_w - 48) // 2
+        # Chip 1 (Wins)
+        cv.create_rectangle(24, my, 24 + bw, my + 38, fill="#10251E", outline="#1A3B30", width=1)
+        cv.create_text(24 + bw // 2, my + 12, text=f"🏆 ชนะ {wins} ไม้", fill=COLOR_SUCCESS_GREEN, font=(app_fonts.UI, 10, "bold"))
+        cv.create_text(24 + bw // 2, my + 26, text=f"อัตราส่วน {ov.get('win_rate', 0.0):.1f}%", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
+
+        # Chip 2 (Losses)
+        cv.create_rectangle(24 + bw + 8, my, 24 + bw * 2 + 8, my + 38, fill="#2A1618", outline="#441E22", width=1)
+        loss_pct = round(losses / closed * 100, 1) if closed > 0 else 0
+        cv.create_text(24 + bw + 8 + bw // 2, my + 12, text=f"❌ แพ้ {losses} ไม้", fill=COLOR_DANGER_RED, font=(app_fonts.UI, 10, "bold"))
+        cv.create_text(24 + bw + 8 + bw // 2, my + 26, text=f"อัตราส่วน {loss_pct:.1f}%", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
+
+        # Chip 3 (Summary Bottom)
+        my2 = my + 44
+        cv.create_rectangle(24, my2, card1_w - 16, my2 + 42, fill="#181C26", outline="#232836", width=1)
+        cv.create_text(34, my2 + 13, text=f"⚖️ Profit Factor: {ov.get('profit_factor', 0.0):.2f}", anchor="w", fill="#FFFFFF", font=(app_fonts.UI, 9, "bold"))
+        cv.create_text(34, my2 + 28, text=f"💰 กำไรรวม: +{ov.get('gross_profit', 0.0):.2f} $  |  ขาดทุน: -{ov.get('gross_loss', 0.0):.2f} $", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
+
+        # 2. ฝั่งขวา: ความสำเร็จรายแผน (Plans Success Donut & Cards)
+        card2_x = card1_w + 12
+        card2_w = W - card2_x - 8
+        cv.create_rectangle(card2_x, 8, W - 8, H - 8, fill="#12151D", outline="#1F2430", width=1)
+        cv.create_text(card2_x + 16, 28, text="🍩 ความสำเร็จรายแผนการเทรด (Trading Plans Analytics)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 12, "bold"))
+        cv.create_text(card2_x + 16, 46, text="สัดส่วนการปิดไม้, Win Rate %, และกำไรสุทธิแยกตามแผน", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
+
+        cx2 = card2_x + 95
+        cy2 = int(H * 0.44)
+        R2 = min(75, int(H * 0.20))
+        r2 = int(R2 * 0.58)
+
+        tot_plan_trades = sum(p.get("closed", 0) for p in plans.values())
+        if tot_plan_trades > 0:
+            cur = 90.0
+            for pname, pstat in sorted(plans.items(), key=lambda x: x[1].get("closed", 0), reverse=True):
+                c_cnt = pstat.get("closed", 0)
+                if c_cnt <= 0:
+                    continue
+                ext = (c_cnt / tot_plan_trades) * 360.0
+                c = self._plan_info(pname)["color"]
+                cv.create_arc(cx2 - R2, cy2 - R2, cx2 + R2, cy2 + R2, start=cur, extent=-ext, fill=c, outline="", style="pieslice")
+                cur -= ext
+        else:
+            cv.create_oval(cx2 - R2, cy2 - R2, cx2 + R2, cy2 + R2, fill="#1E222D", outline="")
+
+        cv.create_oval(cx2 - r2, cy2 - r2, cx2 + r2, cy2 + r2, fill="#12151D", outline="")
+        best_p = max(plans.items(), key=lambda x: x[1].get("profit", 0.0), default=(None, {}))
+        cv.create_text(cx2, cy2 - 8, text=f"{best_p[1].get('profit', 0.0):+.2f} $", fill=COLOR_SUCCESS_GREEN, font=(app_fonts.UI, 11, "bold"))
+        cv.create_text(cx2, cy2 + 8, text="ยอดสูงสุด", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
+
+        # Legend & Cards on Right
+        lx = cx2 + R2 + 28
+        ly = 72
+        for pname, pstat in sorted(plans.items(), key=lambda x: x[1].get("profit", 0.0), reverse=True)[:8]:
+            info = self._plan_info(pname)
+            p = pstat.get("profit", 0.0)
+            wr = pstat.get("win_rate", 0.0)
+            wins_p = pstat.get("wins", 0)
+            closed_p = pstat.get("closed", 0)
+            pf = pstat.get("profit_factor", 0.0)
+
+            # Row card
+            cv.create_rectangle(lx, ly, W - 24, ly + 32, fill="#181C26", outline="#232732", width=1)
+            # Color dot & Name
+            cv.create_rectangle(lx + 8, ly + 11, lx + 18, ly + 21, fill=info["color"], outline="")
+            cv.create_text(lx + 24, ly + 11, text=f"{info['icon']} {info['label']}", anchor="w", fill="#FFFFFF", font=(app_fonts.UI, 9, "bold"))
+            # Subtext (Trades & WR)
+            cv.create_text(lx + 24, ly + 23, text=f"{wins_p}/{closed_p} ไม้ ({wr:.1f}%) · PF {pf:.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
+            # Profit text
+            p_col = COLOR_SUCCESS_GREEN if p > 0.005 else (COLOR_DANGER_RED if p < -0.005 else COLOR_TEXT_MUTED)
+            cv.create_text(W - 36, ly + 11, text=f"{self._money(p)} $", anchor="e", fill=p_col, font=(app_fonts.UI, 10, "bold"))
+            # Mini bar
+            bar_w = 64
+            rx = W - 36
+            cv.create_rectangle(rx - bar_w, ly + 21, rx, ly + 25, fill="#232732", outline="")
+            filled_w = max(0, min(bar_w, int(bar_w * wr / 100)))
+            if filled_w > 0:
+                cv.create_rectangle(rx - bar_w, ly + 21, rx - bar_w + filled_w, ly + 25, fill=info["color"], outline="")
+            ly += 36
+
     def _hover(self, event):
-        for x0, x1, r in self.bars:
+        if self.view_mode != "bar":
+            return
+        for idx, (x0, x1, r) in enumerate(self.bars):
             if x0 <= event.x < x1:
-                when = (f"สัปดาห์ {self._fmt_date(r['date'])} – {self._fmt_date(r['end'], True)}" if self.weekly
-                        else self._fmt_date(r["date"], True))
-                v = r["profit"]
-                word = "กำไร" if v > 0.005 else ("ขาดทุน" if v < -0.005 else "ไม่มีกำไร/ขาดทุน")
-                self.lbl_tip.configure(text=f"{when} · {word} {self._money(v)} · ปิดไม้ {r['closed']} ไม้",
-                                       text_color=COLOR_SUCCESS_GREEN if v > 0.005 else COLOR_DANGER_RED if v < -0.005 else COLOR_TEXT_MUTED)
+                if self.cur_hover_idx != idx:
+                    self.cur_hover_idx = idx
+                    when = (f"สัปดาห์ {self._fmt_date(r['date'])} – {self._fmt_date(r['end'], True)}" if self.weekly
+                            else self._fmt_date(r["date"], True))
+                    v = r["profit"]
+                    word = "กำไร" if v > 0.005 else ("ขาดทุน" if v < -0.005 else "ไม่มีกำไร/ขาดทุน")
+                    self.lbl_tip.configure(
+                        text=f"📅 {when} · {word} {self._money(v)} $ · ปิดไม้ {r['closed']} ไม้",
+                        text_color=COLOR_SUCCESS_GREEN if v > 0.005 else COLOR_DANGER_RED if v < -0.005 else COLOR_TEXT_MUTED
+                    )
+                    self._render_plan_pills(r.get("plans", {}), title=f"แผนในแท่ง {self._fmt_date(r['date'])}:")
+                    self._draw_bar_chart()
                 return
+        if self.cur_hover_idx is not None:
+            self._leave()
+
+    def _leave(self, event=None):
+        if self.cur_hover_idx is not None:
+            self.cur_hover_idx = None
+            if self.view_mode == "bar":
+                self.lbl_tip.configure(text=self.tip_default, text_color=COLOR_TEXT_MUTED)
+                self._render_plan_pills(self.overall_plans_dict, title="ภาพรวมรายแผนทั้งช่วง:")
+                self._draw_bar_chart()
 
 
 class UserStatsDialog(ctk.CTkToplevel):
