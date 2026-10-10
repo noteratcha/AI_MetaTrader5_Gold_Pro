@@ -34,16 +34,17 @@ if os.path.exists(ENV_LOCAL_PATH):
 
 def format_hours_minutes(total_minutes: int) -> str:
     """
-    แปลงจำนวนนาทีทั้งหมดให้อยู่ในรูปแบบ 'ชั่วโมง.นาที' (HH.MM) เสมอ
+    แปลงจำนวนนาทีทั้งหมดให้อยู่ในรูปแบบ 'ชั่วโมง.นาที' (HH.MM) เสมอ พร้อมคั่นจุลภาค (comma) หลักพัน
     ตัวอย่าง:
-      - 2880 นาที -> '48.00' (48 ชั่วโมง 0 นาที)
-      - 60 นาที   -> '1.00'  (1 ชั่วโมง 0 นาที)
+      - 119019 นาที -> '1,983.39' (1,983 ชั่วโมง 39 นาที)
+      - 2880 นาที   -> '48.00' (48 ชั่วโมง 0 นาที)
+      - 60 นาที     -> '1.00'  (1 ชั่วโมง 0 นาที)
     """
     if total_minutes < 0:
         total_minutes = 0
     hours = total_minutes // 60
     minutes = total_minutes % 60
-    return f"{hours}.{minutes:02d}"
+    return f"{hours:,}.{minutes:02d}"
 
 
 def normalize_key_input(raw: str) -> str:

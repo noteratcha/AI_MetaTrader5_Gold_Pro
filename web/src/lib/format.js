@@ -1,11 +1,11 @@
 // ฟังก์ชันจัดรูปแบบตัวเลข/เวลา ที่ใช้ร่วมกันทุกหน้า
 
-/** ชั่วโมงทศนิยม → "ชั่วโมง.นาที" (HH.MM) ตามมาตรฐานระบบ */
+/** ชั่วโมงทศนิยม → "ชั่วโมง.นาที" (HH.MM) ตามมาตรฐานระบบ พร้อมคั่นจุลภาค (comma) หลักพัน */
 export function formatHHMM(hoursDecimal) {
   const totalMins = Math.max(0, Math.round((Number(hoursDecimal) || 0) * 60));
   const h = Math.floor(totalMins / 60);
   const m = totalMins % 60;
-  return `${h}.${String(m).padStart(2, '0')}`;
+  return `${h.toLocaleString('en-US')}.${String(m).padStart(2, '0')}`;
 }
 
 export function formatUsd(value, { sign = false } = {}) {
