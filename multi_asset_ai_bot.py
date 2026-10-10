@@ -861,6 +861,128 @@ def stars_to_text(stars: float) -> str:
         return ""
 
 
+def recommend_sr_focus(sup_levels, res_levels, price, atr):
+    """
+    AI อัลกอริทึมวิเคราะห์คัดเลือกแนวรับและแนวต้านสำคัญที่ต้องโฟกัส (AI S&R Focus Recommendation)
+    วิเคราะห์จาก:
+      1. Strength Score (0.00 - 10.00) จากจำนวน touches และประวัติการกลับตัว
+      2. ระยะห่างจากราคาปัจจุบันเทียบกับ ATR (Proximity)
+      3. ลำดับโครงสร้างราคา (Structural Priority)
+    คืน dict:
+      - focus_sup: รหัสแนวรับที่ AI แนะนำ เช่น 'S1'
+      - focus_res: รหัสแนวต้านที่ AI แนะนำ เช่น 'R1'
+      - focus_sup_price: ราคาแนวรับที่โฟกัส
+      - focus_res_price: ราคาแนวต้านที่โฟกัส
+      - focus_sup_score: คะแนนความแข็งแกร่งแนวรับ
+      - focus_res_score: คะแนนความแข็งแกร่งแนวต้าน
+      - focus_action: คำแนะนำเชิงกลยุทธ์ของ AI
+      - focus_summary: ข้อความสรุปย่อ
+    """
+    if not price or pd.isna(price) or price <= 0:
+        return {
+            "focus_sup": "S1", "focus_res": "R1",
+            "focus_sup_price": 0.0, "focus_res_price": 0.0,
+            "focus_sup_score": 0.0, "focus_res_score": 0.0,
+            "focus_action": "", "focus_summary": "",
+            "dist_sup_pts": 0.0, "dist_res_pts": 0.0,
+            "dist_sup_atr": 0.0, "dist_res_atr": 0.0,
+        }
+
+    atr_val = max(1.0, float(atr) if (atr and not pd.isna(atr)) else 5.0)
+
+    # 1. ให้คะแนนความสำคัญของแต่ละระดับแนวรับ (S1..S5)
+    best_sup = {"name": "S1", "price": 0.0, "score": 0.0, "rank_score": -1.0}
+    for idx, s in enumerate(sup_levels[:5], start=1):
+        s_price = float(s[0])
+        s_touches = int(s[1])
+        s_score = touches_to_stars(s_touches)
+        s_dist = abs(price - s_price)
+        s_dist_atr = s_dist / atr_val
+
+        if s_dist_atr <= 1.0:
+            prox_pts = 45.0
+        elif s_dist_atr <= 2.0:
+            prox_pts = 35.0
+        elif s_dist_atr <= 3.5:
+            prox_pts = 20.0
+        else:
+            prox_pts = 5.0
+
+        strength_pts = (s_score / 10.0) * 35.0
+        struct_pts = 20.0 if idx == 1 else (12.0 if idx == 2 else 5.0)
+        if s_score >= 9.5:
+            struct_pts += 10.0
+
+        total_rank = prox_pts + strength_pts + struct_pts
+        if total_rank > best_sup["rank_score"]:
+            best_sup = {
+                "name": f"S{idx}",
+                "price": round(s_price, 2),
+                "score": s_score,
+                "rank_score": total_rank
+            }
+
+    # 2. ให้คะแนนความสำคัญของแต่ละระดับแนวต้าน (R1..R5)
+    best_res = {"name": "R1", "price": 0.0, "score": 0.0, "rank_score": -1.0}
+    for idx, r in enumerate(res_levels[:5], start=1):
+        r_price = float(r[0])
+        r_touches = int(r[1])
+        r_score = touches_to_stars(r_touches)
+        r_dist = abs(r_price - price)
+        r_dist_atr = r_dist / atr_val
+
+        if r_dist_atr <= 1.0:
+            prox_pts = 45.0
+        elif r_dist_atr <= 2.0:
+            prox_pts = 35.0
+        elif r_dist_atr <= 3.5:
+            prox_pts = 20.0
+        else:
+            prox_pts = 5.0
+
+        strength_pts = (r_score / 10.0) * 35.0
+        struct_pts = 20.0 if idx == 1 else (12.0 if idx == 2 else 5.0)
+        if r_score >= 9.5:
+            struct_pts += 10.0
+
+        total_rank = prox_pts + strength_pts + struct_pts
+        if total_rank > best_res["rank_score"]:
+            best_res = {
+                "name": f"R{idx}",
+                "price": round(r_price, 2),
+                "score": r_score,
+                "rank_score": total_rank
+            }
+
+    # 3. วิเคราะห์ระยะห่างและคำแนะนำเชิงกลยุทธ์ (Action Recommendation)
+    dist_sup_pts = round(abs(price - best_sup["price"]), 2) if best_sup["price"] > 0 else 0.0
+    dist_res_pts = round(abs(best_res["price"] - price), 2) if best_res["price"] > 0 else 0.0
+    dist_sup_atr = round(dist_sup_pts / atr_val, 1)
+    dist_res_atr = round(dist_res_pts / atr_val, 1)
+
+    if dist_sup_pts < dist_res_pts:
+        action = f"ราคาใกล้แนวรับ {best_sup['name']} ({best_sup['price']:,.2f}) ห่าง {dist_sup_pts:,.1f} จุด ({dist_sup_atr} ATR) · เฝ้าระวังสัญญาณเด้งกลับ / ปฏิเสธราคา"
+    else:
+        action = f"ราคาใกล้แนวต้าน {best_res['name']} ({best_res['price']:,.2f}) ห่าง {dist_res_pts:,.1f} จุด ({dist_res_atr} ATR) · เฝ้าระวังแรงต้าน / สัญญาณหมดแรง"
+
+    summary = f"โฟกัส: ต้าน {best_res['name']} {best_res['price']:,.2f} (★ {best_res['score']:.2f}) · รับ {best_sup['name']} {best_sup['price']:,.2f} (★ {best_sup['score']:.2f})"
+
+    return {
+        "focus_sup": best_sup["name"],
+        "focus_res": best_res["name"],
+        "focus_sup_price": best_sup["price"],
+        "focus_res_price": best_res["price"],
+        "focus_sup_score": best_sup["score"],
+        "focus_res_score": best_res["score"],
+        "focus_action": action,
+        "focus_summary": summary,
+        "dist_sup_pts": dist_sup_pts,
+        "dist_res_pts": dist_res_pts,
+        "dist_sup_atr": dist_sup_atr,
+        "dist_res_atr": dist_res_atr,
+    }
+
+
 def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
     """
     หาแนวรับ/แนวต้าน 5 ระดับ (S1..S5 และ R1..R5) จากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` (500 แท่ง)
@@ -868,6 +990,7 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
       - support..support5 / resistance..resistance5
       - sup_touches..sup5_touches / res_touches..res5_touches
       - sup_stars..sup5_stars / res_stars..res5_stars (0.00 - 10.00 คะแนนความแข็งแกร่ง)
+      - focus_sup / focus_res / focus_action / focus_summary (AI วิเคราะห์คัดเลือกแนวที่ต้องโฟกัส)
     """
     out = {
         "support": float('nan'), "resistance": float('nan'),
@@ -885,6 +1008,12 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         "sup3_stars": 3.0, "res3_stars": 3.0,
         "sup4_stars": 3.0, "res4_stars": 3.0,
         "sup5_stars": 3.0, "res5_stars": 3.0,
+        "focus_sup": "S1", "focus_res": "R1",
+        "focus_sup_price": 0.0, "focus_res_price": 0.0,
+        "focus_sup_score": 0.0, "focus_res_score": 0.0,
+        "focus_action": "", "focus_summary": "",
+        "dist_sup_pts": 0.0, "dist_res_pts": 0.0,
+        "dist_sup_atr": 0.0, "dist_res_atr": 0.0,
     }
     if df is None or len(df) < 2 * k + 10 or not price or pd.isna(price):
         return out
@@ -1006,6 +1135,10 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         out[r_key] = round(float(r[0]), 2)
         out[t_key] = int(r[1])
         out[star_key] = touches_to_stars(int(r[1]))
+
+    # AI แนะนำแนวรับแนวต้านสำคัญที่ต้องโฟกัส (AI S&R Focus Recommendation)
+    focus_rec = recommend_sr_focus(sup_levels, res_levels, price, atr)
+    out.update(focus_rec)
 
     return out
 
@@ -2159,6 +2292,14 @@ def main():
                     "h4_res_stars": float(sr_h4.get("res_stars", 6.0)),
                     "h4_sup2_stars": float(sr_h4.get("sup2_stars", 6.0)),
                     "h4_res2_stars": float(sr_h4.get("res2_stars", 6.0)),
+                    "h1_focus_sup": str(sr_h1.get("focus_sup", "S1")),
+                    "h1_focus_res": str(sr_h1.get("focus_res", "R1")),
+                    "h1_focus_action": str(sr_h1.get("focus_action", "")),
+                    "h1_focus_summary": str(sr_h1.get("focus_summary", "")),
+                    "h4_focus_sup": str(sr_h4.get("focus_sup", "S1")),
+                    "h4_focus_res": str(sr_h4.get("focus_res", "R1")),
+                    "h4_focus_action": str(sr_h4.get("focus_action", "")),
+                    "h4_focus_summary": str(sr_h4.get("focus_summary", "")),
                     "h1_lt_dir": int(h1_lt_dir),
                     "h1_dir": int(h1_dir),
                     "h1_stack_dir": int(h1_stack_dir),

@@ -620,6 +620,11 @@ class BotController:
                         if r_k in sr_calc and not math.isnan(sr_calc[r_k]):
                             res_dict[r_k] = sr_calc[r_k]
                             res_dict[star_r] = sr_calc.get(star_r, 6.0)
+                    for fk in ("focus_sup", "focus_res", "focus_sup_price", "focus_res_price",
+                               "focus_sup_score", "focus_res_score", "focus_action", "focus_summary",
+                               "dist_sup_pts", "dist_res_pts", "dist_sup_atr", "dist_res_atr"):
+                        if fk in sr_calc:
+                            res_dict[fk] = sr_calc[fk]
             except Exception:
                 pass
 

@@ -1366,8 +1366,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self._rebuild_legend_chips()
 
         # --- แถวสี่: แถบสถานะเงื่อนไขการเข้าไม้เรียลไทม์ (Condition Status Bar) ---
-        self.cond_frame = ctk.CTkFrame(self, fg_color="#0F131C", corner_radius=8, border_width=1, border_color="#1E2638", height=32)
-        self.cond_frame.pack(fill="x", padx=18, pady=(0, 4))
+        self.cond_frame = ctk.CTkFrame(self, fg_color="#0F131C", corner_radius=8, border_width=1, border_color="#1E2638", height=30)
+        self.cond_frame.pack(fill="x", padx=18, pady=(0, 3))
 
         self.cond_left = ctk.CTkFrame(self.cond_frame, fg_color="transparent")
         self.cond_left.pack(side="left", padx=(10, 6), fill="y")
@@ -1389,6 +1389,40 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         self.cond_chips_box = ctk.CTkFrame(self.cond_frame, fg_color="transparent")
         self.cond_chips_box.pack(side="left", fill="both", expand=True, padx=(4, 8))
+
+        # --- แถวห้า: แถบ AI แนะนำแนวรับแนวต้านสำคัญที่ต้องโฟกัส (AI S&R Focus Bar) ---
+        self.ai_sr_frame = ctk.CTkFrame(self, fg_color="#101520", corner_radius=8, border_width=1, border_color="#2D2415", height=28)
+        self.ai_sr_frame.pack(fill="x", padx=18, pady=(0, 4))
+
+        self.lbl_ai_sr_title = ctk.CTkLabel(
+            self.ai_sr_frame, text="🤖 AI โฟกัสแนวรับ–ต้าน:",
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+            text_color=COLOR_GOLD_PRIMARY
+        )
+        self.lbl_ai_sr_title.pack(side="left", padx=(10, 8))
+
+        self.lbl_ai_res_badge = ctk.CTkLabel(
+            self.ai_sr_frame, text=" 🎯 ต้าน: — ",
+            font=ctk.CTkFont(family=app_fonts.UI, size=10, weight="bold"),
+            fg_color="#261215", text_color="#FCA5A5", corner_radius=5, height=20,
+            padx=8
+        )
+        self.lbl_ai_res_badge.pack(side="left", padx=(0, 6))
+
+        self.lbl_ai_sup_badge = ctk.CTkLabel(
+            self.ai_sr_frame, text=" 🎯 รับ: — ",
+            font=ctk.CTkFont(family=app_fonts.UI, size=10, weight="bold"),
+            fg_color="#0D261B", text_color="#6EE7B7", corner_radius=5, height=20,
+            padx=8
+        )
+        self.lbl_ai_sup_badge.pack(side="left", padx=(0, 8))
+
+        self.lbl_ai_action = ctk.CTkLabel(
+            self.ai_sr_frame, text="กำลังวิเคราะห์โซนราคา...",
+            font=ctk.CTkFont(family=app_fonts.UI, size=10),
+            text_color="#94A3B8"
+        )
+        self.lbl_ai_action.pack(side="left", padx=(0, 8))
 
         # --- กล่องกราฟ Canvas ---
         box = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
@@ -1829,10 +1863,38 @@ class GoldCandleDialog(ctk.CTkToplevel):
             plans_status = bot_ctrl.get_plans_condition_status("XAUUSD")
             self._refresh_plan_buttons(plans_status)
             self._update_condition_bar(plans_status)
+            self._update_ai_sr_bar()
 
             self._draw()
         else:
             self.lbl_tip.configure(text="เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
+
+    def _update_ai_sr_bar(self):
+        """อัปเดตแถบคำแนะนำ AI วิเคราะห์แนวรับแนวต้านสำคัญที่ต้องโฟกัส"""
+        if not hasattr(self, "ai_sr_frame"):
+            return
+        focus_res = self.data.get("focus_res", "R1")
+        focus_sup = self.data.get("focus_sup", "S1")
+        focus_res_price = self.data.get("focus_res_price") or self.data.get("resistance") or 0.0
+        focus_sup_price = self.data.get("focus_sup_price") or self.data.get("support") or 0.0
+        focus_res_score = self.data.get("focus_res_score") or float(self.data.get("res_stars", 6.0) or 6.0)
+        focus_sup_score = self.data.get("focus_sup_score") or float(self.data.get("sup_stars", 6.0) or 6.0)
+        action = self.data.get("focus_action") or ""
+
+        if focus_res_price > 0:
+            self.lbl_ai_res_badge.configure(text=f" 🎯 ต้าน {focus_res}: {focus_res_price:,.2f} (★ {focus_res_score:.2f}) ")
+        else:
+            self.lbl_ai_res_badge.configure(text=" 🎯 ต้าน: — ")
+
+        if focus_sup_price > 0:
+            self.lbl_ai_sup_badge.configure(text=f" 🎯 รับ {focus_sup}: {focus_sup_price:,.2f} (★ {focus_sup_score:.2f}) ")
+        else:
+            self.lbl_ai_sup_badge.configure(text=" 🎯 รับ: — ")
+
+        if action:
+            self.lbl_ai_action.configure(text=f"📌 {action}")
+        else:
+            self.lbl_ai_action.configure(text="📌 ติดตามการเคลื่อนไหวของราคาเทียบกับโซนสำคัญ")
 
     def _draw(self):
         cv = self.canvas
@@ -1976,27 +2038,42 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         # 1. วาดแนวรับ–แนวต้าน 5 ระดับ (R1..R5 & S1..S5) สำหรับ Timeframe H1 และ H4
         if tf in ("H1", "H4"):
+            focus_res = self.data.get("focus_res", "R1")
+            focus_sup = self.data.get("focus_sup", "S1")
+
             # 1.1 แนวต้าน 5 ระดับ (R1..R5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00 ทศนิยม 2 ตำแหน่ง)
             if self.ind_toggles.get("resistance", True):
                 for name, r_val, r_stars, col, dash, width, weight in res_list:
                     if r_val and not (isinstance(r_val, float) and math.isnan(r_val)) and lo <= r_val <= hi:
+                        is_focus = (name == focus_res)
                         yr = y_of(r_val)
-                        cv.create_line(left, yr, W - right, yr, fill=col, dash=dash, width=width)
+                        line_w = 2.5 if is_focus else width
+                        line_dash = None if is_focus else dash
+                        cv.create_line(left, yr, W - right, yr, fill=col, dash=line_dash, width=line_w)
                         lbl_y = yr + 8 if yr < top + 16 else yr - 8
-                        cv.create_text(left + 6, lbl_y, text=f"แนวต้าน {name} {r_val:,.2f}", anchor="w", fill=col, font=(app_fonts.UI, 9, weight))
+                        name_txt = f"แนวต้าน {name} {r_val:,.2f}"
+                        cv.create_text(left + 6, lbl_y, text=name_txt, anchor="w", fill=col, font=(app_fonts.UI, 9, "bold" if is_focus else weight))
                         r_score = max(0.0, min(10.0, float(r_stars or 0.0)))
                         cv.create_text(left + 128, lbl_y, text=f"★ {r_score:.2f}", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
+                        if is_focus:
+                            cv.create_text(left + 175, lbl_y, text="🎯 AI FOCUS", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
 
             # 1.2 แนวรับ 5 ระดับ (S1..S5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00 ทศนิยม 2 ตำแหน่ง)
             if self.ind_toggles.get("support", True):
                 for name, s_val, s_stars, col, dash, width, weight in sup_list:
                     if s_val and not (isinstance(s_val, float) and math.isnan(s_val)) and lo <= s_val <= hi:
+                        is_focus = (name == focus_sup)
                         ys = y_of(s_val)
-                        cv.create_line(left, ys, W - right, ys, fill=col, dash=dash, width=width)
+                        line_w = 2.5 if is_focus else width
+                        line_dash = None if is_focus else dash
+                        cv.create_line(left, ys, W - right, ys, fill=col, dash=line_dash, width=line_w)
                         lbl_y = ys - 8 if ys > top + 16 else ys + 8
-                        cv.create_text(left + 6, lbl_y, text=f"แนวรับ {name} {s_val:,.2f}", anchor="w", fill=col, font=(app_fonts.UI, 9, weight))
+                        name_txt = f"แนวรับ {name} {s_val:,.2f}"
+                        cv.create_text(left + 6, lbl_y, text=name_txt, anchor="w", fill=col, font=(app_fonts.UI, 9, "bold" if is_focus else weight))
                         s_score = max(0.0, min(10.0, float(s_stars or 0.0)))
                         cv.create_text(left + 124, lbl_y, text=f"★ {s_score:.2f}", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
+                        if is_focus:
+                            cv.create_text(left + 171, lbl_y, text="🎯 AI FOCUS", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
 
         # 2. วาดอินดิเคเตอร์เฉพาะตาม Timeframe ที่เลือก
         if tf == "M15":
