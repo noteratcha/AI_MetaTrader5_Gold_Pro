@@ -833,27 +833,30 @@ def p6_trail_sl(pos, df_h1, sar, dr, sar_fast, dr_fast, atr_series, tick, info):
 
 
 def touches_to_stars(touches: int, is_extreme: bool = False) -> float:
-    """แปลงจำนวนครั้งที่ราคามาทดสอบโซนเป็นคะแนนดาว 1.0 - 5.0 (ปัดขั้นละ 0.5)"""
-    if touches <= 1:
-        base = 2.0 if is_extreme else 1.5
+    """แปลงจำนวนครั้งที่ราคามาทดสอบโซนเป็นคะแนนความแข็งแกร่ง 0.00 - 10.00 (ทศนิยม 2 ตำแหน่ง)"""
+    if touches <= 0:
+        base = 0.0
+    elif touches == 1:
+        base = 4.0 if is_extreme else 3.0
     elif touches == 2:
-        base = 2.5
-    elif touches == 3:
-        base = 3.5
-    elif touches == 4:
-        base = 4.5
-    else:
         base = 5.0
-    return min(5.0, max(1.0, round(base * 2) / 2.0))
+    elif touches == 3:
+        base = 7.0
+    elif touches == 4:
+        base = 9.0
+    else:
+        base = 10.0
+    return round(min(10.0, max(0.0, float(base))), 2)
 
 
 def stars_to_text(stars: float) -> str:
-    """แปลงคะแนนดาวความแข็งแกร่งเป็นตัวเลขแสดงผล เช่น 2.5 -> '★ 2.5', 3.0 -> '★ 3.0'"""
-    if not stars or stars <= 0:
+    """แปลงคะแนนความแข็งแกร่งเป็นตัวเลขแสดงผล เช่น 7.0 -> '★ 7.00' (0.00 - 10.00 ทศนิยม 2 ตำแหน่ง)"""
+    if stars is None or stars < 0:
         return ""
     try:
         val = float(stars)
-        return f"★ {val:.1f}" if val > 0 else ""
+        val = max(0.0, min(10.0, val))
+        return f"★ {val:.2f}"
     except Exception:
         return ""
 
@@ -864,7 +867,7 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
     คืน dict:
       - support..support5 / resistance..resistance5
       - sup_touches..sup5_touches / res_touches..res5_touches
-      - sup_stars..sup5_stars / res_stars..res5_stars (1.0 - 5.0 ดาว)
+      - sup_stars..sup5_stars / res_stars..res5_stars (0.00 - 10.00 คะแนนความแข็งแกร่ง)
     """
     out = {
         "support": float('nan'), "resistance": float('nan'),
@@ -877,11 +880,11 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         "sup3_touches": 0, "res3_touches": 0,
         "sup4_touches": 0, "res4_touches": 0,
         "sup5_touches": 0, "res5_touches": 0,
-        "sup_stars": 1.5, "res_stars": 1.5,
-        "sup2_stars": 1.5, "res2_stars": 1.5,
-        "sup3_stars": 1.5, "res3_stars": 1.5,
-        "sup4_stars": 1.5, "res4_stars": 1.5,
-        "sup5_stars": 1.5, "res5_stars": 1.5,
+        "sup_stars": 3.0, "res_stars": 3.0,
+        "sup2_stars": 3.0, "res2_stars": 3.0,
+        "sup3_stars": 3.0, "res3_stars": 3.0,
+        "sup4_stars": 3.0, "res4_stars": 3.0,
+        "sup5_stars": 3.0, "res5_stars": 3.0,
     }
     if df is None or len(df) < 2 * k + 10 or not price or pd.isna(price):
         return out
@@ -2138,24 +2141,24 @@ def main():
                     "h1_resistance4": round(float(sr_h1.get("resistance4", resistance)), 2),
                     "h1_support5": round(float(sr_h1.get("support5", support)), 2),
                     "h1_resistance5": round(float(sr_h1.get("resistance5", resistance)), 2),
-                    "h1_sup_stars": float(sr_h1.get("sup_stars", 3.0)),
-                    "h1_res_stars": float(sr_h1.get("res_stars", 3.0)),
-                    "h1_sup2_stars": float(sr_h1.get("sup2_stars", 3.0)),
-                    "h1_res2_stars": float(sr_h1.get("res2_stars", 3.0)),
-                    "h1_sup3_stars": float(sr_h1.get("sup3_stars", 3.0)),
-                    "h1_res3_stars": float(sr_h1.get("res3_stars", 3.0)),
-                    "h1_sup4_stars": float(sr_h1.get("sup4_stars", 3.0)),
-                    "h1_res4_stars": float(sr_h1.get("res4_stars", 3.0)),
-                    "h1_sup5_stars": float(sr_h1.get("sup5_stars", 3.0)),
-                    "h1_res5_stars": float(sr_h1.get("res5_stars", 3.0)),
+                    "h1_sup_stars": float(sr_h1.get("sup_stars", 6.0)),
+                    "h1_res_stars": float(sr_h1.get("res_stars", 6.0)),
+                    "h1_sup2_stars": float(sr_h1.get("sup2_stars", 6.0)),
+                    "h1_res2_stars": float(sr_h1.get("res2_stars", 6.0)),
+                    "h1_sup3_stars": float(sr_h1.get("sup3_stars", 6.0)),
+                    "h1_res3_stars": float(sr_h1.get("res3_stars", 6.0)),
+                    "h1_sup4_stars": float(sr_h1.get("sup4_stars", 6.0)),
+                    "h1_res4_stars": float(sr_h1.get("res4_stars", 6.0)),
+                    "h1_sup5_stars": float(sr_h1.get("sup5_stars", 6.0)),
+                    "h1_res5_stars": float(sr_h1.get("res5_stars", 6.0)),
                     "h4_support": round(h4_support, 2),
                     "h4_resistance": round(h4_resistance, 2),
                     "h4_support2": round(float(sr_h4.get("support2", h4_support)), 2),
                     "h4_resistance2": round(float(sr_h4.get("resistance2", h4_resistance)), 2),
-                    "h4_sup_stars": float(sr_h4.get("sup_stars", 3.0)),
-                    "h4_res_stars": float(sr_h4.get("res_stars", 3.0)),
-                    "h4_sup2_stars": float(sr_h4.get("sup2_stars", 3.0)),
-                    "h4_res2_stars": float(sr_h4.get("res2_stars", 3.0)),
+                    "h4_sup_stars": float(sr_h4.get("sup_stars", 6.0)),
+                    "h4_res_stars": float(sr_h4.get("res_stars", 6.0)),
+                    "h4_sup2_stars": float(sr_h4.get("sup2_stars", 6.0)),
+                    "h4_res2_stars": float(sr_h4.get("res2_stars", 6.0)),
                     "h1_lt_dir": int(h1_lt_dir),
                     "h1_dir": int(h1_dir),
                     "h1_stack_dir": int(h1_stack_dir),

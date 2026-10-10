@@ -112,8 +112,8 @@ def _context_from(h1, h4, price):
         sr_r = "resistance" if i == 1 else f"resistance{i}"
         d[s_k] = _f(sr.get(sr_s))
         d[r_k] = _f(sr.get(sr_r))
-        d[f"{s_k}_stars"] = float(sr.get(f"sup{i}_stars" if i > 1 else "sup_stars", 2.0))
-        d[f"{r_k}_stars"] = float(sr.get(f"res{i}_stars" if i > 1 else "res_stars", 2.0))
+        d[f"{s_k}_stars"] = float(sr.get(f"sup{i}_stars" if i > 1 else "sup_stars", 6.0))
+        d[f"{r_k}_stars"] = float(sr.get(f"res{i}_stars" if i > 1 else "res_stars", 6.0))
         d[f"{s_k}_t"] = int(sr.get(f"sup{i}_touches" if i > 1 else "sup_touches", 1))
         d[f"{r_k}_t"] = int(sr.get(f"res{i}_touches" if i > 1 else "res_touches", 1))
     return d

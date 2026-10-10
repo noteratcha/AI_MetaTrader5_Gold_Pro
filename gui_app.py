@@ -1883,22 +1883,22 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         cur_price = self.data["bid"]
 
-        # รายการระดับแนวต้าน 5 ระดับ (R1..R5) พร้อมดาวความแข็งแกร่ง
+        # รายการระดับแนวต้าน 5 ระดับ (R1..R5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00)
         res_list = [
-            ("R1", self.data.get("resistance"), float(self.data.get("res_stars", 3.0) or 3.0), COLOR_DANGER_RED, (6, 3), 1.5, "bold"),
-            ("R2", self.data.get("resistance2"), float(self.data.get("res2_stars", 2.5) or 2.5), "#FB923C", (4, 3), 1.2, "bold"),
-            ("R3", self.data.get("resistance3"), float(self.data.get("res3_stars", 2.0) or 2.0), "#F59E0B", (3, 3), 1.0, "normal"),
-            ("R4", self.data.get("resistance4"), float(self.data.get("res4_stars", 2.0) or 2.0), "#F43F5E", (2, 2), 1.0, "normal"),
-            ("R5", self.data.get("resistance5"), float(self.data.get("res5_stars", 1.5) or 1.5), "#E11D48", (2, 2), 1.0, "normal"),
+            ("R1", self.data.get("resistance"), float(self.data.get("res_stars", 6.0) or 6.0), COLOR_DANGER_RED, (6, 3), 1.5, "bold"),
+            ("R2", self.data.get("resistance2"), float(self.data.get("res2_stars", 5.0) or 5.0), "#FB923C", (4, 3), 1.2, "bold"),
+            ("R3", self.data.get("resistance3"), float(self.data.get("res3_stars", 4.0) or 4.0), "#F59E0B", (3, 3), 1.0, "normal"),
+            ("R4", self.data.get("resistance4"), float(self.data.get("res4_stars", 4.0) or 4.0), "#F43F5E", (2, 2), 1.0, "normal"),
+            ("R5", self.data.get("resistance5"), float(self.data.get("res5_stars", 3.0) or 3.0), "#E11D48", (2, 2), 1.0, "normal"),
         ]
 
-        # รายการระดับแนวรับ 5 ระดับ (S1..S5) พร้อมดาวความแข็งแกร่ง
+        # รายการระดับแนวรับ 5 ระดับ (S1..S5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00)
         sup_list = [
-            ("S1", self.data.get("support"), float(self.data.get("sup_stars", 3.0) or 3.0), COLOR_SUCCESS_GREEN, (6, 3), 1.5, "bold"),
-            ("S2", self.data.get("support2"), float(self.data.get("sup2_stars", 2.5) or 2.5), "#34D399", (4, 3), 1.2, "bold"),
-            ("S3", self.data.get("support3"), float(self.data.get("sup3_stars", 2.0) or 2.0), "#2DD4BF", (3, 3), 1.0, "normal"),
-            ("S4", self.data.get("support4"), float(self.data.get("sup4_stars", 2.0) or 2.0), "#06B6D4", (2, 2), 1.0, "normal"),
-            ("S5", self.data.get("support5"), float(self.data.get("sup5_stars", 1.5) or 1.5), "#38BDF8", (2, 2), 1.0, "normal"),
+            ("S1", self.data.get("support"), float(self.data.get("sup_stars", 6.0) or 6.0), COLOR_SUCCESS_GREEN, (6, 3), 1.5, "bold"),
+            ("S2", self.data.get("support2"), float(self.data.get("sup2_stars", 5.0) or 5.0), "#34D399", (4, 3), 1.2, "bold"),
+            ("S3", self.data.get("support3"), float(self.data.get("sup3_stars", 4.0) or 4.0), "#2DD4BF", (3, 3), 1.0, "normal"),
+            ("S4", self.data.get("support4"), float(self.data.get("sup4_stars", 4.0) or 4.0), "#06B6D4", (2, 2), 1.0, "normal"),
+            ("S5", self.data.get("support5"), float(self.data.get("sup5_stars", 3.0) or 3.0), "#38BDF8", (2, 2), 1.0, "normal"),
         ]
 
         if tf in ("H1", "H4"):
@@ -1976,7 +1976,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         # 1. วาดแนวรับ–แนวต้าน 5 ระดับ (R1..R5 & S1..S5) สำหรับ Timeframe H1 และ H4
         if tf in ("H1", "H4"):
-            # 1.1 แนวต้าน 5 ระดับ (R1..R5) พร้อมดาวความแข็งแกร่ง
+            # 1.1 แนวต้าน 5 ระดับ (R1..R5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00 ทศนิยม 2 ตำแหน่ง)
             if self.ind_toggles.get("resistance", True):
                 for name, r_val, r_stars, col, dash, width, weight in res_list:
                     if r_val and not (isinstance(r_val, float) and math.isnan(r_val)) and lo <= r_val <= hi:
@@ -1984,10 +1984,10 @@ class GoldCandleDialog(ctk.CTkToplevel):
                         cv.create_line(left, yr, W - right, yr, fill=col, dash=dash, width=width)
                         lbl_y = yr + 8 if yr < top + 16 else yr - 8
                         cv.create_text(left + 6, lbl_y, text=f"แนวต้าน {name} {r_val:,.2f}", anchor="w", fill=col, font=(app_fonts.UI, 9, weight))
-                        _draw_vector_stars(left + 128, lbl_y, r_stars)
-                        cv.create_text(left + 192, lbl_y, text=f"({r_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
+                        r_score = max(0.0, min(10.0, float(r_stars or 0.0)))
+                        cv.create_text(left + 128, lbl_y, text=f"★ {r_score:.2f}", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
 
-            # 1.2 แนวรับ 5 ระดับ (S1..S5) พร้อมดาวความแข็งแกร่ง
+            # 1.2 แนวรับ 5 ระดับ (S1..S5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00 ทศนิยม 2 ตำแหน่ง)
             if self.ind_toggles.get("support", True):
                 for name, s_val, s_stars, col, dash, width, weight in sup_list:
                     if s_val and not (isinstance(s_val, float) and math.isnan(s_val)) and lo <= s_val <= hi:
@@ -1995,8 +1995,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
                         cv.create_line(left, ys, W - right, ys, fill=col, dash=dash, width=width)
                         lbl_y = ys - 8 if ys > top + 16 else ys + 8
                         cv.create_text(left + 6, lbl_y, text=f"แนวรับ {name} {s_val:,.2f}", anchor="w", fill=col, font=(app_fonts.UI, 9, weight))
-                        _draw_vector_stars(left + 124, lbl_y, s_stars)
-                        cv.create_text(left + 188, lbl_y, text=f"({s_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
+                        s_score = max(0.0, min(10.0, float(s_stars or 0.0)))
+                        cv.create_text(left + 124, lbl_y, text=f"★ {s_score:.2f}", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
 
         # 2. วาดอินดิเคเตอร์เฉพาะตาม Timeframe ที่เลือก
         if tf == "M15":
@@ -4171,12 +4171,13 @@ class MainTradingApp(ctk.CTk):
 
     @staticmethod
     def _format_sr_stars(stars: float) -> str:
-        """แปลงคะแนนดาวความแข็งแกร่งเป็นตัวเลขแสดงผล เช่น 2.5 -> '★ 2.5', 3.0 -> '★ 3.0'"""
-        if not stars or stars <= 0:
+        """แปลงคะแนนความแข็งแกร่งเป็นตัวเลขแสดงผล 0.00 - 10.00 (ทศนิยม 2 ตำแหน่ง) เช่น 7.0 -> '★ 7.00'"""
+        if stars is None or stars < 0:
             return ""
         try:
             val = float(stars)
-            return f"★ {val:.1f}" if val > 0 else ""
+            val = max(0.0, min(10.0, val))
+            return f"★ {val:.2f}"
         except Exception:
             return ""
 
@@ -6397,9 +6398,9 @@ class MainTradingApp(ctk.CTk):
                         row["res"].configure(text=f"▲ {res:,.2f}" if ok else "▲ —")
                         row["sup"].configure(text=f"▼ {sup:,.2f}" if ok else "▼ —")
                         if "res_star" in row:
-                            row["res_star"].configure(text=self._format_sr_stars(res_stars) if (ok and res_stars > 0) else "")
+                            row["res_star"].configure(text=self._format_sr_stars(res_stars) if (ok and res_stars >= 0) else "")
                         if "sup_star" in row:
-                            row["sup_star"].configure(text=self._format_sr_stars(sup_stars) if (ok and sup_stars > 0) else "")
+                            row["sup_star"].configure(text=self._format_sr_stars(sup_stars) if (ok and sup_stars >= 0) else "")
                         st = row["state"]
                         if (st["sup"], st["res"], st["price"]) != (sup, res, price):
                             st.update(sup=sup, res=res, price=price)

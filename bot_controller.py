@@ -572,16 +572,16 @@ class BotController:
                 "resistance4": ctx.get("res4") if ctx else None,
                 "support5": ctx.get("sup5") if ctx else None,
                 "resistance5": ctx.get("res5") if ctx else None,
-                "sup_stars": ctx.get("sup_stars", 3.0) if ctx else 3.0,
-                "res_stars": ctx.get("res_stars", 3.0) if ctx else 3.0,
-                "sup2_stars": ctx.get("sup2_stars", 3.0) if ctx else 3.0,
-                "res2_stars": ctx.get("res2_stars", 3.0) if ctx else 3.0,
-                "sup3_stars": ctx.get("sup3_stars", 3.0) if ctx else 3.0,
-                "res3_stars": ctx.get("res3_stars", 3.0) if ctx else 3.0,
-                "sup4_stars": ctx.get("sup4_stars", 3.0) if ctx else 3.0,
-                "res4_stars": ctx.get("res4_stars", 3.0) if ctx else 3.0,
-                "sup5_stars": ctx.get("sup5_stars", 3.0) if ctx else 3.0,
-                "res5_stars": ctx.get("res5_stars", 3.0) if ctx else 3.0,
+                "sup_stars": ctx.get("sup_stars", 6.0) if ctx else 6.0,
+                "res_stars": ctx.get("res_stars", 6.0) if ctx else 6.0,
+                "sup2_stars": ctx.get("sup2_stars", 6.0) if ctx else 6.0,
+                "res2_stars": ctx.get("res2_stars", 6.0) if ctx else 6.0,
+                "sup3_stars": ctx.get("sup3_stars", 6.0) if ctx else 6.0,
+                "res3_stars": ctx.get("res3_stars", 6.0) if ctx else 6.0,
+                "sup4_stars": ctx.get("sup4_stars", 6.0) if ctx else 6.0,
+                "res4_stars": ctx.get("res4_stars", 6.0) if ctx else 6.0,
+                "sup5_stars": ctx.get("sup5_stars", 6.0) if ctx else 6.0,
+                "res5_stars": ctx.get("res5_stars", 6.0) if ctx else 6.0,
             }
 
             # คำนวณแนวรับ–แนวต้าน 5 ระดับ (S1..S5, R1..R5) จากกราฟแท่ง 500 แท่ง
@@ -616,10 +616,10 @@ class BotController:
                         star_r = "res_stars" if i == 1 else f"res{i}_stars"
                         if s_k in sr_calc and not math.isnan(sr_calc[s_k]):
                             res_dict[s_k] = sr_calc[s_k]
-                            res_dict[star_s] = sr_calc.get(star_s, 2.0)
+                            res_dict[star_s] = sr_calc.get(star_s, 6.0)
                         if r_k in sr_calc and not math.isnan(sr_calc[r_k]):
                             res_dict[r_k] = sr_calc[r_k]
-                            res_dict[star_r] = sr_calc.get(star_r, 2.0)
+                            res_dict[star_r] = sr_calc.get(star_r, 6.0)
             except Exception:
                 pass
 
