@@ -417,52 +417,134 @@ class BotController:
         rows.sort(key=lambda t: t["close_time"] or t["open_time"], reverse=True)
         return rows
 
-    def get_live_candles(self, count: int = 16, symbol: str = "XAUUSD", extra: int = 50):
-        """แท่ง M15 ล่าสุด count แท่ง (แท่งสุดท้าย = แท่งที่กำลังวิ่ง) + MA5/MA13/MA50 + อินดิเคเตอร์ H1 ตามแผน + Bid/Ask ปัจจุบัน — None ถ้าเชื่อม MT5 ไม่ได้"""
+    def get_live_candles(self, count: int = 16, symbol: str = "XAUUSD", extra: int = 50, timeframe: str = "M15"):
+        """แท่งราคาล่าสุด count แท่ง (แท่งสุดท้าย = แท่งที่กำลังวิ่ง) พร้อมอินดิเคเตอร์ตาม Timeframe ที่เลือก (M15, H1, H4) + Bid/Ask ปัจจุบัน — None ถ้าเชื่อม MT5 ไม่ได้"""
         try:
+            import math
+            import pandas as pd
             if mt5.terminal_info() is None and not mt5.initialize():
                 return None
-            rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, count + max(extra, 50))
+
+            tf_upper = (timeframe or "M15").upper()
+            if tf_upper == "H1":
+                mt5_tf = mt5.TIMEFRAME_H1
+                bar_seconds = 3600
+                warmup = max(extra, 150)
+            elif tf_upper == "H4":
+                mt5_tf = mt5.TIMEFRAME_H4
+                bar_seconds = 14400
+                warmup = max(extra, 220)
+            else:
+                tf_upper = "M15"
+                mt5_tf = mt5.TIMEFRAME_M15
+                bar_seconds = 900
+                warmup = max(extra, 60)
+
+            rates = mt5.copy_rates_from_pos(symbol, mt5_tf, 0, count + warmup)
             tick = mt5.symbol_info_tick(symbol)
             if rates is None or len(rates) == 0:
                 return None
+
+            df = pd.DataFrame(rates)
             closes = [float(r["close"]) for r in rates]
+            highs = [float(r["high"]) for r in rates]
+            lows = [float(r["low"]) for r in rates]
             if tick and tick.bid:
-                closes[-1] = float(tick.bid)  # แท่งปัจจุบันใช้ราคาล่าสุด
+                closes[-1] = float(tick.bid)
+                highs[-1] = max(highs[-1], closes[-1])
+                lows[-1] = min(lows[-1], closes[-1])
+            df["close"] = closes
+            df["high"] = highs
+            df["low"] = lows
 
-            def ma(n, i):
-                return sum(closes[i - n + 1:i + 1]) / n if i - n + 1 >= 0 else None
-
-            # ดึงบริบท H1 (MA5/10/20, BB, SAR, EMA100, S&R) จาก position_chart
+            # บริบท S&R จาก position_chart
             ctx = None
-            h1_dict = {}
             try:
                 import position_chart
                 ctx = position_chart._context()
-                if ctx and "h1s" in ctx:
-                    h1s = ctx["h1s"]
-                    idx_sec = [int(t.timestamp()) for t in h1s.index]
-                    records = h1s.to_dict("records")
-                    h1_dict = dict(zip(idx_sec, records))
             except Exception:
                 pass
 
+            def _clean(val):
+                if val is None:
+                    return None
+                try:
+                    v = float(val)
+                    return None if (math.isnan(v) or math.isinf(v)) else v
+                except Exception:
+                    return None
+
             candles = []
-            for i in range(max(0, len(rates) - count), len(rates)):
-                r = rates[i]
-                c = closes[i]
-                bar_t = int(r["time"])
-                cd = {
-                    "time": bar_t, "open": float(r["open"]),
-                    "high": max(float(r["high"]), c), "low": min(float(r["low"]), c), "close": c,
-                    "ma5": ma(5, i), "ma13": ma(13, i), "ma50": ma(50, i),
-                }
-                h1_row = h1_dict.get((bar_t // 3600) * 3600)
-                if h1_row:
-                    for col in ("ma5", "ma10", "ma20", "bb_up", "bb_mid", "bb_lo", "sar", "ema100"):
-                        v = h1_row.get(col)
-                        cd["h1_" + col] = float(v) if v is not None and not (isinstance(v, float) and (v != v)) else None
-                candles.append(cd)
+            if tf_upper == "M15":
+                # Plan 1 (MA-Cross-Trend): MA5, MA13, MA50
+                ma5_s = df["close"].rolling(5).mean()
+                ma13_s = df["close"].rolling(13).mean()
+                ma50_s = df["close"].rolling(50).mean()
+                for i in range(max(0, len(rates) - count), len(rates)):
+                    r = rates[i]
+                    c = closes[i]
+                    candles.append({
+                        "time": int(r["time"]),
+                        "open": float(r["open"]),
+                        "high": highs[i],
+                        "low": lows[i],
+                        "close": c,
+                        "ma5": _clean(ma5_s.iloc[i]),
+                        "ma13": _clean(ma13_s.iloc[i]),
+                        "ma50": _clean(ma50_s.iloc[i]),
+                    })
+            elif tf_upper == "H1":
+                # Plan 2: MA5, MA10, MA20
+                ma5_s = df["close"].rolling(5).mean()
+                ma10_s = df["close"].rolling(10).mean()
+                ma20_s = df["close"].rolling(20).mean()
+                # Plan 5: BB (SMA 20, 2 STD)
+                bb_mid_s = df["close"].rolling(20).mean()
+                bb_std_s = df["close"].rolling(20).std()
+                bb_up_s = bb_mid_s + 2 * bb_std_s
+                bb_lo_s = bb_mid_s - 2 * bb_std_s
+                # Plan 6: SAR & EMA100
+                sar_vals, _ = bot_core.psar_series(df["high"].values, df["low"].values, *bot_core.P6_SAR)
+                ema100_s = df["close"].ewm(span=bot_core.P6_EXIT_EMA, adjust=False).mean()
+
+                for i in range(max(0, len(rates) - count), len(rates)):
+                    r = rates[i]
+                    c = closes[i]
+                    sar_v = sar_vals[i] if i < len(sar_vals) else None
+                    candles.append({
+                        "time": int(r["time"]),
+                        "open": float(r["open"]),
+                        "high": highs[i],
+                        "low": lows[i],
+                        "close": c,
+                        "h1_ma5": _clean(ma5_s.iloc[i]),
+                        "h1_ma10": _clean(ma10_s.iloc[i]),
+                        "h1_ma20": _clean(ma20_s.iloc[i]),
+                        "h1_bb_mid": _clean(bb_mid_s.iloc[i]),
+                        "h1_bb_up": _clean(bb_up_s.iloc[i]),
+                        "h1_bb_lo": _clean(bb_lo_s.iloc[i]),
+                        "h1_sar": _clean(sar_v),
+                        "h1_ema100": _clean(ema100_s.iloc[i]),
+                    })
+            else:  # H4
+                # H4 Trend: MA10, MA30, MA200
+                ma10_s = df["close"].rolling(10).mean()
+                ma30_s = df["close"].rolling(30).mean()
+                ma200_s = df["close"].rolling(200).mean()
+                for i in range(max(0, len(rates) - count), len(rates)):
+                    r = rates[i]
+                    c = closes[i]
+                    candles.append({
+                        "time": int(r["time"]),
+                        "open": float(r["open"]),
+                        "high": highs[i],
+                        "low": lows[i],
+                        "close": c,
+                        "h4_ma10": _clean(ma10_s.iloc[i]),
+                        "h4_ma30": _clean(ma30_s.iloc[i]),
+                        "h4_ma200": _clean(ma200_s.iloc[i]),
+                    })
+
             info = mt5.symbol_info(symbol)
             point = float(info.point) if info and info.point else 0.01
             positions = [{
@@ -470,6 +552,8 @@ class BotController:
                 "lot": float(p.volume), "profit": float(p.profit) + float(getattr(p, "swap", 0.0) or 0.0), "plan": p.comment or "",
             } for p in (mt5.positions_get(symbol=symbol) or [])]
             return {
+                "timeframe": tf_upper,
+                "bar_seconds": bar_seconds,
                 "candles": candles,
                 "positions": positions,
                 "spread_pts": int(round((float(tick.ask) - float(tick.bid)) / point)) if tick else 0,

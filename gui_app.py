@@ -963,69 +963,162 @@ class MarketExplainDialog(ctk.CTkToplevel):
 
 
 class GoldCandleDialog(ctk.CTkToplevel):
-    """กราฟแท่งเทียน XAUUSD M15 แบบเรียลไทม์: แท่งปัจจุบัน + ย้อนหลัง 15 แท่ง พร้อม MA5 / MA13 (เส้นที่ Plan 1 ใช้)"""
+    """กราฟแท่งเทียน XAUUSD เรียลไทม์: เลือก Timeframe M15 / H1 / H4 พร้อมอินดิเคเตอร์แยกตามแผน และปุ่มคลิกเปิด/ปิดแสดงผลแต่ละตัว"""
 
     BARS = 120   # ค่าเริ่มต้น (ปรับได้ที่ตัวเลือก "จำนวนแท่ง")
     BAR_CHOICES = ("16", "30", "50", "80", "120", "200", "300", "500")
     REFRESH_MS = 1000
 
+    INDICATOR_DEFS = {
+        "M15": [
+            ("ma5", "━ MA5", COLOR_CYAN_ACCENT),
+            ("ma13", "━ MA13", COLOR_GOLD_WARM),
+            ("ma50", "┅ MA50", "#A78BFA"),
+            ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
+        ],
+        "H1": [
+            ("h1_ma5", "━ MA5 H1", "#34D399"),
+            ("h1_ma10", "━ MA10 H1", "#FBBF24"),
+            ("h1_ma20", "┅ MA20 H1", "#818CF8"),
+            ("resistance", "┅ แนวต้าน H1", COLOR_DANGER_RED),
+            ("support", "┅ แนวรับ H1", COLOR_SUCCESS_GREEN),
+            ("h1_bb", "━ BB H1", "#C084FC"),
+            ("h1_sar", "• SAR H1", "#FB7185"),
+            ("h1_ema100", "┅ EMA100", "#60A5FA"),
+            ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
+        ],
+        "H4": [
+            ("h4_ma10", "━ MA10 H4", "#FBBF24"),
+            ("h4_ma30", "━ MA30 H4", "#FB923C"),
+            ("h4_ma200", "┅ MA200 H4", "#A78BFA"),
+            ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
+        ],
+    }
+
     def __init__(self, parent):
         super().__init__(parent)
         self.title("XAUUSD · M15 เรียลไทม์")
-        w, h = 980, 600
+        w, h = 1080, 640
         self.configure(fg_color=COLOR_BG_DARK)
-        # ไม่ใช้ transient เพื่อให้มีปุ่มขยายเต็มจอ/ย่อ บนแถบหัวหน้าต่าง
         self.after(10, self.lift)
         self.update_idletasks()
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
-        self.minsize(560, 380)
+        self.minsize(680, 420)
         self.data, self.slots, self._job = None, [], None
 
+        # สถานะเปิด/ปิดแสดงผลของแต่ละอินดิเคเตอร์ตามแผนที่เปิดใช้งานจริง
+        p1 = plan_config.is_enabled("MA-Cross-Trend")
+        p2 = plan_config.is_enabled("MA-Cross-H1-Trend")
+        p3 = plan_config.is_enabled("SMC-LiquidityHunt")
+        p4 = plan_config.is_enabled("SR-SwingBounce")
+        p5 = plan_config.is_enabled("BB-H1-Reversion")
+        p6 = plan_config.is_enabled("PSAR-H1-Trend")
+
+        self.ind_toggles = {
+            "ma5": p1, "ma13": p1, "ma50": p1,
+            "h1_ma5": p2, "h1_ma10": p2, "h1_ma20": p2,
+            "resistance": (p3 or p4), "support": (p3 or p4),
+            "h1_bb": p5,
+            "h1_sar": p6, "h1_ema100": p6,
+            "h4_ma10": True, "h4_ma30": True, "h4_ma200": True,
+            "orders": True,
+        }
+        if not any([p1, p2, p3, p4, p5, p6]):
+            for k in self.ind_toggles:
+                self.ind_toggles[k] = True
+
+        self.ind_buttons = {}
+        self.ind_colors = {}
+        self.tf_var = tk.StringVar(value="M15")
+        self.bars_var = tk.StringVar(value=str(self.BARS))
+
+        # --- แถวบน: สัญลักษณ์, Timeframe, ราคา, จำนวนแท่ง, ไม้เปิด, เต็มจอ ---
         top = ctk.CTkFrame(self, fg_color="transparent")
-        top.pack(fill="x", padx=18, pady=(14, 4))
-        ctk.CTkLabel(top, text="XAUUSD · M15", font=ctk.CTkFont(family=app_fonts.UI, size=17, weight="bold"),
-                     text_color=COLOR_GOLD_PRIMARY).pack(side="left")
-        self.lbl_price = ctk.CTkLabel(top, text="—", font=ctk.CTkFont(family=app_fonts.UI, size=17, weight="bold"),
+        top.pack(fill="x", padx=18, pady=(12, 4))
+
+        # กลุ่มซ้าย: XAUUSD + เลือก Timeframe + ราคา Live + การเปลี่ยนแปลง
+        left_grp = ctk.CTkFrame(top, fg_color="transparent")
+        left_grp.pack(side="left", fill="y")
+
+        self.lbl_sym = ctk.CTkLabel(left_grp, text="XAUUSD", font=ctk.CTkFont(family=app_fonts.UI, size=18, weight="bold"),
+                                    text_color=COLOR_GOLD_PRIMARY)
+        self.lbl_sym.pack(side="left", padx=(0, 10))
+
+        self.seg_tf = ctk.CTkSegmentedButton(left_grp, values=["M15", "H1", "H4"], variable=self.tf_var,
+                                            font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+                                            height=26, selected_color=COLOR_GOLD_WARM, selected_hover_color=COLOR_GOLD_DARK,
+                                            command=self._on_tf_change)
+        self.seg_tf.pack(side="left", padx=(0, 12))
+
+        self.lbl_price = ctk.CTkLabel(left_grp, text="—", font=ctk.CTkFont(family=app_fonts.UI, size=18, weight="bold"),
                                       text_color=COLOR_TEXT_PRIMARY)
-        self.lbl_price.pack(side="left", padx=14)
-        self.lbl_change = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family=app_fonts.UI, size=12))
+        self.lbl_price.pack(side="left", padx=(0, 8))
+
+        self.lbl_change = ctk.CTkLabel(left_grp, text="", font=ctk.CTkFont(family=app_fonts.UI, size=12))
         self.lbl_change.pack(side="left")
-        self.btn_full = ctk.CTkButton(top, text="ขยายเต็มจอ", width=96, height=26, font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
-                                      fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
-                                      text_color=COLOR_GOLD_PRIMARY, command=self._toggle_full)
-        self.btn_full.pack(side="right", padx=(10, 0))
+
+        # กลุ่มขวา: ปุ่มเต็มจอ + นาฬิกา + กำไรไม้ + จำนวนแท่ง
+        right_grp = ctk.CTkFrame(top, fg_color="transparent")
+        right_grp.pack(side="right", fill="y")
+
+        self.btn_full = ctk.CTkButton(right_grp, text="ขยายเต็มจอ", width=92, height=26,
+                                      font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+                                      fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, border_width=1,
+                                      border_color=COLOR_CARD_BORDER, text_color=COLOR_GOLD_PRIMARY,
+                                      command=self._toggle_full)
+        self.btn_full.pack(side="right", padx=(8, 0))
         self.bind("<F11>", lambda e: self._toggle_full())
         self.bind("<Escape>", lambda e: self.state() == "zoomed" and self._toggle_full())
-        self.lbl_clock = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_TEXT_MUTED)
-        self.lbl_clock.pack(side="right")
-        # กำไร/ขาดทุนรวมของไม้ที่เปิดอยู่ (รวม swap)
-        self.lbl_pnl = ctk.CTkLabel(top, text="", font=ctk.CTkFont(family=app_fonts.UI, size=14, weight="bold"),
+
+        self.lbl_clock = ctk.CTkLabel(right_grp, text="", font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=COLOR_TEXT_MUTED)
+        self.lbl_clock.pack(side="right", padx=(8, 4))
+
+        self.lbl_pnl = ctk.CTkLabel(right_grp, text="", font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
                                     corner_radius=8, height=26)
-        self.lbl_pnl.pack(side="right", padx=12)
+        self.lbl_pnl.pack(side="right", padx=(8, 4))
 
-        legend = ctk.CTkFrame(self, fg_color="transparent")
-        legend.pack(fill="x", padx=18)
-        self.bars_var = tk.StringVar(value=str(self.BARS))
-        ctk.CTkSegmentedButton(legend, values=list(self.BAR_CHOICES), variable=self.bars_var, font=ctk.CTkFont(family=app_fonts.UI, size=11),
+        ctk.CTkSegmentedButton(right_grp, values=list(self.BAR_CHOICES), variable=self.bars_var,
+                               font=ctk.CTkFont(family=app_fonts.UI, size=11), height=26,
                                selected_color=COLOR_GOLD_WARM, selected_hover_color=COLOR_GOLD_DARK,
-                               command=lambda v: self._tick(reschedule=False)).pack(side="right")
-        ctk.CTkLabel(legend, text="จำนวนแท่ง", font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=COLOR_TEXT_MUTED).pack(side="right", padx=6)
-        self.legend_box = ctk.CTkFrame(legend, fg_color="transparent")
-        self.legend_box.pack(side="left", fill="x", expand=True)
-        self._legend_sig = None
+                               command=lambda v: self._tick(reschedule=False)).pack(side="right", padx=(4, 0))
+        ctk.CTkLabel(right_grp, text="แท่ง:", font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=COLOR_TEXT_MUTED).pack(side="right")
 
+        # --- แถวสอง: แถบอินดิเคเตอร์แบบคลิกเปิด/ปิดได้ (Indicator Toolbar) ---
+        toolbar = ctk.CTkFrame(self, fg_color="transparent")
+        toolbar.pack(fill="x", padx=18, pady=(2, 6))
+
+        ctk.CTkLabel(toolbar, text="อินดิเคเตอร์:", font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+                     text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(0, 8))
+
+        self.legend_box = ctk.CTkFrame(toolbar, fg_color="transparent")
+        self.legend_box.pack(side="left", fill="x", expand=True)
+
+        # ปุ่มเปิด/ปิดทั้งหมด
+        all_box = ctk.CTkFrame(toolbar, fg_color="transparent")
+        all_box.pack(side="right")
+        ctk.CTkButton(all_box, text="เปิดหมด", width=52, height=22, font=ctk.CTkFont(family=app_fonts.UI, size=10),
+                      fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
+                      text_color=COLOR_TEXT_MUTED, command=lambda: self._set_all_indicators(True)).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(all_box, text="ปิดหมด", width=52, height=22, font=ctk.CTkFont(family=app_fonts.UI, size=10),
+                      fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
+                      text_color=COLOR_TEXT_MUTED, command=lambda: self._set_all_indicators(False)).pack(side="left")
+
+        # สร้างปุ่มอินดิเคเตอร์เริ่มต้น
+        self._rebuild_legend_chips()
+
+        # --- กล่องกราฟ Canvas ---
         box = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
-        box.pack(fill="both", expand=True, padx=18, pady=8)
+        box.pack(fill="both", expand=True, padx=18, pady=4)
         self.canvas = tk.Canvas(box, bg=COLOR_CARD_BG, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True, padx=6, pady=6)
         self.canvas.bind("<Configure>", lambda e: self._draw())
         self.canvas.bind("<Motion>", self._hover)
         self.canvas.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
-        self.tip_default = "อัปเดตทุก 1 วินาที · ชี้ที่แท่งเพื่อดู Open / High / Low / Close และค่าอินดิเคเตอร์ของแผนที่เปิดใช้"
+        self.tip_default = "อัปเดตทุก 1 วินาที · คลิกปุ่มอินดิเคเตอร์ด้านบนเพื่อเปิด/ปิด · ชี้ที่แท่งเพื่อดูราคาและค่าอินดิเคเตอร์"
         self.lbl_tip = ctk.CTkLabel(self, text=self.tip_default, font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_TEXT_MUTED)
-        self.lbl_tip.pack(pady=(0, 10))
+        self.lbl_tip.pack(pady=(2, 8))
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._tick()
 
@@ -1046,32 +1139,68 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 pass
         self.destroy()
 
-    @staticmethod
-    def _hhmm(server_ts, offset):
-        from datetime import datetime, timedelta, timezone
-        return datetime.fromtimestamp(server_ts - offset, timezone(timedelta(hours=7))).strftime("%H:%M")
+    def _on_tf_change(self, new_tf):
+        self.title(f"XAUUSD · {new_tf} เรียลไทม์")
+        self._rebuild_legend_chips()
+        self._tick(reschedule=False)
 
-    def _update_legend(self, p1, p2, p3, p4, p5, p6):
-        items = []
-        if p1:
-            items += [("━ MA5", COLOR_CYAN_ACCENT), ("━ MA13", COLOR_GOLD_WARM), ("┅ MA50", "#A78BFA")]
-        if p2:
-            items += [("━ MA5 H1", "#34D399"), ("━ MA10 H1", "#FBBF24"), ("┅ MA20 H1", "#818CF8")]
-        if p3 or p4:
-            items += [("┅ แนวต้าน", COLOR_DANGER_RED), ("┅ แนวรับ", COLOR_SUCCESS_GREEN)]
-        if p5:
-            items += [("━ BB H1", "#C084FC"), ("┅ BBกลาง", "#94A3B8")]
-        if p6:
-            items += [("• SAR H1", "#FB7185"), ("┅ EMA100", "#60A5FA")]
-        items += [("┅ Bid/Ask", COLOR_TEXT_MUTED), ("┅ ราคาเข้า", COLOR_CYAN_ACCENT), ("┅ TP", COLOR_SUCCESS_GREEN), ("┅ SL", COLOR_DANGER_RED)]
-        sig = tuple(items)
-        if sig == self._legend_sig:
-            return
-        self._legend_sig = sig
+    def _rebuild_legend_chips(self):
         for w in self.legend_box.winfo_children():
             w.destroy()
-        for txt, col in items:
-            ctk.CTkLabel(self.legend_box, text=txt, font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=col).pack(side="left", padx=(0, 10))
+        self.ind_buttons = {}
+        self.ind_colors = {}
+        tf = self.tf_var.get()
+        defs = self.INDICATOR_DEFS.get(tf, self.INDICATOR_DEFS["M15"])
+        for key, label, col in defs:
+            self.ind_colors[key] = col
+            is_on = self.ind_toggles.get(key, True)
+            btn = ctk.CTkButton(
+                self.legend_box,
+                text=label,
+                width=0,
+                height=22,
+                corner_radius=6,
+                font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+                fg_color="#18202F" if is_on else COLOR_CARD_BG,
+                hover_color=COLOR_CARD_HOVER,
+                border_width=1,
+                border_color=col if is_on else COLOR_CARD_BORDER,
+                text_color=col if is_on else "#64748B",
+                command=lambda k=key: self._toggle_indicator(k)
+            )
+            btn.pack(side="left", padx=(0, 6))
+            self.ind_buttons[key] = btn
+
+    def _toggle_indicator(self, key):
+        self.ind_toggles[key] = not self.ind_toggles.get(key, True)
+        self._refresh_chip_style(key)
+        self._draw()
+
+    def _refresh_chip_style(self, key):
+        btn = self.ind_buttons.get(key)
+        if not btn:
+            return
+        is_on = self.ind_toggles.get(key, True)
+        col = self.ind_colors.get(key, COLOR_TEXT_PRIMARY)
+        if is_on:
+            btn.configure(fg_color="#18202F", border_color=col, text_color=col, border_width=1)
+        else:
+            btn.configure(fg_color=COLOR_CARD_BG, border_color=COLOR_CARD_BORDER, text_color="#64748B", border_width=1)
+
+    def _set_all_indicators(self, state: bool):
+        tf = self.tf_var.get()
+        for key, _, _ in self.INDICATOR_DEFS.get(tf, []):
+            self.ind_toggles[key] = state
+            self._refresh_chip_style(key)
+        self._draw()
+
+    @staticmethod
+    def _format_bar_time(server_ts, offset, tf):
+        from datetime import datetime, timedelta, timezone
+        dt = datetime.fromtimestamp(server_ts - offset, timezone(timedelta(hours=7)))
+        if tf == "H4":
+            return dt.strftime("%d/%m %H:%M")
+        return dt.strftime("%H:%M")
 
     def _tick(self, reschedule=True):
         try:
@@ -1089,12 +1218,15 @@ class GoldCandleDialog(ctk.CTkToplevel):
             n = int(self.bars_var.get())
         except Exception:
             n = self.BARS
-        data = bot_ctrl.get_live_candles(n)
+        tf = self.tf_var.get()
+        data = bot_ctrl.get_live_candles(n, timeframe=tf)
         if data:
             self.data = data
             # เวลาเซิร์ฟเวอร์ MT5 → เวลาไทย (thai_time: ตลาดปิด/tick เก่าก็ยังถูก)
             self.offset = thai_time.server_offset()
             c = data["candles"]
+            if not c:
+                return
             last = c[-1]
             chg = last["close"] - last["open"]
             self.lbl_price.configure(text=f"{data['bid']:,.2f}", text_color=COLOR_SUCCESS_GREEN if chg >= 0 else COLOR_DANGER_RED)
@@ -1109,8 +1241,15 @@ class GoldCandleDialog(ctk.CTkToplevel):
                     text_color=COLOR_SUCCESS_GREEN if good else COLOR_DANGER_RED, fg_color="#0F2A20" if good else "#2A1215")
             else:
                 self.lbl_pnl.configure(text="  ไม่มีไม้เปิด  ", text_color=COLOR_TEXT_MUTED, fg_color=COLOR_CARD_BG)
-            remain = max(0, last["time"] + 900 - data["server_time"])
-            self.lbl_clock.configure(text=f"แท่งปัจจุบันปิดในอีก {remain // 60:02d}:{remain % 60:02d}")
+            bar_sec = data.get("bar_seconds", 900)
+            remain = max(0, last["time"] + bar_sec - data["server_time"])
+            hrs = remain // 3600
+            mins = (remain % 3600) // 60
+            secs = remain % 60
+            if hrs > 0:
+                self.lbl_clock.configure(text=f"แท่งปิดในอีก {hrs:02d}:{mins:02d}:{secs:02d}")
+            else:
+                self.lbl_clock.configure(text=f"แท่งปิดในอีก {mins:02d}:{secs:02d}")
             self._draw()
         else:
             self.lbl_tip.configure(text="เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
@@ -1125,43 +1264,57 @@ class GoldCandleDialog(ctk.CTkToplevel):
         if W < 60:
             return
         candles = self.data["candles"]
+        if not candles:
+            return
 
-        # ตรวจสอบแผนที่เปิดใช้งานอยู่
-        p1 = plan_config.is_enabled("MA-Cross-Trend")
-        p2 = plan_config.is_enabled("MA-Cross-H1-Trend")
-        p3 = plan_config.is_enabled("SMC-LiquidityHunt")
-        p4 = plan_config.is_enabled("SR-SwingBounce")
-        p5 = plan_config.is_enabled("BB-H1-Reversion")
-        p6 = plan_config.is_enabled("PSAR-H1-Trend")
-        self._update_legend(p1, p2, p3, p4, p5, p6)
-
+        tf = self.tf_var.get()
         left, right, top, bottom = 10, 70, 16, 28
+
+        # คำนวณช่วงราคา (hi/lo) เฉพาะอินดิเคเตอร์ที่เปิดแสดงผลอยู่
         vals = [v for c in candles for v in (c["high"], c["low"])]
-        if p1:
-            for c in candles:
-                vals += [v for v in (c.get("ma5"), c.get("ma13"), c.get("ma50")) if v is not None]
-        if p2:
-            for c in candles:
-                vals += [v for v in (c.get("h1_ma5"), c.get("h1_ma10"), c.get("h1_ma20")) if v is not None]
-        if p5:
-            for c in candles:
-                vals += [v for v in (c.get("h1_bb_up"), c.get("h1_bb_lo")) if v is not None]
-        if p6:
-            for c in candles:
-                vals += [v for v in (c.get("h1_sar"), c.get("h1_ema100")) if v is not None]
+        if tf == "M15":
+            if self.ind_toggles.get("ma5", True):
+                vals += [c["ma5"] for c in candles if c.get("ma5") is not None]
+            if self.ind_toggles.get("ma13", True):
+                vals += [c["ma13"] for c in candles if c.get("ma13") is not None]
+            if self.ind_toggles.get("ma50", True):
+                vals += [c["ma50"] for c in candles if c.get("ma50") is not None]
+        elif tf == "H1":
+            if self.ind_toggles.get("h1_ma5", True):
+                vals += [c["h1_ma5"] for c in candles if c.get("h1_ma5") is not None]
+            if self.ind_toggles.get("h1_ma10", True):
+                vals += [c["h1_ma10"] for c in candles if c.get("h1_ma10") is not None]
+            if self.ind_toggles.get("h1_ma20", True):
+                vals += [c["h1_ma20"] for c in candles if c.get("h1_ma20") is not None]
+            if self.ind_toggles.get("h1_bb", True):
+                vals += [c["h1_bb_up"] for c in candles if c.get("h1_bb_up") is not None]
+                vals += [c["h1_bb_lo"] for c in candles if c.get("h1_bb_lo") is not None]
+            if self.ind_toggles.get("h1_sar", True):
+                vals += [c["h1_sar"] for c in candles if c.get("h1_sar") is not None]
+            if self.ind_toggles.get("h1_ema100", True):
+                vals += [c["h1_ema100"] for c in candles if c.get("h1_ema100") is not None]
+        elif tf == "H4":
+            if self.ind_toggles.get("h4_ma10", True):
+                vals += [c["h4_ma10"] for c in candles if c.get("h4_ma10") is not None]
+            if self.ind_toggles.get("h4_ma30", True):
+                vals += [c["h4_ma30"] for c in candles if c.get("h4_ma30") is not None]
+            if self.ind_toggles.get("h4_ma200", True):
+                vals += [c["h4_ma200"] for c in candles if c.get("h4_ma200") is not None]
 
         cur_price = self.data["bid"]
         sup = self.data.get("support")
         res = self.data.get("resistance")
-        if (p3 or p4):
-            if sup and abs(sup - cur_price) <= 80:
+        if tf == "H1":
+            if self.ind_toggles.get("support", True) and sup and abs(sup - cur_price) <= 120:
                 vals.append(sup)
-            if res and abs(res - cur_price) <= 80:
+            if self.ind_toggles.get("resistance", True) and res and abs(res - cur_price) <= 120:
                 vals.append(res)
 
         vals.append(self.data["ask"])
-        for p in self.data.get("positions", []):  # ให้เห็นเส้นราคาเข้า/TP/SL ในกรอบเสมอ
-            vals += [v for v in (p["price"], p["sl"], p["tp"]) if v and v > 0]
+        if self.ind_toggles.get("orders", True):
+            for p in self.data.get("positions", []):  # ให้เห็นเส้นราคาเข้า/TP/SL ในกรอบเสมอ
+                vals += [v for v in (p["price"], p["sl"], p["tp"]) if v and v > 0]
+
         hi, lo = max(vals), min(vals)
         pad = max((hi - lo) * 0.08, 0.5)
         hi, lo = hi + pad, lo - pad
@@ -1170,11 +1323,13 @@ class GoldCandleDialog(ctk.CTkToplevel):
         def y_of(v):
             return top + (hi - v) / (hi - lo) * ch
 
-        for k in range(6):  # เส้นราคาแนวนอน
+        # เส้นราคาแนวนอน
+        for k in range(6):
             v = lo + (hi - lo) * k / 5
             y = y_of(v)
             cv.create_line(left, y, W - right, y, fill="#1E232C")
             cv.create_text(W - right + 6, y, text=f"{v:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
+
         n = len(candles)
         slot = (W - left - right - 24) / n   # เว้น 24px ระหว่างแท่งสุดท้ายกับแถบราคา
         bw = max(3, min(26, slot * 0.62))
@@ -1186,51 +1341,69 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 if v is not None and not (isinstance(v, float) and math.isnan(v)):
                     pts += [left + slot * (i + 0.5), y_of(v)]
             if len(pts) >= 4:
+                kw = {"fill": col, "width": width}
                 if dash:
-                    cv.create_line(*pts, fill=col, width=width, dash=dash)
-                else:
-                    cv.create_line(*pts, fill=col, width=width, smooth=smooth)
+                    kw["dash"] = dash
+                elif smooth and len(pts) >= 6:
+                    kw["smooth"] = True
+                cv.create_line(*pts, **kw)
 
-        # 1. แนวรับ / แนวต้าน H1 (Plan 3, Plan 4)
-        if (p3 or p4):
-            if res and lo <= res <= hi:
+        # วาดอินดิเคเตอร์ตาม Timeframe ที่เลือก
+        if tf == "M15":
+            # Plan 1 (MA-Cross-Trend M15)
+            if self.ind_toggles.get("ma50", True):
+                draw_series("ma50", "#A78BFA", width=1, dash=(4, 2), smooth=True)
+            if self.ind_toggles.get("ma13", True):
+                draw_series("ma13", COLOR_GOLD_WARM, width=2, smooth=True)
+            if self.ind_toggles.get("ma5", True):
+                draw_series("ma5", COLOR_CYAN_ACCENT, width=2, smooth=True)
+        elif tf == "H1":
+            # 1. แนวรับ / แนวต้าน H1 (Plan 3, Plan 4)
+            if self.ind_toggles.get("resistance", True) and res and lo <= res <= hi:
                 yr = y_of(res)
                 cv.create_line(left, yr, W - right, yr, fill=COLOR_DANGER_RED, dash=(5, 3), width=1)
                 cv.create_text(left + 6, yr - 8, text=f"แนวต้าน H1 {res:,.2f}", anchor="w", fill=COLOR_DANGER_RED, font=(app_fonts.UI, 9, "bold"))
-            if sup and lo <= sup <= hi:
+            if self.ind_toggles.get("support", True) and sup and lo <= sup <= hi:
                 ys = y_of(sup)
                 cv.create_line(left, ys, W - right, ys, fill=COLOR_SUCCESS_GREEN, dash=(5, 3), width=1)
                 cv.create_text(left + 6, ys - 8, text=f"แนวรับ H1 {sup:,.2f}", anchor="w", fill=COLOR_SUCCESS_GREEN, font=(app_fonts.UI, 9, "bold"))
 
-        # 2. Bollinger Bands H1 (Plan 5)
-        if p5:
-            draw_series("h1_bb_up", "#C084FC", width=1, dash=(4, 2), smooth=False)
-            draw_series("h1_bb_mid", "#94A3B8", width=1, dash=(2, 2), smooth=False)
-            draw_series("h1_bb_lo", "#C084FC", width=1, dash=(4, 2), smooth=False)
+            # 2. Bollinger Bands H1 (Plan 5)
+            if self.ind_toggles.get("h1_bb", True):
+                draw_series("h1_bb_up", "#C084FC", width=1, dash=(4, 2), smooth=True)
+                draw_series("h1_bb_mid", "#94A3B8", width=1, dash=(2, 2), smooth=True)
+                draw_series("h1_bb_lo", "#C084FC", width=1, dash=(4, 2), smooth=True)
 
-        # 3. Parabolic SAR & EMA100 H1 (Plan 6)
-        if p6:
-            draw_series("h1_ema100", "#60A5FA", width=1, dash=(4, 2), smooth=False)
-            for i, c in enumerate(candles):
-                sar = c.get("h1_sar")
-                if sar is not None and not (isinstance(sar, float) and math.isnan(sar)):
-                    cx = left + slot * (i + 0.5)
-                    cy = y_of(sar)
-                    cv.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill="#FB7185", outline="")
+            # 3. EMA100 H1 (Plan 6)
+            if self.ind_toggles.get("h1_ema100", True):
+                draw_series("h1_ema100", "#60A5FA", width=1, dash=(4, 2), smooth=True)
 
-        # 4. Moving Averages H1 (Plan 2)
-        if p2:
-            draw_series("h1_ma5", "#34D399", width=2, smooth=False)
-            draw_series("h1_ma10", "#FBBF24", width=2, smooth=False)
-            draw_series("h1_ma20", "#818CF8", width=1, dash=(5, 3), smooth=False)
+            # 4. Parabolic SAR H1 (Plan 6)
+            if self.ind_toggles.get("h1_sar", True):
+                for i, c in enumerate(candles):
+                    sar = c.get("h1_sar")
+                    if sar is not None and not (isinstance(sar, float) and math.isnan(sar)):
+                        cx = left + slot * (i + 0.5)
+                        cy = y_of(sar)
+                        cv.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill="#FB7185", outline="")
 
-        # 5. Moving Averages M15 (Plan 1)
-        if p1:
-            draw_series("ma50", "#A78BFA", width=1, dash=(4, 2), smooth=True)
-            draw_series("ma5", COLOR_CYAN_ACCENT, width=2, smooth=True)
-            draw_series("ma13", COLOR_GOLD_WARM, width=2, smooth=True)
+            # 5. Moving Averages H1 (Plan 2)
+            if self.ind_toggles.get("h1_ma20", True):
+                draw_series("h1_ma20", "#818CF8", width=1, dash=(5, 3), smooth=True)
+            if self.ind_toggles.get("h1_ma10", True):
+                draw_series("h1_ma10", "#FBBF24", width=2, smooth=True)
+            if self.ind_toggles.get("h1_ma5", True):
+                draw_series("h1_ma5", "#34D399", width=2, smooth=True)
+        elif tf == "H4":
+            # H4 Trend Regimes: MA10, MA30, MA200
+            if self.ind_toggles.get("h4_ma200", True):
+                draw_series("h4_ma200", "#A78BFA", width=2, dash=(4, 2), smooth=True)
+            if self.ind_toggles.get("h4_ma30", True):
+                draw_series("h4_ma30", "#FB923C", width=2, smooth=True)
+            if self.ind_toggles.get("h4_ma10", True):
+                draw_series("h4_ma10", "#FBBF24", width=2, smooth=True)
 
-        # 6. แท่งเทียน Candlesticks
+        # แท่งเทียน Candlesticks
         for i, c in enumerate(candles):
             cx = left + slot * (i + 0.5)
             up = c["close"] >= c["open"]
@@ -1242,28 +1415,31 @@ class GoldCandleDialog(ctk.CTkToplevel):
             live = i == n - 1
             cv.create_rectangle(cx - bw / 2, min(y1, y2), cx + bw / 2, max(y1, y2), fill=col,
                                 outline=COLOR_GOLD_PRIMARY if live else col, width=2 if live else 1)
-            every = max(1, int(round(n / max(1, (W - left - right) / 52))))
+            every = max(1, int(round(n / max(1, (W - left - right) / 58))))
             if (i % every == 0 and i < n - max(2, int(every * 0.8))) or live:
-                cv.create_text(cx, H - bottom + 13, text="ตอนนี้" if live else self._hhmm(c["time"], self.offset),
-                               fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED, font=(app_fonts.UI, 9, "bold" if live else "normal"))
+                t_str = "ตอนนี้" if live else self._format_bar_time(c["time"], self.offset, tf)
+                cv.create_text(cx, H - bottom + 13, text=t_str,
+                               fill=COLOR_GOLD_PRIMARY if live else COLOR_TEXT_MUTED,
+                               font=(app_fonts.UI, 9, "bold" if live else "normal"))
             self.slots.append((cx - slot / 2, cx + slot / 2, c))
 
-        # 7. ไม้ที่เปิดอยู่: ราคาเข้า / TP / SL / Lot
-        for p in self.data.get("positions", []):
-            for val, col, txt in ((p["price"], COLOR_CYAN_ACCENT, f"{p['type']} {p['lot']:.2f} lot @ {p['price']:,.2f} ({p['profit']:+.2f})"),
-                                  (p["tp"], COLOR_SUCCESS_GREEN, f"TP {p['tp']:,.2f}"), (p["sl"], COLOR_DANGER_RED, f"SL {p['sl']:,.2f}")):
-                if not val or val <= 0:
-                    continue
-                yy = y_of(val)
-                cv.create_line(left, yy, W - right, yy, fill=col, dash=(6, 3))
-                cv.create_text(left + 4, yy - 7, text=txt, anchor="w", fill=col, font=(app_fonts.UI, 9, "bold"))
+        # ไม้ที่เปิดอยู่: ราคาเข้า / TP / SL / Lot
+        if self.ind_toggles.get("orders", True):
+            for p in self.data.get("positions", []):
+                for val, col, txt in ((p["price"], COLOR_CYAN_ACCENT, f"{p['type']} {p['lot']:.2f} lot @ {p['price']:,.2f} ({p['profit']:+.2f})"),
+                                      (p["tp"], COLOR_SUCCESS_GREEN, f"TP {p['tp']:,.2f}"), (p["sl"], COLOR_DANGER_RED, f"SL {p['sl']:,.2f}")):
+                    if not val or val <= 0:
+                        continue
+                    yy = y_of(val)
+                    cv.create_line(left, yy, W - right, yy, fill=col, dash=(6, 3))
+                    cv.create_text(left + 4, yy - 7, text=txt, anchor="w", fill=col, font=(app_fonts.UI, 9, "bold"))
 
-        # 8. เส้น Ask
+        # เส้น Ask
         ya = y_of(self.data["ask"])
         cv.create_line(left, ya, W - right, ya, fill="#5B6270", dash=(2, 4))
         cv.create_text(W - right + 6, ya - 12 if abs(ya - y_of(self.data["bid"])) < 18 else ya, text=f"A {self.data['ask']:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 8))
 
-        # 9. เส้นราคาล่าสุด
+        # เส้นราคาล่าสุด (Bid)
         yb = y_of(self.data["bid"])
         cv.create_line(left, yb, W - right, yb, fill=COLOR_TEXT_MUTED, dash=(3, 3))
         cv.create_rectangle(W - right + 2, yb - 9, W - 2, yb + 9, fill=COLOR_GOLD_PRIMARY, outline="")
@@ -1272,21 +1448,39 @@ class GoldCandleDialog(ctk.CTkToplevel):
     def _hover(self, event):
         for x0, x1, c in self.slots:
             if x0 <= event.x < x1:
-                p1 = plan_config.is_enabled("MA-Cross-Trend")
-                p2 = plan_config.is_enabled("MA-Cross-H1-Trend")
-                p5 = plan_config.is_enabled("BB-H1-Reversion")
-                p6 = plan_config.is_enabled("PSAR-H1-Trend")
+                tf = self.tf_var.get()
                 extras = []
-                if p1 and c.get("ma5") is not None and c.get("ma13") is not None:
-                    extras.append(f"MA5 {c['ma5']:,.2f} / MA13 {c['ma13']:,.2f}")
-                if p2 and c.get("h1_ma5") is not None and c.get("h1_ma10") is not None:
-                    extras.append(f"H1 MA5 {c['h1_ma5']:,.2f} / MA10 {c['h1_ma10']:,.2f}")
-                if p5 and c.get("h1_bb_lo") is not None and c.get("h1_bb_up") is not None:
-                    extras.append(f"H1 BB [{c['h1_bb_lo']:,.1f}–{c['h1_bb_up']:,.1f}]")
-                if p6 and c.get("h1_sar") is not None:
-                    extras.append(f"SAR {c['h1_sar']:,.2f}")
+                if tf == "M15":
+                    if self.ind_toggles.get("ma5", True) and c.get("ma5") is not None:
+                        extras.append(f"MA5 {c['ma5']:,.2f}")
+                    if self.ind_toggles.get("ma13", True) and c.get("ma13") is not None:
+                        extras.append(f"MA13 {c['ma13']:,.2f}")
+                    if self.ind_toggles.get("ma50", True) and c.get("ma50") is not None:
+                        extras.append(f"MA50 {c['ma50']:,.2f}")
+                elif tf == "H1":
+                    if self.ind_toggles.get("h1_ma5", True) and c.get("h1_ma5") is not None:
+                        extras.append(f"MA5 {c['h1_ma5']:,.2f}")
+                    if self.ind_toggles.get("h1_ma10", True) and c.get("h1_ma10") is not None:
+                        extras.append(f"MA10 {c['h1_ma10']:,.2f}")
+                    if self.ind_toggles.get("h1_ma20", True) and c.get("h1_ma20") is not None:
+                        extras.append(f"MA20 {c['h1_ma20']:,.2f}")
+                    if self.ind_toggles.get("h1_bb", True) and c.get("h1_bb_lo") is not None and c.get("h1_bb_up") is not None:
+                        extras.append(f"BB [{c['h1_bb_lo']:,.1f}–{c['h1_bb_up']:,.1f}]")
+                    if self.ind_toggles.get("h1_sar", True) and c.get("h1_sar") is not None:
+                        extras.append(f"SAR {c['h1_sar']:,.2f}")
+                    if self.ind_toggles.get("h1_ema100", True) and c.get("h1_ema100") is not None:
+                        extras.append(f"EMA100 {c['h1_ema100']:,.2f}")
+                elif tf == "H4":
+                    if self.ind_toggles.get("h4_ma10", True) and c.get("h4_ma10") is not None:
+                        extras.append(f"MA10 {c['h4_ma10']:,.2f}")
+                    if self.ind_toggles.get("h4_ma30", True) and c.get("h4_ma30") is not None:
+                        extras.append(f"MA30 {c['h4_ma30']:,.2f}")
+                    if self.ind_toggles.get("h4_ma200", True) and c.get("h4_ma200") is not None:
+                        extras.append(f"MA200 {c['h4_ma200']:,.2f}")
+
                 extra_str = (" · " + " · ".join(extras)) if extras else ""
-                self.lbl_tip.configure(text=f"{self._hhmm(c['time'], self.offset)} น. · O {c['open']:,.2f}  H {c['high']:,.2f}  "
+                t_str = self._format_bar_time(c['time'], self.offset, tf)
+                self.lbl_tip.configure(text=f"{t_str} น. · O {c['open']:,.2f}  H {c['high']:,.2f}  "
                                             f"L {c['low']:,.2f}  C {c['close']:,.2f} ({c['close'] - c['open']:+.2f}){extra_str}")
                 return
 
@@ -2953,7 +3147,7 @@ class MainTradingApp(ctk.CTk):
         self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "0.00", "Equity 0.00 · Float 0.00", COLOR_SUCCESS_GREEN)
         self._make_clickable(self.card_balance, lambda: PnlHistoryDialog(self), hint="ดูกราฟ ›")
         self.card_gold = self._create_stat_card(grid_frame, 2, "🏆", "ราคาทองคำ XAUUSD", "0.00", "Spread 0 pts", COLOR_GOLD_PRIMARY)
-        self._make_clickable(self.card_gold, lambda: GoldCandleDialog(self), hint="กราฟ M15 ›")
+        self._make_clickable(self.card_gold, lambda: GoldCandleDialog(self), hint="ดูกราฟ ›")
         # สภาวะตลาด: 2 แถว H1 / H4 + ป้ายทิศที่อนุญาตให้เทรด (Strict Pro-Trend)
         self.card_trend = self._create_dual_card(grid_frame, 3, "📊", "สภาวะตลาด")
         self.card_trend["rows"] = {tf: self._create_trend_row(self.card_trend["body"], tf) for tf in ("H1", "H4")}
