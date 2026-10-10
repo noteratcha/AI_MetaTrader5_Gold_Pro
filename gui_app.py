@@ -4117,7 +4117,7 @@ class MainTradingApp(ctk.CTk):
         sr_body = self.card_sr["body"]
         sr_body.grid_columnconfigure((0, 1), weight=1, uniform="sr_cols")
         self.card_sr["rows"] = {tf: self._create_sr_row(sr_body, tf, col) for col, tf in enumerate(("H1", "H4"))}
-        self._make_clickable(self.card_sr, lambda: GoldCandleDialog(self, default_tf="H1", default_bars=500, default_plan="P3"), hint="ดูกราฟ H1 (500 แท่ง) ›")
+        self._make_clickable(self.card_sr, lambda: GoldCandleDialog(self, default_tf="H1", default_bars=500, default_plan="P3"), hint="ดูกราฟ H1 ›")
 
     # ---------------------------------------------------------------------
     # การ์ด 2 แถว (สภาวะตลาด / แนวรับ–แนวต้าน)
@@ -4135,10 +4135,13 @@ class MainTradingApp(ctk.CTk):
         badge = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED,
                              fg_color="transparent", corner_radius=8, height=18)
         badge.pack(side="right")
+        hint_lbl = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_GOLD_PRIMARY,
+                                fg_color="transparent", corner_radius=6, height=18)
+        hint_lbl.pack(side="right", padx=(0, 4))
 
         body = ctk.CTkFrame(inner, fg_color="transparent")
         body.pack(fill="x", pady=(3, 0))
-        return {"card": card, "badge": badge, "body": body}
+        return {"card": card, "badge": badge, "hint_lbl": hint_lbl, "body": body, "top_row": top_row}
 
     @staticmethod
     def _set_badge(badge, text, fg="#1F2430", color=COLOR_TEXT_MUTED):
@@ -4253,17 +4256,24 @@ class MainTradingApp(ctk.CTk):
         badge = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED,
                              fg_color="transparent", corner_radius=8, height=18)
         badge.pack(side="right")
+        hint_lbl = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_GOLD_PRIMARY,
+                                fg_color="transparent", corner_radius=6, height=18)
+        hint_lbl.pack(side="right", padx=(0, 4))
 
         val_label = ctk.CTkLabel(inner, text=val_text, font=self._font(19, "bold"), text_color=accent_color, height=26)
         val_label.pack(anchor="w", pady=(2, 0))
         sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
         sub_label.pack(anchor="w")
-        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "icon_lbl": icon_lbl}
+        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "hint_lbl": hint_lbl, "icon_lbl": icon_lbl, "top_row": top_row}
 
     def _make_clickable(self, card_info, command, hint=""):
-        """ทำให้ทั้งการ์ดกดได้ (เคอร์เซอร์มือ + ขอบสีทองเมื่อชี้)"""
+        """ทำให้ทั้งการ์ดกดได้ (เคอร์เซอร์มือ + ขอบสีทองเมื่อชี้ + ป้ายบอกทาง)"""
         card = card_info["card"]
+        hint_lbl = card_info.get("hint_lbl")
         state = {"win": None}
+
+        if hint and hint_lbl:
+            hint_lbl.configure(text=f" {hint} ", text_color=COLOR_GOLD_PRIMARY, fg_color="#201C12")
 
         def open_once(_e=None):
             # คลิกโดนหลายวิดเจ็ตซ้อนกันจะยิงหลายครั้ง → เปิดหน้าต่างเดียว ถ้าเปิดอยู่แล้วให้ดึงขึ้นมาหน้าสุด
@@ -4277,8 +4287,20 @@ class MainTradingApp(ctk.CTk):
                     pass
             state["win"] = command()
 
+        def on_enter(_e=None):
+            card.configure(border_color=COLOR_GOLD_PRIMARY)
+            if hint_lbl and hint:
+                hint_lbl.configure(text_color=COLOR_GOLD_WARM, fg_color="#2E2614")
+
+        def on_leave(_e=None):
+            card.configure(border_color=COLOR_CARD_BORDER)
+            if hint_lbl and hint:
+                hint_lbl.configure(text_color=COLOR_GOLD_PRIMARY, fg_color="#201C12")
+
         def bind_all(w):
             w.bind("<Button-1>", open_once, add="+")
+            w.bind("<Enter>", on_enter, add="+")
+            w.bind("<Leave>", on_leave, add="+")
             try:
                 w.configure(cursor="hand2")
             except Exception:
@@ -4286,11 +4308,7 @@ class MainTradingApp(ctk.CTk):
             for ch in w.winfo_children():
                 bind_all(ch)
 
-        if hint:
-            ctk.CTkLabel(card, text=hint, font=self._font(10), text_color=COLOR_GOLD_WARM, height=14).place(relx=1.0, x=-12, y=9, anchor="ne")
         bind_all(card)
-        card.bind("<Enter>", lambda e: card.configure(border_color=COLOR_GOLD_DARK), add="+")
-        card.bind("<Leave>", lambda e: card.configure(border_color=COLOR_CARD_BORDER), add="+")
 
     # ---------------------------------------------------------------------
     # คอลัมน์ขวา: ควบคุมบอท / ข่าวถัดไป / แผนเทรด
@@ -6318,11 +6336,9 @@ class MainTradingApp(ctk.CTk):
                     if bid > 0:
                         self.card_gold["val_lbl"].configure(text=f"{bid:,.2f}")
                     if mkt["is_open"]:
-                        self._set_badge(self.card_gold.get("badge"), "● ตลาดเปิด", "#0F2A20", COLOR_SUCCESS_GREEN)
                         if bid > 0:
                             self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts")
                     else:
-                        self._set_badge(self.card_gold.get("badge"), "● ตลาดปิด", "#2A1414", COLOR_DANGER_RED)
                         if bid > 0:
                             self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts · {mkt['short_desc']}")
                         else:
