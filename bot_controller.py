@@ -589,14 +589,14 @@ class BotController:
                 import multi_asset_ai_bot
                 df_sr = None
                 if tf_upper == "H4":
-                    if len(df) >= 60:
+                    if len(df) >= 502:
                         df_sr = df
                     else:
                         h4_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 520)
                         if h4_rates is not None and len(h4_rates) >= 60:
                             df_sr = pd.DataFrame(h4_rates)
                 elif tf_upper == "H1":
-                    if len(df) >= 60:
+                    if len(df) >= 502:
                         df_sr = df
                     else:
                         h1_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 520)
@@ -865,8 +865,8 @@ class BotController:
                 return self._plans_status_cache or {}
 
             rates_m15 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, 100)
-            rates_h1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 260)
-            rates_h4 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 260)
+            rates_h1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 520)
+            rates_h4 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 520)
             tick = mt5.symbol_info_tick(symbol)
 
             if rates_m15 is None or rates_h1 is None or rates_h4 is None or len(rates_m15) < 55 or len(rates_h1) < 205:

@@ -895,7 +895,7 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
     for idx, s in enumerate(sup_levels[:5], start=1):
         s_price = float(s[0])
         s_touches = int(s[1])
-        s_score = touches_to_stars(s_touches)
+        s_score = float(s[3]) if len(s) > 3 else touches_to_stars(s_touches)
         s_dist = abs(price - s_price)
         s_dist_atr = s_dist / atr_val
 
@@ -927,7 +927,7 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
     for idx, r in enumerate(res_levels[:5], start=1):
         r_price = float(r[0])
         r_touches = int(r[1])
-        r_score = touches_to_stars(r_touches)
+        r_score = float(r[3]) if len(r) > 3 else touches_to_stars(r_touches)
         r_dist = abs(r_price - price)
         r_dist_atr = r_dist / atr_val
 
@@ -986,6 +986,10 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
 def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
     """
     หาแนวรับ/แนวต้าน 5 ระดับ (S1..S5 และ R1..R5) จากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` (500 แท่ง)
+    คำนวณระดับความแข็งแกร่ง (Strength Stars 0.00 - 10.00):
+      1. Recency Decay: ให้น้ำหนักจากล่าสุดไปอดีต (มากไปน้อย)
+      2. Touch Frequency: เกิดซ้ำบริเวณนั้นบ่อย ยิ่งแข็งแกร่งมาก
+      3. Role Purity: คัดกรองแนวรับต้องมี Swing Low จริง (ไม่เอายอดต้านเก่าที่ไม่มีแรงรับจริงมาเป็น S1)
     คืน dict:
       - support..support5 / resistance..resistance5
       - sup_touches..sup5_touches / res_touches..res5_touches
@@ -1024,61 +1028,114 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
     win = 2 * k + 1
     piv_hi = d['high'][d['high'] == d['high'].rolling(win, center=True).max()]
     piv_lo = d['low'][d['low'] == d['low'].rolling(win, center=True).min()]
-    pts = sorted([float(x) for x in pd.concat([piv_hi, piv_lo]).dropna().values])
-    zones = []  # [ราคากลาง, จำนวนครั้ง, ราคาต่ำสุดของโซน] — ความกว้างโซนทั้งหมดไม่เกิน zone_atr × ATR
-    for x in pts:
-        if zones and x - zones[-1][2] <= zone_atr * atr:
-            z = zones[-1]
-            z[1] += 1
-            z[0] = z[0] + (x - z[0]) / z[1]
+
+    # รวบรวมจุด Pivot พร้อมความสดใหม่ (Recency) และประเภท (HIGH/LOW)
+    total_len = len(df)
+    pivots = []
+    for idx, val in piv_hi.items():
+        age = total_len - 1 - idx
+        recency = max(0.20, 1.0 - 0.80 * (age / lookback))
+        pivots.append({'price': float(val), 'type': 'HIGH', 'age': age, 'recency': recency})
+
+    for idx, val in piv_lo.items():
+        age = total_len - 1 - idx
+        recency = max(0.20, 1.0 - 0.80 * (age / lookback))
+        pivots.append({'price': float(val), 'type': 'LOW', 'age': age, 'recency': recency})
+
+    pivots.sort(key=lambda x: x['price'])
+
+    # จัดกลุ่มจุดที่ใกล้เคียงกันเป็นโซน (Clusters ภายใน zone_atr * ATR)
+    raw_zones = []
+    for p in pivots:
+        if raw_zones and p['price'] - raw_zones[-1]['min_p'] <= zone_atr * atr:
+            z = raw_zones[-1]
+            z['touches'] += 1
+            z['sum_weight'] += p['recency']
+            z['min_age'] = min(z['min_age'], p['age'])
+            if p['type'] == 'LOW': z['low_cnt'] += 1
+            else: z['high_cnt'] += 1
+            z['price'] = z['price'] + (p['price'] - z['price']) / z['touches']
         else:
-            zones.append([x, 1, x])
-    below = sorted([z for z in zones if z[0] < price], key=lambda z: z[0], reverse=True)
-    above = sorted([z for z in zones if z[0] > price], key=lambda z: z[0])
-    strong_below = [z for z in below if z[1] >= SR_MIN_TOUCHES] or below
-    strong_above = [z for z in above if z[1] >= SR_MIN_TOUCHES] or above
+            raw_zones.append({
+                'price': p['price'],
+                'min_p': p['price'],
+                'touches': 1,
+                'sum_weight': p['recency'],
+                'min_age': p['age'],
+                'low_cnt': 1 if p['type'] == 'LOW' else 0,
+                'high_cnt': 1 if p['type'] == 'HIGH' else 0,
+            })
+
+    # คำนวณระดับความแข็งแกร่ง (Strength Stars 0.00 - 10.00)
+    # 1) ความถี่ (Touch Frequency): ยิ่งชนบริเวณนั้นบ่อย ยิ่งแข็งแกร่งมาก
+    # 2) ความสดใหม่ (Recency Decay): ล่าสุดได้คะแนนเต็ม อดีตลดหลั่นลงไปตามกาลเวลา
+    for z in raw_zones:
+        n = z['touches']
+        if n == 1: base = 3.5
+        elif n == 2: base = 5.5
+        elif n == 3: base = 7.5
+        elif n == 4: base = 9.0
+        else: base = 10.0
+
+        latest_rec = max(0.25, 1.0 - 0.75 * (z['min_age'] / lookback))
+        avg_rec = z['sum_weight'] / n
+        rec_factor = 0.65 * latest_rec + 0.35 * avg_rec
+
+        raw_score = base * rec_factor
+        if z['min_age'] <= 36 and n >= 2:
+            raw_score = min(10.0, raw_score * 1.25)
+        z['stars'] = round(min(10.0, max(2.0, raw_score)), 2)
+
+    # คัดกรองบทบาทแนวรับ/แนวต้านที่แท้จริง (Role Purity):
+    # - แนวรับ (Support): ต้องมี Swing Low ที่พิสูจน์การเด้งกลับ (low_cnt > 0)
+    #   หรือถ้าเป็นยอด High เก่า ต้องเพิ่งเกิดไม่นาน (<= 36 แท่ง) และทดสอบซ้ำ >= 2 ครั้ง
+    # - แนวต้าน (Resistance): ต้องมี Swing High ที่พิสูจน์แรงต้าน (high_cnt > 0)
+    #   หรือถ้าเป็น Low เก่า ต้องเพิ่งเกิดไม่นาน (<= 36 แท่ง) และทดสอบซ้ำ >= 2 ครั้ง
+    below_all = [z for z in raw_zones if z['price'] < price]
+    above_all = [z for z in raw_zones if z['price'] > price]
+
+    valid_below = [z for z in below_all if z['low_cnt'] > 0 or (z['min_age'] <= 36 and z['high_cnt'] >= 2)]
+    valid_above = [z for z in above_all if z['high_cnt'] > 0 or (z['min_age'] <= 36 and z['low_cnt'] >= 2)]
+
+    cand_below = sorted(valid_below or below_all, key=lambda z: z['price'], reverse=True)
+    cand_above = sorted(valid_above or above_all, key=lambda z: z['price'])
 
     min_gap = max(0.75 * atr, 4.0)
 
     # 1. คัดเลือกแนวรับ 5 ระดับ (S1, S2, S3, S4, S5)
     sup_levels = []
-
     def pick_next_sup(last_price, pool):
         for z in pool:
-            if (last_price - z[0]) >= min_gap:
+            if (last_price - z['price']) >= min_gap:
                 return z
         return None
 
-    if strong_below:
-        s1 = strong_below[0]
-    elif below:
-        s1 = below[0]
+    if cand_below:
+        s1 = cand_below[0]
     else:
         lo_min = float(d['low'].min())
-        s1 = [lo_min, 1, lo_min]
-    sup_levels.append(s1)
+        s1 = {'price': lo_min, 'touches': 1, 'min_p': lo_min, 'stars': 3.0}
+    sup_levels.append([s1['price'], s1['touches'], s1['min_p'], s1['stars']])
 
-    rem_strong_below = [z for z in strong_below if z not in sup_levels]
-    rem_all_below = [z for z in below if z not in sup_levels]
+    rem_cand_below = [z for z in cand_below if z['price'] != s1['price']]
+    rem_all_below = [z for z in below_all if z['price'] != s1['price']]
 
     for _ in range(4):
         last_s = sup_levels[-1][0]
-        cand = pick_next_sup(last_s, rem_strong_below)
+        cand = pick_next_sup(last_s, rem_cand_below)
         if not cand:
             cand = pick_next_sup(last_s, rem_all_below)
         if cand:
-            sup_levels.append(cand)
-            if cand in rem_strong_below:
-                rem_strong_below.remove(cand)
-            if cand in rem_all_below:
-                rem_all_below.remove(cand)
+            sup_levels.append([cand['price'], cand['touches'], cand['min_p'], cand['stars']])
+            if cand in rem_cand_below: rem_cand_below.remove(cand)
+            if cand in rem_all_below: rem_all_below.remove(cand)
         else:
             lo_min = float(d['low'].min())
             if lo_min < last_s - min_gap:
-                sup_levels.append([lo_min, 1, lo_min])
+                sup_levels.append([lo_min, 1, lo_min, 3.0])
             else:
                 next_price = last_s - max(1.5 * atr, 6.0)
-                sup_levels.append([next_price, 1, next_price])
+                sup_levels.append([next_price, 1, next_price, 3.0])
 
     for idx, s in enumerate(sup_levels[:5], start=1):
         s_key = "support" if idx == 1 else f"support{idx}"
@@ -1086,47 +1143,42 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         star_key = "sup_stars" if idx == 1 else f"sup{idx}_stars"
         out[s_key] = round(float(s[0]), 2)
         out[t_key] = int(s[1])
-        out[star_key] = touches_to_stars(int(s[1]))
+        out[star_key] = round(float(s[3]), 2) if len(s) > 3 else touches_to_stars(int(s[1]))
 
     # 2. คัดเลือกแนวต้าน 5 ระดับ (R1, R2, R3, R4, R5)
     res_levels = []
-
     def pick_next_res(last_price, pool):
         for z in pool:
-            if (z[0] - last_price) >= min_gap:
+            if (z['price'] - last_price) >= min_gap:
                 return z
         return None
 
-    if strong_above:
-        r1 = strong_above[0]
-    elif above:
-        r1 = above[0]
+    if cand_above:
+        r1 = cand_above[0]
     else:
         hi_max = float(d['high'].max())
-        r1 = [hi_max, 1, hi_max]
-    res_levels.append(r1)
+        r1 = {'price': hi_max, 'touches': 1, 'min_p': hi_max, 'stars': 3.0}
+    res_levels.append([r1['price'], r1['touches'], r1['min_p'], r1['stars']])
 
-    rem_strong_above = [z for z in strong_above if z not in res_levels]
-    rem_all_above = [z for z in above if z not in res_levels]
+    rem_cand_above = [z for z in cand_above if z['price'] != r1['price']]
+    rem_all_above = [z for z in above_all if z['price'] != r1['price']]
 
     for _ in range(4):
         last_r = res_levels[-1][0]
-        cand = pick_next_res(last_r, rem_strong_above)
+        cand = pick_next_res(last_r, rem_cand_above)
         if not cand:
             cand = pick_next_res(last_r, rem_all_above)
         if cand:
-            res_levels.append(cand)
-            if cand in rem_strong_above:
-                rem_strong_above.remove(cand)
-            if cand in rem_all_above:
-                rem_all_above.remove(cand)
+            res_levels.append([cand['price'], cand['touches'], cand['min_p'], cand['stars']])
+            if cand in rem_cand_above: rem_cand_above.remove(cand)
+            if cand in rem_all_above: rem_all_above.remove(cand)
         else:
             hi_max = float(d['high'].max())
             if hi_max > last_r + min_gap:
-                res_levels.append([hi_max, 1, hi_max])
+                res_levels.append([hi_max, 1, hi_max, 3.0])
             else:
                 next_price = last_r + max(1.5 * atr, 6.0)
-                res_levels.append([next_price, 1, next_price])
+                res_levels.append([next_price, 1, next_price, 3.0])
 
     for idx, r in enumerate(res_levels[:5], start=1):
         r_key = "resistance" if idx == 1 else f"resistance{idx}"
@@ -1134,7 +1186,7 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         star_key = "res_stars" if idx == 1 else f"res{idx}_stars"
         out[r_key] = round(float(r[0]), 2)
         out[t_key] = int(r[1])
-        out[star_key] = touches_to_stars(int(r[1]))
+        out[star_key] = round(float(r[3]), 2) if len(r) > 3 else touches_to_stars(int(r[1]))
 
     # AI แนะนำแนวรับแนวต้านสำคัญที่ต้องโฟกัส (AI S&R Focus Recommendation)
     focus_rec = recommend_sr_focus(sup_levels, res_levels, price, atr)
