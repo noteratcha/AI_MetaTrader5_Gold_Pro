@@ -106,7 +106,11 @@ def _context_from(h1, h4, price):
     d["p6_trend"] = _t4 if _t4 == _l4 else 0
     sr = bot.find_sr_levels(h1, float(price))
     d["sup"], d["res"] = _f(sr["support"]), _f(sr["resistance"])
+    d["sup2"], d["res2"] = _f(sr.get("support2", sr["support"])), _f(sr.get("resistance2", sr["resistance"]))
+    d["sup_stars"], d["res_stars"] = float(sr.get("sup_stars", 3.0)), float(sr.get("res_stars", 3.0))
+    d["sup2_stars"], d["res2_stars"] = float(sr.get("sup2_stars", 3.0)), float(sr.get("res2_stars", 3.0))
     d["sup_t"], d["res_t"] = int(sr["sup_touches"]), int(sr["res_touches"])
+    d["sup2_t"], d["res2_t"] = int(sr.get("sup2_touches", 0)), int(sr.get("res2_touches", 0))
     return d
 
 

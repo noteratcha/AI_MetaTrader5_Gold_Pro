@@ -1471,11 +1471,24 @@ class GoldCandleDialog(ctk.CTkToplevel):
         cur_price = self.data["bid"]
         sup = self.data.get("support")
         res = self.data.get("resistance")
+        sup2 = self.data.get("support2")
+        res2 = self.data.get("resistance2")
+        sup_stars = float(self.data.get("sup_stars", 3.0) or 3.0)
+        res_stars = float(self.data.get("res_stars", 3.0) or 3.0)
+        sup2_stars = float(self.data.get("sup2_stars", 3.0) or 3.0)
+        res2_stars = float(self.data.get("res2_stars", 3.0) or 3.0)
+
         if tf == "H1":
-            if self.ind_toggles.get("support", True) and sup and abs(sup - cur_price) <= 120:
-                vals.append(sup)
-            if self.ind_toggles.get("resistance", True) and res and abs(res - cur_price) <= 120:
-                vals.append(res)
+            if self.ind_toggles.get("support", True):
+                if sup and abs(sup - cur_price) <= 140:
+                    vals.append(sup)
+                if sup2 and abs(sup2 - cur_price) <= 140:
+                    vals.append(sup2)
+            if self.ind_toggles.get("resistance", True):
+                if res and abs(res - cur_price) <= 140:
+                    vals.append(res)
+                if res2 and abs(res2 - cur_price) <= 140:
+                    vals.append(res2)
 
         vals.append(self.data["ask"])
         if self.ind_toggles.get("orders", True):
@@ -1515,6 +1528,26 @@ class GoldCandleDialog(ctk.CTkToplevel):
                     kw["smooth"] = True
                 cv.create_line(*pts, **kw)
 
+        def _draw_vector_stars(start_x, cy, stars, r_out=5.0, r_in=2.4, color='#FBBF24', empty_bg='#1A2232', empty_border='#475569'):
+            full_count = int(stars)
+            has_half = (stars - full_count) >= 0.5
+            for i in range(5):
+                cx = start_x + i * 12
+                all_p = []
+                for j in range(10):
+                    r = r_out if j % 2 == 0 else r_in
+                    angle = math.pi / 2 - j * (math.pi / 5)
+                    all_p.extend([cx + r * math.cos(angle), cy - r * math.sin(angle)])
+                if i < full_count:
+                    cv.create_polygon(all_p, fill=color, outline=color)
+                elif i == full_count and has_half:
+                    cv.create_polygon(all_p, fill=empty_bg, outline=empty_border)
+                    left_p = [all_p[0], all_p[1], all_p[18], all_p[19], all_p[16], all_p[17],
+                              all_p[14], all_p[15], all_p[12], all_p[13], all_p[10], all_p[11]]
+                    cv.create_polygon(left_p, fill=color, outline=color)
+                else:
+                    cv.create_polygon(all_p, fill=empty_bg, outline=empty_border)
+
         # วาดอินดิเคเตอร์ตาม Timeframe ที่เลือก
         if tf == "M15":
             # Plan 1 (MA-Cross-Trend M15)
@@ -1525,15 +1558,38 @@ class GoldCandleDialog(ctk.CTkToplevel):
             if self.ind_toggles.get("ma5", True):
                 draw_series("ma5", COLOR_CYAN_ACCENT, width=2, smooth=True)
         elif tf == "H1":
-            # 1. แนวรับ / แนวต้าน H1 (Plan 3, Plan 4)
-            if self.ind_toggles.get("resistance", True) and res and lo <= res <= hi:
-                yr = y_of(res)
-                cv.create_line(left, yr, W - right, yr, fill=COLOR_DANGER_RED, dash=(5, 3), width=1)
-                cv.create_text(left + 6, yr - 8, text=f"แนวต้าน H1 {res:,.2f}", anchor="w", fill=COLOR_DANGER_RED, font=(app_fonts.UI, 9, "bold"))
-            if self.ind_toggles.get("support", True) and sup and lo <= sup <= hi:
-                ys = y_of(sup)
-                cv.create_line(left, ys, W - right, ys, fill=COLOR_SUCCESS_GREEN, dash=(5, 3), width=1)
-                cv.create_text(left + 6, ys - 8, text=f"แนวรับ H1 {sup:,.2f}", anchor="w", fill=COLOR_SUCCESS_GREEN, font=(app_fonts.UI, 9, "bold"))
+            # 1. แนวรับ / แนวต้าน H1 2 ระดับ พร้อมดาวความแข็งแกร่ง (Plan 3, Plan 4)
+            if self.ind_toggles.get("resistance", True):
+                # R1 (แนวต้านที่ 1)
+                if res and lo <= res <= hi:
+                    yr = y_of(res)
+                    cv.create_line(left, yr, W - right, yr, fill=COLOR_DANGER_RED, dash=(6, 3), width=1.5)
+                    cv.create_text(left + 6, yr - 8, text=f"แนวต้าน R1 {res:,.2f}", anchor="w", fill=COLOR_DANGER_RED, font=(app_fonts.UI, 9, "bold"))
+                    _draw_vector_stars(left + 128, yr - 8, res_stars)
+                    cv.create_text(left + 192, yr - 8, text=f"({res_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
+                # R2 (แนวต้านที่ 2)
+                if res2 and lo <= res2 <= hi and abs(res2 - (res or 0)) > 2.0:
+                    yr2 = y_of(res2)
+                    cv.create_line(left, yr2, W - right, yr2, fill="#FB923C", dash=(3, 3), width=1)
+                    cv.create_text(left + 6, yr2 - 8, text=f"แนวต้าน R2 {res2:,.2f}", anchor="w", fill="#FB923C", font=(app_fonts.UI, 9))
+                    _draw_vector_stars(left + 128, yr2 - 8, res2_stars)
+                    cv.create_text(left + 192, yr2 - 8, text=f"({res2_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8))
+
+            if self.ind_toggles.get("support", True):
+                # S1 (แนวรับที่ 1)
+                if sup and lo <= sup <= hi:
+                    ys = y_of(sup)
+                    cv.create_line(left, ys, W - right, ys, fill=COLOR_SUCCESS_GREEN, dash=(6, 3), width=1.5)
+                    cv.create_text(left + 6, ys - 8, text=f"แนวรับ S1 {sup:,.2f}", anchor="w", fill=COLOR_SUCCESS_GREEN, font=(app_fonts.UI, 9, "bold"))
+                    _draw_vector_stars(left + 124, ys - 8, sup_stars)
+                    cv.create_text(left + 188, ys - 8, text=f"({sup_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
+                # S2 (แนวรับที่ 2)
+                if sup2 and lo <= sup2 <= hi and abs(sup2 - (sup or 0)) > 2.0:
+                    ys2 = y_of(sup2)
+                    cv.create_line(left, ys2, W - right, ys2, fill="#34D399", dash=(3, 3), width=1)
+                    cv.create_text(left + 6, ys2 - 8, text=f"แนวรับ S2 {sup2:,.2f}", anchor="w", fill="#34D399", font=(app_fonts.UI, 9))
+                    _draw_vector_stars(left + 124, ys2 - 8, sup2_stars)
+                    cv.create_text(left + 188, ys2 - 8, text=f"({sup2_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8))
 
             # 2. Bollinger Bands H1 (Plan 5)
             if self.ind_toggles.get("h1_bb", True):
@@ -3326,6 +3382,7 @@ class MainTradingApp(ctk.CTk):
         sr_body = self.card_sr["body"]
         sr_body.grid_columnconfigure((0, 1), weight=1, uniform="sr_cols")
         self.card_sr["rows"] = {tf: self._create_sr_row(sr_body, tf, col) for col, tf in enumerate(("H1", "H4"))}
+        self._make_clickable(self.card_sr, lambda: GoldCandleDialog(self))
 
     # ---------------------------------------------------------------------
     # การ์ด 2 แถว (สภาวะตลาด / แนวรับ–แนวต้าน)
@@ -3374,6 +3431,15 @@ class MainTradingApp(ctk.CTk):
         lt.pack(side="right", padx=(0, 6))
         return {"val": val, "pct": pct, "lt": lt}
 
+    @staticmethod
+    def _format_sr_stars(stars: float) -> str:
+        """แปลงคะแนนดาวเป็นสตริงแสดงผล เช่น 2.5 -> '★★½', 3.0 -> '★★★'"""
+        if not stars or stars <= 0:
+            return ""
+        full = int(stars)
+        has_half = (stars - full) >= 0.5
+        return ("★" * full) + ("½" if has_half else "")
+
     def _create_sr_row(self, parent, tf, col=0):
         """คอลัมน์ต่อ Timeframe (H1 ซ้าย · H4 ขวา): ▲ ต้าน / บาร์ระยะห่าง / ▼ รับ
         บาร์: ช่วงเขียว = ระยะจากแนวรับถึงราคา · ช่วงแดง = ระยะจากราคาถึงแนวต้าน · จุดทอง = ราคาปัจจุบัน"""
@@ -3385,13 +3451,22 @@ class MainTradingApp(ctk.CTk):
                      font=self._font(9, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(0, 6))
         res = ctk.CTkLabel(head, text="▲ —", font=self._font(11, "bold", app_fonts.MONO), text_color=COLOR_DANGER_RED, height=16)
         res.pack(side="left")
+        res_star = ctk.CTkLabel(head, text="", font=self._font(9, "bold"), text_color=COLOR_GOLD_PRIMARY, height=16)
+        res_star.pack(side="right")
+
         bar = tk.Canvas(box, height=10, bg=COLOR_CARD_BG, highlightthickness=0, bd=0)
         bar.pack(fill="x", pady=(3, 3))
-        sup = ctk.CTkLabel(box, text="▼ —", font=self._font(11, "bold", app_fonts.MONO), text_color=COLOR_SUCCESS_GREEN, height=16, anchor="w")
-        sup.pack(anchor="w", padx=(34, 0))
+
+        sup_frame = ctk.CTkFrame(box, fg_color="transparent")
+        sup_frame.pack(fill="x")
+        sup = ctk.CTkLabel(sup_frame, text="▼ —", font=self._font(11, "bold", app_fonts.MONO), text_color=COLOR_SUCCESS_GREEN, height=16, anchor="w")
+        sup.pack(side="left", padx=(34, 0))
+        sup_star = ctk.CTkLabel(sup_frame, text="", font=self._font(9, "bold"), text_color=COLOR_GOLD_PRIMARY, height=16)
+        sup_star.pack(side="right")
+
         state = {"sup": 0.0, "res": 0.0, "price": 0.0}
         bar.bind("<Configure>", lambda e, b=bar, st=state: self._draw_sr_bar(b, st))
-        return {"sup": sup, "res": res, "bar": bar, "state": state}
+        return {"sup": sup, "res": res, "bar": bar, "sup_star": sup_star, "res_star": res_star, "state": state}
 
     @staticmethod
     def _sr_position(sup, res, price):
@@ -5509,9 +5584,15 @@ class MainTradingApp(ctk.CTk):
                     for tf, row in self.card_sr["rows"].items():
                         sup = float(radar.get(f"{tf.lower()}_support", 0.0) or 0.0)
                         res = float(radar.get(f"{tf.lower()}_resistance", 0.0) or 0.0)
+                        sup_stars = float(radar.get(f"{tf.lower()}_sup_stars", 0.0) or 0.0)
+                        res_stars = float(radar.get(f"{tf.lower()}_res_stars", 0.0) or 0.0)
                         ok = sup > 0 and res > 0
                         row["res"].configure(text=f"▲ {res:,.2f}" if ok else "▲ —")
                         row["sup"].configure(text=f"▼ {sup:,.2f}" if ok else "▼ —")
+                        if "res_star" in row:
+                            row["res_star"].configure(text=self._format_sr_stars(res_stars) if (ok and res_stars > 0) else "")
+                        if "sup_star" in row:
+                            row["sup_star"].configure(text=self._format_sr_stars(sup_stars) if (ok and sup_stars > 0) else "")
                         st = row["state"]
                         if (st["sup"], st["res"], st["price"]) != (sup, res, price):
                             st.update(sup=sup, res=res, price=price)

@@ -562,6 +562,12 @@ class BotController:
                 "server_time": int(tick.time) if tick else candles[-1]["time"],
                 "support": ctx.get("sup") if ctx else None,
                 "resistance": ctx.get("res") if ctx else None,
+                "support2": ctx.get("sup2") if ctx else None,
+                "resistance2": ctx.get("res2") if ctx else None,
+                "sup_stars": ctx.get("sup_stars", 3.0) if ctx else 3.0,
+                "res_stars": ctx.get("res_stars", 3.0) if ctx else 3.0,
+                "sup2_stars": ctx.get("sup2_stars", 3.0) if ctx else 3.0,
+                "res2_stars": ctx.get("res2_stars", 3.0) if ctx else 3.0,
             }
         except Exception:
             return None

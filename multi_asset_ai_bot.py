@@ -832,14 +832,47 @@ def p6_trail_sl(pos, df_h1, sar, dr, sar_fast, dr_fast, atr_series, tick, info):
     return new if improved else None
 
 
+def touches_to_stars(touches: int, is_extreme: bool = False) -> float:
+    """แปลงจำนวนครั้งที่ราคามาทดสอบโซนเป็นคะแนนดาว 1.0 - 5.0 (ปัดขั้นละ 0.5)"""
+    if touches <= 1:
+        base = 2.0 if is_extreme else 1.5
+    elif touches == 2:
+        base = 2.5
+    elif touches == 3:
+        base = 3.5
+    elif touches == 4:
+        base = 4.5
+    else:
+        base = 5.0
+    return min(5.0, max(1.0, round(base * 2) / 2.0))
+
+
+def stars_to_text(stars: float) -> str:
+    """แปลงคะแนนดาวเป็นสตริงแสดงผล เช่น 2.5 -> '★★½', 3.0 -> '★★★'"""
+    full = int(stars)
+    has_half = (stars - full) >= 0.5
+    return ("★" * full) + ("½" if has_half else "")
+
+
 def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
     """
     หาแนวรับ/แนวต้านจากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` แท่ง
-    คืน dict: support / resistance (ราคากลางโซนที่ใกล้ราคาปัจจุบันที่สุด) และจำนวนครั้งที่ราคาแตะ
-    - แนวรับ = โซนที่อยู่ใต้ราคา, แนวต้าน = โซนที่อยู่เหนือราคา (เลือกโซนที่แตะ >= 2 ครั้งก่อน)
-    - ถ้าไม่พบโซน ใช้ Low ต่ำสุด / High สูงสุดของช่วงแทน
+    คืน dict:
+      - support / resistance (ระดับ 1: ใกล้ราคาปัจจุบันที่สุด)
+      - support2 / resistance2 (ระดับ 2: โครงสร้างถัดไปที่มีระยะห่างอย่างน้อย 0.75 ATR)
+      - sup_touches / res_touches (จำนวนครั้งที่แตะ S1 / R1)
+      - sup2_touches / res2_touches (จำนวนครั้งที่แตะ S2 / R2)
+      - sup_stars / res_stars (คะแนนความแข็งแกร่ง 1.0 - 5.0 ดาว)
+      - sup2_stars / res2_stars (คะแนนความแข็งแกร่ง 1.0 - 5.0 ดาว)
     """
-    out = {"support": float('nan'), "resistance": float('nan'), "sup_touches": 0, "res_touches": 0}
+    out = {
+        "support": float('nan'), "resistance": float('nan'),
+        "support2": float('nan'), "resistance2": float('nan'),
+        "sup_touches": 0, "res_touches": 0,
+        "sup2_touches": 0, "res2_touches": 0,
+        "sup_stars": 1.5, "res_stars": 1.5,
+        "sup2_stars": 1.5, "res2_stars": 1.5,
+    }
     if df is None or len(df) < 2 * k + 10 or not price or pd.isna(price):
         return out
     d = df.iloc[-(lookback + 1):-1]  # เฉพาะแท่งที่ปิดแล้ว
@@ -858,20 +891,63 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
             z[0] = z[0] + (x - z[0]) / z[1]
         else:
             zones.append([x, 1, x])
-    below = [z for z in zones if z[0] < price]
-    above = [z for z in zones if z[0] > price]
+    below = sorted([z for z in zones if z[0] < price], key=lambda z: z[0], reverse=True)
+    above = sorted([z for z in zones if z[0] > price], key=lambda z: z[0])
     strong_below = [z for z in below if z[1] >= SR_MIN_TOUCHES] or below
     strong_above = [z for z in above if z[1] >= SR_MIN_TOUCHES] or above
+
+    min_gap = max(0.75 * atr, 4.0)
+
+    # แนวรับ S1 และ S2
     if strong_below:
-        z = max(strong_below, key=lambda z: z[0])
-        out["support"], out["sup_touches"] = round(z[0], 2), int(z[1])
+        z1 = strong_below[0]
+        out["support"], out["sup_touches"] = round(z1[0], 2), int(z1[1])
+        out["sup_stars"] = touches_to_stars(z1[1])
+        z2 = next((z for z in strong_below[1:] if z1[0] - z[0] >= min_gap), None)
+        if not z2:
+            z2 = next((z for z in below if z1[0] - z[0] >= min_gap), None)
+        if z2:
+            out["support2"], out["sup2_touches"] = round(z2[0], 2), int(z2[1])
+            out["sup2_stars"] = touches_to_stars(z2[1])
+        else:
+            lo_min = float(d['low'].min())
+            out["support2"] = round(lo_min, 2)
+            out["sup2_touches"] = 1
+            out["sup2_stars"] = 2.0
     else:
-        out["support"] = float(d['low'].min())
+        lo_min = float(d['low'].min())
+        out["support"] = round(lo_min, 2)
+        out["support2"] = round(lo_min, 2)
+        out["sup_touches"] = 1
+        out["sup2_touches"] = 1
+        out["sup_stars"] = 2.0
+        out["sup2_stars"] = 2.0
+
+    # แนวต้าน R1 และ R2
     if strong_above:
-        z = min(strong_above, key=lambda z: z[0])
-        out["resistance"], out["res_touches"] = round(z[0], 2), int(z[1])
+        zr1 = strong_above[0]
+        out["resistance"], out["res_touches"] = round(zr1[0], 2), int(zr1[1])
+        out["res_stars"] = touches_to_stars(zr1[1])
+        zr2 = next((z for z in strong_above[1:] if z[0] - zr1[0] >= min_gap), None)
+        if not zr2:
+            zr2 = next((z for z in above if z[0] - zr1[0] >= min_gap), None)
+        if zr2:
+            out["resistance2"], out["res2_touches"] = round(zr2[0], 2), int(zr2[1])
+            out["res2_stars"] = touches_to_stars(zr2[1])
+        else:
+            hi_max = float(d['high'].max())
+            out["resistance2"] = round(hi_max, 2)
+            out["res2_touches"] = 1
+            out["res2_stars"] = 2.0
     else:
-        out["resistance"] = float(d['high'].max())
+        hi_max = float(d['high'].max())
+        out["resistance"] = round(hi_max, 2)
+        out["resistance2"] = round(hi_max, 2)
+        out["res_touches"] = 1
+        out["res2_touches"] = 1
+        out["res_stars"] = 2.0
+        out["res2_stars"] = 2.0
+
     return out
 
 
@@ -1998,7 +2074,20 @@ def main():
                     "h1_diff_pct": round(h1_diff_pct, 2),
                     "h1_support": round(float(support), 2) if pd.notna(support) else 0.0,
                     "h1_resistance": round(float(resistance), 2) if pd.notna(resistance) else 0.0,
+                    "h1_support2": round(float(sr_h1.get("support2", support)), 2),
+                    "h1_resistance2": round(float(sr_h1.get("resistance2", resistance)), 2),
+                    "h1_sup_stars": float(sr_h1.get("sup_stars", 3.0)),
+                    "h1_res_stars": float(sr_h1.get("res_stars", 3.0)),
+                    "h1_sup2_stars": float(sr_h1.get("sup2_stars", 3.0)),
+                    "h1_res2_stars": float(sr_h1.get("res2_stars", 3.0)),
                     "h4_support": round(h4_support, 2),
+                    "h4_resistance": round(h4_resistance, 2),
+                    "h4_support2": round(float(sr_h4.get("support2", h4_support)), 2),
+                    "h4_resistance2": round(float(sr_h4.get("resistance2", h4_resistance)), 2),
+                    "h4_sup_stars": float(sr_h4.get("sup_stars", 3.0)),
+                    "h4_res_stars": float(sr_h4.get("res_stars", 3.0)),
+                    "h4_sup2_stars": float(sr_h4.get("sup2_stars", 3.0)),
+                    "h4_res2_stars": float(sr_h4.get("res2_stars", 3.0)),
                     "h1_lt_dir": int(h1_lt_dir),
                     "h1_dir": int(h1_dir),
                     "h1_stack_dir": int(h1_stack_dir),
@@ -2012,7 +2101,6 @@ def main():
                     "h4_dir": int(h4_dir),
                     "h4_lt_dir": int(h4_lt_dir),
                     "h4_ma200": round(h4_ma200, 2) if pd.notna(h4_ma200) else 0.0,
-                    "h4_resistance": round(h4_resistance, 2),
                 }
                 
                 # เก็บข้อมูลสินทรัพย์ที่น่าสนใจ (เข้าใกล้โซนเทรด)
