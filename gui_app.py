@@ -1168,6 +1168,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             ("ma5", "P1 · ━ MA5", COLOR_CYAN_ACCENT),
             ("ma13", "P1 · ━ MA13", COLOR_GOLD_WARM),
             ("ma50", "P1 · ┅ MA50", "#A78BFA"),
+            ("day_sep", "📅 เส้นแบ่งวัน", "#60A5FA"),
             ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
         ],
         "H1": [
@@ -1179,6 +1180,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             ("h1_bb", "P5 · ━ BB H1", "#C084FC"),
             ("h1_sar", "P6 · • SAR H1", "#FB7185"),
             ("h1_ema100", "P6 · ┅ EMA100", "#60A5FA"),
+            ("day_sep", "📅 เส้นแบ่งวัน", "#60A5FA"),
             ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
         ],
         "H4": [
@@ -1187,6 +1189,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             ("h4_ma200", "H4 · ┅ MA200", "#A78BFA"),
             ("resistance", "H4 · ┅ แนวต้าน", COLOR_DANGER_RED),
             ("support", "H4 · ┅ แนวรับ", COLOR_SUCCESS_GREEN),
+            ("day_sep", "📅 เส้นแบ่งวัน", "#60A5FA"),
             ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
         ],
     }
@@ -1266,11 +1269,12 @@ class GoldCandleDialog(ctk.CTkToplevel):
             "h1_bb": p5,
             "h1_sar": p6, "h1_ema100": p6,
             "h4_ma10": True, "h4_ma30": True, "h4_ma200": True,
+            "day_sep": True,
             "orders": True,
         }
         if ind_keys is not None:
             for k in list(self.ind_toggles.keys()):
-                if k != "orders":
+                if k not in ("orders", "day_sep"):
                     self.ind_toggles[k] = (k in ind_keys)
 
         self.plan_buttons = {}
@@ -1669,7 +1673,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, []):
                 self.ind_toggles[k] = True
         else:
-            tf_keys = [k for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, []) if k != "orders"]
+            tf_keys = [k for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, []) if k not in ("orders", "day_sep")]
             for k in tf_keys:
                 self.ind_toggles[k] = (k in (ind_keys or []))
             self.ind_toggles["orders"] = True
@@ -1687,8 +1691,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
     def _sync_selected_plan_from_toggles(self):
         cur_tf = self.tf_var.get()
         active_keys = set(k for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, [])
-                          if k != "orders" and self.ind_toggles.get(k, False))
-        all_keys = set(k for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, []) if k != "orders")
+                          if k not in ("orders", "day_sep") and self.ind_toggles.get(k, False))
+        all_keys = set(k for k, _, _ in self.INDICATOR_DEFS.get(cur_tf, []) if k not in ("orders", "day_sep"))
 
         if active_keys == all_keys:
             self.selected_plan = "ALL"
@@ -1803,10 +1807,10 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self._draw()
 
     @staticmethod
-    def _format_bar_time(server_ts, offset, tf):
+    def _format_bar_time(server_ts, offset, tf, include_date=False):
         from datetime import datetime, timedelta, timezone
         dt = datetime.fromtimestamp(server_ts - offset, timezone(timedelta(hours=7)))
-        if tf == "H4":
+        if include_date or tf == "H4":
             return dt.strftime("%d/%m %H:%M")
         return dt.strftime("%H:%M")
 
@@ -2002,6 +2006,25 @@ class GoldCandleDialog(ctk.CTkToplevel):
         slot = (W - left - right - 24) / n   # เว้น 24px ระหว่างแท่งสุดท้ายกับแถบราคา
         bw = max(3, min(26, slot * 0.62))
 
+        # ตรวจจับและวาดเส้นประแบ่งวัน (Period / Day Separators) ในเลเยอร์พื้นหลัง
+        day_splits = []
+        first_dt = None
+        if self.ind_toggles.get("day_sep", True):
+            from datetime import datetime, timedelta, timezone
+            tz_thai = timezone(timedelta(hours=7))
+            offset = getattr(self, "offset", 0)
+            first_dt = datetime.fromtimestamp(candles[0]["time"] - offset, tz_thai)
+            for i in range(1, n):
+                prev_dt = datetime.fromtimestamp(candles[i - 1]["time"] - offset, tz_thai)
+                curr_dt = datetime.fromtimestamp(candles[i]["time"] - offset, tz_thai)
+                if curr_dt.date() != prev_dt.date():
+                    x_sep = left + slot * i
+                    day_splits.append((x_sep, curr_dt))
+
+            for x_sep, _ in day_splits:
+                cv.create_line(x_sep, top, x_sep, H - bottom, fill="#283548", dash=(3, 3), width=1)
+                cv.create_line(x_sep, H - bottom, x_sep, H - bottom + 5, fill="#60A5FA", width=1.5)
+
         def draw_series(key, col, width=2, dash=None, smooth=True):
             pts = []
             for i, c in enumerate(candles):
@@ -2162,6 +2185,53 @@ class GoldCandleDialog(ctk.CTkToplevel):
         cv.create_rectangle(W - right + 2, yb - 9, W - 2, yb + 9, fill=COLOR_GOLD_PRIMARY, outline="")
         cv.create_text(W - right + 6, yb, text=f"{self.data['bid']:,.2f}", anchor="w", fill="#111111", font=(app_fonts.UI, 9, "bold"))
 
+        # ป้ายวันที่ของเส้นแบ่งวัน (เลเยอร์หน้าสุด เพื่อความคมชัด อ่านง่าย ไม่ถูกแท่งเทียนหรือเส้นอินดิเคเตอร์บัง)
+        if self.ind_toggles.get("day_sep", True) and first_dt is not None:
+            THAI_WEEKDAYS = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."]
+            THAI_MONTHS = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+
+            for idx, (x_sep, dti) in enumerate(day_splits):
+                next_x = day_splits[idx + 1][0] if idx + 1 < len(day_splits) else (W - right)
+                avail_w = next_x - x_sep
+
+                if avail_w >= 75:
+                    lbl = f"📅 {THAI_WEEKDAYS[dti.weekday()]} {dti.day} {THAI_MONTHS[dti.month]}"
+                elif avail_w >= 45:
+                    lbl = f"{dti.day} {THAI_MONTHS[dti.month]}"
+                elif avail_w >= 24:
+                    lbl = f"{dti.day}"
+                else:
+                    lbl = None
+
+                if lbl:
+                    t_item = cv.create_text(x_sep + 6, top + 10, text=lbl, anchor="w",
+                                            fill="#60A5FA", font=(app_fonts.UI, 8, "bold"))
+                    bx = cv.bbox(t_item)
+                    if bx:
+                        r_item = cv.create_rectangle(bx[0] - 4, bx[1] - 2, bx[2] + 4, bx[3] + 2,
+                                                     fill="#111827", outline="#25354D", width=1)
+                        cv.tag_lower(r_item, t_item)
+
+            # ป้ายวันที่ของวันเริ่มต้น (ซ้ายสุดของกราฟ) หากมีพื้นที่ว่างพอ
+            first_avail = day_splits[0][0] - left if day_splits else (W - right - left)
+            if first_avail >= 75:
+                lbl0 = f"📅 {THAI_WEEKDAYS[first_dt.weekday()]} {first_dt.day} {THAI_MONTHS[first_dt.month]}"
+            elif first_avail >= 45:
+                lbl0 = f"{first_dt.day} {THAI_MONTHS[first_dt.month]}"
+            elif first_avail >= 24 and not day_splits:
+                lbl0 = f"{first_dt.day}"
+            else:
+                lbl0 = None
+
+            if lbl0:
+                t0_item = cv.create_text(left + 6, top + 10, text=lbl0, anchor="w",
+                                         fill="#60A5FA", font=(app_fonts.UI, 8, "bold"))
+                b0 = cv.bbox(t0_item)
+                if b0:
+                    r0_item = cv.create_rectangle(b0[0] - 4, b0[1] - 2, b0[2] + 4, b0[3] + 2,
+                                                  fill="#111827", outline="#25354D", width=1)
+                    cv.tag_lower(r0_item, t0_item)
+
     def _hover(self, event):
         for x0, x1, c in self.slots:
             if x0 <= event.x < x1:
@@ -2196,7 +2266,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
                         extras.append(f"MA200 {c['h4_ma200']:,.2f}")
 
                 extra_str = (" · " + " · ".join(extras)) if extras else ""
-                t_str = self._format_bar_time(c['time'], self.offset, tf)
+                t_str = self._format_bar_time(c['time'], self.offset, tf, include_date=True)
                 self.lbl_tip.configure(text=f"{t_str} น. · O {c['open']:,.2f}  H {c['high']:,.2f}  "
                                             f"L {c['low']:,.2f}  C {c['close']:,.2f} ({c['close'] - c['open']:+.2f}){extra_str}")
                 return
@@ -2597,6 +2667,20 @@ class PositionDetailDialog(ctk.CTkToplevel):
                 cv.create_text(W - right + 6, y, text=f"{v:,.2f}", anchor="w", fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
         slot = (W - left - right - 24) / n   # เว้น 24px ระหว่างแท่งสุดท้ายกับแถบราคา (ผู้ใช้ขอ 8 ต.ค. 2026)
         bw = max(2, min(18, slot * 0.62))
+
+        # เส้นประแบ่งวัน (Period Separator)
+        from datetime import datetime, timedelta, timezone
+        tz_thai = timezone(timedelta(hours=7))
+        _wd = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."]
+        _mo = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+        for i in range(1, n):
+            prev_dt = datetime.fromtimestamp(candles[i - 1]["time"] - self.offset, tz_thai)
+            curr_dt = datetime.fromtimestamp(candles[i]["time"] - self.offset, tz_thai)
+            if curr_dt.date() != prev_dt.date():
+                x_sep = left + slot * i
+                cv.create_line(x_sep, top, x_sep, main_bottom, fill="#283548", dash=(3, 3), width=1)
+                t_lbl = f"📅 {_wd[curr_dt.weekday()]} {curr_dt.day} {_mo[curr_dt.month]}"
+                cv.create_text(x_sep + 6, top + 8, text=t_lbl, anchor="w", fill="#60A5FA", font=(app_fonts.UI, 8, "bold"))
 
         def xs(i):
             return left + slot * (i + 0.5)
