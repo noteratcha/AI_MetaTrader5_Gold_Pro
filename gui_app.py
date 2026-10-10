@@ -1365,6 +1365,31 @@ class GoldCandleDialog(ctk.CTkToplevel):
         # สร้างปุ่มอินดิเคเตอร์เริ่มต้น
         self._rebuild_legend_chips()
 
+        # --- แถวสี่: แถบสถานะเงื่อนไขการเข้าไม้เรียลไทม์ (Condition Status Bar) ---
+        self.cond_frame = ctk.CTkFrame(self, fg_color="#0F131C", corner_radius=8, border_width=1, border_color="#1E2638", height=32)
+        self.cond_frame.pack(fill="x", padx=18, pady=(0, 4))
+
+        self.cond_left = ctk.CTkFrame(self.cond_frame, fg_color="transparent")
+        self.cond_left.pack(side="left", padx=(10, 6), fill="y")
+
+        self.lbl_cond_title = ctk.CTkLabel(
+            self.cond_left, text="⚡ เงื่อนไขเข้าไม้:",
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+            text_color=COLOR_GOLD_PRIMARY
+        )
+        self.lbl_cond_title.pack(side="left", padx=(0, 4))
+
+        self.lbl_cond_score = ctk.CTkLabel(
+            self.cond_left, text=" กำลังโหลด... ",
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+            text_color=COLOR_TEXT_PRIMARY,
+            corner_radius=4, height=20
+        )
+        self.lbl_cond_score.pack(side="left")
+
+        self.cond_chips_box = ctk.CTkFrame(self.cond_frame, fg_color="transparent")
+        self.cond_chips_box.pack(side="left", fill="both", expand=True, padx=(4, 8))
+
         # --- กล่องกราฟ Canvas ---
         box = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
         box.pack(fill="both", expand=True, padx=18, pady=4)
@@ -1403,11 +1428,40 @@ class GoldCandleDialog(ctk.CTkToplevel):
             btn.pack(side="left", padx=(0, 5))
             self.plan_buttons[plan_key] = btn
 
-    def _refresh_plan_buttons(self):
+    def _refresh_plan_buttons(self, plans_status=None):
+        if plans_status:
+            self._last_plans_status = plans_status
+        else:
+            plans_status = getattr(self, "_last_plans_status", {}) or {}
+
         for plan_key, btn in self.plan_buttons.items():
             is_active = (self.selected_plan == plan_key)
-            if is_active:
+            spec = next((item for item in self.PLAN_SPECS if item[0] == plan_key), None)
+            base_label = spec[1] if spec else plan_key
+
+            pinfo = plans_status.get(plan_key)
+            badge_text = ""
+            is_ready = False
+            if pinfo and plan_key not in ("ALL", "H4"):
+                m = pinfo.get("matched", 0)
+                tot = pinfo.get("total", 4)
+                is_ready = (m == tot and tot > 0)
+                badge_text = f" (★ {m}/{tot})" if is_ready else f" ({m}/{tot})"
+
+            full_label = f"{base_label}{badge_text}"
+
+            if is_ready:
                 btn.configure(
+                    text=full_label,
+                    fg_color="#0F2E22" if is_active else "#081E15",
+                    border_color=COLOR_SUCCESS_GREEN,
+                    border_width=2 if is_active else 1.5,
+                    text_color=COLOR_SUCCESS_GREEN,
+                    font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold")
+                )
+            elif is_active:
+                btn.configure(
+                    text=full_label,
                     fg_color="#3B2E15",
                     border_color=COLOR_GOLD_PRIMARY,
                     border_width=1.5,
@@ -1416,12 +1470,150 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 )
             else:
                 btn.configure(
+                    text=full_label,
                     fg_color=COLOR_CARD_BG,
                     border_color=COLOR_CARD_BORDER,
                     border_width=1,
                     text_color=COLOR_TEXT_MUTED,
                     font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="normal")
                 )
+
+    def _update_condition_bar(self, plans_status=None):
+        if not hasattr(self, "cond_frame"):
+            return
+        if plans_status:
+            self._last_plans_status = plans_status
+        else:
+            plans_status = getattr(self, "_last_plans_status", {}) or {}
+
+        if not plans_status:
+            self.lbl_cond_title.configure(text="⚡ เงื่อนไขเข้าไม้:", text_color=COLOR_GOLD_PRIMARY)
+            self.lbl_cond_score.configure(text=" กำลังวิเคราะห์สัญญาณ... ", fg_color="#18202F", text_color=COLOR_TEXT_MUTED)
+            return
+
+        for w in self.cond_chips_box.winfo_children():
+            w.destroy()
+
+        cur_plan = self.selected_plan
+
+        if cur_plan == "ALL":
+            self.lbl_cond_title.configure(text="⚡ สถานะทุกแผน:", text_color=COLOR_GOLD_PRIMARY)
+            self.lbl_cond_score.configure(text=" (คลิกดูรายละเอียด) ", fg_color="transparent", text_color=COLOR_TEXT_MUTED)
+
+            for pk in ("P1", "P2", "P3", "P4", "P5", "P6"):
+                pinfo = plans_status.get(pk)
+                if not pinfo:
+                    continue
+                m = pinfo["matched"]
+                tot = pinfo["total"]
+                pct = pinfo["pct"]
+                side = pinfo["side"]
+                side_tag = "▲" if side == "BUY" else "▼"
+                is_ready = (m == tot and tot > 0)
+                if is_ready:
+                    chip_fg = "#064E3B"
+                    chip_border = COLOR_SUCCESS_GREEN
+                    chip_text = COLOR_SUCCESS_GREEN
+                    label_txt = f"★ {pk} {side_tag}: {m}/{tot} (ครบ)"
+                elif pct >= 50:
+                    chip_fg = "#231F10"
+                    chip_border = COLOR_GOLD_PRIMARY
+                    chip_text = COLOR_GOLD_PRIMARY
+                    label_txt = f"{pk} {side_tag}: {m}/{tot} ({pct}%)"
+                else:
+                    chip_fg = "#141722"
+                    chip_border = "#2A3447"
+                    chip_text = "#94A3B8"
+                    label_txt = f"{pk} {side_tag}: {m}/{tot}"
+
+                btn = ctk.CTkButton(
+                    self.cond_chips_box,
+                    text=label_txt,
+                    height=22,
+                    width=0,
+                    corner_radius=6,
+                    fg_color=chip_fg,
+                    hover_color=COLOR_CARD_HOVER,
+                    border_width=1,
+                    border_color=chip_border,
+                    text_color=chip_text,
+                    font=ctk.CTkFont(family=app_fonts.UI, size=10, weight="bold" if (is_ready or pct >= 50) else "normal"),
+                    command=lambda p=pk: self._select_plan(p)
+                )
+                btn.pack(side="left", padx=(0, 6))
+
+        elif cur_plan in ("P1", "P2", "P3", "P4", "P5", "P6"):
+            pinfo = plans_status.get(cur_plan)
+            if not pinfo:
+                return
+
+            m = pinfo["matched"]
+            tot = pinfo["total"]
+            pct = pinfo["pct"]
+            side = pinfo["side"]
+            is_ready = (m == tot and tot > 0)
+            side_col = COLOR_SUCCESS_GREEN if side == "BUY" else COLOR_DANGER_RED
+            side_icon = "▲ BUY" if side == "BUY" else "▼ SELL"
+
+            self.lbl_cond_title.configure(text=f"⚡ {pinfo['label']} ({side_icon}):", text_color=side_col)
+
+            if is_ready:
+                score_txt = f" ★ เข้าครบ {m}/{tot} ข้อ (100% สัญญาณพร้อม) "
+                score_bg = "#064E3B"
+                score_text_col = COLOR_SUCCESS_GREEN
+            elif pct >= 50:
+                score_txt = f" เข้าแล้ว {m}/{tot} ข้อ ({pct}%) "
+                score_bg = "#231F10"
+                score_text_col = COLOR_GOLD_PRIMARY
+            else:
+                score_txt = f" เข้าแล้ว {m}/{tot} ข้อ ({pct}%) "
+                score_bg = "#1A1D27"
+                score_text_col = COLOR_TEXT_MUTED
+
+            self.lbl_cond_score.configure(text=score_txt, fg_color=score_bg, text_color=score_text_col)
+
+            for it in pinfo.get("items", []):
+                ok = it["ok"]
+                mark = "✓" if ok else "✗"
+                chip_bg = "#0D2818" if ok else "#251215"
+                chip_text_col = "#34D399" if ok else "#F87171"
+                chip_label = f"{mark} {it['name']}: {it['desc']}"
+
+                lbl = ctk.CTkLabel(
+                    self.cond_chips_box,
+                    text=chip_label,
+                    height=22,
+                    corner_radius=6,
+                    fg_color=chip_bg,
+                    text_color=chip_text_col,
+                    font=ctk.CTkFont(family=app_fonts.UI, size=10, weight="bold" if ok else "normal"),
+                    padx=7,
+                )
+                lbl.pack(side="left", padx=(0, 6))
+                lbl.bind("<Enter>", lambda e, d=it["desc"], n=it["name"]: self.lbl_tip.configure(text=f"📌 {n}: {d}"))
+                lbl.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
+
+        elif cur_plan == "H4":
+            self.lbl_cond_title.configure(text="⚡ วิเคราะห์เทรนด์ H4:", text_color=COLOR_GOLD_PRIMARY)
+            self.lbl_cond_score.configure(text=" (กรอบใหญ่ H4) ", fg_color="transparent", text_color=COLOR_TEXT_MUTED)
+            p2_info = plans_status.get("P2", {})
+            for it in p2_info.get("items", []):
+                if "H4" in it.get("name", ""):
+                    ok = it["ok"]
+                    mark = "✓" if ok else "✗"
+                    lbl = ctk.CTkLabel(
+                        self.cond_chips_box,
+                        text=f"{mark} {it['name']}: {it['desc']}",
+                        height=22,
+                        corner_radius=6,
+                        fg_color="#0D2818" if ok else "#251215",
+                        text_color="#34D399" if ok else "#F87171",
+                        font=ctk.CTkFont(family=app_fonts.UI, size=10),
+                        padx=7,
+                    )
+                    lbl.pack(side="left", padx=(0, 6))
+                    lbl.bind("<Enter>", lambda e, d=it["desc"], n=it["name"]: self.lbl_tip.configure(text=f"📌 {n}: {d}"))
+                    lbl.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
 
     def _select_plan(self, plan_key):
         self.selected_plan = plan_key
@@ -1452,9 +1644,10 @@ class GoldCandleDialog(ctk.CTkToplevel):
         plan_desc = f" ({label})" if plan_key != "ALL" else " (รวมทุกแผน)"
         self.title(f"XAUUSD · {cur_tf} เรียลไทม์{plan_desc}")
 
-        # 4. รีเฟรชปุ่มแผน, ชิปอินดิเคเตอร์ และวาดใหม่
+        # 4. รีเฟรชปุ่มแผน, ชิปอินดิเคเตอร์, แถบเงื่อนไข และวาดใหม่
         self._refresh_plan_buttons()
         self._rebuild_legend_chips()
+        self._update_condition_bar()
         self._tick(reschedule=False)
 
     def _sync_selected_plan_from_toggles(self):
@@ -1631,6 +1824,12 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 self.lbl_clock.configure(text=f"แท่งปิดในอีก {hrs:02d}:{mins:02d}:{secs:02d}")
             else:
                 self.lbl_clock.configure(text=f"แท่งปิดในอีก {mins:02d}:{secs:02d}")
+
+            # ประเมินและแสดงผลสถานะเงื่อนไขการเข้าไม้เรียลไทม์
+            plans_status = bot_ctrl.get_plans_condition_status("XAUUSD")
+            self._refresh_plan_buttons(plans_status)
+            self._update_condition_bar(plans_status)
+
             self._draw()
         else:
             self.lbl_tip.configure(text="เชื่อมต่อ MT5 ไม่ได้ — ตรวจว่าเปิด MetaTrader 5 ค้างไว้")
@@ -4188,7 +4387,25 @@ class MainTradingApp(ctk.CTk):
                                   fg_color="#0F2A20" if side == "BUY" else "#2A1215" if side == "SELL" else COLOR_GOLD_BG,
                                   text_color=COLOR_SUCCESS_GREEN if prof >= 0 else COLOR_DANGER_RED)
                 else:
-                    lbl.configure(text="", fg_color=getattr(self, "_plan_row_bg", {}).get(full, "transparent"))
+                    plan_code = None
+                    if "Plan 1" in full: plan_code = "P1"
+                    elif "Plan 2" in full: plan_code = "P2"
+                    elif "Plan 3" in full: plan_code = "P3"
+                    elif "Plan 4" in full: plan_code = "P4"
+                    elif "Plan 5" in full: plan_code = "P5"
+                    elif "Plan 6" in full: plan_code = "P6"
+                    pinfo = plans_status.get(plan_code) if plan_code else None
+                    if pinfo:
+                        m, tot = pinfo["matched"], pinfo["total"]
+                        side_s = "▲" if pinfo["side"] == "BUY" else "▼"
+                        if m == tot and tot > 0:
+                            lbl.configure(text=f" ★ {side_s} {m}/{tot} ", fg_color="#064E3B", text_color=COLOR_SUCCESS_GREEN)
+                        elif pinfo["pct"] >= 50:
+                            lbl.configure(text=f" {side_s} {m}/{tot} ข้อ ", fg_color=getattr(self, "_plan_row_bg", {}).get(full, "transparent"), text_color=COLOR_GOLD_PRIMARY)
+                        else:
+                            lbl.configure(text=f" {side_s} {m}/{tot} ข้อ ", fg_color=getattr(self, "_plan_row_bg", {}).get(full, "transparent"), text_color=COLOR_TEXT_MUTED)
+                    else:
+                        lbl.configure(text="", fg_color=getattr(self, "_plan_row_bg", {}).get(full, "transparent"))
         except Exception:
             pass
         self.after(2000, self._plan_live_tick)

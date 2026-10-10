@@ -53,6 +53,8 @@ class BotController:
         self._last_tick_msc = 0
         self._last_tick_change = 0.0
         self.sound_enabled = True
+        self._plans_status_cache = None
+        self._plans_status_time = 0.0
 
         # ติดตั้งตัวดักจับ stdout
         self.orig_stdout = sys.stdout
@@ -727,6 +729,318 @@ class BotController:
         except Exception:
             pass
         return list(days.values())
+
+    def get_plans_condition_status(self, symbol: str = "XAUUSD") -> dict:
+        """
+        ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 6 แผนเทรด (P1-P6) ณ ราคาปัจจุบัน
+        คืนค่า dict ข้อมูลแต่ละแผน: label, side, matched (เข้าแล้วกี่ข้อ), total, pct, items ([✓/✗ ข้อความ])
+        มีระบบแคช 1.5 วินาทีเพื่อป้องกันความหน่วง
+        """
+        now = time.time()
+        if self._plans_status_cache and (now - self._plans_status_time < 1.5):
+            return self._plans_status_cache
+
+        try:
+            import pandas as pd
+            import numpy as np
+
+            if mt5.terminal_info() is None and not mt5.initialize():
+                return self._plans_status_cache or {}
+
+            rates_m15 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, 100)
+            rates_h1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 260)
+            rates_h4 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 260)
+            tick = mt5.symbol_info_tick(symbol)
+
+            if rates_m15 is None or rates_h1 is None or rates_h4 is None or len(rates_m15) < 55 or len(rates_h1) < 205:
+                return self._plans_status_cache or {}
+
+            df_m15 = pd.DataFrame(rates_m15)
+            df_h1 = pd.DataFrame(rates_h1)
+            df_h4 = pd.DataFrame(rates_h4)
+
+            cur_price = float(tick.bid) if (tick and tick.bid) else float(df_m15['close'].iloc[-1])
+
+            # --- H4 Indicators ---
+            h4_c = df_h4['close']
+            h4_ma10 = float(h4_c.rolling(10).mean().iloc[-2])
+            h4_ma30 = float(h4_c.rolling(30).mean().iloc[-2])
+            is_uptrend_h4 = h4_ma10 > h4_ma30
+            h4_diff_pct = ((h4_ma10 - h4_ma30) / h4_ma30) * 100 if h4_ma30 else 0
+            h4_ma200 = float(h4_c.rolling(200).mean().iloc[-2]) if len(h4_c) >= 202 else float('nan')
+            h4_close = float(h4_c.iloc[-2])
+            h4_lt_dir = 1 if h4_close > h4_ma200 else (-1 if h4_close < h4_ma200 else 0)
+
+            tr_h4 = pd.concat([
+                df_h4['high'] - df_h4['low'],
+                (df_h4['high'] - df_h4['close'].shift()).abs(),
+                (df_h4['low'] - df_h4['close'].shift()).abs()
+            ], axis=1).max(axis=1)
+            atr_h4 = float(tr_h4.rolling(14).mean().iloc[-2])
+
+            ma5_h4 = h4_c.rolling(5).mean()
+            h4_ma5_slope = (ma5_h4.iloc[-2] - ma5_h4.iloc[-4]) / atr_h4 if (atr_h4 and atr_h4 > 0 and len(ma5_h4) >= 5) else 0.0
+
+            # --- H1 Indicators ---
+            h1_c = df_h1['close']
+            h1_ma5 = float(h1_c.rolling(5).mean().iloc[-2])
+            h1_ma10 = float(h1_c.rolling(10).mean().iloc[-2])
+            prev_h1_ma5 = float(h1_c.rolling(5).mean().iloc[-3])
+            prev_h1_ma10 = float(h1_c.rolling(10).mean().iloc[-3])
+
+            if len(h1_c) >= 202:
+                a, b, c = (h1_c.rolling(k).mean().iloc[-2] for k in (100, 150, 200))
+                h1_stack_dir = -1 if a < b < c else (1 if a > b > c else 0)
+            else:
+                h1_stack_dir = 0
+
+            is_uptrend_h1 = h1_ma5 >= h1_ma10
+
+            sr_h1 = bot_core.find_sr_levels(df_h1, cur_price)
+            support = float(sr_h1.get("support", 0.0))
+            resistance = float(sr_h1.get("resistance", 0.0))
+
+            bb_mid_h1 = float(h1_c.rolling(20).mean().iloc[-2])
+            bb_std_h1 = float(h1_c.rolling(20).std().iloc[-2])
+            bb_upper_h1 = bb_mid_h1 + 2 * bb_std_h1
+            bb_lower_h1 = bb_mid_h1 - 2 * bb_std_h1
+
+            ema12 = h1_c.ewm(span=12, adjust=False).mean()
+            ema26 = h1_c.ewm(span=26, adjust=False).mean()
+            macd_line = ema12 - ema26
+            signal_line = macd_line.ewm(span=9, adjust=False).mean()
+            macd_hist_h1 = float((macd_line - signal_line).iloc[-2])
+            prev_macd_hist_h1 = float((macd_line - signal_line).iloc[-3])
+
+            p6_sar, p6_dir = bot_core.psar_series(df_h1['high'].values, df_h1['low'].values, *bot_core.P6_SAR)
+            sar_val = float(p6_sar[-2])
+            sar_dir = int(p6_dir[-2])
+
+            # --- M15 Indicators ---
+            m15_c = df_m15['close']
+            m15_ma5 = float(m15_c.rolling(5).mean().iloc[-2])
+            m15_ma13 = float(m15_c.rolling(13).mean().iloc[-2])
+            prev_m15_ma5 = float(m15_c.rolling(5).mean().iloc[-3])
+            prev_m15_ma13 = float(m15_c.rolling(13).mean().iloc[-3])
+            m15_ma50 = float(m15_c.rolling(50).mean().iloc[-2])
+
+            delta = m15_c.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+            rsi_m15 = float((100 - (100 / (1 + (gain / (loss + 1e-9))))).iloc[-2])
+
+            tr_m15 = pd.concat([
+                df_m15['high'] - df_m15['low'],
+                (df_m15['high'] - df_m15['close'].shift()).abs(),
+                (df_m15['low'] - df_m15['close'].shift()).abs()
+            ], axis=1).max(axis=1)
+            atr_m15 = float(tr_m15.rolling(14).mean().iloc[-2])
+
+            last_closed_m15 = df_m15.iloc[-2]
+            m15_open = float(last_closed_m15['open'])
+            m15_high = float(last_closed_m15['high'])
+            m15_low = float(last_closed_m15['low'])
+            m15_close = float(last_closed_m15['close'])
+            lower_wick = min(m15_open, m15_close) - m15_low
+            upper_wick = m15_high - max(m15_open, m15_close)
+            lower_wick_ratio = lower_wick / (atr_m15 + 1e-9)
+            upper_wick_ratio = upper_wick / (atr_m15 + 1e-9)
+
+            df_div = bot_core.add_divergence_features(df_m15.copy(), lookback=14)
+            bull_div = bool(df_div['bull_div'].iloc[-2] > 0.5) if 'bull_div' in df_div else False
+            bear_div = bool(df_div['bear_div'].iloc[-2] > 0.5) if 'bear_div' in df_div else False
+
+            ai_prob_up = 0.50
+            ai_prob_down = 0.50
+            try:
+                import ai_outlook
+                out = ai_outlook.get_cached_outlook()
+                if out and "horizons" in out:
+                    h1_hz = out["horizons"].get("1h", {})
+                    ai_prob_up = h1_hz.get("prob_up", 50.0) / 100.0
+                    ai_prob_down = h1_hz.get("prob_down", 50.0) / 100.0
+            except Exception:
+                pass
+
+            results = {}
+
+            # ===== Plan 1: MA-Cross-Trend (M15) =====
+            p1_side = "BUY" if h1_stack_dir == 1 else ("SELL" if h1_stack_dir == -1 else ("BUY" if m15_ma5 >= m15_ma13 else "SELL"))
+            p1_items = []
+            if p1_side == "BUY":
+                c1 = h1_stack_dir == 1
+                p1_items.append({"name": "เทรนด์ H1", "ok": c1, "desc": "MA100>150>200 เรียงตัวขาขึ้น" if c1 else "ยังไม่เรียงตัวขาขึ้น (MA100>150>200)"})
+                c2 = (prev_m15_ma5 <= prev_m15_ma13 and m15_ma5 > m15_ma13) or (m15_ma5 > m15_ma13)
+                p1_items.append({"name": "MA5/13 M15", "ok": c2, "desc": f"MA5 ({m15_ma5:.2f}) > MA13 ({m15_ma13:.2f})" if c2 else f"MA5 ({m15_ma5:.2f}) < MA13 ({m15_ma13:.2f})"})
+                c3 = 50 < rsi_m15 < 70
+                p1_items.append({"name": "RSI M15", "ok": c3, "desc": f"RSI อยู่ช่วง 50–70 ({rsi_m15:.1f})" if c3 else f"RSI ({rsi_m15:.1f}) ไม่อยู่ใน 50–70"})
+                c4 = m15_close > m15_ma50
+                p1_items.append({"name": "MA50 M15", "ok": c4, "desc": f"ราคา {m15_close:.2f} > MA50 {m15_ma50:.2f}" if c4 else f"ราคา {m15_close:.2f} < MA50 {m15_ma50:.2f}"})
+            else:
+                c1 = h1_stack_dir == -1
+                p1_items.append({"name": "เทรนด์ H1", "ok": c1, "desc": "MA100<150<200 เรียงตัวขาลง" if c1 else "ยังไม่เรียงตัวขาลง (MA100<150<200)"})
+                c2 = (prev_m15_ma5 >= prev_m15_ma13 and m15_ma5 < m15_ma13) or (m15_ma5 < m15_ma13)
+                p1_items.append({"name": "MA5/13 M15", "ok": c2, "desc": f"MA5 ({m15_ma5:.2f}) < MA13 ({m15_ma13:.2f})" if c2 else f"MA5 ({m15_ma5:.2f}) > MA13 ({m15_ma13:.2f})"})
+                c3 = 30 < rsi_m15 < 50
+                p1_items.append({"name": "RSI M15", "ok": c3, "desc": f"RSI อยู่ช่วง 30–50 ({rsi_m15:.1f})" if c3 else f"RSI ({rsi_m15:.1f}) ไม่อยู่ใน 30–50"})
+                c4 = m15_close < m15_ma50
+                p1_items.append({"name": "MA50 M15", "ok": c4, "desc": f"ราคา {m15_close:.2f} < MA50 {m15_ma50:.2f}" if c4 else f"ราคา {m15_close:.2f} > MA50 {m15_ma50:.2f}"})
+
+            m1 = sum(1 for it in p1_items if it["ok"])
+            results["P1"] = {
+                "name": "MA-Cross-Trend", "label": "P1 · M15", "side": p1_side,
+                "matched": m1, "total": 4, "pct": int(m1 / 4 * 100), "items": p1_items
+            }
+
+            # ===== Plan 2: MA-Cross-H1-Trend (H1) =====
+            p2_side = "BUY" if is_uptrend_h4 else "SELL"
+            p2_items = []
+            if p2_side == "BUY":
+                c1 = is_uptrend_h4
+                p2_items.append({"name": "เทรนด์ H4", "ok": c1, "desc": f"H4 MA10>MA30 (+{h4_diff_pct:.2f}%)" if c1 else f"H4 ยังไม่ใช่ขาขึ้น ({h4_diff_pct:.2f}%)"})
+                c2 = (prev_h1_ma5 <= prev_h1_ma10 and h1_ma5 > h1_ma10) or (h1_ma5 > h1_ma10)
+                p2_items.append({"name": "MA5/10 H1", "ok": c2, "desc": f"H1 MA5 ({h1_ma5:.2f}) > MA10 ({h1_ma10:.2f})" if c2 else f"H1 MA5 ({h1_ma5:.2f}) < MA10 ({h1_ma10:.2f})"})
+                c3 = h4_ma5_slope > 0
+                p2_items.append({"name": "ความชัน H4", "ok": c3, "desc": f"MA5 H4 ชันขึ้น (+{h4_ma5_slope:.2f})" if c3 else f"MA5 H4 ชันลง ({h4_ma5_slope:.2f})"})
+                c4 = h4_lt_dir == 1
+                p2_items.append({"name": "MA200 H4", "ok": c4, "desc": f"ราคา {h4_close:.2f} > MA200 {h4_ma200:.2f}" if c4 else f"ราคาต่ำกว่า MA200 H4 ({h4_ma200:.2f})"})
+            else:
+                c1 = not is_uptrend_h4
+                p2_items.append({"name": "เทรนด์ H4", "ok": c1, "desc": f"H4 MA10<MA30 ({h4_diff_pct:.2f}%)" if c1 else f"H4 ยังไม่ใช่ขาลง (+{h4_diff_pct:.2f}%)"})
+                c2 = (prev_h1_ma5 >= prev_h1_ma10 and h1_ma5 < h1_ma10) or (h1_ma5 < h1_ma10)
+                p2_items.append({"name": "MA5/10 H1", "ok": c2, "desc": f"H1 MA5 ({h1_ma5:.2f}) < MA10 ({h1_ma10:.2f})" if c2 else f"H1 MA5 ({h1_ma5:.2f}) > MA10 ({h1_ma10:.2f})"})
+                c3 = h4_ma5_slope < 0
+                p2_items.append({"name": "ความชัน H4", "ok": c3, "desc": f"MA5 H4 ชันลง ({h4_ma5_slope:.2f})" if c3 else f"MA5 H4 ชันขึ้น (+{h4_ma5_slope:.2f})"})
+                c4 = h4_lt_dir == -1
+                p2_items.append({"name": "MA200 H4", "ok": c4, "desc": f"ราคา {h4_close:.2f} < MA200 {h4_ma200:.2f}" if c4 else f"ราคาสูงกว่า MA200 H4 ({h4_ma200:.2f})"})
+
+            m2 = sum(1 for it in p2_items if it["ok"])
+            results["P2"] = {
+                "name": "MA-Cross-H1-Trend", "label": "P2 · H1", "side": p2_side,
+                "matched": m2, "total": 4, "pct": int(m2 / 4 * 100), "items": p2_items
+            }
+
+            # ===== Plan 3: SMC-LiquidityHunt (H1) =====
+            dist_sup = abs(cur_price - support) if support else 9999
+            dist_res = abs(resistance - cur_price) if resistance else 9999
+            p3_side = "BUY" if dist_sup <= dist_res else "SELL"
+            p3_items = []
+            if p3_side == "BUY":
+                c1 = m15_low < support and m15_close >= support
+                p3_items.append({"name": "กวาดแนวรับ (Sweep)", "ok": c1, "desc": f"Low กวาดแนวรับ {support:.2f} แล้วดึงกลับ" if c1 else f"ยังไม่กวาดแนวรับ {support:.2f}"})
+                c2 = 0.25 <= lower_wick_ratio <= 2.50
+                p3_items.append({"name": "ไส้ล่างปฏิเสธ", "ok": c2, "desc": f"ไส้ล่างยาว {lower_wick_ratio:.2f} ATR (≥0.25)" if c2 else f"ไส้ล่าง {lower_wick_ratio:.2f} ATR (<0.25)"})
+                c3 = is_uptrend_h1 and h1_stack_dir == 1
+                p3_items.append({"name": "เทรนด์ H1", "ok": c3, "desc": "H1 ขาขึ้น + MA100>150>200" if c3 else "เทรนด์ H1 ยังไม่เป็นขาขึ้นสมบูรณ์"})
+                c4 = ai_prob_up >= 0.50
+                p3_items.append({"name": "AI ทายขึ้น ≥50%", "ok": c4, "desc": f"AI UP {ai_prob_up:.1%}" if c4 else f"AI UP {ai_prob_up:.1%} (<50%)"})
+            else:
+                c1 = m15_high > resistance and m15_close <= resistance
+                p3_items.append({"name": "กวาดแนวต้าน (Sweep)", "ok": c1, "desc": f"High กวาดแนวต้าน {resistance:.2f} แล้วดึงกลับ" if c1 else f"ยังไม่กวาดแนวต้าน {resistance:.2f}"})
+                c2 = 0.25 <= upper_wick_ratio <= 2.50
+                p3_items.append({"name": "ไส้บนปฏิเสธ", "ok": c2, "desc": f"ไส้บนยาว {upper_wick_ratio:.2f} ATR (≥0.25)" if c2 else f"ไส้บน {upper_wick_ratio:.2f} ATR (<0.25)"})
+                c3 = (not is_uptrend_h1) and h1_stack_dir == -1
+                p3_items.append({"name": "เทรนด์ H1", "ok": c3, "desc": "H1 ขาลง + MA100<150<200" if c3 else "เทรนด์ H1 ยังไม่เป็นขาลงสมบูรณ์"})
+                c4 = ai_prob_down >= 0.50
+                p3_items.append({"name": "AI ทายลง ≥50%", "ok": c4, "desc": f"AI DOWN {ai_prob_down:.1%}" if c4 else f"AI DOWN {ai_prob_down:.1%} (<50%)"})
+
+            m3 = sum(1 for it in p3_items if it["ok"])
+            results["P3"] = {
+                "name": "SMC-LiquidityHunt", "label": "P3 · H1 (SMC)", "side": p3_side,
+                "matched": m3, "total": 4, "pct": int(m3 / 4 * 100), "items": p3_items
+            }
+
+            # ===== Plan 4: SR-SwingBounce (H1) =====
+            p4_side = "BUY" if dist_sup <= dist_res else "SELL"
+            p4_items = []
+            if p4_side == "BUY":
+                c1 = (abs(cur_price - support) <= (atr_m15 * 1.0)) and (cur_price >= support)
+                p4_items.append({"name": "ประชิดแนวรับ (≤1 ATR)", "ok": c1, "desc": f"ห่างแนวรับ {dist_sup:.2f} (≤{atr_m15:.2f})" if c1 else f"ห่างแนวรับ {dist_sup:.2f} (>1 ATR)"})
+                c2 = (lower_wick_ratio >= 0.20) or (m15_close > m15_open)
+                p4_items.append({"name": "แท่งเด้งกลับ / ไส้ล่าง", "ok": c2, "desc": "แท่งเขียวหรือมีไส้ล่างปฏิเสธราคา" if c2 else "ยังไม่มีแท่งปฏิเสธราคา"})
+                c3 = bull_div
+                p4_items.append({"name": "Bullish Divergence", "ok": c3, "desc": "พบ RSI Bullish Divergence" if c3 else "ไม่พบ Bullish Divergence"})
+                c4 = ai_prob_up >= 0.51 and h1_stack_dir != -1
+                p4_items.append({"name": "AI ยืนยัน ≥51%", "ok": c4, "desc": f"AI UP {ai_prob_up:.1%} และ H1 ไม่ใช่ขาลง" if c4 else f"AI UP {ai_prob_up:.1%} หรือ H1 ขาลง"})
+            else:
+                c1 = (abs(resistance - cur_price) <= (atr_m15 * 1.0)) and (cur_price <= resistance)
+                p4_items.append({"name": "ประชิดแนวต้าน (≤1 ATR)", "ok": c1, "desc": f"ห่างแนวต้าน {dist_res:.2f} (≤{atr_m15:.2f})" if c1 else f"ห่างแนวต้าน {dist_res:.2f} (>1 ATR)"})
+                c2 = (upper_wick_ratio >= 0.20) or (m15_close < m15_open)
+                p4_items.append({"name": "แท่งเด้งกลับ / ไส้บน", "ok": c2, "desc": "แท่งแดงหรือมีไส้บนปฏิเสธราคา" if c2 else "ยังไม่มีแท่งปฏิเสธราคา"})
+                c3 = bear_div
+                p4_items.append({"name": "Bearish Divergence", "ok": c3, "desc": "พบ RSI Bearish Divergence" if c3 else "ไม่พบ Bearish Divergence"})
+                c4 = ai_prob_down >= 0.51 and h1_stack_dir != 1
+                p4_items.append({"name": "AI ยืนยัน ≥51%", "ok": c4, "desc": f"AI DOWN {ai_prob_down:.1%} และ H1 ไม่ใช่ขาขึ้น" if c4 else f"AI DOWN {ai_prob_down:.1%} หรือ H1 ขาขึ้น"})
+
+            m4 = sum(1 for it in p4_items if it["ok"])
+            results["P4"] = {
+                "name": "SR-SwingBounce", "label": "P4 · H1 (SR)", "side": p4_side,
+                "matched": m4, "total": 4, "pct": int(m4 / 4 * 100), "items": p4_items
+            }
+
+            # ===== Plan 5: BB-H1-Reversion (H1) =====
+            dist_bb_low = abs(cur_price - bb_lower_h1)
+            dist_bb_up = abs(bb_upper_h1 - cur_price)
+            p5_side = "BUY" if dist_bb_low <= dist_bb_up else "SELL"
+            p5_items = []
+            if p5_side == "BUY":
+                c1 = m15_low < bb_lower_h1 and m15_close >= bb_lower_h1
+                p5_items.append({"name": "หลุด BB ล่างแล้วดีดกลับ", "ok": c1, "desc": f"Low หลุด {bb_lower_h1:.2f} แล้วปิดกลับขึ้นมา" if c1 else f"ยังไม่หลุดกรอบ BB ล่าง ({bb_lower_h1:.2f})"})
+                c2 = lower_wick_ratio >= 0.20
+                p5_items.append({"name": "ไส้ล่างปฏิเสธ", "ok": c2, "desc": f"ไส้ล่างยาว {lower_wick_ratio:.2f} ATR (≥0.20)" if c2 else f"ไส้ล่าง {lower_wick_ratio:.2f} (<0.20)"})
+                c3 = macd_hist_h1 >= prev_macd_hist_h1
+                p5_items.append({"name": "MACD H1 หมดแรง", "ok": c3, "desc": "MACD Histogram เริ่มยกตัวขึ้น" if c3 else "MACD Histogram ยังทำ New Low"})
+                c4 = bull_div
+                p5_items.append({"name": "Bullish Divergence", "ok": c4, "desc": "พบ Bullish Divergence" if c4 else "ไม่พบ Divergence"})
+                c5 = ai_prob_up >= 0.50
+                p5_items.append({"name": "AI ทายขึ้น ≥50%", "ok": c5, "desc": f"AI UP {ai_prob_up:.1%}" if c5 else f"AI UP {ai_prob_up:.1%} (<50%)"})
+            else:
+                c1 = m15_high > bb_upper_h1 and m15_close <= bb_upper_h1
+                p5_items.append({"name": "หลุด BB บนแล้วดึงกลับ", "ok": c1, "desc": f"High ทะลุ {bb_upper_h1:.2f} แล้วปิดกลับลงมา" if c1 else f"ยังไม่หลุดกรอบ BB บน ({bb_upper_h1:.2f})"})
+                c2 = upper_wick_ratio >= 0.20
+                p5_items.append({"name": "ไส้บนปฏิเสธ", "ok": c2, "desc": f"ไส้บนยาว {upper_wick_ratio:.2f} ATR (≥0.20)" if c2 else f"ไส้บน {upper_wick_ratio:.2f} (<0.20)"})
+                c3 = macd_hist_h1 <= prev_macd_hist_h1
+                p5_items.append({"name": "MACD H1 หมดแรง", "ok": c3, "desc": "MACD Histogram เริ่มชะลอลง" if c3 else "MACD Histogram ยังทำ New High"})
+                c4 = bear_div
+                p5_items.append({"name": "Bearish Divergence", "ok": c4, "desc": "พบ Bearish Divergence" if c4 else "ไม่พบ Divergence"})
+                c5 = ai_prob_down >= 0.50
+                p5_items.append({"name": "AI ทายลง ≥50%", "ok": c5, "desc": f"AI DOWN {ai_prob_down:.1%}" if c5 else f"AI DOWN {ai_prob_down:.1%} (<50%)"})
+
+            m5 = sum(1 for it in p5_items if it["ok"])
+            results["P5"] = {
+                "name": "BB-H1-Reversion", "label": "P5 · H1 (BB)", "side": p5_side,
+                "matched": m5, "total": 5, "pct": int(m5 / 5 * 100), "items": p5_items
+            }
+
+            # ===== Plan 6: PSAR-H1-Trend (H1) =====
+            p6_side = "BUY" if sar_dir == 1 else "SELL"
+            p6_items = []
+            if p6_side == "BUY":
+                c1 = sar_dir == 1
+                p6_items.append({"name": "SAR อยู่ใต้ราคา", "ok": c1, "desc": f"SAR {sar_val:.2f} อยู่ใต้ราคา (ขาขึ้น)" if c1 else f"SAR อยู่เหนือราคา ({sar_val:.2f})"})
+                c2 = is_uptrend_h4
+                p6_items.append({"name": "เทรนด์ H4", "ok": c2, "desc": f"H4 ขาขึ้น (MA10>MA30 +{h4_diff_pct:.2f}%)" if c2 else "H4 ไม่ใช่ขาขึ้น"})
+                c3 = h4_lt_dir == 1
+                p6_items.append({"name": "เหนือ MA200 H4", "ok": c3, "desc": f"ราคา {h4_close:.2f} > MA200 {h4_ma200:.2f}" if c3 else "ราคาต่ำกว่า MA200 H4"})
+            else:
+                c1 = sar_dir == -1
+                p6_items.append({"name": "SAR อยู่เหนือราคา", "ok": c1, "desc": f"SAR {sar_val:.2f} อยู่เหนือราคา (ขาลง)" if c1 else f"SAR อยู่ใต้ราคา ({sar_val:.2f})"})
+                c2 = not is_uptrend_h4
+                p6_items.append({"name": "เทรนด์ H4", "ok": c2, "desc": f"H4 ขาลง (MA10<MA30 {h4_diff_pct:.2f}%)" if c2 else "H4 ไม่ใช่ขาลง"})
+                c3 = h4_lt_dir == -1
+                p6_items.append({"name": "ใต้ MA200 H4", "ok": c3, "desc": f"ราคา {h4_close:.2f} < MA200 {h4_ma200:.2f}" if c3 else "ราคาสูงกว่า MA200 H4"})
+
+            m6 = sum(1 for it in p6_items if it["ok"])
+            results["P6"] = {
+                "name": "PSAR-H1-Trend", "label": "P6 · H1 (PSAR)", "side": p6_side,
+                "matched": m6, "total": 3, "pct": int(m6 / 3 * 100), "items": p6_items
+            }
+
+            self._plans_status_cache = results
+            self._plans_status_time = now
+            return results
+        except Exception:
+            return self._plans_status_cache or {}
 
 # Singleton Controller Instance
 bot_ctrl = BotController()

@@ -88,6 +88,7 @@ description: Knowledge, skills, techniques, execution style, the 5 XAUUSD tradin
   - บังคับใช้ไตเติ้ลบาร์สีเข้ม (Dark Theme / Immersive Dark Mode) ทุกหน้าต่างย่อยและป๊อปอัปผ่าน `apply_dark_title_bar(window)` ป้องกัน Windows รีเซ็ตไตเติ้ลบาร์เป็นสีขาวเมื่อถูกสั่ง `self.transient(parent)`
   - ดูกราฟสด H4 มีการแสดงผลเส้นแนวนอนแนวรับ–แนวต้านระดับ H4 (เส้นประสีแดง/เขียว พร้อมป้ายราคา) สอดคล้องกับ H1
   - มีระบบตรวจจับและนับถอยหลังเวลาเปิด-ปิดตลาด พร้อมป้องกันข้อความแจ้งเตือนซ้ำซ้อนในคอนโซล (Duplicate Suppression)
+  - แสดงสถานะเงื่อนไขการเข้าไม้เรียลไทม์ (Live Entry Condition Score & Real-time Checklist): หน้าต่างดูกราฟสด `GoldCandleDialog` มีป้ายนับเงื่อนไขบนปุ่มแผน (เช่น `P2 · H1 (3/4)`, ไฮไลต์เขียว `★ (4/4)` เมื่อเข้าครบ 100%) และแถบสถานะเงื่อนไขด้านล่าง (`cond_frame`: Checklist ชิป `✓`/`✗` พร้อมตัวเลขจริงและ Tooltip) + หน้า Dashboard ตารางแผนแสดงจำนวนข้อที่เข้า ณ ขณะนั้น (เช่น `▲ 3/4 ข้อ`) แทนช่องว่างเมื่อยังไม่มีไม้เปิด
   - คำเทรนด์ภาษาอังกฤษ (Uptrend/Downtrend/Sideway) · ชื่อแผน `P1 · MA M15` … · เรียก "โปรแกรม AI Gold Commander Pro" · ค่าบริการ "บาท/ชม."
   - ตัวเลขมีคอมมา · การ์ดแผนเทรดไม่ใส่ $ · ข้อความแจ้งเวอร์ชันใหม่ใช้ `UpdateDialog`
   - ค่าตั้งของผู้ใช้เก็บใน `%APPDATA%\GoldBot24\bot_settings.json` ผ่าน `_save_setting` (รวมค่า ไม่ทับ) — คีย์: `lot`, `tp_usd_enabled`, `tp_usd`, `console_autoclear`, `user_plans`
