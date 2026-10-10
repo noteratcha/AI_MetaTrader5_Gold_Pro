@@ -564,11 +564,51 @@ class BotController:
                 "resistance": ctx.get("res") if ctx else None,
                 "support2": ctx.get("sup2") if ctx else None,
                 "resistance2": ctx.get("res2") if ctx else None,
+                "support3": ctx.get("sup3") if ctx else None,
+                "resistance3": ctx.get("res3") if ctx else None,
+                "support4": ctx.get("sup4") if ctx else None,
+                "resistance4": ctx.get("res4") if ctx else None,
+                "support5": ctx.get("sup5") if ctx else None,
+                "resistance5": ctx.get("res5") if ctx else None,
                 "sup_stars": ctx.get("sup_stars", 3.0) if ctx else 3.0,
                 "res_stars": ctx.get("res_stars", 3.0) if ctx else 3.0,
                 "sup2_stars": ctx.get("sup2_stars", 3.0) if ctx else 3.0,
                 "res2_stars": ctx.get("res2_stars", 3.0) if ctx else 3.0,
+                "sup3_stars": ctx.get("sup3_stars", 3.0) if ctx else 3.0,
+                "res3_stars": ctx.get("res3_stars", 3.0) if ctx else 3.0,
+                "sup4_stars": ctx.get("sup4_stars", 3.0) if ctx else 3.0,
+                "res4_stars": ctx.get("res4_stars", 3.0) if ctx else 3.0,
+                "sup5_stars": ctx.get("sup5_stars", 3.0) if ctx else 3.0,
+                "res5_stars": ctx.get("res5_stars", 3.0) if ctx else 3.0,
             }
+
+            # คำนวณแนวรับ–แนวต้าน 5 ระดับ (S1..S5, R1..R5) จากกราฟแท่ง H1 500 แท่ง
+            try:
+                import multi_asset_ai_bot
+                df_sr = None
+                if tf_upper == "H1" and len(df) >= 510:
+                    df_sr = df
+                else:
+                    h1_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 520)
+                    if h1_rates is not None and len(h1_rates) >= 60:
+                        df_sr = pd.DataFrame(h1_rates)
+                if df_sr is not None and len(df_sr) >= 60:
+                    sr_calc = multi_asset_ai_bot.find_sr_levels(df_sr, float(closes[-1]), lookback=min(500, len(df_sr) - 2))
+                    for i in range(1, 6):
+                        s_k = "support" if i == 1 else f"support{i}"
+                        r_k = "resistance" if i == 1 else f"resistance{i}"
+                        star_s = "sup_stars" if i == 1 else f"sup{i}_stars"
+                        star_r = "res_stars" if i == 1 else f"res{i}_stars"
+                        if s_k in sr_calc and not math.isnan(sr_calc[s_k]):
+                            res_dict[s_k] = sr_calc[s_k]
+                            res_dict[star_s] = sr_calc.get(star_s, 2.0)
+                        if r_k in sr_calc and not math.isnan(sr_calc[r_k]):
+                            res_dict[r_k] = sr_calc[r_k]
+                            res_dict[star_r] = sr_calc.get(star_r, 2.0)
+            except Exception:
+                pass
+
+            return res_dict
         except Exception:
             return None
 

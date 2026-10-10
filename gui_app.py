@@ -1102,7 +1102,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         ],
     }
 
-    def __init__(self, parent):
+    def __init__(self, parent, default_tf=None, default_bars=None, default_plan=None):
         super().__init__(parent)
         w, h = 1100, 680
         self.configure(fg_color=COLOR_BG_DARK)
@@ -1122,30 +1122,52 @@ class GoldCandleDialog(ctk.CTkToplevel):
         p5 = plan_config.is_enabled("BB-H1-Reversion")
         p6 = plan_config.is_enabled("PSAR-H1-Trend")
 
-        # เลือกแผนเริ่มต้นตามแผนที่เปิดใช้งาน (โฟกัส P1 ก่อน)
-        if p1:
-            self.selected_plan = "P1"
-            init_tf = "M15"
-        elif p2:
-            self.selected_plan = "P2"
-            init_tf = "H1"
-        elif p3:
-            self.selected_plan = "P3"
-            init_tf = "H1"
-        elif p4:
-            self.selected_plan = "P4"
-            init_tf = "H1"
-        elif p5:
-            self.selected_plan = "P5"
-            init_tf = "H1"
-        elif p6:
-            self.selected_plan = "P6"
-            init_tf = "H1"
+        # เลือกแผนเริ่มต้นตามพารามิเตอร์ หรือตามแผนที่เปิดใช้งานจริง
+        if default_plan:
+            self.selected_plan = default_plan
+            spec = next((item for item in self.PLAN_SPECS if item[0] == default_plan), None)
+            init_tf = default_tf or (spec[2] if spec and spec[2] else "H1")
+        elif default_tf:
+            init_tf = default_tf
+            if init_tf == "H1":
+                self.selected_plan = "P3" if (p3 or p4) else ("P2" if p2 else "ALL")
+            elif init_tf == "H4":
+                self.selected_plan = "H4"
+            else:
+                self.selected_plan = "P1"
         else:
-            self.selected_plan = "ALL"
-            init_tf = "M15"
+            if p1:
+                self.selected_plan = "P1"
+                init_tf = "M15"
+            elif p2:
+                self.selected_plan = "P2"
+                init_tf = "H1"
+            elif p3:
+                self.selected_plan = "P3"
+                init_tf = "H1"
+            elif p4:
+                self.selected_plan = "P4"
+                init_tf = "H1"
+            elif p5:
+                self.selected_plan = "P5"
+                init_tf = "H1"
+            elif p6:
+                self.selected_plan = "P6"
+                init_tf = "H1"
+            else:
+                self.selected_plan = "ALL"
+                init_tf = "M15"
 
-        self.title(f"XAUUSD · {init_tf} เรียลไทม์ ({self.selected_plan})")
+        plan_desc = ""
+        for pk, plabel, _, _ in self.PLAN_SPECS:
+            if pk == self.selected_plan:
+                plan_desc = f" ({plabel})"
+                break
+        self.title(f"XAUUSD · {init_tf} เรียลไทม์{plan_desc}")
+
+        # ปรับเปิด/ปิดอินดิเคเตอร์ตามแผนที่เลือก
+        target_spec = next((item for item in self.PLAN_SPECS if item[0] == self.selected_plan), None)
+        ind_keys = target_spec[3] if target_spec and target_spec[3] is not None else None
 
         self.ind_toggles = {
             "ma5": True, "ma13": True, "ma50": True,
@@ -1156,12 +1178,16 @@ class GoldCandleDialog(ctk.CTkToplevel):
             "h4_ma10": True, "h4_ma30": True, "h4_ma200": True,
             "orders": True,
         }
+        if ind_keys is not None:
+            for k in list(self.ind_toggles.keys()):
+                if k != "orders":
+                    self.ind_toggles[k] = (k in ind_keys)
 
         self.plan_buttons = {}
         self.ind_buttons = {}
         self.ind_colors = {}
         self.tf_var = tk.StringVar(value=init_tf)
-        self.bars_var = tk.StringVar(value=str(self.BARS))
+        self.bars_var = tk.StringVar(value=str(default_bars or self.BARS))
 
         # --- แถวบน: สัญลักษณ์, Timeframe, ราคา, จำนวนแท่ง, ไม้เปิด, เต็มจอ ---
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -1565,26 +1591,39 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 vals += [c["h4_ma200"] for c in candles if c.get("h4_ma200") is not None]
 
         cur_price = self.data["bid"]
-        sup = self.data.get("support")
-        res = self.data.get("resistance")
-        sup2 = self.data.get("support2")
-        res2 = self.data.get("resistance2")
-        sup_stars = float(self.data.get("sup_stars", 3.0) or 3.0)
-        res_stars = float(self.data.get("res_stars", 3.0) or 3.0)
-        sup2_stars = float(self.data.get("sup2_stars", 3.0) or 3.0)
-        res2_stars = float(self.data.get("res2_stars", 3.0) or 3.0)
+
+        # รายการระดับแนวต้าน 5 ระดับ (R1..R5) พร้อมดาวความแข็งแกร่ง
+        res_list = [
+            ("R1", self.data.get("resistance"), float(self.data.get("res_stars", 3.0) or 3.0), COLOR_DANGER_RED, (6, 3), 1.5, "bold"),
+            ("R2", self.data.get("resistance2"), float(self.data.get("res2_stars", 2.5) or 2.5), "#FB923C", (4, 3), 1.2, "bold"),
+            ("R3", self.data.get("resistance3"), float(self.data.get("res3_stars", 2.0) or 2.0), "#F59E0B", (3, 3), 1.0, "normal"),
+            ("R4", self.data.get("resistance4"), float(self.data.get("res4_stars", 2.0) or 2.0), "#F43F5E", (2, 2), 1.0, "normal"),
+            ("R5", self.data.get("resistance5"), float(self.data.get("res5_stars", 1.5) or 1.5), "#E11D48", (2, 2), 1.0, "normal"),
+        ]
+
+        # รายการระดับแนวรับ 5 ระดับ (S1..S5) พร้อมดาวความแข็งแกร่ง
+        sup_list = [
+            ("S1", self.data.get("support"), float(self.data.get("sup_stars", 3.0) or 3.0), COLOR_SUCCESS_GREEN, (6, 3), 1.5, "bold"),
+            ("S2", self.data.get("support2"), float(self.data.get("sup2_stars", 2.5) or 2.5), "#34D399", (4, 3), 1.2, "bold"),
+            ("S3", self.data.get("support3"), float(self.data.get("sup3_stars", 2.0) or 2.0), "#2DD4BF", (3, 3), 1.0, "normal"),
+            ("S4", self.data.get("support4"), float(self.data.get("sup4_stars", 2.0) or 2.0), "#06B6D4", (2, 2), 1.0, "normal"),
+            ("S5", self.data.get("support5"), float(self.data.get("sup5_stars", 1.5) or 1.5), "#38BDF8", (2, 2), 1.0, "normal"),
+        ]
 
         if tf == "H1":
+            try:
+                n_bars = int(self.bars_var.get())
+            except Exception:
+                n_bars = 120
+            sr_range_limit = 250 if n_bars >= 200 else 60
             if self.ind_toggles.get("support", True):
-                if sup and abs(sup - cur_price) <= 140:
-                    vals.append(sup)
-                if sup2 and abs(sup2 - cur_price) <= 140:
-                    vals.append(sup2)
+                for _, s_val, _, _, _, _, _ in sup_list:
+                    if s_val and not (isinstance(s_val, float) and math.isnan(s_val)) and abs(s_val - cur_price) <= sr_range_limit:
+                        vals.append(s_val)
             if self.ind_toggles.get("resistance", True):
-                if res and abs(res - cur_price) <= 140:
-                    vals.append(res)
-                if res2 and abs(res2 - cur_price) <= 140:
-                    vals.append(res2)
+                for _, r_val, _, _, _, _, _ in res_list:
+                    if r_val and not (isinstance(r_val, float) and math.isnan(r_val)) and abs(r_val - cur_price) <= sr_range_limit:
+                        vals.append(r_val)
 
         vals.append(self.data["ask"])
         if self.ind_toggles.get("orders", True):
@@ -1654,38 +1693,27 @@ class GoldCandleDialog(ctk.CTkToplevel):
             if self.ind_toggles.get("ma5", True):
                 draw_series("ma5", COLOR_CYAN_ACCENT, width=2, smooth=True)
         elif tf == "H1":
-            # 1. แนวรับ / แนวต้าน H1 2 ระดับ พร้อมดาวความแข็งแกร่ง (Plan 3, Plan 4)
+            # 1. แนวต้าน H1 5 ระดับ (R1..R5) พร้อมดาวความแข็งแกร่ง (Plan 3, Plan 4)
             if self.ind_toggles.get("resistance", True):
-                # R1 (แนวต้านที่ 1)
-                if res and lo <= res <= hi:
-                    yr = y_of(res)
-                    cv.create_line(left, yr, W - right, yr, fill=COLOR_DANGER_RED, dash=(6, 3), width=1.5)
-                    cv.create_text(left + 6, yr - 8, text=f"แนวต้าน R1 {res:,.2f}", anchor="w", fill=COLOR_DANGER_RED, font=(app_fonts.UI, 9, "bold"))
-                    _draw_vector_stars(left + 128, yr - 8, res_stars)
-                    cv.create_text(left + 192, yr - 8, text=f"({res_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
-                # R2 (แนวต้านที่ 2)
-                if res2 and lo <= res2 <= hi and abs(res2 - (res or 0)) > 2.0:
-                    yr2 = y_of(res2)
-                    cv.create_line(left, yr2, W - right, yr2, fill="#FB923C", dash=(3, 3), width=1)
-                    cv.create_text(left + 6, yr2 - 8, text=f"แนวต้าน R2 {res2:,.2f}", anchor="w", fill="#FB923C", font=(app_fonts.UI, 9))
-                    _draw_vector_stars(left + 128, yr2 - 8, res2_stars)
-                    cv.create_text(left + 192, yr2 - 8, text=f"({res2_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8))
+                for name, r_val, r_stars, col, dash, width, weight in res_list:
+                    if r_val and not (isinstance(r_val, float) and math.isnan(r_val)) and lo <= r_val <= hi:
+                        yr = y_of(r_val)
+                        cv.create_line(left, yr, W - right, yr, fill=col, dash=dash, width=width)
+                        lbl_y = yr + 8 if yr < top + 16 else yr - 8
+                        cv.create_text(left + 6, lbl_y, text=f"แนวต้าน {name} {r_val:,.2f}", anchor="w", fill=col, font=(app_fonts.UI, 9, weight))
+                        _draw_vector_stars(left + 128, lbl_y, r_stars)
+                        cv.create_text(left + 192, lbl_y, text=f"({r_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
 
+            # 2. แนวรับ H1 5 ระดับ (S1..S5) พร้อมดาวความแข็งแกร่ง (Plan 3, Plan 4)
             if self.ind_toggles.get("support", True):
-                # S1 (แนวรับที่ 1)
-                if sup and lo <= sup <= hi:
-                    ys = y_of(sup)
-                    cv.create_line(left, ys, W - right, ys, fill=COLOR_SUCCESS_GREEN, dash=(6, 3), width=1.5)
-                    cv.create_text(left + 6, ys - 8, text=f"แนวรับ S1 {sup:,.2f}", anchor="w", fill=COLOR_SUCCESS_GREEN, font=(app_fonts.UI, 9, "bold"))
-                    _draw_vector_stars(left + 124, ys - 8, sup_stars)
-                    cv.create_text(left + 188, ys - 8, text=f"({sup_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
-                # S2 (แนวรับที่ 2)
-                if sup2 and lo <= sup2 <= hi and abs(sup2 - (sup or 0)) > 2.0:
-                    ys2 = y_of(sup2)
-                    cv.create_line(left, ys2, W - right, ys2, fill="#34D399", dash=(3, 3), width=1)
-                    cv.create_text(left + 6, ys2 - 8, text=f"แนวรับ S2 {sup2:,.2f}", anchor="w", fill="#34D399", font=(app_fonts.UI, 9))
-                    _draw_vector_stars(left + 124, ys2 - 8, sup2_stars)
-                    cv.create_text(left + 188, ys2 - 8, text=f"({sup2_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8))
+                for name, s_val, s_stars, col, dash, width, weight in sup_list:
+                    if s_val and not (isinstance(s_val, float) and math.isnan(s_val)) and lo <= s_val <= hi:
+                        ys = y_of(s_val)
+                        cv.create_line(left, ys, W - right, ys, fill=col, dash=dash, width=width)
+                        lbl_y = ys - 8 if ys > top + 16 else ys + 8
+                        cv.create_text(left + 6, lbl_y, text=f"แนวรับ {name} {s_val:,.2f}", anchor="w", fill=col, font=(app_fonts.UI, 9, weight))
+                        _draw_vector_stars(left + 124, lbl_y, s_stars)
+                        cv.create_text(left + 188, lbl_y, text=f"({s_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
 
             # 2. Bollinger Bands H1 (Plan 5)
             if self.ind_toggles.get("h1_bb", True):
@@ -3478,7 +3506,7 @@ class MainTradingApp(ctk.CTk):
         sr_body = self.card_sr["body"]
         sr_body.grid_columnconfigure((0, 1), weight=1, uniform="sr_cols")
         self.card_sr["rows"] = {tf: self._create_sr_row(sr_body, tf, col) for col, tf in enumerate(("H1", "H4"))}
-        self._make_clickable(self.card_sr, lambda: GoldCandleDialog(self))
+        self._make_clickable(self.card_sr, lambda: GoldCandleDialog(self, default_tf="H1", default_bars=500, default_plan="P3"), hint="ดูกราฟ H1 (500 แท่ง) ›")
 
     # ---------------------------------------------------------------------
     # การ์ด 2 แถว (สภาวะตลาด / แนวรับ–แนวต้าน)

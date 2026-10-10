@@ -105,12 +105,17 @@ def _context_from(h1, h4, price):
     _l4 = 1 if c4.iloc[-2] > c4.rolling(200).mean().iloc[-2] else -1
     d["p6_trend"] = _t4 if _t4 == _l4 else 0
     sr = bot.find_sr_levels(h1, float(price))
-    d["sup"], d["res"] = _f(sr["support"]), _f(sr["resistance"])
-    d["sup2"], d["res2"] = _f(sr.get("support2", sr["support"])), _f(sr.get("resistance2", sr["resistance"]))
-    d["sup_stars"], d["res_stars"] = float(sr.get("sup_stars", 3.0)), float(sr.get("res_stars", 3.0))
-    d["sup2_stars"], d["res2_stars"] = float(sr.get("sup2_stars", 3.0)), float(sr.get("res2_stars", 3.0))
-    d["sup_t"], d["res_t"] = int(sr["sup_touches"]), int(sr["res_touches"])
-    d["sup2_t"], d["res2_t"] = int(sr.get("sup2_touches", 0)), int(sr.get("res2_touches", 0))
+    for i in range(1, 6):
+        s_k = "sup" if i == 1 else f"sup{i}"
+        r_k = "res" if i == 1 else f"res{i}"
+        sr_s = "support" if i == 1 else f"support{i}"
+        sr_r = "resistance" if i == 1 else f"resistance{i}"
+        d[s_k] = _f(sr.get(sr_s))
+        d[r_k] = _f(sr.get(sr_r))
+        d[f"{s_k}_stars"] = float(sr.get(f"sup{i}_stars" if i > 1 else "sup_stars", 2.0))
+        d[f"{r_k}_stars"] = float(sr.get(f"res{i}_stars" if i > 1 else "res_stars", 2.0))
+        d[f"{s_k}_t"] = int(sr.get(f"sup{i}_touches" if i > 1 else "sup_touches", 1))
+        d[f"{r_k}_t"] = int(sr.get(f"res{i}_touches" if i > 1 else "res_touches", 1))
     return d
 
 

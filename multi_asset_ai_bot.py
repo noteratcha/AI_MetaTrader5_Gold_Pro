@@ -856,26 +856,32 @@ def stars_to_text(stars: float) -> str:
 
 def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
     """
-    หาแนวรับ/แนวต้านจากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` แท่ง
+    หาแนวรับ/แนวต้าน 5 ระดับ (S1..S5 และ R1..R5) จากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` (500 แท่ง)
     คืน dict:
-      - support / resistance (ระดับ 1: ใกล้ราคาปัจจุบันที่สุด)
-      - support2 / resistance2 (ระดับ 2: โครงสร้างถัดไปที่มีระยะห่างอย่างน้อย 0.75 ATR)
-      - sup_touches / res_touches (จำนวนครั้งที่แตะ S1 / R1)
-      - sup2_touches / res2_touches (จำนวนครั้งที่แตะ S2 / R2)
-      - sup_stars / res_stars (คะแนนความแข็งแกร่ง 1.0 - 5.0 ดาว)
-      - sup2_stars / res2_stars (คะแนนความแข็งแกร่ง 1.0 - 5.0 ดาว)
+      - support..support5 / resistance..resistance5
+      - sup_touches..sup5_touches / res_touches..res5_touches
+      - sup_stars..sup5_stars / res_stars..res5_stars (1.0 - 5.0 ดาว)
     """
     out = {
         "support": float('nan'), "resistance": float('nan'),
         "support2": float('nan'), "resistance2": float('nan'),
+        "support3": float('nan'), "resistance3": float('nan'),
+        "support4": float('nan'), "resistance4": float('nan'),
+        "support5": float('nan'), "resistance5": float('nan'),
         "sup_touches": 0, "res_touches": 0,
         "sup2_touches": 0, "res2_touches": 0,
+        "sup3_touches": 0, "res3_touches": 0,
+        "sup4_touches": 0, "res4_touches": 0,
+        "sup5_touches": 0, "res5_touches": 0,
         "sup_stars": 1.5, "res_stars": 1.5,
         "sup2_stars": 1.5, "res2_stars": 1.5,
+        "sup3_stars": 1.5, "res3_stars": 1.5,
+        "sup4_stars": 1.5, "res4_stars": 1.5,
+        "sup5_stars": 1.5, "res5_stars": 1.5,
     }
     if df is None or len(df) < 2 * k + 10 or not price or pd.isna(price):
         return out
-    d = df.iloc[-(lookback + 1):-1]  # เฉพาะแท่งที่ปิดแล้ว
+    d = df.iloc[-(lookback + 1):-1]  # เฉพาะแท่งที่ปิดแล้วย้อนหลัง 500 แท่ง
     atr = _atr_series(df).iloc[-2]
     if pd.isna(atr) or atr <= 0:
         atr = float((d['high'] - d['low']).mean() or 1.0)
@@ -898,55 +904,101 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
 
     min_gap = max(0.75 * atr, 4.0)
 
-    # แนวรับ S1 และ S2
+    # 1. คัดเลือกแนวรับ 5 ระดับ (S1, S2, S3, S4, S5)
+    sup_levels = []
+
+    def pick_next_sup(last_price, pool):
+        for z in pool:
+            if (last_price - z[0]) >= min_gap:
+                return z
+        return None
+
     if strong_below:
-        z1 = strong_below[0]
-        out["support"], out["sup_touches"] = round(z1[0], 2), int(z1[1])
-        out["sup_stars"] = touches_to_stars(z1[1])
-        z2 = next((z for z in strong_below[1:] if z1[0] - z[0] >= min_gap), None)
-        if not z2:
-            z2 = next((z for z in below if z1[0] - z[0] >= min_gap), None)
-        if z2:
-            out["support2"], out["sup2_touches"] = round(z2[0], 2), int(z2[1])
-            out["sup2_stars"] = touches_to_stars(z2[1])
-        else:
-            lo_min = float(d['low'].min())
-            out["support2"] = round(lo_min, 2)
-            out["sup2_touches"] = 1
-            out["sup2_stars"] = 2.0
+        s1 = strong_below[0]
+    elif below:
+        s1 = below[0]
     else:
         lo_min = float(d['low'].min())
-        out["support"] = round(lo_min, 2)
-        out["support2"] = round(lo_min, 2)
-        out["sup_touches"] = 1
-        out["sup2_touches"] = 1
-        out["sup_stars"] = 2.0
-        out["sup2_stars"] = 2.0
+        s1 = [lo_min, 1, lo_min]
+    sup_levels.append(s1)
 
-    # แนวต้าน R1 และ R2
-    if strong_above:
-        zr1 = strong_above[0]
-        out["resistance"], out["res_touches"] = round(zr1[0], 2), int(zr1[1])
-        out["res_stars"] = touches_to_stars(zr1[1])
-        zr2 = next((z for z in strong_above[1:] if z[0] - zr1[0] >= min_gap), None)
-        if not zr2:
-            zr2 = next((z for z in above if z[0] - zr1[0] >= min_gap), None)
-        if zr2:
-            out["resistance2"], out["res2_touches"] = round(zr2[0], 2), int(zr2[1])
-            out["res2_stars"] = touches_to_stars(zr2[1])
+    rem_strong_below = [z for z in strong_below if z not in sup_levels]
+    rem_all_below = [z for z in below if z not in sup_levels]
+
+    for _ in range(4):
+        last_s = sup_levels[-1][0]
+        cand = pick_next_sup(last_s, rem_strong_below)
+        if not cand:
+            cand = pick_next_sup(last_s, rem_all_below)
+        if cand:
+            sup_levels.append(cand)
+            if cand in rem_strong_below:
+                rem_strong_below.remove(cand)
+            if cand in rem_all_below:
+                rem_all_below.remove(cand)
         else:
-            hi_max = float(d['high'].max())
-            out["resistance2"] = round(hi_max, 2)
-            out["res2_touches"] = 1
-            out["res2_stars"] = 2.0
+            lo_min = float(d['low'].min())
+            if lo_min < last_s - min_gap:
+                sup_levels.append([lo_min, 1, lo_min])
+            else:
+                next_price = last_s - max(1.5 * atr, 6.0)
+                sup_levels.append([next_price, 1, next_price])
+
+    for idx, s in enumerate(sup_levels[:5], start=1):
+        s_key = "support" if idx == 1 else f"support{idx}"
+        t_key = "sup_touches" if idx == 1 else f"sup{idx}_touches"
+        star_key = "sup_stars" if idx == 1 else f"sup{idx}_stars"
+        out[s_key] = round(float(s[0]), 2)
+        out[t_key] = int(s[1])
+        out[star_key] = touches_to_stars(int(s[1]))
+
+    # 2. คัดเลือกแนวต้าน 5 ระดับ (R1, R2, R3, R4, R5)
+    res_levels = []
+
+    def pick_next_res(last_price, pool):
+        for z in pool:
+            if (z[0] - last_price) >= min_gap:
+                return z
+        return None
+
+    if strong_above:
+        r1 = strong_above[0]
+    elif above:
+        r1 = above[0]
     else:
         hi_max = float(d['high'].max())
-        out["resistance"] = round(hi_max, 2)
-        out["resistance2"] = round(hi_max, 2)
-        out["res_touches"] = 1
-        out["res2_touches"] = 1
-        out["res_stars"] = 2.0
-        out["res2_stars"] = 2.0
+        r1 = [hi_max, 1, hi_max]
+    res_levels.append(r1)
+
+    rem_strong_above = [z for z in strong_above if z not in res_levels]
+    rem_all_above = [z for z in above if z not in res_levels]
+
+    for _ in range(4):
+        last_r = res_levels[-1][0]
+        cand = pick_next_res(last_r, rem_strong_above)
+        if not cand:
+            cand = pick_next_res(last_r, rem_all_above)
+        if cand:
+            res_levels.append(cand)
+            if cand in rem_strong_above:
+                rem_strong_above.remove(cand)
+            if cand in rem_all_above:
+                rem_all_above.remove(cand)
+        else:
+            hi_max = float(d['high'].max())
+            if hi_max > last_r + min_gap:
+                res_levels.append([hi_max, 1, hi_max])
+            else:
+                next_price = last_r + max(1.5 * atr, 6.0)
+                res_levels.append([next_price, 1, next_price])
+
+    for idx, r in enumerate(res_levels[:5], start=1):
+        r_key = "resistance" if idx == 1 else f"resistance{idx}"
+        t_key = "res_touches" if idx == 1 else f"res{idx}_touches"
+        star_key = "res_stars" if idx == 1 else f"res{idx}_stars"
+        out[r_key] = round(float(r[0]), 2)
+        out[t_key] = int(r[1])
+        out[star_key] = touches_to_stars(int(r[1]))
 
     return out
 
@@ -2076,10 +2128,22 @@ def main():
                     "h1_resistance": round(float(resistance), 2) if pd.notna(resistance) else 0.0,
                     "h1_support2": round(float(sr_h1.get("support2", support)), 2),
                     "h1_resistance2": round(float(sr_h1.get("resistance2", resistance)), 2),
+                    "h1_support3": round(float(sr_h1.get("support3", support)), 2),
+                    "h1_resistance3": round(float(sr_h1.get("resistance3", resistance)), 2),
+                    "h1_support4": round(float(sr_h1.get("support4", support)), 2),
+                    "h1_resistance4": round(float(sr_h1.get("resistance4", resistance)), 2),
+                    "h1_support5": round(float(sr_h1.get("support5", support)), 2),
+                    "h1_resistance5": round(float(sr_h1.get("resistance5", resistance)), 2),
                     "h1_sup_stars": float(sr_h1.get("sup_stars", 3.0)),
                     "h1_res_stars": float(sr_h1.get("res_stars", 3.0)),
                     "h1_sup2_stars": float(sr_h1.get("sup2_stars", 3.0)),
                     "h1_res2_stars": float(sr_h1.get("res2_stars", 3.0)),
+                    "h1_sup3_stars": float(sr_h1.get("sup3_stars", 3.0)),
+                    "h1_res3_stars": float(sr_h1.get("res3_stars", 3.0)),
+                    "h1_sup4_stars": float(sr_h1.get("sup4_stars", 3.0)),
+                    "h1_res4_stars": float(sr_h1.get("res4_stars", 3.0)),
+                    "h1_sup5_stars": float(sr_h1.get("sup5_stars", 3.0)),
+                    "h1_res5_stars": float(sr_h1.get("res5_stars", 3.0)),
                     "h4_support": round(h4_support, 2),
                     "h4_resistance": round(h4_resistance, 2),
                     "h4_support2": round(float(sr_h4.get("support2", h4_support)), 2),
