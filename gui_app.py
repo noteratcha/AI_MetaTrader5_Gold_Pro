@@ -8,6 +8,7 @@ AI MetaTrader 5 (FBS) Gold Pro - Desktop GUI Application
 import os
 import json
 import sys
+import ctypes
 import time
 import math
 import queue
@@ -137,7 +138,67 @@ def _app_icon_path():
     return os.path.join(base, "assets", "app_icon.ico")
 
 
-# หน้าต่างย่อยทุกอัน (CTkToplevel) ใช้โลโก้เดียวกับโปรแกรมหลัก
+def apply_dark_title_bar(window, bg_hex=COLOR_BG_DARK, text_hex=COLOR_TEXT_PRIMARY):
+    """
+    บังคับใช้แถบไตเติ้ลบาร์สีเข้ม (Dark Theme / Immersive Dark Mode) สำหรับ Windows 10/11
+    ป้องกันการหลุดเป็นไตเติ้ลบาร์สีขาวเมื่อถูกเรียก self.transient(parent) หรือเปิดหน้าต่างป๊อปอัป
+    """
+    if sys.platform != "win32":
+        return
+
+    def _apply():
+        try:
+            if not window.winfo_exists():
+                return
+            wid = window.winfo_id()
+            p = ctypes.windll.user32.GetParent(wid)
+            hwnd = p if p else wid
+            if not hwnd:
+                return
+
+            val = ctypes.c_int(1)
+            # 1) Windows 10 (20H1+ / Build 19041+) & Windows 11 Immersive Dark Mode
+            res = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 20, ctypes.byref(val), ctypes.sizeof(val)
+            )
+            # 2) Fallback สำหรับ Windows 10 รุ่นก่อน 20H1 (Build < 19041)
+            if res != 0:
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 19, ctypes.byref(val), ctypes.sizeof(val)
+                )
+
+            # 3) Windows 11 build 22000+: สีพื้นหลังไตเติ้ลบาร์ (COLORREF / BGR)
+            if bg_hex and len(bg_hex) == 7 and bg_hex.startswith("#"):
+                r, g, b = int(bg_hex[1:3], 16), int(bg_hex[3:5], 16), int(bg_hex[5:7], 16)
+                c_bgr = ctypes.c_int(r | (g << 8) | (b << 16))
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 35, ctypes.byref(c_bgr), ctypes.sizeof(c_bgr)
+                )
+
+            # 4) Windows 11 build 22000+: สีตัวอักษรไตเติ้ลบาร์ (COLORREF / BGR)
+            if text_hex and len(text_hex) == 7 and text_hex.startswith("#"):
+                r, g, b = int(text_hex[1:3], 16), int(text_hex[3:5], 16), int(text_hex[5:7], 16)
+                t_bgr = ctypes.c_int(r | (g << 8) | (b << 16))
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 36, ctypes.byref(t_bgr), ctypes.sizeof(t_bgr)
+                )
+
+            # บังคับให้ Windows DWM รีเฟรชกรอบหน้าต่างทันที ป้องกันจังหวะกะพริบขาว
+            flags = 0x0020 | 0x0002 | 0x0001 | 0x0004 | 0x0010  # FRAMECHANGED | NOMOVE | NOSIZE | NOZORDER | NOACTIVATE
+            ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, flags)
+        except Exception:
+            pass
+
+    _apply()
+    try:
+        window.after(20, _apply)
+        window.after(100, _apply)
+        window.after(300, _apply)
+    except Exception:
+        pass
+
+
+# หน้าต่างย่อยทุกอัน (CTkToplevel) ใช้โลโก้เดียวกับโปรแกรมหลัก และบังคับใช้ Dark Title Bar
 # CustomTkinter ตั้งไอคอนเริ่มต้นของตัวเองหลังสร้าง ~200ms จึงต้องตั้งทับหลังจากนั้น
 # และอยู่หน้าสุดเสมอ (topmost) — ไม่ถูกโปรแกรมอื่น เช่น MT5 / เบราว์เซอร์ บังขณะเปิดอยู่
 _ctk_toplevel_init = ctk.CTkToplevel.__init__
@@ -145,6 +206,11 @@ _ctk_toplevel_init = ctk.CTkToplevel.__init__
 
 def _toplevel_init_with_icon(self, *args, **kwargs):
     _ctk_toplevel_init(self, *args, **kwargs)
+    apply_dark_title_bar(self)
+    try:
+        self.bind("<Map>", lambda _e: apply_dark_title_bar(self), add="+")
+    except Exception:
+        pass
     try:
         self.attributes("-topmost", True)
         self.after(60, self.lift)
@@ -161,6 +227,20 @@ def _toplevel_init_with_icon(self, *args, **kwargs):
 
 
 ctk.CTkToplevel.__init__ = _toplevel_init_with_icon
+
+# เมื่อหน้าต่างย่อยเรียก self.transient(parent) หรือ wm_transient Windows OS จะรีเซ็ตไตเติ้ลบาร์กลับเป็นสีขาว
+# ดักจับและบังคับใช้ Dark Title Bar ซ้ำเสมอ
+_orig_ctk_transient = ctk.CTkToplevel.transient
+
+
+def _toplevel_transient(self, *args, **kwargs):
+    res = _orig_ctk_transient(self, *args, **kwargs)
+    apply_dark_title_bar(self)
+    return res
+
+
+ctk.CTkToplevel.transient = _toplevel_transient
+ctk.CTkToplevel.wm_transient = _toplevel_transient
 
 
 class RedeemKeyDialog(ctk.CTkToplevel):
@@ -190,6 +270,7 @@ class RedeemKeyDialog(ctk.CTkToplevel):
         x = px + max(0, (pw - 560) // 2)
         y = py + max(0, (ph - 420) // 2)
         self.geometry(f"560x420+{x}+{y}")
+        apply_dark_title_bar(self)
 
         self._build_ui()
 
@@ -360,6 +441,7 @@ class UpdateDialog(ctk.CTkToplevel):
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
+        apply_dark_title_bar(self)
         self.info = info or {}
         self.url = download_url
         self.direct_url = self.info.get("direct_download_url") or download_url
@@ -534,6 +616,7 @@ class NewsImpactDialog(ctk.CTkToplevel):
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
+        apply_dark_title_bar(self)
         f = lambda size, weight="normal": ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
         a = analysis or {}
 
@@ -617,6 +700,7 @@ class StyledMessage(ctk.CTkToplevel):
         self.configure(fg_color=COLOR_BG_DARK)
         self.resizable(False, False)
         self.transient(parent)
+        apply_dark_title_bar(self)
 
         def f(size, weight="normal"):
             return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
@@ -706,6 +790,7 @@ class ContactDialog(ctk.CTkToplevel):
         self.configure(fg_color=COLOR_BG_DARK)
         self.transient(parent)
         self.resizable(False, False)
+        apply_dark_title_bar(self)
 
         def f(size, weight="normal", family=app_fonts.UI):
             return ctk.CTkFont(family=family, size=size, weight=weight)
@@ -767,6 +852,7 @@ class QuickOrderDialog(ctk.CTkToplevel):
         self.configure(fg_color=COLOR_BG_DARK)
         self.transient(parent)
         self.resizable(False, False)
+        apply_dark_title_bar(self)
 
         def f(size, weight="normal", family=app_fonts.UI):
             return ctk.CTkFont(family=family, size=size, weight=weight)
@@ -985,6 +1071,7 @@ class MarketExplainDialog(ctk.CTkToplevel):
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
+        apply_dark_title_bar(self)
 
         def f(size, weight="normal", family=app_fonts.UI):
             return ctk.CTkFont(family=family, size=size, weight=weight)
@@ -1114,6 +1201,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
         self.minsize(720, 460)
+        apply_dark_title_bar(self)
         self.data, self.slots, self._job = None, [], None
 
         # สถานะเปิด/ปิดแสดงผลของแต่ละอินดิเคเตอร์ตามแผนที่เปิดใช้งานจริง
@@ -1879,6 +1967,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
         y = max(0, parent.winfo_rooty() + (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
         self.minsize(820, 520)
+        apply_dark_title_bar(self)
         f = self._f
 
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -2407,6 +2496,7 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
         self.minsize(720, 460)
+        apply_dark_title_bar(self)
         self.rows, self.bars, self.weekly = [], [], False
         self._build()
         self.after(50, lambda: self._apply_preset(14))
@@ -2632,6 +2722,7 @@ class UserStatsDialog(ctk.CTkToplevel):
         x = px + max(0, (pw - 860) // 2)
         y = py + max(0, (ph - 600) // 2)
         self.geometry(f"860x600+{x}+{y}")
+        apply_dark_title_bar(self)
 
         self._build_ui()
 
@@ -2768,6 +2859,7 @@ class MainTradingApp(ctk.CTk):
             # จอโน้ตบุ๊ก (เช่น 1366x768) — เปิดเต็มจอเพื่อไม่ให้ส่วนล่างถูกตัด
             self.after(0, lambda: self.state("zoomed"))
         self.configure(fg_color=COLOR_BG_DARK)
+        apply_dark_title_bar(self)
 
         # ตั้งค่าไอคอนหน้าต่าง Windows
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "app_icon.ico")
