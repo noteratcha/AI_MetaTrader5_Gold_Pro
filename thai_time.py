@@ -96,3 +96,132 @@ def server_to_epoch(server_ts: float) -> float:
 def from_server(server_ts: float, fmt: str = "%d/%m %H:%M") -> str:
     """เวลาเซิร์ฟเวอร์ MT5 → ข้อความเวลาไทย"""
     return datetime.fromtimestamp(server_to_epoch(server_ts), TH).strftime(fmt)
+
+
+def get_gold_market_status(dt: datetime = None) -> dict:
+    """
+    คำนวณสถานะตลาดทองคำ (XAUUSD) ตามเวลาประเทศไทย (UTC+7):
+    - เปิดทำการ: วันจันทร์ 05:00 น. ถึง วันเสาร์ 04:00 น.
+    - พักเบรกประจำวัน: อังคาร–ศุกร์ 04:00 – 05:00 น.
+    - ปิดสุดสัปดาห์: วันเสาร์ 04:00 น. ถึง วันจันทร์ 05:00 น.
+    """
+    t = dt if dt is not None else now()
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=TH)
+    else:
+        t = t.astimezone(TH)
+
+    weekday = t.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+    hm = t.hour * 60 + t.minute
+
+    # 1. วันเสาร์ (5): หลัง 04:00 น. ปิดยาวจนถึงเช้าวันจันทร์
+    if weekday == 5:
+        if hm >= 4 * 60:
+            next_open = (t + timedelta(days=2)).replace(hour=5, minute=0, second=0, microsecond=0)
+            diff = next_open - t
+            total_sec = max(0, int(diff.total_seconds()))
+            days = total_sec // 86400
+            hours = (total_sec % 86400) // 3600
+            mins = (total_sec % 3600) // 60
+            countdown = f"ในอีก {days} วัน {hours} ชม. {mins} นาที" if days > 0 else f"ในอีก {hours} ชม. {mins} นาที"
+            return {
+                "is_open": False,
+                "state": "WEEKEND_CLOSED",
+                "badge_text": "🔴 ตลาดปิด (เสาร์–อาทิตย์)",
+                "headline": "🔴 ตลาดทองคำปิดทำการ (วันหยุดสุดสัปดาห์ เสาร์–อาทิตย์)",
+                "subtext": f"เปิดวันจันทร์ เวลา 05:00 น. ({countdown})",
+                "short_desc": "🔴 ตลาดปิด · เปิด จ. 05:00 น.",
+                "countdown": countdown,
+                "next_open_dt": next_open,
+            }
+        else:
+            # ก่อน 04:00 น. วันเสาร์: ยังเปิดอยู่ กำลังจะปิดสุดสัปดาห์
+            next_close = t.replace(hour=4, minute=0, second=0, microsecond=0)
+            diff = next_close - t
+            total_sec = max(0, int(diff.total_seconds()))
+            hours = total_sec // 3600
+            mins = (total_sec % 3600) // 60
+            return {
+                "is_open": True,
+                "state": "OPEN",
+                "badge_text": "🟢 ตลาดเปิดทำการ",
+                "headline": "🟢 ตลาดทองคำเปิดทำการปกติ",
+                "subtext": f"จะปิดสุดสัปดาห์ในอีก {hours} ชม. {mins} นาที (เวลา 04:00 น.)",
+                "short_desc": "🟢 ตลาดเปิดปกติ",
+                "countdown": f"{hours} ชม. {mins} นาที",
+                "next_open_dt": None,
+            }
+
+    # 2. วันอาทิตย์ (6): ปิดตลอดทั้งวัน
+    if weekday == 6:
+        next_open = (t + timedelta(days=1)).replace(hour=5, minute=0, second=0, microsecond=0)
+        diff = next_open - t
+        total_sec = max(0, int(diff.total_seconds()))
+        hours = total_sec // 3600
+        mins = (total_sec % 3600) // 60
+        countdown = f"ในอีก {hours} ชม. {mins} นาที"
+        return {
+            "is_open": False,
+            "state": "WEEKEND_CLOSED",
+            "badge_text": "🔴 ตลาดปิด (วันอาทิตย์)",
+            "headline": "🔴 ตลาดทองคำปิดทำการ (วันหยุดสุดสัปดาห์)",
+            "subtext": f"เปิดวันจันทร์ เวลา 05:00 น. ({countdown})",
+            "short_desc": "🔴 ตลาดปิด · เปิด จ. 05:00 น.",
+            "countdown": countdown,
+            "next_open_dt": next_open,
+        }
+
+    # 3. วันจันทร์ (0): เช้ามืดก่อน 05:00 น. ยังไม่เปิด
+    if weekday == 0 and hm < 5 * 60:
+        next_open = t.replace(hour=5, minute=0, second=0, microsecond=0)
+        diff = next_open - t
+        total_sec = max(0, int(diff.total_seconds()))
+        hours = total_sec // 3600
+        mins = (total_sec % 3600) // 60
+        countdown = f"ในอีก {hours} ชม. {mins} นาที"
+        return {
+            "is_open": False,
+            "state": "PRE_OPEN",
+            "badge_text": "🔴 รอเปิดตลาด (เช้าวันจันทร์)",
+            "headline": "🔴 ตลาดทองคำยังไม่เปิดทำการ",
+            "subtext": f"จะเปิดทำการเช้านี้ เวลา 05:00 น. ({countdown})",
+            "short_desc": "🔴 รอเปิด 05:00 น.",
+            "countdown": countdown,
+            "next_open_dt": next_open,
+        }
+
+    # 4. วันอังคาร - ศุกร์ (1, 2, 3, 4): ช่วงพักเบรกประจำวัน 04:00 - 05:00 น.
+    if weekday in (1, 2, 3, 4) and 4 * 60 <= hm < 5 * 60:
+        next_open = t.replace(hour=5, minute=0, second=0, microsecond=0)
+        diff = next_open - t
+        mins = max(1, int(diff.total_seconds()) // 60)
+        return {
+            "is_open": False,
+            "state": "DAILY_BREAK",
+            "badge_text": "🟡 พักเบรกประจำวัน",
+            "headline": "🟡 ตลาดทองคำพักเบรกประจำวัน (04:00 – 05:00 น.)",
+            "subtext": f"จะเปิดทำการต่อในอีก {mins} นาที (เวลา 05:00 น.)",
+            "short_desc": "🟡 พักเบรก · เปิด 05:00 น.",
+            "countdown": f"{mins} นาที",
+            "next_open_dt": next_open,
+        }
+
+    # 5. เวลาเปิดทำการปกติ (วันจันทร์ 05:00 ถึง วันเสาร์ 04:00)
+    if weekday == 4:
+        close_desc = "ปิดตลาดสุดสัปดาห์ วันเสาร์ เวลา 04:00 น."
+    elif hm < 4 * 60:
+        close_desc = "พักเบรกประจำวัน เวลา 04:00 น."
+    else:
+        close_desc = "พักเบรกประจำวัน เวลา 04:00 น."
+
+    return {
+        "is_open": True,
+        "state": "OPEN",
+        "badge_text": "🟢 ตลาดเปิดทำการ",
+        "headline": "🟢 ตลาดทองคำเปิดทำการปกติ (ซื้อขายได้ 24 ชม.)",
+        "subtext": close_desc,
+        "short_desc": "🟢 ตลาดเปิดปกติ",
+        "countdown": "",
+        "next_open_dt": None,
+    }
+

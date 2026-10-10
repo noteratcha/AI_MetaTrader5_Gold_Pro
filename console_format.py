@@ -64,6 +64,7 @@ _RULES = [
     (re.compile(r"^\[LOSS BLOCK CLEARED\]"), "profit", "key"),
     (re.compile(r"^\[LOSS BLOCK\]"), "warn", "key"),
     (re.compile(r"^\[PLAN DISABLED\]"), "warn", "key"),
+    (re.compile(r"^\[MARKET\]"), "system", "key"),
     (re.compile(r"^\[MARKET CLOSED\]"), "warn", "key"),
     (re.compile(r"^\[MARKET OPEN\]"), "profit", "key"),
     (re.compile(r"^\[P4 WAIT CONFIRM\]"), "system", "key"),
@@ -102,6 +103,7 @@ class ConsoleFormatter:
         self._block = None
         self._last_seen = {}
         self._last_status = None
+        self._last_scan_content = None
 
     # ------------------------------------------------------------------
     def feed(self, text: str) -> list:
@@ -143,7 +145,8 @@ class ConsoleFormatter:
                 if key:
                     self._block[key] = m.group(2).strip()
                 if m.group(1) == "Status":
-                    return [self._block_summary()]
+                    res = self._block_summary()
+                    return res if res else []
                 return []
             if line.startswith("[POSITION]"):
                 return [(f"   {line.replace('[POSITION] ', '📌 ')}\n", "position", "key")]
@@ -159,6 +162,12 @@ class ConsoleFormatter:
         if m:
             t, price, h4, up, down, status = m.groups()
             h4_clean = h4.strip("[]").replace("H4: ", "H4 ")
+            ai_str = f"↑{up} ↓{down}"
+            scan_content = (price.strip(), h4_clean, ai_str, status.strip())
+            if scan_content == self._last_scan_content:
+                # ถ้าข้อมูลซ้ำอันเดิมกับรอบที่แล้ว (ราคา/AI/สถานะไม่เปลี่ยน) ไม่ต้องแสดงซ้ำ
+                return []
+            self._last_scan_content = scan_content
             return [(f"📡 {t}  {price} · AI ↑{up} ↓{down} · {h4_clean} · {status}\n", "scan", "detail")]
 
         tag, level = "text", "detail"
@@ -185,8 +194,16 @@ class ConsoleFormatter:
         h4 = (b.get("h4") or "").split("|")[0].strip()
         h4 = re.sub(r"\s*\[[~^v]\]", "", h4)
         status = b.get("status") or ""
+
+        scan_content = (price, h4, ai, status)
+        if scan_content == self._last_scan_content:
+            # ข้อมูลซ้ำเดิม ไม่ต้องแสดงซ้ำ
+            return []
+        self._last_scan_content = scan_content
+
         tag = "buy" if "BUY" in status else ("sell" if "SELL" in status else "scan")
         # แสดงเป็นข้อความสำคัญเฉพาะเมื่อสถานะเปลี่ยน — สถานะเดิมซ้ำทุก 20 วินาทีถือเป็นรายละเอียด
         level = "key" if status != self._last_status else "detail"
         self._last_status = status
-        return (f"📡 {b.get('time', self._stamp())}  {price} · AI {ai} · H4 {h4} · {status}\n", tag, level)
+        return [(f"📡 {b.get('time', self._stamp())}  {price} · AI {ai} · H4 {h4} · {status}\n", tag, level)]
+

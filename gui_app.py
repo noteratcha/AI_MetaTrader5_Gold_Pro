@@ -4221,6 +4221,13 @@ class MainTradingApp(ctk.CTk):
         for text, tag in (("● เปิด BUY", "buy"), ("● เปิด SELL", "sell"), ("● ปิด/TP", "close"), ("● ล็อกกำไร", "lock"), ("● ผิดพลาด", "error")):
             ctk.CTkLabel(legend, text=text, font=self._font(11), text_color=TAG_COLORS[tag]).pack(side="left", padx=(0, 10))
 
+        # ป้ายสถานะตลาดทองคำสด (เปิด/ปิด/พักเบรก)
+        self.lbl_market_status = ctk.CTkLabel(
+            legend, text="", font=self._font(11, "bold"), height=22, corner_radius=6,
+            fg_color="#2A1414", text_color=COLOR_DANGER_RED
+        )
+        self.lbl_market_status.pack(side="left", padx=(4, 0))
+
         ctk.CTkButton(bar, text="ล้าง", font=self._font(11, "bold"), width=56, height=26, corner_radius=8,
                       fg_color="#2E2410", hover_color="#3A2E14", border_width=1, border_color="#7A5A1C",
                       text_color=COLOR_GOLD_PRIMARY, command=self._clear_console).pack(side="right")
@@ -4263,16 +4270,23 @@ class MainTradingApp(ctk.CTk):
         self.txt_console.configure(state="disabled")
         self._console_banner()
 
-    CONSOLE_BANNER = (
-        (f"🏆 AI Gold Commander Pro v{APP_VERSION}\n", "close"),
-        ("XAUUSD · P1 SL 1.0 ATR ไม่ตั้ง TP · P2 SL 1.25 ATR (H1) ไม่ตั้ง TP · P3–P4 SL 1.0 / TP 2.0 ATR · P5 SL 0.75 ATR · TP RRR 1:1.5 · P6 SL ตาม SAR ไม่ตั้ง TP\n", "muted"),
-        ("คิดเวลาเฉพาะตอนบอททำงาน\n", "muted"),
-        ("กด ▶ เริ่มการทำงานบอท ด้านขวาเพื่อเริ่มสแกนตลาด — ที่นี่จะแสดงเฉพาะเหตุการณ์สำคัญ (เปิด/ปิดออเดอร์ ฯลฯ)\n\n", "profit"),
-    )
+    def _get_console_banner(self):
+        mkt = thai_time.get_gold_market_status()
+        status_tag = "profit" if mkt.get("is_open") else ("warn" if mkt.get("state") == "DAILY_BREAK" else "error")
+        return [
+            (f"🏆 AI Gold Commander Pro v{APP_VERSION}\n", "close"),
+            ("XAUUSD · P1 SL 1.0 ATR ไม่ตั้ง TP · P2 SL 1.25 ATR (H1) ไม่ตั้ง TP · P3–P4 SL 1.0 / TP 2.0 ATR · P5 SL 0.75 ATR · TP RRR 1:1.5 · P6 SL ตาม SAR ไม่ตั้ง TP\n", "muted"),
+            (f"{mkt['headline']} · {mkt['subtext']}\n", status_tag),
+            ("คิดเวลาเฉพาะตอนบอททำงาน (ช่วงตลาดปิดไม่หักชั่วโมงการใช้งาน)\n", "muted"),
+            ("กด ▶ เริ่มการทำงานบอท ด้านขวาเพื่อเริ่มสแกนตลาด — ที่นี่จะแสดงเฉพาะเหตุการณ์สำคัญ (เปิด/ปิดออเดอร์ ฯลฯ)\n\n", "profit"),
+        ]
 
     def _console_banner(self, note=""):
         self.txt_console.configure(state="normal")
-        for text, tag in self.CONSOLE_BANNER + (((note, "muted"),) if note else ()):
+        banner_items = self._get_console_banner()
+        if note:
+            banner_items.append((note, "muted"))
+        for text, tag in banner_items:
             self._console_entries.append((text, tag, "key"))
             self.txt_console.insert("end", text, tag)
         self.txt_console.configure(state="disabled")
@@ -5345,6 +5359,11 @@ class MainTradingApp(ctk.CTk):
             success, msg = bot_ctrl.start_bot()
             if success:
                 license_mgr.track_event("bot_start")
+                mkt = thai_time.get_gold_market_status()
+                if not mkt["is_open"]:
+                    self._append_console(self._console_formatter.feed(
+                        f"[MARKET] {mkt['headline']} — {mkt['subtext']} (ระบบสแตนด์บายอัตโนมัติ ไม่หักชั่วโมงใช้งาน)\n"
+                    ))
             else:
                 messagebox.showwarning("ไม่สามารถเริ่มบอทได้", msg)
         elif bot_ctrl.is_paused:
@@ -5655,13 +5674,30 @@ class MainTradingApp(ctk.CTk):
                     self.card_balance["val_lbl"].configure(text=f"{bal:,.2f}")
                     self.card_balance["sub_lbl"].configure(text=f"Equity {eq:,.2f} · Float {flt_sign}{flt:,.2f}")
 
+                # อัปเดตสถานะตลาดทองคำสด (Market Hours)
+                mkt = thai_time.get_gold_market_status()
+                if hasattr(self, 'lbl_market_status'):
+                    color = COLOR_SUCCESS_GREEN if mkt["is_open"] else (COLOR_GOLD_WARM if mkt["state"] == "DAILY_BREAK" else COLOR_DANGER_RED)
+                    bg = "#0F2A20" if mkt["is_open"] else ("#261E10" if mkt["state"] == "DAILY_BREAK" else "#2A1414")
+                    self.lbl_market_status.configure(text=f"  {mkt['short_desc']}  ", text_color=color, fg_color=bg)
+
                 # อัปเดตราคาทองคำ XAUUSD
                 bid = telemetry.get("xau_bid", 0.0)
                 ask = telemetry.get("xau_ask", 0.0)
                 spd = telemetry.get("spread_pts", 0)
-                if hasattr(self, 'card_gold') and bid > 0:
-                    self.card_gold["val_lbl"].configure(text=f"{bid:,.2f}")
-                    self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts")
+                if hasattr(self, 'card_gold'):
+                    if bid > 0:
+                        self.card_gold["val_lbl"].configure(text=f"{bid:,.2f}")
+                    if mkt["is_open"]:
+                        self._set_badge(self.card_gold.get("badge"), "● ตลาดเปิด", "#0F2A20", COLOR_SUCCESS_GREEN)
+                        if bid > 0:
+                            self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts")
+                    else:
+                        self._set_badge(self.card_gold.get("badge"), "● ตลาดปิด", "#2A1414", COLOR_DANGER_RED)
+                        if bid > 0:
+                            self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts · {mkt['short_desc']}")
+                        else:
+                            self.card_gold["sub_lbl"].configure(text=mkt["short_desc"])
 
                 # อัปเดตสภาวะตลาด H4 และ H1
                 radar = telemetry.get("radar", {})
