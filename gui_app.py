@@ -5820,11 +5820,95 @@ class MainTradingApp(ctk.CTk):
         self.after(500, self._realtime_ui_loop)
 
 
+MUTEX_NAME = "Local\\GoldBot24_AI_Gold_Commander_Pro_SingleInstance"
+
+
+def _focus_existing_window():
+    """ค้นหาหน้าต่างโปรแกรมที่เปิดอยู่แล้ว และนำขึ้นมาแสดงข้างหน้า (Foreground)"""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        SW_RESTORE = 9
+
+        current_pid = os.getpid()
+        found_hwnd = [None]
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def enum_windows_callback(hwnd, lparam):
+            if user32.IsWindowVisible(hwnd):
+                length = user32.GetWindowTextLengthW(hwnd)
+                if length > 0:
+                    buf = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(hwnd, buf, length + 1)
+                    title = buf.value
+                    if "AI Gold Commander Pro" in title or "GoldBot24" in title:
+                        pid = wintypes.DWORD()
+                        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                        if pid.value != current_pid:
+                            found_hwnd[0] = hwnd
+                            return False
+            return True
+
+        cb = WNDENUMPROC(enum_windows_callback)
+        user32.EnumWindows(cb, 0)
+
+        target_hwnd = found_hwnd[0]
+        if target_hwnd:
+            user32.ShowWindow(target_hwnd, SW_RESTORE)
+            user32.SetForegroundWindow(target_hwnd)
+    except Exception:
+        pass
+
+
+def check_single_instance() -> tuple[bool, any]:
+    """
+    ตรวจสอบว่ามี Instance ของโปรแกรมกำลังรันอยู่แล้วหรือไม่ (Single Instance Guard)
+    คืนค่า (is_already_running, mutex_handle)
+    """
+    if sys.platform != "win32":
+        return False, None
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        ERROR_ALREADY_EXISTS = 183
+
+        mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+        last_error = kernel32.GetLastError()
+
+        if last_error == ERROR_ALREADY_EXISTS:
+            _focus_existing_window()
+            if mutex:
+                kernel32.CloseHandle(mutex)
+            return True, None
+
+        return False, mutex
+    except Exception:
+        return False, None
+
+
 def launch_gui():
-    """ฟังก์ชันเปิดใช้งานหน้าจอ Desktop GUI"""
-    app = MainTradingApp()
-    app.mainloop()
+    """ฟังก์ชันเปิดใช้งานหน้าจอ Desktop GUI พร้อมระบบป้องกันเปิดซ้ำซ้อน (Single Instance Guard)"""
+    is_running, mutex = check_single_instance()
+    if is_running:
+        print("[GoldBot24] พบโปรแกรมเปิดใช้งานอยู่แล้ว กำลังสลับไปยังหน้าต่างเดิม...")
+        sys.exit(0)
+
+    try:
+        app = MainTradingApp()
+        app.mainloop()
+    finally:
+        if mutex:
+            try:
+                import ctypes
+                ctypes.windll.kernel32.CloseHandle(mutex)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
     launch_gui()
+
