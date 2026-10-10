@@ -1073,7 +1073,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         ("P4", "P4 · H1 (SR)", "H1", ["resistance", "support"]),
         ("P5", "P5 · H1 (BB)", "H1", ["h1_bb"]),
         ("P6", "P6 · H1 (PSAR)", "H1", ["h1_sar", "h1_ema100"]),
-        ("H4", "เทรนด์ H4", "H4", ["h4_ma10", "h4_ma30", "h4_ma200"]),
+        ("H4", "เทรนด์ H4", "H4", ["h4_ma10", "h4_ma30", "h4_ma200", "resistance", "support"]),
     ]
 
     INDICATOR_DEFS = {
@@ -1098,6 +1098,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
             ("h4_ma10", "H4 · ━ MA10", "#FBBF24"),
             ("h4_ma30", "H4 · ━ MA30", "#FB923C"),
             ("h4_ma200", "H4 · ┅ MA200", "#A78BFA"),
+            ("resistance", "H4 · ┅ แนวต้าน", COLOR_DANGER_RED),
+            ("support", "H4 · ┅ แนวรับ", COLOR_SUCCESS_GREEN),
             ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
         ],
     }
@@ -1414,6 +1416,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 self.ind_toggles["h4_ma10"] = True
                 self.ind_toggles["h4_ma30"] = True
                 self.ind_toggles["h4_ma200"] = True
+                self.ind_toggles["resistance"] = True
+                self.ind_toggles["support"] = True
             elif new_tf == "H1":
                 self.selected_plan = "ALL"
                 for k, _, _ in self.INDICATOR_DEFS.get("H1", []):
@@ -1610,12 +1614,12 @@ class GoldCandleDialog(ctk.CTkToplevel):
             ("S5", self.data.get("support5"), float(self.data.get("sup5_stars", 1.5) or 1.5), "#38BDF8", (2, 2), 1.0, "normal"),
         ]
 
-        if tf == "H1":
+        if tf in ("H1", "H4"):
             try:
                 n_bars = int(self.bars_var.get())
             except Exception:
                 n_bars = 120
-            sr_range_limit = 250 if n_bars >= 200 else 60
+            sr_range_limit = 600 if tf == "H4" else (250 if n_bars >= 200 else 60)
             if self.ind_toggles.get("support", True):
                 for _, s_val, _, _, _, _, _ in sup_list:
                     if s_val and not (isinstance(s_val, float) and math.isnan(s_val)) and abs(s_val - cur_price) <= sr_range_limit:
@@ -1683,17 +1687,9 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 else:
                     cv.create_polygon(all_p, fill=empty_bg, outline=empty_border)
 
-        # วาดอินดิเคเตอร์ตาม Timeframe ที่เลือก
-        if tf == "M15":
-            # Plan 1 (MA-Cross-Trend M15)
-            if self.ind_toggles.get("ma50", True):
-                draw_series("ma50", "#A78BFA", width=1, dash=(4, 2), smooth=True)
-            if self.ind_toggles.get("ma13", True):
-                draw_series("ma13", COLOR_GOLD_WARM, width=2, smooth=True)
-            if self.ind_toggles.get("ma5", True):
-                draw_series("ma5", COLOR_CYAN_ACCENT, width=2, smooth=True)
-        elif tf == "H1":
-            # 1. แนวต้าน H1 5 ระดับ (R1..R5) พร้อมดาวความแข็งแกร่ง (Plan 3, Plan 4)
+        # 1. วาดแนวรับ–แนวต้าน 5 ระดับ (R1..R5 & S1..S5) สำหรับ Timeframe H1 และ H4
+        if tf in ("H1", "H4"):
+            # 1.1 แนวต้าน 5 ระดับ (R1..R5) พร้อมดาวความแข็งแกร่ง
             if self.ind_toggles.get("resistance", True):
                 for name, r_val, r_stars, col, dash, width, weight in res_list:
                     if r_val and not (isinstance(r_val, float) and math.isnan(r_val)) and lo <= r_val <= hi:
@@ -1704,7 +1700,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
                         _draw_vector_stars(left + 128, lbl_y, r_stars)
                         cv.create_text(left + 192, lbl_y, text=f"({r_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
 
-            # 2. แนวรับ H1 5 ระดับ (S1..S5) พร้อมดาวความแข็งแกร่ง (Plan 3, Plan 4)
+            # 1.2 แนวรับ 5 ระดับ (S1..S5) พร้อมดาวความแข็งแกร่ง
             if self.ind_toggles.get("support", True):
                 for name, s_val, s_stars, col, dash, width, weight in sup_list:
                     if s_val and not (isinstance(s_val, float) and math.isnan(s_val)) and lo <= s_val <= hi:
@@ -1715,7 +1711,17 @@ class GoldCandleDialog(ctk.CTkToplevel):
                         _draw_vector_stars(left + 124, lbl_y, s_stars)
                         cv.create_text(left + 188, lbl_y, text=f"({s_stars:g}★)", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
 
-            # 2. Bollinger Bands H1 (Plan 5)
+        # 2. วาดอินดิเคเตอร์เฉพาะตาม Timeframe ที่เลือก
+        if tf == "M15":
+            # Plan 1 (MA-Cross-Trend M15)
+            if self.ind_toggles.get("ma50", True):
+                draw_series("ma50", "#A78BFA", width=1, dash=(4, 2), smooth=True)
+            if self.ind_toggles.get("ma13", True):
+                draw_series("ma13", COLOR_GOLD_WARM, width=2, smooth=True)
+            if self.ind_toggles.get("ma5", True):
+                draw_series("ma5", COLOR_CYAN_ACCENT, width=2, smooth=True)
+        elif tf == "H1":
+            # Bollinger Bands H1 (Plan 5)
             if self.ind_toggles.get("h1_bb", True):
                 draw_series("h1_bb_up", "#C084FC", width=1, dash=(4, 2), smooth=True)
                 draw_series("h1_bb_mid", "#94A3B8", width=1, dash=(2, 2), smooth=True)

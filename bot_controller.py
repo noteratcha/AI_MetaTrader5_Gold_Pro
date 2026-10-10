@@ -551,7 +551,7 @@ class BotController:
                 "type": "BUY" if p.type == 0 else "SELL", "price": float(p.price_open), "sl": float(p.sl), "tp": float(p.tp),
                 "lot": float(p.volume), "profit": float(p.profit) + float(getattr(p, "swap", 0.0) or 0.0), "plan": p.comment or "",
             } for p in (mt5.positions_get(symbol=symbol) or [])]
-            return {
+            res_dict = {
                 "timeframe": tf_upper,
                 "bar_seconds": bar_seconds,
                 "candles": candles,
@@ -582,16 +582,29 @@ class BotController:
                 "res5_stars": ctx.get("res5_stars", 3.0) if ctx else 3.0,
             }
 
-            # คำนวณแนวรับ–แนวต้าน 5 ระดับ (S1..S5, R1..R5) จากกราฟแท่ง H1 500 แท่ง
+            # คำนวณแนวรับ–แนวต้าน 5 ระดับ (S1..S5, R1..R5) จากกราฟแท่ง 500 แท่ง
             try:
                 import multi_asset_ai_bot
                 df_sr = None
-                if tf_upper == "H1" and len(df) >= 510:
-                    df_sr = df
+                if tf_upper == "H4":
+                    if len(df) >= 60:
+                        df_sr = df
+                    else:
+                        h4_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 520)
+                        if h4_rates is not None and len(h4_rates) >= 60:
+                            df_sr = pd.DataFrame(h4_rates)
+                elif tf_upper == "H1":
+                    if len(df) >= 60:
+                        df_sr = df
+                    else:
+                        h1_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 520)
+                        if h1_rates is not None and len(h1_rates) >= 60:
+                            df_sr = pd.DataFrame(h1_rates)
                 else:
                     h1_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 520)
                     if h1_rates is not None and len(h1_rates) >= 60:
                         df_sr = pd.DataFrame(h1_rates)
+
                 if df_sr is not None and len(df_sr) >= 60:
                     sr_calc = multi_asset_ai_bot.find_sr_levels(df_sr, float(closes[-1]), lookback=min(500, len(df_sr) - 2))
                     for i in range(1, 6):
