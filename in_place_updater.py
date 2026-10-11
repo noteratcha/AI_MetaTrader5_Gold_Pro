@@ -85,14 +85,13 @@ def launch_in_place_patch(patch_file: str, is_installer: bool = True) -> tuple[b
             bat_content = f"""@echo off
 chcp 65001 > nul
 echo [GoldBot24 Updater] รอให้โปรแกรมเดิมปิดการทำงาน...
-ping 127.0.0.1 -n 3 > nul
 
 set wait_count=0
 :wait_closed
 tasklist /fi "imagename eq AI_Gold_Commander_Pro.exe" 2>nul | find /i "AI_Gold_Commander_Pro.exe" > nul
 if not errorlevel 1 (
     set /a wait_count+=1
-    if %wait_count% geq 8 (
+    if %wait_count% geq 6 (
         taskkill /f /im "AI_Gold_Commander_Pro.exe" > nul 2>&1
         goto do_install
     )
@@ -103,9 +102,6 @@ if not errorlevel 1 (
 
 echo [GoldBot24 Updater] กำลังติดตั้งแพตช์อัปเดตเวอร์ชันใหม่ทับ Path เดิม...
 start /wait "" "{patch_file}" /SP- /SILENT /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="{target_dir}"
-
-echo [GoldBot24 Updater] รอให้ไฟล์ถูกเขียนเสร็จสิ้น...
-ping 127.0.0.1 -n 3 > nul
 
 echo [GoldBot24 Updater] กำลังเปิดโปรแกรมเวอร์ชันใหม่...
 set "APP_EXE={target_exe}"
@@ -122,13 +118,12 @@ if not exist "%APP_EXE%" (
 cd /d "%APP_DIR%"
 start "" /d "%APP_DIR%" "%APP_EXE%"
 
-ping 127.0.0.1 -n 3 > nul
+ping 127.0.0.1 -n 2 > nul
 tasklist /fi "imagename eq AI_Gold_Commander_Pro.exe" 2>nul | find /i "AI_Gold_Commander_Pro.exe" > nul
 if errorlevel 1 (
     powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%APP_EXE%' -WorkingDirectory '%APP_DIR%'"
 )
 
-ping 127.0.0.1 -n 3 > nul
 del /f /q "{patch_file}" > nul 2>&1
 del /f /q "%~f0" > nul 2>&1
 exit
@@ -138,14 +133,13 @@ exit
             bat_content = f"""@echo off
 chcp 65001 > nul
 echo [GoldBot24 Updater] รอให้โปรแกรมเดิมปิดการทำงาน...
-ping 127.0.0.1 -n 3 > nul
 
 set wait_count=0
 :wait_closed_zip
 tasklist /fi "imagename eq AI_Gold_Commander_Pro.exe" 2>nul | find /i "AI_Gold_Commander_Pro.exe" > nul
 if not errorlevel 1 (
     set /a wait_count+=1
-    if %wait_count% geq 8 (
+    if %wait_count% geq 6 (
         taskkill /f /im "AI_Gold_Commander_Pro.exe" > nul 2>&1
         goto do_extract
     )
@@ -164,8 +158,6 @@ if exist "{staging_dir}\\AI_Gold_Commander_Pro" (
     robocopy "{staging_dir}" "{target_dir}" /E /IS /IT /NP /R:2 /W:1 > nul
 )
 
-ping 127.0.0.1 -n 2 > nul
-
 echo [GoldBot24 Updater] กำลังเปิดโปรแกรมเวอร์ชันใหม่...
 set "APP_EXE={target_exe}"
 set "APP_DIR={target_dir}"
@@ -177,13 +169,12 @@ if not exist "%APP_EXE%" (
 cd /d "%APP_DIR%"
 start "" /d "%APP_DIR%" "%APP_EXE%"
 
-ping 127.0.0.1 -n 3 > nul
+ping 127.0.0.1 -n 2 > nul
 tasklist /fi "imagename eq AI_Gold_Commander_Pro.exe" 2>nul | find /i "AI_Gold_Commander_Pro.exe" > nul
 if errorlevel 1 (
     powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%APP_EXE%' -WorkingDirectory '%APP_DIR%'"
 )
 
-ping 127.0.0.1 -n 3 > nul
 rd /s /q "{staging_dir}" > nul 2>&1
 del /f /q "{patch_file}" > nul 2>&1
 del /f /q "%~f0" > nul 2>&1
@@ -200,7 +191,7 @@ exit
             close_fds=True
         )
 
-        time.sleep(0.5)
+        time.sleep(0.1)
         return True, "กำลังเริ่มขั้นตอนอัปเดตและรีสตาร์ทโปรแกรม..."
     except Exception as e:
         return False, f"ไม่สามารถเริ่มการอัปเดตได้: {e}"

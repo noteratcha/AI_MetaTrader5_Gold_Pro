@@ -817,7 +817,7 @@ class UpdateDialog(ctk.CTkToplevel):
             else:
                 self._update_failed(msg)
 
-        self.after(1200, _do_launch)
+        self.after(300, _do_launch)
 
     def _on_cancel(self):
         if self._is_updating:
