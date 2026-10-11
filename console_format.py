@@ -70,6 +70,7 @@ _RULES = [
     (re.compile(r"^\[P4 WAIT CONFIRM\]"), "system", "key"),
     (re.compile(r"^\[P4 CONFIRMED\]"), "lock", "key"),
     (re.compile(r"^\[P4 CONFIRM EXPIRED\]"), "warn", "key"),
+    (re.compile(r"^\[(PLAN CONDITIONS|PLAN STATUS|CONDITION STATUS)\]"), "system", "key"),
     (re.compile(r"^\[(AI TRAINING|AI QUALITY|OK|AI READY|ACCOUNT|SUCCESS|LICENSE|STOP|\*)\]"), "system", "key"),
     (re.compile(r"^\[(AI BOT|ASSET FOCUS|ACTIVE PLANS|RISK/RRR|DATA RETENTION)\]"), "system", "detail"),
     (re.compile(r"^\[REQUOTE RETRY"), "warn", "detail"),
@@ -169,6 +170,23 @@ class ConsoleFormatter:
                 return []
             self._last_scan_content = scan_content
             return [(f"📡 {t}  {price} · AI ↑{up} ↓{down} · {h4_clean} · {status}\n", "scan", "detail")]
+
+        # แสดงรายการสถานะความสำเร็จเงื่อนไขแต่ละแผน
+        if re.match(r"^[•*]?\s*P[1-6]\b", line):
+            if "100%" in line:
+                tag = "profit"
+            elif "▲ BUY" in line or "[BUY]" in line or "BUY" in line:
+                tag = "buy"
+            elif "▼ SELL" in line or "[SELL]" in line or "SELL" in line:
+                tag = "sell"
+            else:
+                tag = "text"
+            return [(f"   {line.strip()}\n", tag, "key")]
+
+        # แสดงบรรทัดรายละเอียดเงื่อนไขย่อย (เช่น "✓ เทรนด์ H1 | ✓ MA5/13 M15 | ✗ RSI M15")
+        if re.match(r"^\s*([✓✗]|\[[✓✗]\])", line):
+            tag = "text"
+            return [(f"      {line.strip()}\n", tag, "key")]
 
         tag, level = "text", "detail"
         for pattern, rule_tag, rule_level in _RULES:
