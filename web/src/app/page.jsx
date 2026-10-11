@@ -290,23 +290,53 @@ function RadarCard({ radar, loading }) {
               <span className="muted small">เทรนด์ H4</span>
               <span className={`badge ${h4CondTone}`}>{h4CondLabel || 'กำลังวิเคราะห์'}</span>
             </div>
-            {[
-              ['แนวรับ – ต้าน H1', radar?.h1_support, radar?.h1_resistance],
-              ['แนวรับ – ต้าน H4', radar?.h4_support, radar?.h4_resistance],
-            ].map(([label, sup, res]) => (
-              <div className="row-between" key={label}>
-                <span className="muted small">{label}</span>
-                <span className="mono small">
-                  {Number(sup) > 0 && Number(res) > 0 ? (
-                    <>
-                      <span className="text-green">{formatPrice(sup)}</span> – <span className="text-red">{formatPrice(res)}</span>
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </span>
+            <div className="row-between">
+              <span className="muted small">แนวรับ – ต้าน H1</span>
+              <span className="mono small">
+                {Number(radar?.h1_support) > 0 && Number(radar?.h1_resistance) > 0 ? (
+                  <>
+                    <span className="text-green" title={radar?.h1_sup_h4_conf ? 'H4 Confluence ยืนยัน' : ''}>
+                      {formatPrice(radar.h1_support)}
+                      {radar?.h1_sup_stars ? <span style={{ fontSize: '0.72rem', color: '#f59e0b', marginLeft: 3 }}>★{Number(radar.h1_sup_stars).toFixed(1)}</span> : null}
+                      {radar?.h1_sup_h4_conf && <span className="badge badge-gold" style={{ fontSize: '0.62rem', padding: '1px 4px', marginLeft: 3 }}>👑 H4</span>}
+                    </span>
+                    {' – '}
+                    <span className="text-red" title={radar?.h1_res_h4_conf ? 'H4 Confluence ยืนยัน' : ''}>
+                      {formatPrice(radar.h1_resistance)}
+                      {radar?.h1_res_stars ? <span style={{ fontSize: '0.72rem', color: '#f59e0b', marginLeft: 3 }}>★{Number(radar.h1_res_stars).toFixed(1)}</span> : null}
+                      {radar?.h1_res_h4_conf && <span className="badge badge-gold" style={{ fontSize: '0.62rem', padding: '1px 4px', marginLeft: 3 }}>👑 H4</span>}
+                    </span>
+                  </>
+                ) : (
+                  '—'
+                )}
+              </span>
+            </div>
+            <div className="row-between">
+              <span className="muted small">แนวรับ – ต้าน H4</span>
+              <span className="mono small">
+                {Number(radar?.h4_support) > 0 && Number(radar?.h4_resistance) > 0 ? (
+                  <>
+                    <span className="text-green">
+                      {formatPrice(radar.h4_support)}
+                      {radar?.h4_sup_stars ? <span style={{ fontSize: '0.72rem', color: '#f59e0b', marginLeft: 3 }}>★{Number(radar.h4_sup_stars).toFixed(1)}</span> : null}
+                    </span>
+                    {' – '}
+                    <span className="text-red">
+                      {formatPrice(radar.h4_resistance)}
+                      {radar?.h4_res_stars ? <span style={{ fontSize: '0.72rem', color: '#f59e0b', marginLeft: 3 }}>★{Number(radar.h4_res_stars).toFixed(1)}</span> : null}
+                    </span>
+                  </>
+                ) : (
+                  '—'
+                )}
+              </span>
+            </div>
+            {radar?.h1_focus_action ? (
+              <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: 6, padding: '5px 8px', fontSize: '0.72rem', color: 'var(--gold)' }}>
+                🎯 {radar.h1_focus_action}
               </div>
-            ))}
+            ) : null}
             <div className="radar-status mono small">{status}</div>
           </>
         )}

@@ -68,13 +68,25 @@ ema12, ema26 = h1.close.ewm(span=12, adjust=False).mean(), h1.close.ewm(span=26,
 macd = ema12 - ema26
 hx["macd_h"] = macd - macd.ewm(span=9, adjust=False).mean()
 hx["macd_h_prev"] = hx["macd_h"].shift(1)
-# แนวรับ/ต้าน 500 แท่ง ณ แท่ง H1 ที่ปิด
+# แนวรับ/ต้าน 1,000 แท่ง ณ แท่ง H1 ที่ปิด พร้อมผสาน H4 Confluence (1,000 แท่ง)
+h4_close_times = (h4.time + pd.Timedelta(hours=4)).values
+h1_close_times = (h1.time + pd.Timedelta(hours=1)).values
+h4_indices = np.searchsorted(h4_close_times, h1_close_times, side="right")
+cached_h4_zones, cached_h4_atr = None, None
+last_h4_idx = -1
+
 sup, res = np.full(len(h1), np.nan), np.full(len(h1), np.nan)
-for i in range(520, len(h1)):
-    r = bot.find_sr_levels(h1.iloc[i - 501:i + 2] if i + 2 <= len(h1) else pd.concat([h1.iloc[i - 501:i + 1], h1.iloc[[i]]]), float(h1.close.iloc[i]))
+for i in range(1020, len(h1)):
+    idx_h4 = h4_indices[i]
+    if idx_h4 != last_h4_idx and idx_h4 >= 60:
+        h4_slice = h4.iloc[max(0, idx_h4 - 1000):idx_h4]
+        cached_h4_zones, cached_h4_atr = bot._extract_sr_zones(h4_slice, lookback=1000)
+        last_h4_idx = idx_h4
+    h1_slice = h1.iloc[i - 1001:i + 2] if i + 2 <= len(h1) else pd.concat([h1.iloc[i - 1001:i + 1], h1.iloc[[i]]])
+    r = bot.find_sr_levels(h1_slice, float(h1.close.iloc[i]), lookback=1000, raw_zones_h4=cached_h4_zones, atr_h4=cached_h4_atr)
     sup[i], res[i] = r["support"], r["resistance"]
 hx["sup"], hx["res"] = sup, res
-print(f"H1 S/R done {time.time() - t0:.0f}s", flush=True)
+print(f"H1 S/R (1,000 bars + H4 confluence) done {time.time() - t0:.0f}s", flush=True)
 
 # H4 regime (MA10/30, ±0.20%) + H4 stack
 vx = pd.DataFrame({"avail": h4.time + pd.Timedelta(minutes=240)})
@@ -295,8 +307,8 @@ print(pd.DataFrame(rows).to_string(index=False))
 from version import APP_VERSION  # noqa: E402
 NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200 · SL 1.25 ATR · ออกเมื่อ MA5 ตัด MA20"),
-         3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
-         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 55% · SL 1.0 / TP 2.0 ATR"),
+         3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
+         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 55% · SL 1.0 / TP 2.0 ATR"),
          5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · เลื่อน SL ทุก 5 จุด (50%/40%)"),
          6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100")}
 plans_out, events = [], []
@@ -326,7 +338,7 @@ summary = dict(net=round(float(tt.sum()), 1), trades=int(len(tt)), win=round(flo
 out = dict(generated_at=pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"), app_version=APP_VERSION, symbol="XAUUSD",
            period=[curve[0]["date"] if curve else str(b.time.iloc[0])[:10], str(b.time.iloc[-1])[:10]], lot=0.01, spread_points=SPREAD,
            summary=summary, plans=plans_out, equity=curve,
-           assumptions=["ข้อมูลราคา XAUUSD จริงจาก MT5 (M15/H1/H4) ใช้แท่งที่ปิดแล้ว เข้าไม้ที่ราคาเปิดแท่งถัดไป",
+           assumptions=["ข้อมูลราคา XAUUSD จริงจาก MT5 (M15/H1/H4) ใช้แท่งที่ปิดแล้ว เข้าไม้ที่ราคาเปิดแท่งถัดไป · Multi-Timeframe S&R 1,000 แท่ง H1 + H4 Confluence",
                         "หักสเปรด 0.35 จุดต่อไม้ · 1 จุด ≈ $1 ที่ 0.01 lot",
                         "AI (Plan 3–5) จำลองแบบ Walk-forward: เทรนด้วยอดีต 5,000 แท่ง แล้วทายช่วงถัดไปที่ไม่เคยเห็น",
                         "จำลองแยกทีละแผน 1 ไม้ต่อแผน · ไม่รวม Cooldown / Circuit Breaker / Loss Block",

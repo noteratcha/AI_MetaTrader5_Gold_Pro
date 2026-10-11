@@ -1067,7 +1067,7 @@ def _extract_sr_zones(df, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_Z
     return raw_zones, atr
 
 
-def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR, df_h4=None):
+def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR, df_h4=None, raw_zones_h4=None, atr_h4=None):
     """
     หาแนวรับ/แนวต้าน 5 ระดับ (S1..S5 และ R1..R5) จากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` (1,000 แท่ง)
     พร้อมการผสานความแข็งแกร่งข้าม Timeframe (Multi-Timeframe H1 + H4 Confluence Engine):
@@ -1127,9 +1127,11 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         return out
 
     # ผสานความแข็งแกร่งข้าม Timeframe (H1 + H4 Multi-Timeframe Confluence)
-    if df_h4 is not None and len(df_h4) >= 60:
-        raw_zones_h4, atr_h4 = _extract_sr_zones(df_h4, lookback=lookback, k=k, zone_atr=zone_atr)
-        match_dist = max(1.0 * atr, 0.75 * atr_h4, 5.0)
+    has_h4_cache = raw_zones_h4 is not None and len(raw_zones_h4) > 0
+    if has_h4_cache or (df_h4 is not None and len(df_h4) >= 60):
+        if not has_h4_cache:
+            raw_zones_h4, atr_h4 = _extract_sr_zones(df_h4, lookback=lookback, k=k, zone_atr=zone_atr)
+        match_dist = max(1.0 * atr, 0.75 * (atr_h4 or 1.0), 5.0)
         for z in raw_zones:
             matched_h4 = None
             min_d = float('inf')
@@ -2797,6 +2799,12 @@ def main():
                     "h1_res4_stars": float(sr_h1.get("res4_stars", 6.0)),
                     "h1_sup5_stars": float(sr_h1.get("sup5_stars", 6.0)),
                     "h1_res5_stars": float(sr_h1.get("res5_stars", 6.0)),
+                    "h1_sup_h4_conf": bool(sr_h1.get("sup_h4_conf", False)),
+                    "h1_res_h4_conf": bool(sr_h1.get("res_h4_conf", False)),
+                    "h1_sup_h4_stars": float(sr_h1.get("sup_h4_stars", 0.0)),
+                    "h1_res_h4_stars": float(sr_h1.get("res_h4_stars", 0.0)),
+                    "h1_focus_sup_h4_conf": bool(sr_h1.get("focus_sup_h4_conf", False)),
+                    "h1_focus_res_h4_conf": bool(sr_h1.get("focus_res_h4_conf", False)),
                     "h4_support": round(h4_support, 2),
                     "h4_resistance": round(h4_resistance, 2),
                     "h4_support2": round(float(sr_h4.get("support2", h4_support)), 2),
