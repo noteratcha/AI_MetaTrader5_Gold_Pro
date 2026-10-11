@@ -42,6 +42,7 @@ import secure_store
 import plan_config
 from app_paths import data_path, get_active_profile, list_profiles, set_active_profile
 from profile_dialog import ProfileManagerDialog
+from mt5_terminal_manager import get_profile_magic_number
 from collections import deque
 from console_format import ConsoleFormatter, TAG_COLORS
 from stats_manager import stats_mgr, STANDARD_PLANS
@@ -4615,6 +4616,9 @@ class MainTradingApp(ctk.CTk):
         grid_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="metric_cards")
 
         self.card_mt5 = self._create_stat_card(grid_frame, 0, "🖥", "บัญชี MT5", "รอเชื่อมต่อ...", "Server: กำลังตรวจสอบ", COLOR_CYAN_ACCENT)
+        if "extra_lbl" in self.card_mt5:
+            self.card_mt5["extra_lbl"].configure(text=f" Magic: {get_profile_magic_number()} ", text_color=COLOR_GOLD_PRIMARY, fg_color="#261E10")
+        self._make_clickable(self.card_mt5, lambda: ProfileManagerDialog(self))
         self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "0.00", "Equity 0.00 · Float 0.00", COLOR_SUCCESS_GREEN)
         self._make_clickable(self.card_balance, lambda: PnlHistoryDialog(self), hint="ดูกราฟ ›")
         self.card_gold = self._create_stat_card(grid_frame, 2, "🏆", "ราคาทองคำ XAUUSD", "0.00", "Spread 0 pts", COLOR_GOLD_PRIMARY)
@@ -4778,11 +4782,17 @@ class MainTradingApp(ctk.CTk):
                                 fg_color="transparent", corner_radius=6, height=18)
         hint_lbl.pack(side="right", padx=(0, 4))
 
-        val_label = ctk.CTkLabel(inner, text=val_text, font=self._font(19, "bold"), text_color=accent_color, height=26)
-        val_label.pack(anchor="w", pady=(2, 0))
+        val_row = ctk.CTkFrame(inner, fg_color="transparent")
+        val_row.pack(fill="x", pady=(2, 0))
+        val_label = ctk.CTkLabel(val_row, text=val_text, font=self._font(19, "bold"), text_color=accent_color, height=26)
+        val_label.pack(side="left")
+        extra_lbl = ctk.CTkLabel(val_row, text="", font=self._font(10, "bold", app_fonts.MONO), text_color=COLOR_TEXT_MUTED,
+                                 fg_color="transparent", corner_radius=6, height=20)
+        extra_lbl.pack(side="right")
+
         sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
         sub_label.pack(anchor="w")
-        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "hint_lbl": hint_lbl, "icon_lbl": icon_lbl, "top_row": top_row, "title_lbl": title_lbl}
+        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "hint_lbl": hint_lbl, "icon_lbl": icon_lbl, "top_row": top_row, "title_lbl": title_lbl, "extra_lbl": extra_lbl, "val_row": val_row}
 
     def _make_clickable(self, card_info, command, hint=""):
         """ทำให้ทั้งการ์ดกดได้ (เคอร์เซอร์มือ + ขอบสีทองเมื่อชี้ + ป้ายบอกทาง)"""
@@ -6878,9 +6888,16 @@ class MainTradingApp(ctk.CTk):
                 srv = telemetry.get("server", "N/A")
                 is_mkt_open = telemetry.get("is_market_open", False)
                 if hasattr(self, 'card_mt5'):
+                    magic_num = get_profile_magic_number()
                     if is_conn:
                         self.card_mt5["val_lbl"].configure(text=f"#{acc_num}", text_color=COLOR_SUCCESS_GREEN)
                         self.card_mt5["sub_lbl"].configure(text=f"● เชื่อมต่อแล้ว · {srv}")
+                        if "extra_lbl" in self.card_mt5:
+                            self.card_mt5["extra_lbl"].configure(
+                                text=f" Magic: {magic_num} ",
+                                text_color=COLOR_GOLD_PRIMARY,
+                                fg_color="#261E10"
+                            )
                         if is_mkt_open:
                             # ตลาดเปิดปกติ: ไอคอนสีเขียว + ป้าย "● ตลาดเปิด" สีเขียว
                             if "icon_lbl" in self.card_mt5:
@@ -6895,6 +6912,12 @@ class MainTradingApp(ctk.CTk):
                         # ยังไม่ได้เชื่อมต่อ MT5: ไอคอนสีขาว (สีดั้งเดิม) + ซ่อนป้าย
                         self.card_mt5["val_lbl"].configure(text="ไม่ได้เชื่อมต่อ", text_color=COLOR_DANGER_RED)
                         self.card_mt5["sub_lbl"].configure(text="กรุณาเปิด MT5 Terminal")
+                        if "extra_lbl" in self.card_mt5:
+                            self.card_mt5["extra_lbl"].configure(
+                                text=f" Magic: {magic_num} ",
+                                text_color=COLOR_TEXT_MUTED,
+                                fg_color="#1F2430"
+                            )
                         if "icon_lbl" in self.card_mt5:
                             self.card_mt5["icon_lbl"].configure(text_color=COLOR_TEXT_PRIMARY)
                         self._set_badge(self.card_mt5.get("badge"), "")

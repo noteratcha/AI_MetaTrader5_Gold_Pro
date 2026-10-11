@@ -27,6 +27,11 @@ SETUP = os.path.join(ROOT, "dist", f"GoldBot24_Setup_{TAG}.exe")
 
 RELEASE_NOTES = f"""## AI Gold Commander Pro {TAG}
 
+### แสดง Magic Number บนการ์ดบัญชี MT5 (Card 1)
+- แสดงป้าย Magic Number บนการ์ดบัญชี MT5 (การ์ดที่ 1) ฝั่งขวาของเลขที่บัญชี MT5 อย่างเด่นชัดและสวยงามด้วยสไตล์ Gold Pill Badge
+- อัปเดต Magic Number แบบเรียลไทม์ตาม Profile ที่กำลังใช้งานอยู่ (แยกอิสระระหว่างหลายโปรไฟล์)
+- สามารถคลิกที่การ์ดบัญชี MT5 เพื่อเปิดหน้าต่าง Profile & Magic Number Manager ได้ทันที
+
 ### ระบบ Profile และ Multi-Instance (รันบอทหลาย MT5 พร้อมกันในเครื่องเดียว)
 - รองรับการเปิดบอทหลายตัวขนานกันบนเครื่องเดียวกัน (เช่น บัญชี FBS และบัญชี XM Global) ข้อมูลแยกขาดจากกัน 100%
 - **Isolated Data Storage**: แยกโฟลเดอร์จัดเก็บข้อมูลประจำแต่ละ Profile (`%APPDATA%\\GoldBot24\\profiles\\<name>\\`) ไม่ทับเซสชั่นหรือประวัติการเทรด
