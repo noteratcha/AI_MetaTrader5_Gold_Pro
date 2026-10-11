@@ -11,9 +11,10 @@ import csv
 from datetime import datetime
 import supabase_sync
 import sys
+from app_paths import data_path
 BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
-STATS_FILE = os.path.join(BASE_DIR, "user_stats_store.json")
-TRADE_CSV_FILE = os.path.join(BASE_DIR, "user_trade_history.csv")
+STATS_FILE = data_path("user_stats_store.json")
+TRADE_CSV_FILE = data_path("user_trade_history.csv")
 
 # รายชื่อแผนการเทรดมาตรฐาน 5 แผนเฉพาะทองคำ
 STANDARD_PLANS = [

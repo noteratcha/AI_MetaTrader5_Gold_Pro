@@ -1,1 +1,127 @@
-{}
+{
+  "43763006": {
+    "user_id": "43763006",
+    "email": "43763006@aitrade24.local",
+    "plans": {
+      "Plan 3: SMC-LiquidityHunt": {
+        "plan_name": "Plan 3: SMC-LiquidityHunt",
+        "total_trades": 9,
+        "win_trades": 8,
+        "loss_trades": 4,
+        "win_rate_pct": 66.7,
+        "total_profit_usd": 18.33,
+        "gross_profit_usd": 36.76,
+        "gross_loss_usd": 18.43,
+        "profit_factor": 1.99,
+        "last_trade_time": "2026-10-08 00:56:18"
+      },
+      "Plan 4: SR-SwingBounce": {
+        "plan_name": "Plan 4: SR-SwingBounce",
+        "total_trades": 12,
+        "win_trades": 6,
+        "loss_trades": 5,
+        "win_rate_pct": 54.5,
+        "total_profit_usd": 14.17,
+        "gross_profit_usd": 39.79,
+        "gross_loss_usd": 25.62,
+        "profit_factor": 1.55,
+        "last_trade_time": "2026-10-09 09:04:44"
+      },
+      "Plan 5: BB-H1-Reversion": {
+        "plan_name": "Plan 5: BB-H1-Reversion",
+        "total_trades": 1,
+        "win_trades": 1,
+        "loss_trades": 0,
+        "win_rate_pct": 100.0,
+        "total_profit_usd": 2.15,
+        "gross_profit_usd": 2.15,
+        "gross_loss_usd": 0.0,
+        "profit_factor": 2.15,
+        "last_trade_time": "2026-10-06 16:35:20"
+      },
+      "Plan 1: MA-Cross-Trend": {
+        "plan_name": "Plan 1: MA-Cross-Trend",
+        "total_trades": 3,
+        "win_trades": 1,
+        "loss_trades": 2,
+        "win_rate_pct": 33.3,
+        "total_profit_usd": 0.64,
+        "gross_profit_usd": 7.76,
+        "gross_loss_usd": 7.12,
+        "profit_factor": 1.09,
+        "last_trade_time": "2026-10-08 22:37:24"
+      },
+      "Plan 2: MA-Cross-H1-Trend": {
+        "plan_name": "Plan 2: MA-Cross-H1-Trend",
+        "total_trades": 1,
+        "win_trades": 1,
+        "loss_trades": 0,
+        "win_rate_pct": 100.0,
+        "total_profit_usd": 0.14,
+        "gross_profit_usd": 0.14,
+        "gross_loss_usd": 0.0,
+        "profit_factor": 0.14,
+        "last_trade_time": "2026-10-05 16:13:50"
+      },
+      "Manual-Quick": {
+        "plan_name": "Manual-Quick",
+        "total_trades": 4,
+        "win_trades": 3,
+        "loss_trades": 1,
+        "win_rate_pct": 75.0,
+        "total_profit_usd": 0.21,
+        "gross_profit_usd": 1.67,
+        "gross_loss_usd": 1.46,
+        "profit_factor": 1.14,
+        "last_trade_time": "2026-10-09 09:48:25"
+      },
+      "Plan 6: PSAR-H1-Trend": {
+        "plan_name": "Plan 6: PSAR-H1-Trend",
+        "total_trades": 0,
+        "win_trades": 0,
+        "loss_trades": 0,
+        "win_rate_pct": 0.0,
+        "total_profit_usd": 0.0,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 0.0,
+        "profit_factor": 0.0,
+        "last_trade_time": ""
+      },
+      "Manual/Other": {
+        "plan_name": "Manual/Other",
+        "total_trades": 1,
+        "win_trades": 0,
+        "loss_trades": 1,
+        "win_rate_pct": 0.0,
+        "total_profit_usd": -3.74,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 3.74,
+        "profit_factor": 0.0,
+        "last_trade_time": "2026-10-09 07:57:35"
+      }
+    },
+    "open_tickets": {
+      "2085249149": {
+        "ticket": 2085249149,
+        "plan_name": "Plan 4: SR-SwingBounce",
+        "symbol": "XAUUSD",
+        "action": "SELL",
+        "volume": 0.01,
+        "open_price": 4162.38,
+        "sl": 4168.41,
+        "tp": 4150.32,
+        "open_time": "2026-10-09 08:28:35"
+      }
+    },
+    "overall": {
+      "total_trades": 30,
+      "win_trades": 20,
+      "loss_trades": 13,
+      "win_rate_pct": 60.6,
+      "total_profit_usd": 31.9,
+      "gross_profit_usd": 88.27,
+      "gross_loss_usd": 56.37,
+      "profit_factor": 1.57
+    }
+  }
+}

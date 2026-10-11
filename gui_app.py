@@ -3210,7 +3210,7 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         top = ctk.CTkFrame(self, fg_color="transparent")
         top.pack(fill="x", padx=20, pady=(16, 6))
         ctk.CTkLabel(top, text="ประวัติกำไร / ขาดทุน และสถิติความสำเร็จรายแผน", font=self._f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(side="left")
-        ctk.CTkLabel(top, text="ทั้งบัญชี MT5 · รวม commission/swap · เวลาไทย · แยกตามแผนการเทรด", font=self._f(11), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=12)
+        ctk.CTkLabel(top, text="บัญชี MT5 และประวัติผู้ใช้ · รวม commission/swap · เวลาไทย · แยกตามแผนการเทรด", font=self._f(11), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=12)
 
         bar = ctk.CTkFrame(self, fg_color="transparent")
         bar.pack(fill="x", padx=20, pady=(0, 8))

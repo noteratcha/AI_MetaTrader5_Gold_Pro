@@ -400,6 +400,7 @@ class BotController:
     def get_trade_history(self, days: int = 90, symbol: str = None) -> list[dict]:
         """
         ประวัติการเข้าไม้/ปิดไม้จาก MT5 โดยตรง (จับคู่ Deal เข้า-ออกด้วย position_id)
+        ผสานประวัติจาก user_trade_history.csv สำหรับไม้ที่ไม่อยู่ในประวัติ MT5 ปัจจุบัน (เช่น สลับโบรกเกอร์)
         รวมไม้ที่ยังเปิดอยู่ — เรียงจากใหม่ไปเก่า
         """
         if symbol is None or symbol == "XAUUSD":
@@ -408,47 +409,116 @@ class BotController:
         from datetime import datetime, timedelta
         trades = {}
         try:
-            if mt5.terminal_info() is None and not mt5.initialize():
-                return []
-            deals = mt5.history_deals_get(datetime.now() - timedelta(days=days), datetime.now() + timedelta(days=1)) or []
-            for d in deals:
-                if d.symbol.upper() not in gold_syms or d.entry not in (0, 1, 2):
-                    continue
-                t = trades.setdefault(d.position_id, {
-                    "ticket": int(d.position_id), "side": "", "plan": "", "volume": 0.0,
-                    "open_time": None, "open_price": 0.0, "close_time": None, "close_price": 0.0,
-                    "profit": 0.0, "status": "OPEN",
-                })
-                t["profit"] += float(d.profit) + float(getattr(d, "commission", 0.0)) + float(getattr(d, "swap", 0.0))
-                if d.entry == 0:  # DEAL_ENTRY_IN
-                    t["side"] = "BUY" if d.type == 0 else "SELL"
-                    t["plan"] = d.comment or ("Manual" if d.magic != 888999 else "")
-                    t["volume"] = float(d.volume)
-                    t["open_time"] = int(d.time)
-                    t["open_price"] = float(d.price)
-                else:  # DEAL_ENTRY_OUT / INOUT
-                    t["close_time"] = int(d.time)
-                    t["close_price"] = float(d.price)
-                    t["close_reason"] = d.comment or ""
-                    t["close_code"] = int(getattr(d, "reason", -1))  # 0-2 ปิดเอง · 3 บอท · 4 SL · 5 TP · 6 Stop Out
-                    t["status"] = "CLOSED"
+            if mt5.terminal_info() is not None or mt5.initialize():
+                deals = mt5.history_deals_get(datetime.now() - timedelta(days=days), datetime.now() + timedelta(days=1)) or []
+                for d in deals:
+                    if d.symbol.upper() not in gold_syms or d.entry not in (0, 1, 2):
+                        continue
+                    t = trades.setdefault(d.position_id, {
+                        "ticket": int(d.position_id), "side": "", "plan": "", "volume": 0.0,
+                        "open_time": None, "open_price": 0.0, "close_time": None, "close_price": 0.0,
+                        "profit": 0.0, "status": "OPEN",
+                    })
+                    t["profit"] += float(d.profit) + float(getattr(d, "commission", 0.0)) + float(getattr(d, "swap", 0.0))
+                    if d.entry == 0:  # DEAL_ENTRY_IN
+                        t["side"] = "BUY" if d.type == 0 else "SELL"
+                        t["plan"] = d.comment or ("Manual" if d.magic != 888999 else "")
+                        t["volume"] = float(d.volume)
+                        t["open_time"] = int(d.time)
+                        t["open_price"] = float(d.price)
+                    else:  # DEAL_ENTRY_OUT / INOUT
+                        t["close_time"] = int(d.time)
+                        t["close_price"] = float(d.price)
+                        t["close_reason"] = d.comment or ""
+                        t["close_code"] = int(getattr(d, "reason", -1))  # 0-2 ปิดเอง · 3 บอท · 4 SL · 5 TP · 6 Stop Out
+                        t["status"] = "CLOSED"
 
-            # ไม้ที่ยังเปิดอยู่: ใช้กำไรลอยตัวปัจจุบัน
-            for p in mt5.positions_get() or []:
-                if p.symbol.upper() not in gold_syms:
-                    continue
-                t = trades.setdefault(p.ticket, {"ticket": int(p.ticket), "close_time": None, "close_price": 0.0})
-                t.update({
-                    "side": "BUY" if p.type == 0 else "SELL",
-                    "plan": p.comment or "Manual",
-                    "volume": float(p.volume),
-                    "open_time": int(p.time),
-                    "open_price": float(p.price_open),
-                    "profit": float(p.profit),
-                    "status": "OPEN",
-                })
+                # ไม้ที่ยังเปิดอยู่: ใช้กำไรลอยตัวปัจจุบัน
+                for p in mt5.positions_get() or []:
+                    if p.symbol.upper() not in gold_syms:
+                        continue
+                    t = trades.setdefault(p.ticket, {"ticket": int(p.ticket), "close_time": None, "close_price": 0.0})
+                    t.update({
+                        "side": "BUY" if p.type == 0 else "SELL",
+                        "plan": p.comment or "Manual",
+                        "volume": float(p.volume),
+                        "open_time": int(p.time),
+                        "open_price": float(p.price_open),
+                        "profit": float(p.profit),
+                        "status": "OPEN",
+                    })
         except Exception:
-            return []
+            pass
+
+        # ผสานประวัติจาก user_trade_history.csv สำหรับไม้ที่ยังไม่มีใน trades
+        try:
+            import csv
+            import os
+            import thai_time
+            from app_paths import data_path
+            cur_user_id = ""
+            try:
+                from license_manager import license_mgr
+                cur_user_id = str(license_mgr.get_current_user().get("user_id") or "").strip()
+            except Exception:
+                pass
+
+            csv_path = data_path("user_trade_history.csv")
+            if os.path.exists(csv_path) and os.path.getsize(csv_path) > 100:
+                mt5_tickets = set(trades.keys())
+                with open(csv_path, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for r in reader:
+                        u_id = str(r.get("User_ID") or "").strip()
+                        if cur_user_id and u_id and u_id != cur_user_id:
+                            continue
+                        try:
+                            ticket = int(r.get("Ticket") or 0)
+                        except Exception:
+                            continue
+                        if not ticket or ticket in mt5_tickets:
+                            continue
+
+                        action = (r.get("Action") or "").strip()
+                        time_str = (r.get("Time") or "").strip()
+                        try:
+                            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=thai_time.TH)
+                            if (datetime.now(thai_time.TH) - dt).days > days:
+                                continue
+                            utc_ts = dt.timestamp()
+                            server_ts = int(utc_ts + thai_time.server_offset_at(utc_ts))
+                        except Exception:
+                            continue
+
+                        t = trades.setdefault(ticket, {
+                            "ticket": ticket, "side": "", "plan": "", "volume": 0.01,
+                            "open_time": None, "open_price": 0.0, "close_time": None, "close_price": 0.0,
+                            "profit": 0.0, "status": "OPEN"
+                        })
+                        if action in ("BUY", "SELL"):
+                            t["side"] = action
+                            t["plan"] = r.get("Plan") or ""
+                            try: t["volume"] = float(r.get("Lot") or 0.01)
+                            except Exception: pass
+                            t["open_time"] = server_ts
+                            try: t["open_price"] = float(r.get("Price") or 0.0)
+                            except Exception: pass
+                        elif action in ("CLOSE", "TP_HIT", "SL_HIT"):
+                            t["close_time"] = server_ts
+                            try: t["profit"] = float(r.get("Profit") or 0.0)
+                            except Exception: pass
+                            try:
+                                cp = float(r.get("Price") or 0.0)
+                                if cp > 0: t["close_price"] = cp
+                            except Exception: pass
+                            if not t.get("plan"):
+                                t["plan"] = r.get("Plan") or ""
+                            t["status"] = "CLOSED"
+                            t["close_reason"] = action
+                            if t.get("open_time") is None:
+                                t["open_time"] = server_ts
+        except Exception:
+            pass
 
         rows = [t for t in trades.values() if t.get("open_time")]
         rows.sort(key=lambda t: t["close_time"] or t["open_time"], reverse=True)
@@ -817,9 +887,30 @@ class BotController:
         except Exception:
             return None
 
+    @staticmethod
+    def _normalize_plan_name(raw_plan: str) -> str:
+        s = str(raw_plan or "").strip()
+        if not s or "Manual" in s or s in ("เข้าเอง", "อื่นๆ"):
+            return "เข้าเอง"
+        for base in ("MA-Cross-H1-Trend", "MA-Cross-Trend", "SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "PSAR-H1-Trend"):
+            if base in s:
+                return base
+        if "Plan 1" in s: return "MA-Cross-Trend"
+        if "Plan 2" in s: return "MA-Cross-H1-Trend"
+        if "Plan 3" in s: return "SMC-LiquidityHunt"
+        if "Plan 4" in s: return "SR-SwingBounce"
+        if "Plan 5" in s: return "BB-H1-Reversion"
+        if "Plan 6" in s: return "PSAR-H1-Trend"
+        try:
+            import plan_config
+            return plan_config.base_plan(s) or "อื่นๆ"
+        except Exception:
+            return "อื่นๆ"
+
     def get_daily_pnl(self, start_date, end_date) -> list[dict]:
         """
         กำไร/ขาดทุนสุทธิรายวันของทั้งบัญชี (profit + commission + swap ของทุก Deal เทรด) ตามวันเวลาไทย
+        ผสานประวัติจาก user_trade_history.csv สำหรับไม้ที่ไม่อยู่ในประวัติ MT5 ปัจจุบัน (เช่น สลับโบรกเกอร์)
         start_date / end_date = datetime.date (รวมทั้งสองวัน) · คืน [{"date", "profit", "closed", "plans"}] ครบทุกวันในช่วง
         """
         from datetime import datetime, timedelta, timezone
@@ -828,55 +919,121 @@ class BotController:
         while d <= end_date:
             days[d] = {"date": d, "profit": 0.0, "closed": 0, "plans": {}}
             d += timedelta(days=1)
+        seen_tickets = set()
         try:
-            if mt5.terminal_info() is None and not mt5.initialize():
-                return list(days.values())
-            # เวลา Deal ของ MT5 = เวลาเซิร์ฟเวอร์ → แปลงเป็นเวลาจริงด้วย thai_time (ตลาดปิดก็ยังถูก · คิดตาม DST ของวันนั้น)
-            th = timezone(timedelta(hours=7))
-            fetch_start = datetime.combine(start_date - timedelta(days=90), datetime.min.time())
-            fetch_end = datetime.combine(end_date + timedelta(days=2), datetime.min.time())
-            deals = mt5.history_deals_get(fetch_start, fetch_end) or []
+            if mt5.terminal_info() is not None or mt5.initialize():
+                # เวลา Deal ของ MT5 = เวลาเซิร์ฟเวอร์ → แปลงเป็นเวลาจริงด้วย thai_time (ตลาดปิดก็ยังถูก · คิดตาม DST ของวันนั้น)
+                th = timezone(timedelta(hours=7))
+                fetch_start = datetime.combine(start_date - timedelta(days=90), datetime.min.time())
+                fetch_end = datetime.combine(end_date + timedelta(days=2), datetime.min.time())
+                deals = mt5.history_deals_get(fetch_start, fetch_end) or []
 
-            import plan_config
-            pos_plan_map = {}
-            for dl in deals:
-                if dl.entry == 0 and dl.comment:
-                    pos_plan_map[dl.position_id] = plan_config.base_plan(dl.comment)
+                import plan_config
+                pos_plan_map = {}
+                for dl in deals:
+                    if dl.entry == 0 and dl.comment:
+                        pos_plan_map[dl.position_id] = plan_config.base_plan(dl.comment)
 
-            for dl in deals:
-                if dl.type not in (0, 1):  # เฉพาะ Deal ซื้อ/ขาย (ไม่นับฝาก-ถอน/โบนัส)
-                    continue
-                day = datetime.fromtimestamp(thai_time.server_to_epoch(int(dl.time)), th).date()
-                if day not in days:
-                    continue
-                p = float(dl.profit) + float(getattr(dl, "commission", 0.0)) + float(getattr(dl, "swap", 0.0))
-                days[day]["profit"] += p
+                for dl in deals:
+                    if dl.type not in (0, 1):  # เฉพาะ Deal ซื้อ/ขาย (ไม่นับฝาก-ถอน/โบนัส)
+                        continue
+                    if dl.position_id:
+                        seen_tickets.add(int(dl.position_id))
+                    day = datetime.fromtimestamp(thai_time.server_to_epoch(int(dl.time)), th).date()
+                    if day not in days:
+                        continue
+                    p = float(dl.profit) + float(getattr(dl, "commission", 0.0)) + float(getattr(dl, "swap", 0.0))
+                    days[day]["profit"] += p
 
-                plan = pos_plan_map.get(dl.position_id)
-                if not plan and dl.comment:
-                    plan = plan_config.base_plan(dl.comment)
-                if not plan:
-                    plan = "เข้าเอง" if getattr(dl, "magic", 0) == 0 else "อื่นๆ"
-                elif plan in ("Manual-Quick", "Manual"):
-                    plan = "เข้าเอง"
+                    plan = pos_plan_map.get(dl.position_id)
+                    if not plan and dl.comment:
+                        plan = plan_config.base_plan(dl.comment)
+                    plan = self._normalize_plan_name(plan)
 
-                dp = days[day]["plans"].setdefault(plan, {"profit": 0.0, "closed": 0, "wins": 0, "losses": 0})
-                dp["profit"] += p
+                    dp = days[day]["plans"].setdefault(plan, {"profit": 0.0, "closed": 0, "wins": 0, "losses": 0})
+                    dp["profit"] += p
 
-                if dl.entry in (1, 2):
-                    days[day]["closed"] += 1
-                    dp["closed"] += 1
-                    if p > 0.005:
-                        dp["wins"] += 1
-                    elif p < -0.005:
-                        dp["losses"] += 1
+                    if dl.entry in (1, 2):
+                        days[day]["closed"] += 1
+                        dp["closed"] += 1
+                        if p > 0.005:
+                            dp["wins"] += 1
+                        elif p < -0.005:
+                            dp["losses"] += 1
         except Exception:
             pass
+
+        # ผสานประวัติการเทรดที่บันทึกไว้ใน user_trade_history.csv
+        try:
+            import csv
+            import os
+            from app_paths import data_path
+            cur_user_id = ""
+            try:
+                from license_manager import license_mgr
+                cur_user_id = str(license_mgr.get_current_user().get("user_id") or "").strip()
+            except Exception:
+                pass
+
+            csv_path = data_path("user_trade_history.csv")
+            if os.path.exists(csv_path) and os.path.getsize(csv_path) > 100:
+                csv_seen = set()
+                with open(csv_path, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        u_id = str(row.get("User_ID") or "").strip()
+                        if cur_user_id and u_id and u_id != cur_user_id:
+                            continue
+                        action = (row.get("Action") or "").strip()
+                        if action not in ("CLOSE", "TP_HIT", "SL_HIT"):
+                            continue
+                        try:
+                            ticket = int(row.get("Ticket") or 0)
+                        except Exception:
+                            ticket = 0
+                        if ticket:
+                            if ticket in seen_tickets or ticket in csv_seen:
+                                continue
+                            csv_seen.add(ticket)
+
+                        time_str = (row.get("Time") or "").strip()
+                        if not time_str:
+                            continue
+                        try:
+                            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                        except Exception:
+                            continue
+                        day = dt.date()
+                        if day not in days:
+                            continue
+
+                        try:
+                            p = float(row.get("Profit") or 0.0)
+                        except Exception:
+                            p = 0.0
+
+                        raw_plan = (row.get("Plan") or "").strip()
+                        plan = self._normalize_plan_name(raw_plan)
+
+                        days[day]["profit"] += p
+                        days[day]["closed"] += 1
+
+                        dp = days[day]["plans"].setdefault(plan, {"profit": 0.0, "closed": 0, "wins": 0, "losses": 0})
+                        dp["profit"] += p
+                        dp["closed"] += 1
+                        if p > 0.005:
+                            dp["wins"] += 1
+                        elif p < -0.005:
+                            dp["losses"] += 1
+        except Exception:
+            pass
+
         return list(days.values())
 
     def get_plans_summary_stats(self, start_date, end_date) -> dict:
         """
         สรุปสถิติความสำเร็จรายแผน และภาพรวมทั้งหมด ในช่วงวันที่กำหนด
+        ผสานประวัติจาก user_trade_history.csv สำหรับไม้ที่ไม่อยู่ในประวัติ MT5 ปัจจุบัน (เช่น สลับโบรกเกอร์)
         คืน dict {"overall": {...}, "plans": {...}}
         """
         from datetime import datetime, timedelta, timezone
@@ -887,77 +1044,154 @@ class BotController:
             },
             "plans": {}
         }
+        seen_tickets = set()
         try:
-            if mt5.terminal_info() is None and not mt5.initialize():
-                return res
-            th = timezone(timedelta(hours=7))
-            fetch_start = datetime.combine(start_date - timedelta(days=90), datetime.min.time())
-            fetch_end = datetime.combine(end_date + timedelta(days=2), datetime.min.time())
-            deals = mt5.history_deals_get(fetch_start, fetch_end) or []
+            if mt5.terminal_info() is not None or mt5.initialize():
+                th = timezone(timedelta(hours=7))
+                fetch_start = datetime.combine(start_date - timedelta(days=90), datetime.min.time())
+                fetch_end = datetime.combine(end_date + timedelta(days=2), datetime.min.time())
+                deals = mt5.history_deals_get(fetch_start, fetch_end) or []
 
-            import plan_config
-            pos_plan_map = {}
-            for dl in deals:
-                if dl.entry == 0 and dl.comment:
-                    pos_plan_map[dl.position_id] = plan_config.base_plan(dl.comment)
+                import plan_config
+                pos_plan_map = {}
+                for dl in deals:
+                    if dl.entry == 0 and dl.comment:
+                        pos_plan_map[dl.position_id] = plan_config.base_plan(dl.comment)
 
-            for dl in deals:
-                if dl.type not in (0, 1):
-                    continue
-                day = datetime.fromtimestamp(thai_time.server_to_epoch(int(dl.time)), th).date()
-                if day < start_date or day > end_date:
-                    continue
-                p = float(dl.profit) + float(getattr(dl, "commission", 0.0)) + float(getattr(dl, "swap", 0.0))
+                for dl in deals:
+                    if dl.type not in (0, 1):
+                        continue
+                    if dl.position_id:
+                        seen_tickets.add(int(dl.position_id))
+                    day = datetime.fromtimestamp(thai_time.server_to_epoch(int(dl.time)), th).date()
+                    if day < start_date or day > end_date:
+                        continue
+                    p = float(dl.profit) + float(getattr(dl, "commission", 0.0)) + float(getattr(dl, "swap", 0.0))
 
-                plan = pos_plan_map.get(dl.position_id)
-                if not plan and dl.comment:
-                    plan = plan_config.base_plan(dl.comment)
-                if not plan:
-                    plan = "เข้าเอง" if getattr(dl, "magic", 0) == 0 else "อื่นๆ"
-                elif plan in ("Manual-Quick", "Manual"):
-                    plan = "เข้าเอง"
+                    plan = pos_plan_map.get(dl.position_id)
+                    if not plan and dl.comment:
+                        plan = plan_config.base_plan(dl.comment)
+                    plan = self._normalize_plan_name(plan)
 
-                st = res["plans"].setdefault(plan, {
-                    "profit": 0.0, "closed": 0, "wins": 0, "losses": 0, "be": 0,
-                    "gross_profit": 0.0, "gross_loss": 0.0, "win_rate": 0.0, "profit_factor": 0.0
-                })
-                st["profit"] += p
-                res["overall"]["profit"] += p
+                    st = res["plans"].setdefault(plan, {
+                        "profit": 0.0, "closed": 0, "wins": 0, "losses": 0, "be": 0,
+                        "gross_profit": 0.0, "gross_loss": 0.0, "win_rate": 0.0, "profit_factor": 0.0
+                    })
+                    st["profit"] += p
+                    res["overall"]["profit"] += p
 
-                if dl.entry in (1, 2):
-                    res["overall"]["closed"] += 1
-                    st["closed"] += 1
-                    if p > 0.005:
-                        res["overall"]["wins"] += 1
-                        res["overall"]["gross_profit"] += p
-                        st["wins"] += 1
-                        st["gross_profit"] += p
-                    elif p < -0.005:
-                        res["overall"]["losses"] += 1
-                        res["overall"]["gross_loss"] += abs(p)
-                        st["losses"] += 1
-                        st["gross_loss"] += abs(p)
-                    else:
-                        res["overall"]["be"] += 1
-                        st["be"] += 1
-
-            ov = res["overall"]
-            if ov["closed"] > 0:
-                ov["win_rate"] = round(ov["wins"] / ov["closed"] * 100, 1)
-            if ov["gross_loss"] > 0:
-                ov["profit_factor"] = round(ov["gross_profit"] / ov["gross_loss"], 2)
-            elif ov["gross_profit"] > 0:
-                ov["profit_factor"] = 99.9
-
-            for p_info in res["plans"].values():
-                if p_info["closed"] > 0:
-                    p_info["win_rate"] = round(p_info["wins"] / p_info["closed"] * 100, 1)
-                if p_info["gross_loss"] > 0:
-                    p_info["profit_factor"] = round(p_info["gross_profit"] / p_info["gross_loss"], 2)
-                elif p_info["gross_profit"] > 0:
-                    p_info["profit_factor"] = 99.9
+                    if dl.entry in (1, 2):
+                        res["overall"]["closed"] += 1
+                        st["closed"] += 1
+                        if p > 0.005:
+                            res["overall"]["wins"] += 1
+                            res["overall"]["gross_profit"] += p
+                            st["wins"] += 1
+                            st["gross_profit"] += p
+                        elif p < -0.005:
+                            res["overall"]["losses"] += 1
+                            res["overall"]["gross_loss"] += abs(p)
+                            st["losses"] += 1
+                            st["gross_loss"] += abs(p)
+                        else:
+                            res["overall"]["be"] += 1
+                            st["be"] += 1
         except Exception:
             pass
+
+        # ผสานประวัติจาก user_trade_history.csv
+        try:
+            import csv
+            import os
+            from app_paths import data_path
+            cur_user_id = ""
+            try:
+                from license_manager import license_mgr
+                cur_user_id = str(license_mgr.get_current_user().get("user_id") or "").strip()
+            except Exception:
+                pass
+
+            csv_path = data_path("user_trade_history.csv")
+            if os.path.exists(csv_path) and os.path.getsize(csv_path) > 100:
+                csv_seen = set()
+                with open(csv_path, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        u_id = str(row.get("User_ID") or "").strip()
+                        if cur_user_id and u_id and u_id != cur_user_id:
+                            continue
+                        action = (row.get("Action") or "").strip()
+                        if action not in ("CLOSE", "TP_HIT", "SL_HIT"):
+                            continue
+                        try:
+                            ticket = int(row.get("Ticket") or 0)
+                        except Exception:
+                            ticket = 0
+                        if ticket:
+                            if ticket in seen_tickets or ticket in csv_seen:
+                                continue
+                            csv_seen.add(ticket)
+
+                        time_str = (row.get("Time") or "").strip()
+                        if not time_str:
+                            continue
+                        try:
+                            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                        except Exception:
+                            continue
+                        day = dt.date()
+                        if day < start_date or day > end_date:
+                            continue
+
+                        try:
+                            p = float(row.get("Profit") or 0.0)
+                        except Exception:
+                            p = 0.0
+
+                        raw_plan = (row.get("Plan") or "").strip()
+                        plan = self._normalize_plan_name(raw_plan)
+
+                        st = res["plans"].setdefault(plan, {
+                            "profit": 0.0, "closed": 0, "wins": 0, "losses": 0, "be": 0,
+                            "gross_profit": 0.0, "gross_loss": 0.0, "win_rate": 0.0, "profit_factor": 0.0
+                        })
+                        st["profit"] += p
+                        st["closed"] += 1
+                        res["overall"]["profit"] += p
+                        res["overall"]["closed"] += 1
+
+                        if p > 0.005:
+                            res["overall"]["wins"] += 1
+                            res["overall"]["gross_profit"] += p
+                            st["wins"] += 1
+                            st["gross_profit"] += p
+                        elif p < -0.005:
+                            res["overall"]["losses"] += 1
+                            res["overall"]["gross_loss"] += abs(p)
+                            st["losses"] += 1
+                            st["gross_loss"] += abs(p)
+                        else:
+                            res["overall"]["be"] += 1
+                            st["be"] += 1
+        except Exception:
+            pass
+
+        ov = res["overall"]
+        if ov["closed"] > 0:
+            ov["win_rate"] = round(ov["wins"] / ov["closed"] * 100, 1)
+        if ov["gross_loss"] > 0:
+            ov["profit_factor"] = round(ov["gross_profit"] / ov["gross_loss"], 2)
+        elif ov["gross_profit"] > 0:
+            ov["profit_factor"] = 99.9
+
+        for p_info in res["plans"].values():
+            if p_info["closed"] > 0:
+                p_info["win_rate"] = round(p_info["wins"] / p_info["closed"] * 100, 1)
+            if p_info["gross_loss"] > 0:
+                p_info["profit_factor"] = round(p_info["gross_profit"] / p_info["gross_loss"], 2)
+            elif p_info["gross_profit"] > 0:
+                p_info["profit_factor"] = 99.9
+
         return res
 
     def get_plans_condition_status(self, symbol: str = None) -> dict:
