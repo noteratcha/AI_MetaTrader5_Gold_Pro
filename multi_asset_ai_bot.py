@@ -655,6 +655,16 @@ def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val, sym=Non
     detected = False
     reason = ""
 
+    # ตลาดปิดทำการ (วันหยุดสุดสัปดาห์ / พักเบรกประจำวัน) ไม่ส่งเสียงเตือนไซเลน เพราะโบรกเกอร์ถ่างสเปรดและหยุดส่งราคาตามปกติ
+    try:
+        import thai_time
+        if not thai_time.get_gold_market_status().get("is_open", True):
+            _volatility_active_until = 0.0
+            _last_volatility_reason = ""
+            return False, ""
+    except Exception:
+        pass
+
     # บันทึกประวัติราคาสดระดับ Tick (วินาที)
     if tick is not None and getattr(tick, 'bid', 0) > 0:
         curr_bid = float(tick.bid)
