@@ -40,9 +40,10 @@ def _load():
     import multi_asset_ai_bot as bot
     if mt5.terminal_info() is None and not mt5.initialize():
         raise RuntimeError("เชื่อมต่อ MT5 ไม่ได้")
-    m15 = bot.get_data("XAUUSD", mt5.TIMEFRAME_M15, 17000)
-    h1 = bot.get_data("XAUUSD", mt5.TIMEFRAME_H1, 4800)
-    h4 = bot.get_data("XAUUSD", mt5.TIMEFRAME_H4, 1400)
+    sym = bot.get_gold_symbol()
+    m15 = bot.get_data(sym, mt5.TIMEFRAME_M15, 17000)
+    h1 = bot.get_data(sym, mt5.TIMEFRAME_H1, 4800)
+    h4 = bot.get_data(sym, mt5.TIMEFRAME_H4, 1400)
     if m15 is None or h1 is None or h4 is None:
         raise RuntimeError("ดึงข้อมูลราคาไม่ได้")
     return bot, m15, h1, h4
@@ -123,8 +124,8 @@ def _popular_factors(bot, h1, h4):
     out = []
     c4, h4h, h4l = h4["close"], h4["high"], h4["low"]
     c1 = h1["close"]
-    # 1) EMA50/200 รายวัน — Golden / Death Cross
-    d1 = bot.get_data("XAUUSD", mt5.TIMEFRAME_D1, 400)
+    sym = bot.get_gold_symbol()
+    d1 = bot.get_data(sym, mt5.TIMEFRAME_D1, 400)
     if d1 is not None and len(d1) >= 210:
         e50, e200 = (d1["close"].ewm(span=k, adjust=False).mean().iloc[-2] for k in (50, 200))
         d = 1 if e50 > e200 else -1

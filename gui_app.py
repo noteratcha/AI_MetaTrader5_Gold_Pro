@@ -1095,7 +1095,8 @@ class QuickOrderDialog(ctk.CTkToplevel):
             icon.create_polygon(10, 15, 30, 15, 20, 30, fill="#0A0B0F", outline="")
         tbox = ctk.CTkFrame(hrow, fg_color="transparent")
         tbox.pack(side="left")
-        ctk.CTkLabel(tbox, text=f"เปิด {side} XAUUSD ทันที", font=f(18, "bold"), text_color=self.color).pack(anchor="w")
+        gold_sym = bot_ctrl.get_gold_symbol()
+        ctk.CTkLabel(tbox, text=f"เปิด {side} {gold_sym} ทันที", font=f(18, "bold"), text_color=self.color).pack(anchor="w")
         ctk.CTkLabel(tbox, text=f"Lot {d['lot']:.2f} (ตั้งที่แผงควบคุม)" if d else "", font=f(11), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
         pbox = ctk.CTkFrame(hrow, fg_color="transparent")
         pbox.pack(side="right")
@@ -1226,8 +1227,7 @@ class QuickOrderDialog(ctk.CTkToplevel):
         except Exception:
             return
         try:
-            import MetaTrader5 as _mt5
-            t = _mt5.symbol_info_tick("XAUUSD")
+            t = _mt5.symbol_info_tick(bot_ctrl.get_gold_symbol())
             if t:
                 self.d["bid"], self.d["ask"] = float(t.bid), float(t.ask)
                 self._refresh()
@@ -1478,7 +1478,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
             if pk == self.selected_plan:
                 plan_desc = f" ({plabel})"
                 break
-        self.title(f"XAUUSD · {init_tf} เรียลไทม์{plan_desc}")
+        self.symbol = bot_ctrl.get_gold_symbol()
+        self.title(f"{self.symbol} · {init_tf} เรียลไทม์{plan_desc}")
 
         # ปรับเปิด/ปิดอินดิเคเตอร์ตามแผนที่เลือก
         target_spec = next((item for item in self.PLAN_SPECS if item[0] == self.selected_plan), None)
@@ -1513,7 +1514,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         left_grp = ctk.CTkFrame(top, fg_color="transparent")
         left_grp.pack(side="left", fill="y")
 
-        self.lbl_sym = ctk.CTkLabel(left_grp, text="XAUUSD", font=ctk.CTkFont(family=app_fonts.UI, size=18, weight="bold"),
+        self.lbl_sym = ctk.CTkLabel(left_grp, text=self.symbol, font=ctk.CTkFont(family=app_fonts.UI, size=18, weight="bold"),
                                     text_color=COLOR_GOLD_PRIMARY)
         self.lbl_sym.pack(side="left", padx=(0, 10))
 
@@ -1968,7 +1969,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         # 3. อัปเดต Title
         plan_desc = f" ({label})" if plan_key != "ALL" else " (รวมทุกแผน)"
-        self.title(f"XAUUSD · {cur_tf} เรียลไทม์{plan_desc}")
+        self.title(f"{self.symbol} · {cur_tf} เรียลไทม์{plan_desc}")
 
         # 4. รีเฟรชปุ่มแผน, ชิปอินดิเคเตอร์, แถบเงื่อนไข และวาดใหม่
         self._last_plan_btns_sig = None
@@ -2037,7 +2038,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             if pk == self.selected_plan:
                 plan_desc = f" ({plabel})"
                 break
-        self.title(f"XAUUSD · {new_tf} เรียลไทม์{plan_desc}")
+        self.title(f"{self.symbol} · {new_tf} เรียลไทม์{plan_desc}")
         self._refresh_plan_buttons()
         self._rebuild_legend_chips()
         self._tick(reschedule=False)
@@ -2157,8 +2158,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             else:
                 self.lbl_clock.configure(text=f"แท่งปิดในอีก {mins:02d}:{secs:02d}")
 
-            # ประเมินและแสดงผลสถานะเงื่อนไขการเข้าไม้เรียลไทม์
-            plans_status = bot_ctrl.get_plans_condition_status("XAUUSD")
+            plans_status = bot_ctrl.get_plans_condition_status(self.symbol)
             self._refresh_plan_buttons(plans_status)
             self._update_condition_bar(plans_status)
             self._update_ai_sr_bar()
@@ -5228,14 +5228,16 @@ class MainTradingApp(ctk.CTk):
     def _plan_live_tick(self):
         """แสดงป้ายสถานะเงื่อนไขการเข้าไม้เรียลไทม์ และป้าย ● BUY / ● SELL ที่แผนที่มีไม้เปิดอยู่ตอนนี้"""
         try:
-            import MetaTrader5 as _mt5
-            open_by_plan = {}
-            for p in _mt5.positions_get(symbol="XAUUSD") or []:
+            sym = bot_ctrl.get_gold_symbol()
+            gold_syms = {sym.upper(), "XAUUSD", "GOLD"}
+            for p in _mt5.positions_get() or []:
+                if p.symbol.upper() not in gold_syms:
+                    continue
                 base = plan_config.base_plan(p.comment)
                 open_by_plan.setdefault(base, []).append(("BUY" if p.type == 0 else "SELL", float(p.profit)))
 
             # ดึงสถานะเงื่อนไขการเข้าไม้เรียลไทม์ครบทั้ง 6 แผน
-            plans_status = bot_ctrl.get_plans_condition_status("XAUUSD") or {}
+            plans_status = bot_ctrl.get_plans_condition_status(sym) or {}
             self._last_card_plans_status = plans_status
 
             sig = (
@@ -6425,8 +6427,7 @@ class MainTradingApp(ctk.CTk):
 
     def _last_gold_price(self) -> float:
         try:
-            import MetaTrader5 as _mt5
-            t = _mt5.symbol_info_tick("XAUUSD")
+            t = _mt5.symbol_info_tick(bot_ctrl.get_gold_symbol())
             return float(t.bid) if t else 0.0
         except Exception:
             return 0.0
@@ -6687,10 +6688,11 @@ class MainTradingApp(ctk.CTk):
 
     def _on_click_close_all(self):
         """กดปุ่ม Emergency ปิดทุกออเดอร์ทันที"""
+        sym = bot_ctrl.get_gold_symbol()
         n = len(bot_ctrl.get_telemetry().get("open_positions") or [])
         confirm = messagebox.askyesno(
             "ปิดออเดอร์ทั้งหมด",
-            f"ต้องการปิดออเดอร์ทองคำ XAUUSD ทั้งหมด{f' {n} ไม้' if n else ''} ทันทีหรือไม่?\n"
+            f"ต้องการปิดออเดอร์ทองคำ {sym} ทั้งหมด{f' {n} ไม้' if n else ''} ทันทีหรือไม่?\n"
             "ปิดที่ราคาตลาดตอนนี้ · คำสั่งนี้ยกเลิกไม่ได้"
         )
         if confirm:
@@ -6867,11 +6869,13 @@ class MainTradingApp(ctk.CTk):
                     bg = "#0F2A20" if mkt["is_open"] else ("#261E10" if mkt["state"] == "DAILY_BREAK" else "#2A1414")
                     self.lbl_market_status.configure(text=f"  {mkt['short_desc']}  ", text_color=color, fg_color=bg)
 
-                # อัปเดตราคาทองคำ XAUUSD
+                # อัปเดตราคาทองคำ
+                gold_sym = telemetry.get("gold_symbol") or bot_ctrl.get_gold_symbol()
                 bid = telemetry.get("xau_bid", 0.0)
                 ask = telemetry.get("xau_ask", 0.0)
                 spd = telemetry.get("spread_pts", 0)
                 if hasattr(self, 'card_gold'):
+                    self.card_gold["title_lbl"].configure(text=f"ราคาทองคำ {gold_sym}")
                     if bid > 0:
                         self.card_gold["val_lbl"].configure(text=f"{bid:,.2f}")
                     if mkt["is_open"]:

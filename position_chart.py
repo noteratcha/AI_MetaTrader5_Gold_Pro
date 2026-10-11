@@ -17,6 +17,13 @@ import pandas as pd
 import multi_asset_ai_bot as bot
 import thai_time
 
+def _gold_symbol() -> str:
+    try:
+        return bot.get_gold_symbol()
+    except Exception:
+        return "XAUUSD"
+
+
 SYMBOL = "XAUUSD"
 CTX_TTL = 15
 WARMUP = 220   # แท่งเผื่อคำนวณ MA50 / RSI / Divergence ให้ครบตั้งแต่แท่งแรกที่แสดง
@@ -126,8 +133,9 @@ def _context():
     now = time.time()
     if _ctx["data"] is not None and now - _ctx["t"] < CTX_TTL:
         return _ctx["data"]
-    h1 = bot.get_data(SYMBOL, mt5.TIMEFRAME_H1, 620)
-    h4 = bot.get_data(SYMBOL, mt5.TIMEFRAME_H4, 320)
+    sym = _gold_symbol()
+    h1 = bot.get_data(sym, mt5.TIMEFRAME_H1, 620)
+    h4 = bot.get_data(sym, mt5.TIMEFRAME_H4, 320)
     d = _context_from(h1, h4, float(h1["close"].iloc[-1])) if h1 is not None else None
     if d is not None:
         _ctx.update(t=now, data=d)
@@ -157,7 +165,7 @@ def _map_h1(m, ctx):
 
 
 def _money_per_pt(lot):
-    info = mt5.symbol_info(SYMBOL)
+    info = mt5.symbol_info(_gold_symbol())
     if info and info.trade_tick_size:
         return float(info.trade_tick_value) / float(info.trade_tick_size) * float(lot or 0.01)
     return 100.0 * float(lot or 0.01)
@@ -259,7 +267,8 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
     def ai_prob():
         if not live:   # ไม่มีบันทึกค่า AI ย้อนหลัง
             return
-        up = _f((bot.latest_radar_cache.get(SYMBOL) or {}).get("up_prob"))
+        sym = _gold_symbol()
+        up = _f((bot.latest_radar_cache.get(sym) or bot.latest_radar_cache.get("XAUUSD") or {}).get("up_prob"))
         if up is None:
             inds.append(_ind("AI (โมเดลของบอท)", "—", 0, "เริ่มบอทเพื่อให้ AI คำนวณ"))
             return
@@ -384,9 +393,10 @@ def get(ticket, count=80, fallback=None):
     """
     if mt5.terminal_info() is None and not mt5.initialize():
         return None
-    tick = mt5.symbol_info_tick(SYMBOL)
-    info = mt5.symbol_info(SYMBOL)
-    rates = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M15, 0, count + WARMUP)
+    sym = _gold_symbol()
+    tick = mt5.symbol_info_tick(sym)
+    info = mt5.symbol_info(sym)
+    rates = mt5.copy_rates_from_pos(sym, mt5.TIMEFRAME_M15, 0, count + WARMUP)
     if tick is None or rates is None or len(rates) < count:
         return None
     m = _m15_frame(rates, float(tick.bid))   # แท่งปัจจุบันใช้ราคาล่าสุด
@@ -466,20 +476,21 @@ def get_closed(trade, count=80):
     open_t, close_t = int(trade["open_time"]), int(trade["close_time"])
     entry, exit_px = float(trade["open_price"]), float(trade["close_price"])
     lot = float(trade.get("volume") or 0.01)
-    rates = mt5.copy_rates_from(SYMBOL, mt5.TIMEFRAME_M15, close_t, count + WARMUP)
+    sym = _gold_symbol()
+    rates = mt5.copy_rates_from(sym, mt5.TIMEFRAME_M15, close_t, count + WARMUP)
     if rates is None or len(rates) < count:
         return None
     m = pd.DataFrame(rates)
     bar_open = int(m["time"].iloc[-1])
-    m1 = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M1, bar_open, close_t)
+    m1 = mt5.copy_rates_range(sym, mt5.TIMEFRAME_M1, bar_open, close_t)
     if m1 is not None and len(m1):   # แท่งที่ปิดไม้: ตัดที่นาทีที่ปิด
         i = m.index[-1]
         m.loc[i, "high"] = max(float(x["high"]) for x in m1)
         m.loc[i, "low"] = min(float(x["low"]) for x in m1)
     m = _m15_frame(m.to_records(index=False), exit_px)
 
-    h1 = _rates_df(mt5.copy_rates_from(SYMBOL, mt5.TIMEFRAME_H1, close_t, 620))
-    h4 = _rates_df(mt5.copy_rates_from(SYMBOL, mt5.TIMEFRAME_H4, close_t, 320))
+    h1 = _rates_df(mt5.copy_rates_from(sym, mt5.TIMEFRAME_H1, close_t, 620))
+    h4 = _rates_df(mt5.copy_rates_from(sym, mt5.TIMEFRAME_H4, close_t, 320))
     if h1 is not None and h4 is not None:
         _set_last(h1, exit_px)
         _set_last(h4, exit_px)
@@ -490,9 +501,9 @@ def get_closed(trade, count=80):
     sl, tp, path = _sl_tp_at_close(pid, open_t, close_t, trade.get("close_reason"), offset)
 
     # กำไรสูงสุด / ติดลบสูงสุดระหว่างถือ (จากแท่ง M1 — ถ้าไม่มีใช้ M15)
-    span = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M1, open_t, close_t)
+    span = mt5.copy_rates_range(sym, mt5.TIMEFRAME_M1, open_t, close_t)
     if span is None or len(span) == 0:
-        span = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M15, open_t - open_t % 900, close_t)
+        span = mt5.copy_rates_range(sym, mt5.TIMEFRAME_M15, open_t - open_t % 900, close_t)
     mfe = mae = None
     if span is not None and len(span):
         hi, lo = max(float(x["high"]) for x in span), min(float(x["low"]) for x in span)

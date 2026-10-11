@@ -19,6 +19,16 @@ from app_paths import data_path
 import thai_time
 
 SYMBOL = "XAUUSD"
+
+
+def _gold_symbol():
+    try:
+        import multi_asset_ai_bot as bot
+        return bot.get_gold_symbol()
+    except Exception:
+        return "XAUUSD"
+
+
 WINDOW_MIN = 60
 HISTORY_BARS = 50000          # M15 ประมาณ 2 ปี
 STATS_TTL = 6 * 3600
@@ -106,7 +116,7 @@ def _ensure_stats():
         try:
             if mt5.terminal_info() is None and not mt5.initialize():
                 return False
-            rates = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M15, 0, HISTORY_BARS)
+            rates = mt5.copy_rates_from_pos(_gold_symbol(), mt5.TIMEFRAME_M15, 0, HISTORY_BARS)
             if rates is None or len(rates) < 1000:
                 return False
             slots = {}
@@ -157,7 +167,7 @@ def actual_move(ev_time: datetime):
     target = ev_time.astimezone(timezone.utc)
     # หาแท่งที่เริ่มตรงเวลาข่าว (ปัดลงทีละ 15 นาที) — ข้อมูลใหม่กว่า cache ให้โหลดเพิ่ม
     try:
-        recent = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M15, 0, 800)
+        recent = mt5.copy_rates_from_pos(_gold_symbol(), mt5.TIMEFRAME_M15, 0, 800)
     except Exception:
         recent = None
     for src in (recent, rates):

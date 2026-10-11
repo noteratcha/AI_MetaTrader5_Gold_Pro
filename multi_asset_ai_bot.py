@@ -79,8 +79,63 @@ BOT_NAME = "AI MetaTrader 5 (FBS) Gold Pro"
 from version import APP_VERSION
 BOT_VERSION = APP_VERSION  # แหล่งเดียว: version.py
 
-# ตั้งค่าสำหรับระบบ AI Trading (เทรดเฉพาะ XAUUSD ทองคำ 100%)
-TRADE_SYMBOLS = ["XAUUSD"] # โฟกัสเฉพาะทองคำ XAUUSD 100%
+# ตั้งค่าสำหรับระบบ AI Trading (เทรดเฉพาะทองคำ 100% — ตรวจจับสัญลักษณ์อัตโนมัติ)
+GOLD_SYMBOL = "XAUUSD"
+
+
+def detect_gold_symbol(default="XAUUSD") -> str:
+    """ตรวจจับชื่อสัญลักษณ์ทองคำของโบรกเกอร์ที่กำลังเชื่อมต่ออยู่โดยอัตโนมัติ (เช่น XAUUSD, GOLD, GOLDmicro, XAUUSDm ฯลฯ)"""
+    try:
+        if mt5.terminal_info() is None and not mt5.initialize():
+            return default
+        symbols = mt5.symbols_get()
+        if not symbols:
+            return default
+        name_map = {s.name.upper(): s.name for s in symbols}
+        # ลำดับความสำคัญของชื่อสัญลักษณ์ทองคำที่พบบ่อยในโบรกเกอร์ต่างๆ
+        priority = [
+            "XAUUSD", "GOLD", "XAUUSDM", "GOLDMICRO", "GOLD#", "XAUUSD#",
+            "XAUUSD.M", "GOLD.M", "XAUUSD+", "GOLD+", "XAUUSDECN", "XAUUSD.ECN",
+            "XAUUSD_I", "XAUUSD.", "XAUUSDPRO", "GOLDPRO"
+        ]
+        for p in priority:
+            if p in name_map:
+                actual = name_map[p]
+                try:
+                    mt5.symbol_select(actual, True)
+                except Exception:
+                    pass
+                return actual
+        # Heuristic scan สำหรับชื่อที่ขึ้นต้นด้วย XAUUSD หรือ GOLD (ตัดหุ้นเหมืองทองออก)
+        for s in symbols:
+            u = s.name.upper()
+            if any(k in u for k in ("CORP", "LTD", "INC", "BARRICK", "KINROSS", "SANDSTORM", "OCEAN", "SACHS", "FIELDS")):
+                continue
+            if u.startswith("XAUUSD") or u == "GOLD" or u.startswith("GOLD"):
+                try:
+                    mt5.symbol_select(s.name, True)
+                except Exception:
+                    pass
+                return s.name
+    except Exception:
+        pass
+    return default
+
+
+def get_gold_symbol() -> str:
+    """คืนค่าสัญลักษณ์ทองคำปัจจุบัน และอัปเดต TRADE_SYMBOLS / SYMBOLS ให้ตรงกันอัตโนมัติ"""
+    global GOLD_SYMBOL, TRADE_SYMBOLS, SYMBOLS
+    sym = detect_gold_symbol(GOLD_SYMBOL)
+    if sym != GOLD_SYMBOL:
+        GOLD_SYMBOL = sym
+        TRADE_SYMBOLS = [sym]
+        SYMBOLS = [sym]
+        if sym not in latest_radar_cache:
+            latest_radar_cache[sym] = {"symbol": sym, "status": "[WAIT OUTSIDE ZONE]", "up_prob": 0.50, "price": 0.0, "is_in_zone": False, "h4_trend": "ANALYZING...", "h4_diff_pct": 0.0, "h1_trend": "ANALYZING...", "h1_diff_pct": 0.0}
+    return sym
+
+
+TRADE_SYMBOLS = ["XAUUSD"] # โฟกัสเฉพาะทองคำ 100% (อัปเดตไดนามิกตามโบรกเกอร์)
 WATCH_SYMBOLS = []         # ปิดคู่เงินอื่นๆ และสินทรัพย์อื่นทั้งหมด
 SYMBOLS = ["XAUUSD"]
 TIMEFRAME = mt5.TIMEFRAME_M15   # กราฟ 15 นาที
@@ -217,7 +272,8 @@ BOT_PAUSED_FLAG = False
 
 # ที่เก็บข้อมูลสัญญาณเรดาร์แบบ Real-time ให้ Background Thread ดึงไปสตรีมขึ้นเว็บ
 latest_radar_cache = {
-    "XAUUSD": {"symbol": "XAUUSD", "status": "[WAIT OUTSIDE ZONE]", "up_prob": 0.50, "price": 0.0, "is_in_zone": False, "h4_trend": "ANALYZING...", "h4_diff_pct": 0.0, "h1_trend": "ANALYZING...", "h1_diff_pct": 0.0}
+    "XAUUSD": {"symbol": "XAUUSD", "status": "[WAIT OUTSIDE ZONE]", "up_prob": 0.50, "price": 0.0, "is_in_zone": False, "h4_trend": "ANALYZING...", "h4_diff_pct": 0.0, "h1_trend": "ANALYZING...", "h1_diff_pct": 0.0},
+    "GOLD": {"symbol": "GOLD", "status": "[WAIT OUTSIDE ZONE]", "up_prob": 0.50, "price": 0.0, "is_in_zone": False, "h4_trend": "ANALYZING...", "h4_diff_pct": 0.0, "h1_trend": "ANALYZING...", "h1_diff_pct": 0.0}
 }
 
 _web_extra_cache = {"pnl_at": 0.0, "pnl": []}
@@ -312,7 +368,7 @@ def telemetry_background_worker():
                             "mode": "DEMO" if int(acc_info.trade_mode) == 0 else ("CONTEST" if int(acc_info.trade_mode) == 1 else "REAL"),
                             "lot": float(current_lot()),
                         },
-                        **(_web_extras() if s == "XAUUSD" else {}),
+                        **(_web_extras() if s in ("XAUUSD", GOLD_SYMBOL) else {}),
                     })
 
                 # แยกแถว Telemetry ตามบัญชีผู้ใช้ GoldBot24 (id ใน bot_config) — ลูกค้าแต่ละคนเห็นเฉพาะพอร์ตตัวเอง
@@ -581,7 +637,7 @@ _last_volatility_reason = ""
 _price_tick_buffer = []  # [(timestamp, price)] เก็บบันทึกประวัติราคาสดช่วง 45 วินาทีล่าสุด
 
 
-def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val, sym="XAUUSD"):
+def check_abnormal_volatility(df_m15, df_h1, tick, symbol_info, atr_val, sym=None):
     """
     ตรวจจับสภาวะราคาผันผวนแรงผิดปกติ (Abnormal Market Volatility)
     จำแนกจาก "การขึ้นลงของราคาเร็วผิดปกติในช่วงเวลานั้น" (Rapid Price Velocity & Acceleration):
@@ -1380,11 +1436,13 @@ def log_signal_event(symbol, signal_type, plan, direction, price, ai_up, ai_down
     return True
 
 
-def evaluate_plans_condition_status(symbol: str = "XAUUSD") -> dict:
+def evaluate_plans_condition_status(symbol: str = None) -> dict:
     """
     ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 6 แผนเทรด (P1-P6) ณ ราคาปัจจุบัน
     คืนค่า dict ข้อมูลแต่ละแผน: label, side, matched (เข้าแล้วกี่ข้อ), total, pct, items ([✓/✗ ข้อความ])
     """
+    if symbol is None:
+        symbol = get_gold_symbol()
     try:
         import pandas as pd
         import numpy as np
@@ -1706,10 +1764,12 @@ def evaluate_plans_condition_status(symbol: str = "XAUUSD") -> dict:
         return {}
 
 
-def print_plans_condition_status(symbol: str = "XAUUSD"):
+def print_plans_condition_status(symbol: str = None):
     """
     พิมพ์สรุปสถานะความสำเร็จของเงื่อนไขแต่ละแผนเทรด (P1-P6) ลง Console เมื่อเริ่มต้นระบบ
     """
+    if symbol is None:
+        symbol = get_gold_symbol()
     try:
         status_map = evaluate_plans_condition_status(symbol)
         if not status_map:
@@ -2164,6 +2224,9 @@ def main():
     last_tick_time = {} # เอาไว้เช็คว่าตลาดเปิดไหม (ถ้า tick.time ไม่เปลี่ยนแสดงว่าตลาดปิด)
     last_pos_count = {} # เอาไว้เช็คว่ามีออเดอร์ปิดไปเอง (ชน SL/TP) หรือไม่ เพื่อเริ่มนับ Cooldown
     global consecutive_loss, last_lock_time, last_loss_plan, _last_volatility_alert_time
+    # ตรวจจับสัญลักษณ์ทองคำของโบรกเกอร์นี้อัตโนมัติ (เช่น XAUUSD สำหรับ FBS หรือ GOLD สำหรับ XM)
+    active_gold = get_gold_symbol()
+    print(f"{Colors.GREEN}[ASSET] ตรวจพบสัญลักษณ์ทองคำของโบรกเกอร์: {active_gold}{Colors.RESET}")
     consecutive_loss = {sym: 0 for sym in SYMBOLS}
     last_lock_time = {}
     last_loss_plan = {}

@@ -195,11 +195,21 @@ class BotController:
     MARKET_SYMBOL = "XAUUSD"
     MARKET_IDLE_SECONDS = 120  # ไม่มี tick ใหม่เกิน 2 นาที = ตลาดปิด (เสาร์-อาทิตย์/วันหยุด/ช่วงพักรายวัน)
 
+    def get_gold_symbol(self) -> str:
+        """คืนค่าสัญลักษณ์ทองคำที่ใช้งานอยู่ โดยซิงค์กับ bot_core อัตโนมัติ"""
+        try:
+            sym = bot_core.get_gold_symbol()
+            self.MARKET_SYMBOL = sym
+            return sym
+        except Exception:
+            return self.MARKET_SYMBOL
+
     def _check_market_open(self) -> bool:
         """ตลาดเปิด = โบรกเกอร์เปิดการเทรด และราคามี tick ใหม่อยู่ภายใน 2 นาที (ทองมี tick ตลอดเมื่อตลาดเปิด)"""
         try:
-            tick = mt5.symbol_info_tick(self.MARKET_SYMBOL)
-            sym = mt5.symbol_info(self.MARKET_SYMBOL)
+            sym_name = self.get_gold_symbol()
+            tick = mt5.symbol_info_tick(sym_name)
+            sym = mt5.symbol_info(sym_name)
         except Exception:
             tick = None
             sym = None
@@ -298,18 +308,26 @@ class BotController:
                 self.market_open = False
                 data["is_market_open"] = False
 
-            tick = mt5.symbol_info_tick("XAUUSD")
+            sym = self.get_gold_symbol()
+            tick = mt5.symbol_info_tick(sym)
             if tick:
                 data["xau_bid"] = tick.bid
                 data["xau_ask"] = tick.ask
-                sym_info = mt5.symbol_info("XAUUSD")
+                sym_info = mt5.symbol_info(sym)
                 if sym_info and sym_info.point > 0:
                     data["spread_pts"] = int(round((tick.ask - tick.bid) / sym_info.point))
+            data["gold_symbol"] = sym
+            data["radar"] = bot_core.latest_radar_cache.get(sym) or bot_core.latest_radar_cache.get("XAUUSD", {})
 
             # รายการ Position ค้างอยู่
-            positions = mt5.positions_get(symbol="XAUUSD")
+            positions = mt5.positions_get(symbol=sym)
+            if not positions:
+                all_p = mt5.positions_get()
+                if all_p:
+                    gold_syms = {sym.upper(), "XAUUSD", "GOLD"}
+                    positions = [p for p in all_p if p.symbol.upper() in gold_syms]
             if positions:
-                si = mt5.symbol_info("XAUUSD")
+                si = mt5.symbol_info(sym)
                 per_pt = (float(si.trade_tick_value) / float(si.trade_tick_size)) if si and si.trade_tick_size else 100.0
                 for pos in positions:
                     side = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
@@ -328,7 +346,7 @@ class BotController:
                         "swap": pos.swap,
                         "time": int(pos.time),  # เวลาเปิดไม้ (เวลาเซิร์ฟเวอร์ MT5)
                     })
-                tick_now = mt5.symbol_info_tick("XAUUSD")
+                tick_now = mt5.symbol_info_tick(sym)
                 data["server_time"] = int(tick_now.time) if tick_now else 0
         except Exception:
             pass
@@ -353,9 +371,15 @@ class BotController:
             if not mt5.initialize():
                 return 0, "ไม่สามารถเชื่อมต่อ MT5 ได้"
 
-            positions = mt5.positions_get(symbol="XAUUSD")
+            sym = self.get_gold_symbol()
+            positions = mt5.positions_get(symbol=sym)
             if not positions:
-                return 0, "ไม่มีออเดอร์ XAUUSD ที่เปิดค้างอยู่"
+                all_p = mt5.positions_get()
+                if all_p:
+                    gold_syms = {sym.upper(), "XAUUSD", "GOLD"}
+                    positions = [p for p in all_p if p.symbol.upper() in gold_syms]
+            if not positions:
+                return 0, f"ไม่มีออเดอร์ {sym} ที่เปิดค้างอยู่"
 
             closed_count = 0
             for pos in positions:
@@ -367,11 +391,14 @@ class BotController:
         except Exception as e:
             return 0, f"เกิดข้อผิดพลาดในการปิดออเดอร์: {e}"
 
-    def get_trade_history(self, days: int = 90, symbol: str = "XAUUSD") -> list[dict]:
+    def get_trade_history(self, days: int = 90, symbol: str = None) -> list[dict]:
         """
         ประวัติการเข้าไม้/ปิดไม้จาก MT5 โดยตรง (จับคู่ Deal เข้า-ออกด้วย position_id)
         รวมไม้ที่ยังเปิดอยู่ — เรียงจากใหม่ไปเก่า
         """
+        if symbol is None or symbol == "XAUUSD":
+            symbol = self.get_gold_symbol()
+        gold_syms = {symbol.upper(), "XAUUSD", "GOLD"}
         from datetime import datetime, timedelta
         trades = {}
         try:
@@ -379,7 +406,7 @@ class BotController:
                 return []
             deals = mt5.history_deals_get(datetime.now() - timedelta(days=days), datetime.now() + timedelta(days=1)) or []
             for d in deals:
-                if d.symbol != symbol or d.entry not in (0, 1, 2):
+                if d.symbol.upper() not in gold_syms or d.entry not in (0, 1, 2):
                     continue
                 t = trades.setdefault(d.position_id, {
                     "ticket": int(d.position_id), "side": "", "plan": "", "volume": 0.0,
@@ -401,7 +428,9 @@ class BotController:
                     t["status"] = "CLOSED"
 
             # ไม้ที่ยังเปิดอยู่: ใช้กำไรลอยตัวปัจจุบัน
-            for p in mt5.positions_get(symbol=symbol) or []:
+            for p in mt5.positions_get() or []:
+                if p.symbol.upper() not in gold_syms:
+                    continue
                 t = trades.setdefault(p.ticket, {"ticket": int(p.ticket), "close_time": None, "close_price": 0.0})
                 t.update({
                     "side": "BUY" if p.type == 0 else "SELL",
@@ -419,8 +448,10 @@ class BotController:
         rows.sort(key=lambda t: t["close_time"] or t["open_time"], reverse=True)
         return rows
 
-    def get_live_candles(self, count: int = 16, symbol: str = "XAUUSD", extra: int = 50, timeframe: str = "M15"):
+    def get_live_candles(self, count: int = 16, symbol: str = None, extra: int = 50, timeframe: str = "M15"):
         """แท่งราคาล่าสุด count แท่ง (แท่งสุดท้าย = แท่งที่กำลังวิ่ง) พร้อมอินดิเคเตอร์ตาม Timeframe ที่เลือก (M15, H1, H4) + Bid/Ask ปัจจุบัน — None ถ้าเชื่อม MT5 ไม่ได้"""
+        if symbol is None or symbol == "XAUUSD":
+            symbol = self.get_gold_symbol()
         try:
             import math
             import pandas as pd
@@ -649,8 +680,10 @@ class BotController:
 
     QUICK_PLAN = "Manual-Quick"   # comment ของไม้ที่กดเข้าเอง (แยกในประวัติ/สถิติ)
 
-    def quick_order_defaults(self, symbol: str = "XAUUSD"):
+    def quick_order_defaults(self, symbol: str = None):
         """ค่าเริ่มต้นสำหรับหน้าต่างเข้าไม้ทันที: ATR(14) M15 แท่งปิด · SL 1.0 ATR · TP 1.5 เท่าของ SL"""
+        if symbol is None or symbol == "XAUUSD":
+            symbol = self.get_gold_symbol()
         try:
             import pandas as pd
             if mt5.terminal_info() is None and not mt5.initialize():
@@ -666,9 +699,11 @@ class BotController:
         except Exception:
             return None
 
-    def quick_order(self, side: str, sl_pts: float, tp_pts: float, symbol: str = "XAUUSD") -> tuple[bool, str]:
+    def quick_order(self, side: str, sl_pts: float, tp_pts: float, symbol: str = None) -> tuple[bool, str]:
         """เปิดออเดอร์ทันทีจากปุ่มในโปรแกรม (ใช้ send_order ตัวเดียวกับบอท: Lot ที่ตั้งไว้, เช็กหลักประกัน, บันทึกประวัติ)
         sl_pts / tp_pts = ระยะเป็นจุดราคา (tp_pts <= 0 = ไม่ตั้ง TP)"""
+        if symbol is None or symbol == "XAUUSD":
+            symbol = self.get_gold_symbol()
         if not license_mgr.is_authenticated:
             return False, "กรุณาเข้าสู่ระบบก่อน"
         if not license_mgr.has_active_hours():
@@ -700,8 +735,10 @@ class BotController:
         except Exception as e:
             return False, f"เกิดข้อผิดพลาด: {e}"
 
-    def get_market_explain(self, symbol: str = "XAUUSD"):
+    def get_market_explain(self, symbol: str = None):
         """ค่าที่ใช้ตัดสินสภาวะตลาด H1/H4 จากแท่งที่ปิดแล้ว (สำหรับหน้าต่างอธิบาย) — None ถ้าเชื่อม MT5 ไม่ได้"""
+        if symbol is None or symbol == "XAUUSD":
+            symbol = self.get_gold_symbol()
         try:
             import pandas as pd
             if mt5.terminal_info() is None and not mt5.initialize():
@@ -862,12 +899,14 @@ class BotController:
             pass
         return res
 
-    def get_plans_condition_status(self, symbol: str = "XAUUSD") -> dict:
+    def get_plans_condition_status(self, symbol: str = None) -> dict:
         """
         ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 6 แผนเทรด (P1-P6) ณ ราคาปัจจุบัน
         คืนค่า dict ข้อมูลแต่ละแผน: label, side, matched (เข้าแล้วกี่ข้อ), total, pct, items ([✓/✗ ข้อความ])
         มีระบบแคช 1.5 วินาทีเพื่อป้องกันความหน่วง
         """
+        if symbol is None or symbol == "XAUUSD":
+            symbol = self.get_gold_symbol()
         now = time.time()
         if self._plans_status_cache and (now - self._plans_status_time < 1.5):
             return self._plans_status_cache

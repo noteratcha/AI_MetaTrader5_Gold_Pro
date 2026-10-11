@@ -27,12 +27,16 @@ def _load():
     import multi_asset_ai_bot as bot
     if mt5.terminal_info() is None and not mt5.initialize():
         raise RuntimeError("เชื่อมต่อ MT5 ไม่ได้")
-    m15 = bot.get_data("XAUUSD", mt5.TIMEFRAME_M15, 300)
-    h1 = bot.get_data("XAUUSD", mt5.TIMEFRAME_H1, 600)
-    h4 = bot.get_data("XAUUSD", mt5.TIMEFRAME_H4, 300)
+    sym = bot.get_gold_symbol()
+    m15 = bot.get_data(sym, mt5.TIMEFRAME_M15, 300)
+    h1 = bot.get_data(sym, mt5.TIMEFRAME_H1, 600)
+    h4 = bot.get_data(sym, mt5.TIMEFRAME_H4, 300)
     if m15 is None or h1 is None or h4 is None:
         raise RuntimeError("ดึงข้อมูลราคาไม่ได้")
-    positions = mt5.positions_get(symbol="XAUUSD") or []
+    positions = mt5.positions_get(symbol=sym) or []
+    if not positions:
+        gold_syms = {sym.upper(), "XAUUSD", "GOLD"}
+        positions = [p for p in (mt5.positions_get() or []) if p.symbol.upper() in gold_syms]
     return bot, mt5, m15, h1, h4, positions
 
 
