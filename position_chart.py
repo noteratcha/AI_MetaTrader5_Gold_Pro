@@ -104,7 +104,7 @@ def _context_from(h1, h4, price):
     _t4 = 1 if c4.rolling(10).mean().iloc[-2] > c4.rolling(30).mean().iloc[-2] else -1
     _l4 = 1 if c4.iloc[-2] > c4.rolling(200).mean().iloc[-2] else -1
     d["p6_trend"] = _t4 if _t4 == _l4 else 0
-    sr = bot.find_sr_levels(h1, float(price))
+    sr = bot.find_sr_levels(h1, float(price), df_h4=h4)
     for i in range(1, 6):
         s_k = "sup" if i == 1 else f"sup{i}"
         r_k = "res" if i == 1 else f"res{i}"
@@ -114,6 +114,8 @@ def _context_from(h1, h4, price):
         d[r_k] = _f(sr.get(sr_r))
         d[f"{s_k}_stars"] = float(sr.get(f"sup{i}_stars" if i > 1 else "sup_stars", 6.0))
         d[f"{r_k}_stars"] = float(sr.get(f"res{i}_stars" if i > 1 else "res_stars", 6.0))
+        d[f"{s_k}_h4_conf"] = bool(sr.get(f"sup{i}_h4_conf" if i > 1 else "sup_h4_conf", False))
+        d[f"{r_k}_h4_conf"] = bool(sr.get(f"res{i}_h4_conf" if i > 1 else "res_h4_conf", False))
         d[f"{s_k}_t"] = int(sr.get(f"sup{i}_touches" if i > 1 else "sup_touches", 1))
         d[f"{r_k}_t"] = int(sr.get(f"res{i}_touches" if i > 1 else "res_touches", 1))
     return d

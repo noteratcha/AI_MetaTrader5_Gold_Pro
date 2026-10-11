@@ -584,45 +584,60 @@ class BotController:
                 "res5_stars": ctx.get("res5_stars", 6.0) if ctx else 6.0,
             }
 
-            # คำนวณแนวรับ–แนวต้าน 5 ระดับ (S1..S5, R1..R5) จากกราฟแท่ง 500 แท่ง
+            # คำนวณแนวรับ–แนวต้าน 5 ระดับ (S1..S5, R1..R5) จากกราฟแท่ง 1,000 แท่ง พร้อม H1 + H4 Confluence
             try:
                 import multi_asset_ai_bot
                 df_sr = None
+                df_h4_sr = None
+                # ดึง H4 1,050 แท่งสำหรับ Confluence เสมอ
                 if tf_upper == "H4":
-                    if len(df) >= 502:
+                    if len(df) >= 1002:
                         df_sr = df
                     else:
-                        h4_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 520)
+                        h4_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 1050)
                         if h4_rates is not None and len(h4_rates) >= 60:
                             df_sr = pd.DataFrame(h4_rates)
-                elif tf_upper == "H1":
-                    if len(df) >= 502:
+                else:
+                    # ดึง H1 สำหรับ SR หลัก
+                    if tf_upper == "H1" and len(df) >= 1002:
                         df_sr = df
                     else:
-                        h1_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 520)
+                        h1_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 1050)
                         if h1_rates is not None and len(h1_rates) >= 60:
                             df_sr = pd.DataFrame(h1_rates)
-                else:
-                    h1_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 520)
-                    if h1_rates is not None and len(h1_rates) >= 60:
-                        df_sr = pd.DataFrame(h1_rates)
+                    # ดึง H4 ประกอบ Confluence
+                    h4_rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 1050)
+                    if h4_rates is not None and len(h4_rates) >= 60:
+                        df_h4_sr = pd.DataFrame(h4_rates)
 
                 if df_sr is not None and len(df_sr) >= 60:
-                    sr_calc = multi_asset_ai_bot.find_sr_levels(df_sr, float(closes[-1]), lookback=min(500, len(df_sr) - 2))
+                    sr_calc = multi_asset_ai_bot.find_sr_levels(
+                        df_sr, float(closes[-1]),
+                        lookback=min(1000, len(df_sr) - 2),
+                        df_h4=df_h4_sr
+                    )
                     for i in range(1, 6):
                         s_k = "support" if i == 1 else f"support{i}"
                         r_k = "resistance" if i == 1 else f"resistance{i}"
                         star_s = "sup_stars" if i == 1 else f"sup{i}_stars"
                         star_r = "res_stars" if i == 1 else f"res{i}_stars"
+                        conf_s = "sup_h4_conf" if i == 1 else f"sup{i}_h4_conf"
+                        conf_r = "res_h4_conf" if i == 1 else f"res{i}_h4_conf"
+                        h4_star_s = "sup_h4_stars" if i == 1 else f"sup{i}_h4_stars"
+                        h4_star_r = "res_h4_stars" if i == 1 else f"res{i}_h4_stars"
                         if s_k in sr_calc and not math.isnan(sr_calc[s_k]):
                             res_dict[s_k] = sr_calc[s_k]
                             res_dict[star_s] = sr_calc.get(star_s, 6.0)
+                            res_dict[conf_s] = sr_calc.get(conf_s, False)
+                            res_dict[h4_star_s] = sr_calc.get(h4_star_s, 0.0)
                         if r_k in sr_calc and not math.isnan(sr_calc[r_k]):
                             res_dict[r_k] = sr_calc[r_k]
                             res_dict[star_r] = sr_calc.get(star_r, 6.0)
+                            res_dict[conf_r] = sr_calc.get(conf_r, False)
+                            res_dict[h4_star_r] = sr_calc.get(h4_star_r, 0.0)
                     for fk in ("focus_sup", "focus_res", "focus_sup_price", "focus_res_price",
-                               "focus_sup_score", "focus_res_score", "focus_action", "focus_summary",
-                               "dist_sup_pts", "dist_res_pts", "dist_sup_atr", "dist_res_atr"):
+                               "focus_sup_score", "focus_res_score", "focus_sup_h4_conf", "focus_res_h4_conf",
+                               "focus_action", "focus_summary", "dist_sup_pts", "dist_res_pts", "dist_sup_atr", "dist_res_atr"):
                         if fk in sr_calc:
                             res_dict[fk] = sr_calc[fk]
             except Exception:

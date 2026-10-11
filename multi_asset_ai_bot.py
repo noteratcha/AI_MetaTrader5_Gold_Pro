@@ -768,7 +768,7 @@ def long_term_dir(close, fast=None, slow=200):
     return (1 if ref > ma_slow else -1), float(ma_slow)
 
 
-SR_LOOKBACK_BARS = 500   # แนวรับ/ต้าน: ดูย้อนหลัง 500 แท่ง (H1 และ H4)
+SR_LOOKBACK_BARS = 1000  # แนวรับ/ต้าน: ดูย้อนหลัง 1,000 แท่ง (H1 และ H4 พร้อม Multi-Timeframe H1+H4 Confluence)
 SR_PIVOT_K = 3           # Swing High/Low = สูง/ต่ำสุดเมื่อเทียบ 3 แท่งซ้าย-ขวา
 SR_ZONE_ATR = 0.5        # รวมจุดกลับตัวที่ห่างกันไม่เกิน 0.5 ATR เป็นโซนเดียวกัน
 SR_MIN_TOUCHES = 2       # โซนที่ใช้ได้ต้องมีราคากลับตัวอย่างน้อย 2 ครั้ง
@@ -866,8 +866,9 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
     AI อัลกอริทึมวิเคราะห์คัดเลือกแนวรับและแนวต้านสำคัญที่ต้องโฟกัส (AI S&R Focus Recommendation)
     วิเคราะห์จาก:
       1. Strength Score (0.00 - 10.00) จากจำนวน touches และประวัติการกลับตัว
-      2. ระยะห่างจากราคาปัจจุบันเทียบกับ ATR (Proximity)
-      3. ลำดับโครงสร้างราคา (Structural Priority)
+      2. Multi-Timeframe Confluence: ได้รับการยืนยันจากโครงสร้าง H4 หรือไม่ (+12.0 rank pts)
+      3. ระยะห่างจากราคาปัจจุบันเทียบกับ ATR (Proximity)
+      4. ลำดับโครงสร้างราคา (Structural Priority)
     คืน dict:
       - focus_sup: รหัสแนวรับที่ AI แนะนำ เช่น 'S1'
       - focus_res: รหัสแนวต้านที่ AI แนะนำ เช่น 'R1'
@@ -875,6 +876,8 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
       - focus_res_price: ราคาแนวต้านที่โฟกัส
       - focus_sup_score: คะแนนความแข็งแกร่งแนวรับ
       - focus_res_score: คะแนนความแข็งแกร่งแนวต้าน
+      - focus_sup_h4_conf: สถานะว่าแนวรับได้รับการยืนยันจาก H4 หรือไม่
+      - focus_res_h4_conf: สถานะว่าแนวต้านได้รับการยืนยันจาก H4 หรือไม่
       - focus_action: คำแนะนำเชิงกลยุทธ์ของ AI
       - focus_summary: ข้อความสรุปย่อ
     """
@@ -883,6 +886,7 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
             "focus_sup": "S1", "focus_res": "R1",
             "focus_sup_price": 0.0, "focus_res_price": 0.0,
             "focus_sup_score": 0.0, "focus_res_score": 0.0,
+            "focus_sup_h4_conf": False, "focus_res_h4_conf": False,
             "focus_action": "", "focus_summary": "",
             "dist_sup_pts": 0.0, "dist_res_pts": 0.0,
             "dist_sup_atr": 0.0, "dist_res_atr": 0.0,
@@ -891,11 +895,12 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
     atr_val = max(1.0, float(atr) if (atr and not pd.isna(atr)) else 5.0)
 
     # 1. ให้คะแนนความสำคัญของแต่ละระดับแนวรับ (S1..S5)
-    best_sup = {"name": "S1", "price": 0.0, "score": 0.0, "rank_score": -1.0}
+    best_sup = {"name": "S1", "price": 0.0, "score": 0.0, "h4_conf": False, "rank_score": -1.0}
     for idx, s in enumerate(sup_levels[:5], start=1):
         s_price = float(s[0])
         s_touches = int(s[1])
         s_score = float(s[3]) if len(s) > 3 else touches_to_stars(s_touches)
+        s_h4_conf = bool(s[4]) if len(s) > 4 else False
         s_dist = abs(price - s_price)
         s_dist_atr = s_dist / atr_val
 
@@ -912,6 +917,8 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
         struct_pts = 20.0 if idx == 1 else (12.0 if idx == 2 else 5.0)
         if s_score >= 9.5:
             struct_pts += 10.0
+        if s_h4_conf:
+            struct_pts += 12.0  # โบนัสสำคัญ: แนวที่ H4 ยืนยันตรงกัน ได้รับ Focus เป็นพิเศษ
 
         total_rank = prox_pts + strength_pts + struct_pts
         if total_rank > best_sup["rank_score"]:
@@ -919,15 +926,17 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
                 "name": f"S{idx}",
                 "price": round(s_price, 2),
                 "score": s_score,
+                "h4_conf": s_h4_conf,
                 "rank_score": total_rank
             }
 
     # 2. ให้คะแนนความสำคัญของแต่ละระดับแนวต้าน (R1..R5)
-    best_res = {"name": "R1", "price": 0.0, "score": 0.0, "rank_score": -1.0}
+    best_res = {"name": "R1", "price": 0.0, "score": 0.0, "h4_conf": False, "rank_score": -1.0}
     for idx, r in enumerate(res_levels[:5], start=1):
         r_price = float(r[0])
         r_touches = int(r[1])
         r_score = float(r[3]) if len(r) > 3 else touches_to_stars(r_touches)
+        r_h4_conf = bool(r[4]) if len(r) > 4 else False
         r_dist = abs(r_price - price)
         r_dist_atr = r_dist / atr_val
 
@@ -944,6 +953,8 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
         struct_pts = 20.0 if idx == 1 else (12.0 if idx == 2 else 5.0)
         if r_score >= 9.5:
             struct_pts += 10.0
+        if r_h4_conf:
+            struct_pts += 12.0  # โบนัสสำคัญ: แนวที่ H4 ยืนยันตรงกัน ได้รับ Focus เป็นพิเศษ
 
         total_rank = prox_pts + strength_pts + struct_pts
         if total_rank > best_res["rank_score"]:
@@ -951,6 +962,7 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
                 "name": f"R{idx}",
                 "price": round(r_price, 2),
                 "score": r_score,
+                "h4_conf": r_h4_conf,
                 "rank_score": total_rank
             }
 
@@ -960,12 +972,15 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
     dist_sup_atr = round(dist_sup_pts / atr_val, 1)
     dist_res_atr = round(dist_res_pts / atr_val, 1)
 
-    if dist_sup_pts < dist_res_pts:
-        action = f"ราคาใกล้แนวรับ {best_sup['name']} ({best_sup['price']:,.2f}) ห่าง {dist_sup_pts:,.1f} จุด ({dist_sup_atr} ATR) · เฝ้าระวังสัญญาณเด้งกลับ / ปฏิเสธราคา"
-    else:
-        action = f"ราคาใกล้แนวต้าน {best_res['name']} ({best_res['price']:,.2f}) ห่าง {dist_res_pts:,.1f} จุด ({dist_res_atr} ATR) · เฝ้าระวังแรงต้าน / สัญญาณหมดแรง"
+    conf_tag_sup = " [H4 ยืนยัน]" if best_sup.get("h4_conf") else ""
+    conf_tag_res = " [H4 ยืนยัน]" if best_res.get("h4_conf") else ""
 
-    summary = f"โฟกัส: ต้าน {best_res['name']} {best_res['price']:,.2f} (★ {best_res['score']:.2f}) · รับ {best_sup['name']} {best_sup['price']:,.2f} (★ {best_sup['score']:.2f})"
+    if dist_sup_pts < dist_res_pts:
+        action = f"ราคาใกล้แนวรับ {best_sup['name']} ({best_sup['price']:,.2f}{conf_tag_sup}) ห่าง {dist_sup_pts:,.1f} จุด ({dist_sup_atr} ATR) · เฝ้าระวังสัญญาณเด้งกลับ / ปฏิเสธราคา"
+    else:
+        action = f"ราคาใกล้แนวต้าน {best_res['name']} ({best_res['price']:,.2f}{conf_tag_res}) ห่าง {dist_res_pts:,.1f} จุด ({dist_res_atr} ATR) · เฝ้าระวังแรงต้าน / สัญญาณหมดแรง"
+
+    summary = f"โฟกัส: ต้าน {best_res['name']} {best_res['price']:,.2f} (★ {best_res['score']:.2f}{conf_tag_res}) · รับ {best_sup['name']} {best_sup['price']:,.2f} (★ {best_sup['score']:.2f}{conf_tag_sup})"
 
     return {
         "focus_sup": best_sup["name"],
@@ -974,6 +989,8 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
         "focus_res_price": best_res["price"],
         "focus_sup_score": best_sup["score"],
         "focus_res_score": best_res["score"],
+        "focus_sup_h4_conf": bool(best_sup.get("h4_conf", False)),
+        "focus_res_h4_conf": bool(best_res.get("h4_conf", False)),
         "focus_action": action,
         "focus_summary": summary,
         "dist_sup_pts": dist_sup_pts,
@@ -983,45 +1000,15 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
     }
 
 
-def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
+def _extract_sr_zones(df, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
     """
-    หาแนวรับ/แนวต้าน 5 ระดับ (S1..S5 และ R1..R5) จากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` (500 แท่ง)
-    คำนวณระดับความแข็งแกร่ง (Strength Stars 0.00 - 10.00):
-      1. Recency Decay: ให้น้ำหนักจากล่าสุดไปอดีต (มากไปน้อย)
-      2. Touch Frequency: เกิดซ้ำบริเวณนั้นบ่อย ยิ่งแข็งแกร่งมาก
-      3. Role Purity: คัดกรองแนวรับต้องมี Swing Low จริง (ไม่เอายอดต้านเก่าที่ไม่มีแรงรับจริงมาเป็น S1)
-    คืน dict:
-      - support..support5 / resistance..resistance5
-      - sup_touches..sup5_touches / res_touches..res5_touches
-      - sup_stars..sup5_stars / res_stars..res5_stars (0.00 - 10.00 คะแนนความแข็งแกร่ง)
-      - focus_sup / focus_res / focus_action / focus_summary (AI วิเคราะห์คัดเลือกแนวที่ต้องโฟกัส)
+    สกัดคลัสเตอร์จุดกลับตัวแนวรับ/ต้านดิบ (Raw S&R Zones) พร้อมคำนวณความแข็งแกร่ง (Stars 2.00 - 10.00)
+    จากแท่งเทียนย้อนหลัง lookback (1,000 แท่ง)
     """
-    out = {
-        "support": float('nan'), "resistance": float('nan'),
-        "support2": float('nan'), "resistance2": float('nan'),
-        "support3": float('nan'), "resistance3": float('nan'),
-        "support4": float('nan'), "resistance4": float('nan'),
-        "support5": float('nan'), "resistance5": float('nan'),
-        "sup_touches": 0, "res_touches": 0,
-        "sup2_touches": 0, "res2_touches": 0,
-        "sup3_touches": 0, "res3_touches": 0,
-        "sup4_touches": 0, "res4_touches": 0,
-        "sup5_touches": 0, "res5_touches": 0,
-        "sup_stars": 3.0, "res_stars": 3.0,
-        "sup2_stars": 3.0, "res2_stars": 3.0,
-        "sup3_stars": 3.0, "res3_stars": 3.0,
-        "sup4_stars": 3.0, "res4_stars": 3.0,
-        "sup5_stars": 3.0, "res5_stars": 3.0,
-        "focus_sup": "S1", "focus_res": "R1",
-        "focus_sup_price": 0.0, "focus_res_price": 0.0,
-        "focus_sup_score": 0.0, "focus_res_score": 0.0,
-        "focus_action": "", "focus_summary": "",
-        "dist_sup_pts": 0.0, "dist_res_pts": 0.0,
-        "dist_sup_atr": 0.0, "dist_res_atr": 0.0,
-    }
-    if df is None or len(df) < 2 * k + 10 or not price or pd.isna(price):
-        return out
-    d = df.iloc[-(lookback + 1):-1]  # เฉพาะแท่งที่ปิดแล้วย้อนหลัง 500 แท่ง
+    if df is None or len(df) < 2 * k + 10:
+        return [], 1.0
+    actual_lookback = min(lookback, len(df) - 2)
+    d = df.iloc[-(actual_lookback + 1):-1]
     atr = _atr_series(df).iloc[-2]
     if pd.isna(atr) or atr <= 0:
         atr = float((d['high'] - d['low']).mean() or 1.0)
@@ -1029,22 +1016,18 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
     piv_hi = d['high'][d['high'] == d['high'].rolling(win, center=True).max()]
     piv_lo = d['low'][d['low'] == d['low'].rolling(win, center=True).min()]
 
-    # รวบรวมจุด Pivot พร้อมความสดใหม่ (Recency) และประเภท (HIGH/LOW)
     total_len = len(df)
     pivots = []
     for idx, val in piv_hi.items():
         age = total_len - 1 - idx
-        recency = max(0.20, 1.0 - 0.80 * (age / lookback))
+        recency = max(0.20, 1.0 - 0.80 * (age / actual_lookback))
         pivots.append({'price': float(val), 'type': 'HIGH', 'age': age, 'recency': recency})
-
     for idx, val in piv_lo.items():
         age = total_len - 1 - idx
-        recency = max(0.20, 1.0 - 0.80 * (age / lookback))
+        recency = max(0.20, 1.0 - 0.80 * (age / actual_lookback))
         pivots.append({'price': float(val), 'type': 'LOW', 'age': age, 'recency': recency})
-
     pivots.sort(key=lambda x: x['price'])
 
-    # จัดกลุ่มจุดที่ใกล้เคียงกันเป็นโซน (Clusters ภายใน zone_atr * ATR)
     raw_zones = []
     for p in pivots:
         if raw_zones and p['price'] - raw_zones[-1]['min_p'] <= zone_atr * atr:
@@ -1066,9 +1049,6 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
                 'high_cnt': 1 if p['type'] == 'HIGH' else 0,
             })
 
-    # คำนวณระดับความแข็งแกร่ง (Strength Stars 0.00 - 10.00)
-    # 1) ความถี่ (Touch Frequency): ยิ่งชนบริเวณนั้นบ่อย ยิ่งแข็งแกร่งมาก
-    # 2) ความสดใหม่ (Recency Decay): ล่าสุดได้คะแนนเต็ม อดีตลดหลั่นลงไปตามกาลเวลา
     for z in raw_zones:
         n = z['touches']
         if n == 1: base = 3.5
@@ -1076,21 +1056,111 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         elif n == 3: base = 7.5
         elif n == 4: base = 9.0
         else: base = 10.0
-
-        latest_rec = max(0.25, 1.0 - 0.75 * (z['min_age'] / lookback))
+        latest_rec = max(0.25, 1.0 - 0.75 * (z['min_age'] / actual_lookback))
         avg_rec = z['sum_weight'] / n
         rec_factor = 0.65 * latest_rec + 0.35 * avg_rec
-
         raw_score = base * rec_factor
         if z['min_age'] <= 36 and n >= 2:
             raw_score = min(10.0, raw_score * 1.25)
         z['stars'] = round(min(10.0, max(2.0, raw_score)), 2)
 
+    return raw_zones, atr
+
+
+def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR, df_h4=None):
+    """
+    หาแนวรับ/แนวต้าน 5 ระดับ (S1..S5 และ R1..R5) จากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` (1,000 แท่ง)
+    พร้อมการผสานความแข็งแกร่งข้าม Timeframe (Multi-Timeframe H1 + H4 Confluence Engine):
+      1. Recency Decay: ให้น้ำหนักจากล่าสุดไปอดีต (มากไปน้อย)
+      2. Touch Frequency: เกิดซ้ำบริเวณนั้นบ่อย ยิ่งแข็งแกร่งมาก
+      3. Multi-Timeframe H1 + H4 Confluence: นำคลัสเตอร์ระดับ H4 (1,000 แท่ง ~8 เดือน) มาตรวจสอบการทับซ้อน
+         หากแนวรับ/ต้าน H1 ตรงกับโซนสำคัญของ H4 จะได้รับ H4 Confluence Boost (+1.5 ดาว และถ่วงน้ำหนักระดับ Macro)
+         ทำให้จุดกลับตัวสำคัญของ H4 (เช่น Swing High/Low) มีความแข็งแกร่งหนักแน่นอย่างแท้จริง
+      4. Role Purity: คัดกรองแนวรับต้องมี Swing Low จริง (ไม่เอายอดต้านเก่าที่ไม่มีแรงรับจริงมาเป็น S1)
+    คืน dict:
+      - support..support5 / resistance..resistance5
+      - sup_touches..sup5_touches / res_touches..res5_touches
+      - sup_stars..sup5_stars / res_stars..res5_stars (0.00 - 10.00 คะแนนความแข็งแกร่ง)
+      - sup_h4_conf..sup5_h4_conf / res_h4_conf..res5_h4_conf (ได้รับการยืนยันจาก H4 หรือไม่)
+      - sup_h4_stars..sup5_h4_stars / res_h4_stars..res5_h4_stars (คะแนนความแข็งแกร่งบน H4)
+      - focus_sup / focus_res / focus_action / focus_summary (AI วิเคราะห์คัดเลือกแนวที่ต้องโฟกัส)
+    """
+    out = {
+        "support": float('nan'), "resistance": float('nan'),
+        "support2": float('nan'), "resistance2": float('nan'),
+        "support3": float('nan'), "resistance3": float('nan'),
+        "support4": float('nan'), "resistance4": float('nan'),
+        "support5": float('nan'), "resistance5": float('nan'),
+        "sup_touches": 0, "res_touches": 0,
+        "sup2_touches": 0, "res2_touches": 0,
+        "sup3_touches": 0, "res3_touches": 0,
+        "sup4_touches": 0, "res4_touches": 0,
+        "sup5_touches": 0, "res5_touches": 0,
+        "sup_stars": 3.0, "res_stars": 3.0,
+        "sup2_stars": 3.0, "res2_stars": 3.0,
+        "sup3_stars": 3.0, "res3_stars": 3.0,
+        "sup4_stars": 3.0, "res4_stars": 3.0,
+        "sup5_stars": 3.0, "res5_stars": 3.0,
+        "sup_h4_conf": False, "res_h4_conf": False,
+        "sup2_h4_conf": False, "res2_h4_conf": False,
+        "sup3_h4_conf": False, "res3_h4_conf": False,
+        "sup4_h4_conf": False, "res4_h4_conf": False,
+        "sup5_h4_conf": False, "res5_h4_conf": False,
+        "sup_h4_stars": 0.0, "res_h4_stars": 0.0,
+        "sup2_h4_stars": 0.0, "res2_h4_stars": 0.0,
+        "sup3_h4_stars": 0.0, "res3_h4_stars": 0.0,
+        "sup4_h4_stars": 0.0, "res4_h4_stars": 0.0,
+        "sup5_h4_stars": 0.0, "res5_h4_stars": 0.0,
+        "focus_sup": "S1", "focus_res": "R1",
+        "focus_sup_price": 0.0, "focus_res_price": 0.0,
+        "focus_sup_score": 0.0, "focus_res_score": 0.0,
+        "focus_sup_h4_conf": False, "focus_res_h4_conf": False,
+        "focus_action": "", "focus_summary": "",
+        "dist_sup_pts": 0.0, "dist_res_pts": 0.0,
+        "dist_sup_atr": 0.0, "dist_res_atr": 0.0,
+    }
+    if df is None or len(df) < 2 * k + 10 or not price or pd.isna(price):
+        return out
+
+    raw_zones, atr = _extract_sr_zones(df, lookback=lookback, k=k, zone_atr=zone_atr)
+    if not raw_zones:
+        return out
+
+    # ผสานความแข็งแกร่งข้าม Timeframe (H1 + H4 Multi-Timeframe Confluence)
+    if df_h4 is not None and len(df_h4) >= 60:
+        raw_zones_h4, atr_h4 = _extract_sr_zones(df_h4, lookback=lookback, k=k, zone_atr=zone_atr)
+        match_dist = max(1.0 * atr, 0.75 * atr_h4, 5.0)
+        for z in raw_zones:
+            matched_h4 = None
+            min_d = float('inf')
+            for zh4 in raw_zones_h4:
+                d = abs(z['price'] - zh4['price'])
+                if d <= match_dist and d < min_d:
+                    min_d = d
+                    matched_h4 = zh4
+            if matched_h4:
+                z['h4_conf'] = True
+                z['h4_stars'] = matched_h4['stars']
+                z['h4_touches'] = matched_h4['touches']
+                z['h4_price'] = matched_h4['price']
+                # ถ่วงน้ำหนักผสาน Macro Structure H4
+                blended = 0.55 * z['stars'] + 0.45 * matched_h4['stars']
+                if matched_h4['stars'] >= 8.0 or matched_h4['touches'] >= 3:
+                    blended += 1.5
+                z['stars'] = round(min(10.0, max(z['stars'], blended)), 2)
+            else:
+                z['h4_conf'] = False
+                z['h4_stars'] = 0.0
+                z['h4_touches'] = 0
+                z['h4_price'] = 0.0
+    else:
+        for z in raw_zones:
+            z['h4_conf'] = False
+            z['h4_stars'] = 0.0
+            z['h4_touches'] = 0
+            z['h4_price'] = 0.0
+
     # คัดกรองบทบาทแนวรับ/แนวต้านที่แท้จริง (Role Purity):
-    # - แนวรับ (Support): ต้องมี Swing Low ที่พิสูจน์การเด้งกลับ (low_cnt > 0)
-    #   หรือถ้าเป็นยอด High เก่า ต้องเพิ่งเกิดไม่นาน (<= 36 แท่ง) และทดสอบซ้ำ >= 2 ครั้ง
-    # - แนวต้าน (Resistance): ต้องมี Swing High ที่พิสูจน์แรงต้าน (high_cnt > 0)
-    #   หรือถ้าเป็น Low เก่า ต้องเพิ่งเกิดไม่นาน (<= 36 แท่ง) และทดสอบซ้ำ >= 2 ครั้ง
     below_all = [z for z in raw_zones if z['price'] < price]
     above_all = [z for z in raw_zones if z['price'] > price]
 
@@ -1113,9 +1183,9 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
     if cand_below:
         s1 = cand_below[0]
     else:
-        lo_min = float(d['low'].min())
-        s1 = {'price': lo_min, 'touches': 1, 'min_p': lo_min, 'stars': 3.0}
-    sup_levels.append([s1['price'], s1['touches'], s1['min_p'], s1['stars']])
+        lo_min = float(df['low'].min())
+        s1 = {'price': lo_min, 'touches': 1, 'min_p': lo_min, 'stars': 3.0, 'h4_conf': False, 'h4_stars': 0.0, 'h4_price': 0.0}
+    sup_levels.append([s1['price'], s1['touches'], s1['min_p'], s1['stars'], s1['h4_conf'], s1['h4_stars'], s1['h4_price']])
 
     rem_cand_below = [z for z in cand_below if z['price'] != s1['price']]
     rem_all_below = [z for z in below_all if z['price'] != s1['price']]
@@ -1126,24 +1196,28 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         if not cand:
             cand = pick_next_sup(last_s, rem_all_below)
         if cand:
-            sup_levels.append([cand['price'], cand['touches'], cand['min_p'], cand['stars']])
+            sup_levels.append([cand['price'], cand['touches'], cand['min_p'], cand['stars'], cand['h4_conf'], cand['h4_stars'], cand['h4_price']])
             if cand in rem_cand_below: rem_cand_below.remove(cand)
             if cand in rem_all_below: rem_all_below.remove(cand)
         else:
-            lo_min = float(d['low'].min())
+            lo_min = float(df['low'].min())
             if lo_min < last_s - min_gap:
-                sup_levels.append([lo_min, 1, lo_min, 3.0])
+                sup_levels.append([lo_min, 1, lo_min, 3.0, False, 0.0, 0.0])
             else:
                 next_price = last_s - max(1.5 * atr, 6.0)
-                sup_levels.append([next_price, 1, next_price, 3.0])
+                sup_levels.append([next_price, 1, next_price, 3.0, False, 0.0, 0.0])
 
     for idx, s in enumerate(sup_levels[:5], start=1):
         s_key = "support" if idx == 1 else f"support{idx}"
         t_key = "sup_touches" if idx == 1 else f"sup{idx}_touches"
         star_key = "sup_stars" if idx == 1 else f"sup{idx}_stars"
+        h4_c_key = "sup_h4_conf" if idx == 1 else f"sup{idx}_h4_conf"
+        h4_s_key = "sup_h4_stars" if idx == 1 else f"sup{idx}_h4_stars"
         out[s_key] = round(float(s[0]), 2)
         out[t_key] = int(s[1])
         out[star_key] = round(float(s[3]), 2) if len(s) > 3 else touches_to_stars(int(s[1]))
+        out[h4_c_key] = bool(s[4]) if len(s) > 4 else False
+        out[h4_s_key] = round(float(s[5]), 2) if len(s) > 5 else 0.0
 
     # 2. คัดเลือกแนวต้าน 5 ระดับ (R1, R2, R3, R4, R5)
     res_levels = []
@@ -1156,9 +1230,9 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
     if cand_above:
         r1 = cand_above[0]
     else:
-        hi_max = float(d['high'].max())
-        r1 = {'price': hi_max, 'touches': 1, 'min_p': hi_max, 'stars': 3.0}
-    res_levels.append([r1['price'], r1['touches'], r1['min_p'], r1['stars']])
+        hi_max = float(df['high'].max())
+        r1 = {'price': hi_max, 'touches': 1, 'min_p': hi_max, 'stars': 3.0, 'h4_conf': False, 'h4_stars': 0.0, 'h4_price': 0.0}
+    res_levels.append([r1['price'], r1['touches'], r1['min_p'], r1['stars'], r1['h4_conf'], r1['h4_stars'], r1['h4_price']])
 
     rem_cand_above = [z for z in cand_above if z['price'] != r1['price']]
     rem_all_above = [z for z in above_all if z['price'] != r1['price']]
@@ -1169,24 +1243,28 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
         if not cand:
             cand = pick_next_res(last_r, rem_all_above)
         if cand:
-            res_levels.append([cand['price'], cand['touches'], cand['min_p'], cand['stars']])
+            res_levels.append([cand['price'], cand['touches'], cand['min_p'], cand['stars'], cand['h4_conf'], cand['h4_stars'], cand['h4_price']])
             if cand in rem_cand_above: rem_cand_above.remove(cand)
             if cand in rem_all_above: rem_all_above.remove(cand)
         else:
-            hi_max = float(d['high'].max())
+            hi_max = float(df['high'].max())
             if hi_max > last_r + min_gap:
-                res_levels.append([hi_max, 1, hi_max, 3.0])
+                res_levels.append([hi_max, 1, hi_max, 3.0, False, 0.0, 0.0])
             else:
                 next_price = last_r + max(1.5 * atr, 6.0)
-                res_levels.append([next_price, 1, next_price, 3.0])
+                res_levels.append([next_price, 1, next_price, 3.0, False, 0.0, 0.0])
 
     for idx, r in enumerate(res_levels[:5], start=1):
         r_key = "resistance" if idx == 1 else f"resistance{idx}"
         t_key = "res_touches" if idx == 1 else f"res{idx}_touches"
         star_key = "res_stars" if idx == 1 else f"res{idx}_stars"
+        h4_c_key = "res_h4_conf" if idx == 1 else f"res{idx}_h4_conf"
+        h4_s_key = "res_h4_stars" if idx == 1 else f"res{idx}_h4_stars"
         out[r_key] = round(float(r[0]), 2)
         out[t_key] = int(r[1])
         out[star_key] = round(float(r[3]), 2) if len(r) > 3 else touches_to_stars(int(r[1]))
+        out[h4_c_key] = bool(r[4]) if len(r) > 4 else False
+        out[h4_s_key] = round(float(r[5]), 2) if len(r) > 5 else 0.0
 
     # AI แนะนำแนวรับแนวต้านสำคัญที่ต้องโฟกัส (AI S&R Focus Recommendation)
     focus_rec = recommend_sr_focus(sup_levels, res_levels, price, atr)
@@ -1313,8 +1391,8 @@ def evaluate_plans_condition_status(symbol: str = "XAUUSD") -> dict:
             return {}
 
         rates_m15 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, 100)
-        rates_h1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 520)
-        rates_h4 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 520)
+        rates_h1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 1050)
+        rates_h4 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 0, 1050)
         tick = mt5.symbol_info_tick(symbol)
 
         if rates_m15 is None or rates_h1 is None or rates_h4 is None or len(rates_m15) < 55 or len(rates_h1) < 205:
@@ -1361,7 +1439,7 @@ def evaluate_plans_condition_status(symbol: str = "XAUUSD") -> dict:
 
         is_uptrend_h1 = h1_ma5 >= h1_ma10
 
-        sr_h1 = find_sr_levels(df_h1, cur_price)
+        sr_h1 = find_sr_levels(df_h1, cur_price, df_h4=df_h4)
         support = float(sr_h1.get("support", 0.0))
         resistance = float(sr_h1.get("resistance", 0.0))
 
@@ -2147,8 +2225,8 @@ def main():
                 features = model_features[sym]
                 
                 df_m15 = get_data(sym, TIMEFRAME, 300)   # 300 แท่ง: พอสำหรับ Features AI (เช่น ATR เฉลี่ย 96 แท่ง)
-                df_h1 = get_data(sym, TIMEFRAME_H1, 600)   # 600 แท่ง: แนวรับ/ต้าน 500 แท่ง + MA200
-                df_h4 = get_data(sym, TIMEFRAME_H4, 600)
+                df_h1 = get_data(sym, TIMEFRAME_H1, 1100)   # 1,100 แท่ง: แนวรับ/ต้าน 1,000 แท่ง + MA200
+                df_h4 = get_data(sym, TIMEFRAME_H4, 1100)   # 1,100 แท่ง: แนวรับ/ต้าน 1,000 แท่ง H4
                 if df_m15 is None or df_h1 is None or df_h4 is None:
                     continue
                 
@@ -2364,10 +2442,10 @@ def main():
                     prob = model.predict_proba(ai_row)[0]
                 
                 # ข้อมูลราคาและตัวแปรทางเทคนิค
-                # แนวรับ/แนวต้านจากโซนกลับตัวย้อนหลัง 500 แท่ง (แทน Low/High 20 แท่งเดิม) — Plan 3 (SMC) / Plan 4 (SR-Bounce) ใช้ H1
+                # แนวรับ/แนวต้านจากโซนกลับตัวย้อนหลัง 1,000 แท่ง H1 พร้อม H4 Confluence — Plan 3 (SMC) / Plan 4 (SR-Bounce) ใช้ H1
                 sr_price = float(last_bar['close'])
-                sr_h1 = find_sr_levels(df_h1, sr_price)
                 sr_h4 = find_sr_levels(df_h4, sr_price)
+                sr_h1 = find_sr_levels(df_h1, sr_price, df_h4=df_h4)
                 support = sr_h1["support"] if pd.notna(sr_h1["support"]) else last_bar['support']
                 resistance = sr_h1["resistance"] if pd.notna(sr_h1["resistance"]) else last_bar['resistance']
                 h4_support = sr_h4["support"] if pd.notna(sr_h4["support"]) else h4_support

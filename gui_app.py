@@ -2248,22 +2248,22 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         cur_price = self.data["bid"]
 
-        # รายการระดับแนวต้าน 5 ระดับ (R1..R5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00)
+        # รายการระดับแนวต้าน 5 ระดับ (R1..R5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00) และสถานะ H4 Confluence
         res_list = [
-            ("R1", self.data.get("resistance"), float(self.data.get("res_stars", 6.0) or 6.0), COLOR_DANGER_RED, (6, 3), 1.5, "bold"),
-            ("R2", self.data.get("resistance2"), float(self.data.get("res2_stars", 5.0) or 5.0), "#FB923C", (4, 3), 1.2, "bold"),
-            ("R3", self.data.get("resistance3"), float(self.data.get("res3_stars", 4.0) or 4.0), "#F59E0B", (3, 3), 1.0, "normal"),
-            ("R4", self.data.get("resistance4"), float(self.data.get("res4_stars", 4.0) or 4.0), "#F43F5E", (2, 2), 1.0, "normal"),
-            ("R5", self.data.get("resistance5"), float(self.data.get("res5_stars", 3.0) or 3.0), "#E11D48", (2, 2), 1.0, "normal"),
+            ("R1", self.data.get("resistance"), float(self.data.get("res_stars", 6.0) or 6.0), COLOR_DANGER_RED, (6, 3), 1.5, "bold", bool(self.data.get("res_h4_conf", False))),
+            ("R2", self.data.get("resistance2"), float(self.data.get("res2_stars", 5.0) or 5.0), "#FB923C", (4, 3), 1.2, "bold", bool(self.data.get("res2_h4_conf", False))),
+            ("R3", self.data.get("resistance3"), float(self.data.get("res3_stars", 4.0) or 4.0), "#F59E0B", (3, 3), 1.0, "normal", bool(self.data.get("res3_h4_conf", False))),
+            ("R4", self.data.get("resistance4"), float(self.data.get("res4_stars", 4.0) or 4.0), "#F43F5E", (2, 2), 1.0, "normal", bool(self.data.get("res4_h4_conf", False))),
+            ("R5", self.data.get("resistance5"), float(self.data.get("res5_stars", 3.0) or 3.0), "#E11D48", (2, 2), 1.0, "normal", bool(self.data.get("res5_h4_conf", False))),
         ]
 
-        # รายการระดับแนวรับ 5 ระดับ (S1..S5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00)
+        # รายการระดับแนวรับ 5 ระดับ (S1..S5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00) และสถานะ H4 Confluence
         sup_list = [
-            ("S1", self.data.get("support"), float(self.data.get("sup_stars", 6.0) or 6.0), COLOR_SUCCESS_GREEN, (6, 3), 1.5, "bold"),
-            ("S2", self.data.get("support2"), float(self.data.get("sup2_stars", 5.0) or 5.0), "#34D399", (4, 3), 1.2, "bold"),
-            ("S3", self.data.get("support3"), float(self.data.get("sup3_stars", 4.0) or 4.0), "#2DD4BF", (3, 3), 1.0, "normal"),
-            ("S4", self.data.get("support4"), float(self.data.get("sup4_stars", 4.0) or 4.0), "#06B6D4", (2, 2), 1.0, "normal"),
-            ("S5", self.data.get("support5"), float(self.data.get("sup5_stars", 3.0) or 3.0), "#38BDF8", (2, 2), 1.0, "normal"),
+            ("S1", self.data.get("support"), float(self.data.get("sup_stars", 6.0) or 6.0), COLOR_SUCCESS_GREEN, (6, 3), 1.5, "bold", bool(self.data.get("sup_h4_conf", False))),
+            ("S2", self.data.get("support2"), float(self.data.get("sup2_stars", 5.0) or 5.0), "#34D399", (4, 3), 1.2, "bold", bool(self.data.get("sup2_h4_conf", False))),
+            ("S3", self.data.get("support3"), float(self.data.get("sup3_stars", 4.0) or 4.0), "#2DD4BF", (3, 3), 1.0, "normal", bool(self.data.get("sup3_h4_conf", False))),
+            ("S4", self.data.get("support4"), float(self.data.get("sup4_stars", 4.0) or 4.0), "#06B6D4", (2, 2), 1.0, "normal", bool(self.data.get("sup4_h4_conf", False))),
+            ("S5", self.data.get("support5"), float(self.data.get("sup5_stars", 3.0) or 3.0), "#38BDF8", (2, 2), 1.0, "normal", bool(self.data.get("sup5_h4_conf", False))),
         ]
 
         if tf in ("H1", "H4"):
@@ -2365,7 +2365,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
             # 1.1 แนวต้าน 5 ระดับ (R1..R5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00 ทศนิยม 2 ตำแหน่ง)
             if self.ind_toggles.get("resistance", True):
-                for name, r_val, r_stars, col, dash, width, weight in res_list:
+                for name, r_val, r_stars, col, dash, width, weight, r_h4_conf in res_list:
                     if r_val and not (isinstance(r_val, float) and math.isnan(r_val)) and lo <= r_val <= hi:
                         is_focus = (name == focus_res)
                         yr = y_of(r_val)
@@ -2377,12 +2377,16 @@ class GoldCandleDialog(ctk.CTkToplevel):
                         cv.create_text(left + 6, lbl_y, text=name_txt, anchor="w", fill=col, font=(app_fonts.UI, 9, "bold" if is_focus else weight))
                         r_score = max(0.0, min(10.0, float(r_stars or 0.0)))
                         cv.create_text(left + 128, lbl_y, text=f"★ {r_score:.2f}", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
+                        cur_x = left + 175
+                        if r_h4_conf:
+                            cv.create_text(cur_x, lbl_y, text="👑 H4 CONF", anchor="w", fill="#FBBF24", font=(app_fonts.UI, 8, "bold"))
+                            cur_x += 68
                         if is_focus:
-                            cv.create_text(left + 175, lbl_y, text="🎯 AI FOCUS", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
+                            cv.create_text(cur_x, lbl_y, text="🎯 AI FOCUS", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
 
             # 1.2 แนวรับ 5 ระดับ (S1..S5) พร้อมคะแนนความแข็งแกร่ง (เต็ม 10.00 ทศนิยม 2 ตำแหน่ง)
             if self.ind_toggles.get("support", True):
-                for name, s_val, s_stars, col, dash, width, weight in sup_list:
+                for name, s_val, s_stars, col, dash, width, weight, s_h4_conf in sup_list:
                     if s_val and not (isinstance(s_val, float) and math.isnan(s_val)) and lo <= s_val <= hi:
                         is_focus = (name == focus_sup)
                         ys = y_of(s_val)
@@ -2394,8 +2398,12 @@ class GoldCandleDialog(ctk.CTkToplevel):
                         cv.create_text(left + 6, lbl_y, text=name_txt, anchor="w", fill=col, font=(app_fonts.UI, 9, "bold" if is_focus else weight))
                         s_score = max(0.0, min(10.0, float(s_stars or 0.0)))
                         cv.create_text(left + 124, lbl_y, text=f"★ {s_score:.2f}", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, weight))
+                        cur_x = left + 171
+                        if s_h4_conf:
+                            cv.create_text(cur_x, lbl_y, text="👑 H4 CONF", anchor="w", fill="#FBBF24", font=(app_fonts.UI, 8, "bold"))
+                            cur_x += 68
                         if is_focus:
-                            cv.create_text(left + 171, lbl_y, text="🎯 AI FOCUS", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
+                            cv.create_text(cur_x, lbl_y, text="🎯 AI FOCUS", anchor="w", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 8, "bold"))
 
         # 2. วาดอินดิเคเตอร์เฉพาะตาม Timeframe ที่เลือก
         if tf == "M15":

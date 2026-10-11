@@ -90,13 +90,15 @@ def _factors(bot, m15, h1, h4, ai_row):
         out.append(("โมเมนตัม M15 (MA5/13 + RSI)", d, f"MA5 {'>' if ma5 > ma13 else '<'} MA13 · RSI {rsi:.0f}"))
     try:
         price = float(cm.iloc[-1])
-        sr = bot.find_sr_levels(h1.iloc[-502:], price)
+        sr = bot.find_sr_levels(h1.iloc[-1002:], price, df_h4=h4)
         atr = float(bot._atr_series(h1).iloc[-2])
         sup, res = sr.get("support"), sr.get("resistance")
+        conf_res = " [H4 ยืนยัน]" if sr.get("res_h4_conf") else ""
+        conf_sup = " [H4 ยืนยัน]" if sr.get("sup_h4_conf") else ""
         if res and atr and not np.isnan(res) and (res - price) < 0.5 * atr:
-            out.append(("แนวรับ/แนวต้าน H1", -1, f"ใกล้แนวต้าน {res:,.2f} — เสี่ยงถูกกดลง"))
+            out.append(("แนวรับ/แนวต้าน H1", -1, f"ใกล้แนวต้าน {res:,.2f}{conf_res} — เสี่ยงถูกกดลง"))
         elif sup and atr and not np.isnan(sup) and (price - sup) < 0.5 * atr:
-            out.append(("แนวรับ/แนวต้าน H1", 1, f"ใกล้แนวรับ {sup:,.2f} — มีโอกาสเด้ง"))
+            out.append(("แนวรับ/แนวต้าน H1", 1, f"ใกล้แนวรับ {sup:,.2f}{conf_sup} — มีโอกาสเด้ง"))
         elif sup and res and not np.isnan(sup) and not np.isnan(res):
             out.append(("แนวรับ/แนวต้าน H1", 0, f"อยู่กลางกรอบ {sup:,.2f} – {res:,.2f}"))
     except Exception:
