@@ -9,6 +9,8 @@ import mt5_algo
 import thai_time
 import sound_manager
 from license_manager import license_mgr
+from mt5_terminal_manager import get_profile_magic_number, initialize_mt5, scan_installed_terminals, get_configured_terminal_path, set_configured_terminal_path
+from app_paths import get_active_profile, list_profiles
 
 class OutputRedirector:
     """ดักจับและส่งต่อข้อความ print() จากบอทไปยัง Queue ของ GUI"""
@@ -167,7 +169,7 @@ class BotController:
         """ยอดเงิน (Equity) ต้องมีอย่างน้อย 25 USD ระบบถึงจะทำงาน — คืนข้อความเตือน หรือ None ถ้าผ่าน/อ่าน MT5 ไม่ได้"""
         try:
             import plan_config
-            if mt5.terminal_info() is None and not mt5.initialize():
+            if mt5.terminal_info() is None and not initialize_mt5():
                 return None   # ยังเชื่อม MT5 ไม่ได้ — ให้บอทแจ้งเรื่องการเชื่อมต่อเอง
             acc = mt5.account_info()
             if acc is None:
@@ -289,7 +291,7 @@ class BotController:
         }
 
         try:
-            if not mt5.initialize():
+            if not initialize_mt5():
                 return data
 
             term = mt5.terminal_info()
@@ -374,7 +376,7 @@ class BotController:
     def close_all_positions(self) -> tuple[int, str]:
         """ฟังก์ชัน Emergency: ปิดทุกออเดอร์ในพอร์ตทันที"""
         try:
-            if not mt5.initialize():
+            if not initialize_mt5():
                 return 0, "ไม่สามารถเชื่อมต่อ MT5 ได้"
 
             sym = self.get_gold_symbol()
@@ -409,7 +411,7 @@ class BotController:
         from datetime import datetime, timedelta
         trades = {}
         try:
-            if mt5.terminal_info() is not None or mt5.initialize():
+            if mt5.terminal_info() is not None or initialize_mt5():
                 deals = mt5.history_deals_get(datetime.now() - timedelta(days=days), datetime.now() + timedelta(days=1)) or []
                 for d in deals:
                     if d.symbol.upper() not in gold_syms or d.entry not in (0, 1, 2):
@@ -422,7 +424,7 @@ class BotController:
                     t["profit"] += float(d.profit) + float(getattr(d, "commission", 0.0)) + float(getattr(d, "swap", 0.0))
                     if d.entry == 0:  # DEAL_ENTRY_IN
                         t["side"] = "BUY" if d.type == 0 else "SELL"
-                        t["plan"] = d.comment or ("Manual" if d.magic != 888999 else "")
+                        t["plan"] = d.comment or ("Manual" if d.magic != get_profile_magic_number() else "")
                         t["volume"] = float(d.volume)
                         t["open_time"] = int(d.time)
                         t["open_price"] = float(d.price)
@@ -531,7 +533,7 @@ class BotController:
         try:
             import math
             import pandas as pd
-            if mt5.terminal_info() is None and not mt5.initialize():
+            if mt5.terminal_info() is None and not initialize_mt5():
                 return None
 
             tf_upper = (timeframe or "M15").upper()
@@ -762,7 +764,7 @@ class BotController:
             symbol = self.get_gold_symbol()
         try:
             import pandas as pd
-            if mt5.terminal_info() is None and not mt5.initialize():
+            if mt5.terminal_info() is None and not initialize_mt5():
                 return None
             rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, 40)
             tick = mt5.symbol_info_tick(symbol)
@@ -785,7 +787,7 @@ class BotController:
         if not license_mgr.has_active_hours():
             return False, "ชั่วโมงใช้งานหมดแล้ว — เติมชั่วโมงก่อนเข้าไม้"
         try:
-            if mt5.terminal_info() is None and not mt5.initialize():
+            if mt5.terminal_info() is None and not initialize_mt5():
                 return False, "เชื่อมต่อ MT5 ไม่ได้ — เปิด MetaTrader 5 ค้างไว้"
             tick = mt5.symbol_info_tick(symbol)
             info = mt5.symbol_info(symbol)
@@ -817,7 +819,7 @@ class BotController:
             symbol = self.get_gold_symbol()
         try:
             import pandas as pd
-            if mt5.terminal_info() is None and not mt5.initialize():
+            if mt5.terminal_info() is None and not initialize_mt5():
                 return None
             out = {}
             dfs = {}
@@ -921,7 +923,7 @@ class BotController:
             d += timedelta(days=1)
         seen_tickets = set()
         try:
-            if mt5.terminal_info() is not None or mt5.initialize():
+            if mt5.terminal_info() is not None or initialize_mt5():
                 # เวลา Deal ของ MT5 = เวลาเซิร์ฟเวอร์ → แปลงเป็นเวลาจริงด้วย thai_time (ตลาดปิดก็ยังถูก · คิดตาม DST ของวันนั้น)
                 th = timezone(timedelta(hours=7))
                 fetch_start = datetime.combine(start_date - timedelta(days=90), datetime.min.time())
@@ -1046,7 +1048,7 @@ class BotController:
         }
         seen_tickets = set()
         try:
-            if mt5.terminal_info() is not None or mt5.initialize():
+            if mt5.terminal_info() is not None or initialize_mt5():
                 th = timezone(timedelta(hours=7))
                 fetch_start = datetime.combine(start_date - timedelta(days=90), datetime.min.time())
                 fetch_end = datetime.combine(end_date + timedelta(days=2), datetime.min.time())

@@ -1,6 +1,6 @@
-# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1011.1911 - Project Master Guide
+# 🤖 AI MetaTrader 5 (FBS) Gold Pro v2026.1011.1948 - Project Master Guide
 
-คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1011.1911): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
+คู่มือมาตรฐานโครงการ (เวอร์ชัน 2026.1011.1948): **สกิล เทคนิค ทักษะ สไตล์ และแผนการเทรดเฉพาะทองคำ (XAUUSD Gold Specialist)** สำหรับระบบเทรด AI อัตโนมัติเชื่อมต่อ MetaTrader 5 (FBS Broker) มุ่งเน้นการดัน **Win Rate และกำไรสุทธิสูงสุด** ด้วยการโฟกัสสภาพคล่องทองคำแบบ 100%
 
 > 📌 **กฎมาตรฐานการกำหนดเลขเวอร์ชัน (Versioning Rule)**:  
 > โครงสร้างเลขเวอร์ชันกำหนดในรูปแบบ **`ปี.เดือนวันที่.ชั่วโมงนาที` (`YYYY.MMDD.HHMM`)** เสมอ เช่น `2026.1005.2244`  
@@ -170,7 +170,7 @@
 
 ---
 
-### 🔸 แนวรับ/แนวต้าน และสภาวะตลาด (อัปเดต 11 ต.ค. 2026 - v2026.1011.1911)
+### 🔸 แนวรับ/แนวต้าน และสภาวะตลาด (อัปเดต 11 ต.ค. 2026 - v2026.1011.1948)
 * **แนวรับ/แนวต้าน H1 และ H4 (5 ระดับ: S1..S5 และ R1..R5)** (`find_sr_levels`): ดูแท่งที่ปิดแล้วย้อนหลัง **1,000 แท่ง ทั้ง H1 และ H4** → หา Swing High/Low (สูง/ต่ำสุดเทียบ 3 แท่งซ้าย-ขวา) → จัดคลัสเตอร์โซนในระยะ 0.5 ATR → คัดกรองบทบาทแท้จริง (Support ต้องมี Swing Low ที่พิสูจน์การเด้งกลับ / Resistance ต้องมี Swing High ที่พิสูจน์แรงต้าน ไม่เอายอดดอยเก่าที่ไม่มีแรงรับมาเป็น S1)
 * **Multi-Timeframe H1 + H4 Confluence Engine**: นำความแข็งแกร่งระดับ Mega-Structure ย้อนหลัง 1,000 แท่ง H4 (~8 เดือน) มาตรวจสอบการทับซ้อนกับโซน H1 หากแนวรับ/ต้าน H1 ตรงกับโซนของ H4 จะได้รับ **H4 Confluence Boost (+1.2 ดาว พร้อมถ่วงน้ำหนัก Macro Structure)** ทำให้จุดกลับตัวสำคัญของ H4 (เช่น Swing High/Low หรือ All-Time High ประวัติศาสตร์ เช่น 4,219–4,222) คงความแข็งแกร่งหนักแน่นอย่างแท้จริง และแสดงป้ายกำกับ `👑 H4 CONF` บนกราฟสด
 * **คะแนนความแข็งแกร่งแนวรับ/แนวต้าน (Support & Resistance Strength Stars 0.00 - 10.00)**: ประเมินจาก 3 มิติหลักตามหลัก SMC Liquidity: (1) **ความสดใหม่ (Recency Decay)**: ให้น้ำหนักจากล่าสุดไปอดีต จากมากไปน้อย, (2) **SMC Liquidity & Mitigation Decay**: โซนสดใหม่ (Fresh Zone 1 Touch) มีสภาพคล่อง Unfilled Orders หนาแน่น แข็งแกร่งที่สุด (ดาวสูงสุด Base 9.0–9.5) หากแนวถูกทดสอบซ้ำหรือเคยถูกราคาแท่งถัดมาแตะ/ใช้งานมาก่อน (Tested / Used Mitigation) ความแข็งแกร่งจะลดลงตามจำนวนครั้ง เพราะสภาพคล่องถูกดูดซับไปแล้ว และเสี่ยงต่อการเกิด Breakout / Sweep, (3) **H1 + H4 Confluence**: แนวที่ได้รับการยืนยันจากทั้ง H1 และ H4 พร้อมกัน
@@ -338,4 +338,21 @@
 | **Investing.com Widget** | ปฏิทินแบบฝัง (เว็บ) | มีปุ่มเปิดหน้า Investing.com สำรอง |
 
 ### 8.5 ไฟล์สำคัญฝั่ง Desktop
-`version.py` (เลขเวอร์ชันแหล่งเดียว) · `app_paths.py` (โฟลเดอร์ข้อมูลผู้ใช้) · `secure_store.py` (DPAPI) · `console_format.py` (Console สี) · `econ_calendar.py` · `tools/bump_version.py` · `tools/admin_reset_password.py` (สร้าง SQL รีเซ็ตรหัสผ่านลูกค้า)
+`version.py` (เลขเวอร์ชันแหล่งเดียว) · `app_paths.py` (โฟลเดอร์ข้อมูลและระบบ Multi-Profile) · `mt5_terminal_manager.py` (จัดการ MT5 Terminal Path & Magic Number) · `profile_dialog.py` (หน้าต่างจัดการ Profile & Multi-Instance) · `secure_store.py` (DPAPI) · `console_format.py` (Console สี) · `econ_calendar.py` · `tools/bump_version.py` · `tools/admin_reset_password.py` (สร้าง SQL รีเซ็ตรหัสผ่านลูกค้า) · `Launch_FBS.bat` · `Launch_XM.bat` · `Launch_Multi_Instance.bat`
+
+### 8.6 สถาปัตยกรรม Profile / Multi-Instance (รันหลาย MT5 / หลายบัญชีพร้อมกัน)
+* **การแยกข้อมูลแบบ 100% (Isolated Profiles)** (`app_paths.py`):
+  * **Default Profile**: `%APPDATA%\GoldBot24\` (รักษาความเข้ากันได้ย้อนหลัง 100% ไม่กระทบผู้ใช้เดิม)
+  * **Named Profiles (เช่น FBS, XM, XM-Micro)**: `%APPDATA%\GoldBot24\profiles\<profile_name>\` แยกขาดทั้ง `session.json`, `bot_settings.json`, `credentials.json`, `trade_history.csv`, `signal_history.csv`, `p4_trail_state.json`
+* **Single Instance Guard ประจำ Profile (`get_instance_mutex_name`)**:
+  * Mutex ตั้งชื่อตามโปรไฟล์ `Local\GoldBot24_AI_Gold_Commander_Pro_<profile>` ทำให้เปิดรันบอทคนละโปรไฟล์ขนานกันได้โดยสมบูรณ์ แต่ยังคงป้องกันการเปิดซ้ำซ้อนในโปรไฟล์เดียวกัน (สลับไปหน้าต่างเดิมอัตโนมัติ)
+  * รองรับ CLI Argument `--profile <name>` หรือ `-p <name>` และ flag `--multi-instance`
+* **การระบุ MT5 Terminal เฉพาะตัว (`mt5_terminal_manager.py`)**:
+  * สแกนหา MT5 ที่ติดตั้งในเครื่องอัตโนมัติ (เช่น `C:\Program Files\FBS MetaTrader 5\terminal64.exe` และ `C:\Program Files\XM Global MT5\terminal64.exe`)
+  * ฟังก์ชัน `initialize_mt5(path=...)`: บังคับให้ Python API ต่อเข้ากับ Terminal ที่กำหนดประจำโปรไฟล์นั้น ไม่เกาะมั่ว
+* **Magic Number อิสระประจำ Profile (`get_profile_magic_number`)**:
+  * บันทึกใน `bot_settings.json` หรือคำนวณ Hash Offset อัตโนมัติ ป้องกันบอทแต่ละหน้าต่างเข้าแทรกแซงหรือแย่งปิดออเดอร์ของกันและกัน
+* **UI จัดการ Profile (`profile_dialog.py`)**:
+  * แสดงชิป `[📁 Profile: ...]` บนแถบหัว (Header) และเมนูผู้ใช้
+  * มีหน้าต่างจัดการ Profile ให้สลับ Terminal, ปรับ Magic, สร้าง Profile ใหม่ และกดปุ่ม **"🚀 เปิดหน้าต่างใหม่ (Launch)"** เพื่อเริ่มบอทอีกตัวได้ในคลิกเดียว
+

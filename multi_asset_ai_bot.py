@@ -19,6 +19,7 @@ import stats_manager
 import plan_config
 import thai_time
 from license_manager import license_mgr
+from mt5_terminal_manager import get_profile_magic_number, initialize_mt5
 from datetime import datetime, timedelta, timezone
 
 # เริ่มต้นระบบสี Colorama สำหรับ Windows Console ให้แสดงสีจริง ไม่ขึ้น [96m [1m
@@ -86,7 +87,7 @@ GOLD_SYMBOL = "XAUUSD"
 def detect_gold_symbol(default="XAUUSD") -> str:
     """ตรวจจับชื่อสัญลักษณ์ทองคำของโบรกเกอร์ที่กำลังเชื่อมต่ออยู่โดยอัตโนมัติ (เช่น XAUUSD, GOLD, GOLDmicro, XAUUSDm ฯลฯ)"""
     try:
-        if mt5.terminal_info() is None and not mt5.initialize():
+        if mt5.terminal_info() is None and not initialize_mt5():
             return default
         symbols = mt5.symbols_get()
         if not symbols:
@@ -1548,7 +1549,7 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
         import pandas as pd
         import numpy as np
 
-        if mt5.terminal_info() is None and not mt5.initialize():
+        if mt5.terminal_info() is None and not initialize_mt5():
             return {}
 
         rates_m15 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, 100)
@@ -1941,7 +1942,7 @@ def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
         "sl": float(sl),
         "tp": float(tp),
         "deviation": 30,
-        "magic": 888999,
+        "magic": get_profile_magic_number(),
         "comment": plan_name,
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": filling_type,
@@ -2030,7 +2031,7 @@ def close_position(position, comment="AI Reversal Close"):
         "position": position.ticket,
         "price": tick.bid if position.type == mt5.ORDER_TYPE_BUY else tick.ask,
         "deviation": 30,
-        "magic": 888999,
+        "magic": get_profile_magic_number(),
         "comment": comment,
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": filling_type,
@@ -2246,7 +2247,7 @@ def prune_old_csv_records(days=365):
             print(f"[WARN] ข้อผิดพลาดในการคลีนไฟล์ {filename}: {e}")
 
 def main():
-    if not mt5.initialize():
+    if not initialize_mt5():
         print(f"{Colors.RED}[ERROR] MT5 connection failed. Please ensure MT5 terminal is open.{Colors.RESET}")
         return
 
@@ -3345,7 +3346,7 @@ def main():
 
                     for pos in positions:
                         # 0.0 ปิดไม้เมื่อกำไรถึงเป้าเงิน $ ที่ผู้ใช้ตั้ง (ทุกแผน · เฉพาะไม้ของบอท)
-                        if tp_usd and pos.magic == 888999:
+                        if tp_usd and pos.magic == get_profile_magic_number():
                             net = float(pos.profit) + float(getattr(pos, 'swap', 0.0) or 0.0)
                             if net >= tp_usd:
                                 print(f"{Colors.GREEN}[TAKE PROFIT $] {sym} {pos.comment} กำไร ${net:.2f} ถึงเป้า ${tp_usd:.2f} — ปิดไม้ทันที{Colors.RESET}")
@@ -3358,7 +3359,7 @@ def main():
                         # 0.05 ปิดไม้ตามเป้าจุด (Points Take Profit)
                         # - สภาวะปกติ: ใช้กับไม้ที่เข้าเอง (manual / magic 0) เมื่อเปิดใช้งาน (manual_tp_pts_enabled)
                         # - สภาวะผันผวนแรงผิดปกติ: ต้องเปิดใช้เสมอและมีผลต่อทุกแผน (ทั้งไม้เข้าเองและไม้ของบอท)
-                        is_manual_pos = (pos.magic == 0 or (pos.comment or "").startswith("Manual") or pos.magic != 888999)
+                        is_manual_pos = (pos.magic == 0 or (pos.comment or "").startswith("Manual") or pos.magic != get_profile_magic_number())
                         should_check_pts = is_volatile or (tp_pts_enabled and is_manual_pos)
 
                         if should_check_pts:

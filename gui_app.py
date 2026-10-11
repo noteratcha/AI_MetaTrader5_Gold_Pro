@@ -40,7 +40,8 @@ import position_chart
 from version import APP_VERSION
 import secure_store
 import plan_config
-from app_paths import data_path
+from app_paths import data_path, get_active_profile, list_profiles, set_active_profile
+from profile_dialog import ProfileManagerDialog
 from collections import deque
 from console_format import ConsoleFormatter, TAG_COLORS
 from stats_manager import stats_mgr, STANDARD_PLANS
@@ -3834,7 +3835,9 @@ class MainTradingApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title(f"AI Gold Commander Pro - GoldBot24 (v{APP_VERSION})")
+        prof = get_active_profile()
+        prof_suffix = f" [{prof}]" if prof != "default" else ""
+        self.title(f"AI Gold Commander Pro{prof_suffix} - GoldBot24 (v{APP_VERSION})")
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{min(1320, sw - 40)}x{min(840, sh - 90)}")
         self.minsize(min(1040, sw - 40), min(620, sh - 90))
@@ -4447,6 +4450,15 @@ class MainTradingApp(ctk.CTk):
         self.btn_update_status.pack(side="left", padx=(8, 0))
         self._update_info = None
 
+        cur_prof = get_active_profile()
+        prof_label = f"📁 {cur_prof}" if cur_prof != "default" else "📁 Profile: default"
+        self.btn_profile_chip = ctk.CTkButton(
+            ver_row, text=prof_label, font=self._font(10, "bold"), height=18, width=10,
+            corner_radius=9, fg_color="#1E293B", hover_color="#334155", text_color=COLOR_GOLD_PRIMARY,
+            command=self._open_profile_manager_modal,
+        )
+        self.btn_profile_chip.pack(side="left", padx=(8, 0))
+
         # --- ขวา: เมนูผู้ใช้
         user_name = license_mgr.session_data.get("username") or "User"
         # รูปย่อ + ชื่อ + ▾ รวมเป็นปุ่มเดียว (ทั้งก้อนคลิกเปิดเมนูได้)
@@ -4517,6 +4529,7 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  🎯  เปิดบัญชีทดลองเทรด (XM Global)", command=lambda: webbrowser.open(self.BROKER_URL))
         menu.add_command(label="  🛒  ซื้อชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
         menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
+        menu.add_command(label="  ⚙️  จัดการ Profile & MT5 Terminal", command=self._open_profile_manager_modal)
         menu.add_command(label="  💬  ติดต่อแอดมิน (LINE)", command=lambda: ContactDialog(self))
         menu.add_command(label="  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
         menu.add_separator()
@@ -4527,6 +4540,12 @@ class MainTradingApp(ctk.CTk):
             menu.tk_popup(x, y)
         finally:
             menu.grab_release()
+
+    def _open_profile_manager_modal(self):
+        try:
+            ProfileManagerDialog(self)
+        except Exception as e:
+            print(f"[WARN] Open profile manager dialog error: {e}")
 
     # ---- ตรวจสอบเวอร์ชันอัตโนมัติ (เธรดเบื้องหลัง ไม่ให้ UI ค้าง) ----
     UPDATE_CHECK_INTERVAL_SEC = 6 * 3600
@@ -7083,11 +7102,15 @@ class MainTradingApp(ctk.CTk):
         self.after(500, self._realtime_ui_loop)
 
 
-MUTEX_NAME = "Local\\GoldBot24_AI_Gold_Commander_Pro_SingleInstance"
+def get_instance_mutex_name() -> str:
+    """ชื่อ Mutex ประจำ Profile เพื่อให้รันขนานกันได้ระหว่าง Profile และกันเปิดซ้ำใน Profile เดียวกัน"""
+    prof = get_active_profile()
+    clean_prof = "".join(c for c in prof if c.isalnum() or c in ("_", "-"))
+    return f"Local\\GoldBot24_AI_Gold_Commander_Pro_{clean_prof or 'default'}"
 
 
 def _focus_existing_window():
-    """ค้นหาหน้าต่างโปรแกรมที่เปิดอยู่แล้ว และนำขึ้นมาแสดงข้างหน้า (Foreground)"""
+    """ค้นหาหน้าต่างโปรแกรมที่เปิดอยู่แล้วสำหรับ Profile นี้ และนำขึ้นมาแสดงข้างหน้า (Foreground)"""
     if sys.platform != "win32":
         return
     try:
@@ -7098,6 +7121,8 @@ def _focus_existing_window():
 
         current_pid = os.getpid()
         found_hwnd = [None]
+        prof = get_active_profile()
+        target_token = f"[{prof}]" if prof != "default" else ""
 
         WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
@@ -7109,6 +7134,12 @@ def _focus_existing_window():
                     user32.GetWindowTextW(hwnd, buf, length + 1)
                     title = buf.value
                     if "AI Gold Commander Pro" in title or "GoldBot24" in title:
+                        if target_token:
+                            if target_token not in title:
+                                return True
+                        else:
+                            if "[" in title and "]" in title:
+                                return True
                         pid = wintypes.DWORD()
                         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
                         if pid.value != current_pid:
@@ -7129,17 +7160,20 @@ def _focus_existing_window():
 
 def check_single_instance() -> tuple[bool, any]:
     """
-    ตรวจสอบว่ามี Instance ของโปรแกรมกำลังรันอยู่แล้วหรือไม่ (Single Instance Guard)
+    ตรวจสอบว่ามี Instance ของโปรแกรมกำลังรันอยู่แล้วหรือไม่ (Single Instance Guard ประจำ Profile)
     คืนค่า (is_already_running, mutex_handle)
     """
     if sys.platform != "win32":
+        return False, None
+    if "--multi-instance" in sys.argv or "--no-single-instance" in sys.argv:
         return False, None
     try:
         import ctypes
         kernel32 = ctypes.windll.kernel32
         ERROR_ALREADY_EXISTS = 183
 
-        mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+        mutex_name = get_instance_mutex_name()
+        mutex = kernel32.CreateMutexW(None, False, mutex_name)
         last_error = kernel32.GetLastError()
 
         if last_error == ERROR_ALREADY_EXISTS:
