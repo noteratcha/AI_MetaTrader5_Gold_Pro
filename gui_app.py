@@ -4601,7 +4601,8 @@ class MainTradingApp(ctk.CTk):
         top_row = ctk.CTkFrame(inner, fg_color="transparent")
         top_row.pack(fill="x")
         ctk.CTkLabel(top_row, text=icon, font=ctk.CTkFont(size=15)).pack(side="left", padx=(0, 6))
-        ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        title_lbl = ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED)
+        title_lbl.pack(side="left")
         badge = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED,
                              fg_color="transparent", corner_radius=8, height=18)
         badge.pack(side="right")
@@ -4611,7 +4612,7 @@ class MainTradingApp(ctk.CTk):
 
         body = ctk.CTkFrame(inner, fg_color="transparent")
         body.pack(fill="x", pady=(3, 0))
-        return {"card": card, "badge": badge, "hint_lbl": hint_lbl, "body": body, "top_row": top_row}
+        return {"card": card, "badge": badge, "hint_lbl": hint_lbl, "body": body, "top_row": top_row, "title_lbl": title_lbl}
 
     @staticmethod
     def _set_badge(badge, text, fg="#1F2430", color=COLOR_TEXT_MUTED):
@@ -4725,7 +4726,8 @@ class MainTradingApp(ctk.CTk):
 
         icon_lbl = ctk.CTkLabel(top_row, text=icon_char, font=icon_font, text_color=COLOR_TEXT_PRIMARY)
         icon_lbl.pack(side="left", padx=(0, 6))
-        ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        title_lbl = ctk.CTkLabel(top_row, text=title, font=self._font(12), text_color=COLOR_TEXT_MUTED)
+        title_lbl.pack(side="left")
         badge = ctk.CTkLabel(top_row, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED,
                              fg_color="transparent", corner_radius=8, height=18)
         badge.pack(side="right")
@@ -4737,7 +4739,7 @@ class MainTradingApp(ctk.CTk):
         val_label.pack(anchor="w", pady=(2, 0))
         sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
         sub_label.pack(anchor="w")
-        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "hint_lbl": hint_lbl, "icon_lbl": icon_lbl, "top_row": top_row}
+        return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "hint_lbl": hint_lbl, "icon_lbl": icon_lbl, "top_row": top_row, "title_lbl": title_lbl}
 
     def _make_clickable(self, card_info, command, hint=""):
         """ทำให้ทั้งการ์ดกดได้ (เคอร์เซอร์มือ + ขอบสีทองเมื่อชี้ + ป้ายบอกทาง)"""
@@ -6872,97 +6874,108 @@ class MainTradingApp(ctk.CTk):
                     self.lbl_market_status.configure(text=f"  {mkt['short_desc']}  ", text_color=color, fg_color=bg)
 
                 # อัปเดตราคาทองคำ
-                gold_sym = telemetry.get("gold_symbol") or bot_ctrl.get_gold_symbol()
-                bid = telemetry.get("xau_bid", 0.0)
-                ask = telemetry.get("xau_ask", 0.0)
-                spd = telemetry.get("spread_pts", 0)
-                if hasattr(self, 'card_gold'):
-                    self.card_gold["title_lbl"].configure(text=f"ราคาทองคำ {gold_sym}")
-                    if bid > 0:
-                        self.card_gold["val_lbl"].configure(text=f"{bid:,.2f}")
-                    if mkt["is_open"]:
+                try:
+                    gold_sym = telemetry.get("gold_symbol") or bot_ctrl.get_gold_symbol()
+                    bid = telemetry.get("xau_bid", 0.0)
+                    ask = telemetry.get("xau_ask", 0.0)
+                    spd = telemetry.get("spread_pts", 0)
+                    if hasattr(self, 'card_gold'):
+                        if "title_lbl" in self.card_gold:
+                            self.card_gold["title_lbl"].configure(text=f"ราคาทองคำ {gold_sym}")
                         if bid > 0:
-                            self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts")
-                    else:
-                        if bid > 0:
-                            self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts · {mkt['short_desc']}")
+                            self.card_gold["val_lbl"].configure(text=f"{bid:,.2f}")
+                        if mkt["is_open"]:
+                            if bid > 0:
+                                self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts")
                         else:
-                            self.card_gold["sub_lbl"].configure(text=mkt["short_desc"])
+                            if bid > 0:
+                                self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts · {mkt['short_desc']}")
+                            else:
+                                self.card_gold["sub_lbl"].configure(text=mkt["short_desc"])
+                except Exception:
+                    pass
 
                 # อัปเดตสภาวะตลาด H4 และ H1
-                radar = telemetry.get("radar", {})
-                h4_trend = radar.get("h4_trend", "ANALYZING...")
-                if h4_trend == "ANALYZING...":
-                    h4_trend = "รอเริ่มบอท" if not bot_ctrl.is_active else "กำลังวิเคราะห์"
-                h4_pct = float(radar.get("h4_diff_pct", 0.0) or 0.0)
-                h1_pct = float(radar.get("h1_diff_pct", 0.0) or 0.0)
-                h1_trend = str(radar.get("h1_trend", "ANALYZING..."))
-                analyzed = "BULL" in h4_trend or "BEAR" in h4_trend or "SIDEWAY" in h4_trend
-                if hasattr(self, 'card_trend'):
-                    rows = self.card_trend["rows"]
-                    pct_color = lambda v: COLOR_SUCCESS_GREEN if v > 0 else COLOR_DANGER_RED if v < 0 else COLOR_TEXT_MUTED
-                    # ป้ายมุมขวา = ทิศที่ Plan 3–5 อนุญาต (กฎ Strict Pro-Trend จาก H4 MA10/30)
-                    if not analyzed:
-                        self._set_badge(self.card_trend["badge"], "")
-                    elif "BULL" in h4_trend:
-                        self._set_badge(self.card_trend["badge"], "BUY เท่านั้น", "#0F2A20", COLOR_SUCCESS_GREEN)
-                    elif "BEAR" in h4_trend:
-                        self._set_badge(self.card_trend["badge"], "SELL เท่านั้น", "#2A1414", COLOR_DANGER_RED)
-                    else:
-                        self._set_badge(self.card_trend["badge"], "BUY / SELL", "#132036", COLOR_CYAN_ACCENT)
-
-                    # สภาวะตลาด H1/H4: MA50 < MA100 < MA150 = ขาลง · MA50 > MA100 > MA150 = ขาขึ้น · แบบอื่น = ไซด์เวย์
-                    for tf, key in (("H1", "h1_cond"), ("H4", "h4_cond")):
-                        cond = radar.get(key)
-                        if cond is None or not analyzed:
-                            rows[tf]["val"].configure(text="รอเริ่มบอท" if tf == "H4" and not analyzed else "—", text_color=COLOR_TEXT_MUTED)
-                            rows[tf]["pct"].configure(text="")
-                            continue
-                        cond = int(cond)
-                        if cond == 1:
-                            rows[tf]["val"].configure(text="▲ Uptrend", text_color=COLOR_SUCCESS_GREEN)
-                        elif cond == -1:
-                            rows[tf]["val"].configure(text="▼ Downtrend", text_color=COLOR_DANGER_RED)
+                try:
+                    radar = telemetry.get("radar", {})
+                    h4_trend = radar.get("h4_trend", "ANALYZING...")
+                    if h4_trend == "ANALYZING...":
+                        h4_trend = "รอเริ่มบอท" if not bot_ctrl.is_active else "กำลังวิเคราะห์"
+                    h4_pct = float(radar.get("h4_diff_pct", 0.0) or 0.0)
+                    h1_pct = float(radar.get("h1_diff_pct", 0.0) or 0.0)
+                    h1_trend = str(radar.get("h1_trend", "ANALYZING..."))
+                    analyzed = "BULL" in h4_trend or "BEAR" in h4_trend or "SIDEWAY" in h4_trend
+                    if hasattr(self, 'card_trend'):
+                        rows = self.card_trend["rows"]
+                        pct_color = lambda v: COLOR_SUCCESS_GREEN if v > 0 else COLOR_DANGER_RED if v < 0 else COLOR_TEXT_MUTED
+                        # ป้ายมุมขวา = ทิศที่ Plan 3–5 อนุญาต (กฎ Strict Pro-Trend จาก H4 MA10/30)
+                        if not analyzed:
+                            self._set_badge(self.card_trend["badge"], "")
+                        elif "BULL" in h4_trend:
+                            self._set_badge(self.card_trend["badge"], "BUY เท่านั้น", "#0F2A20", COLOR_SUCCESS_GREEN)
+                        elif "BEAR" in h4_trend:
+                            self._set_badge(self.card_trend["badge"], "SELL เท่านั้น", "#2A1414", COLOR_DANGER_RED)
                         else:
-                            rows[tf]["val"].configure(text="◆ Sideway", text_color=COLOR_CYAN_ACCENT)
-                        cpct = float(radar.get(f"{key}_pct", 0.0) or 0.0)  # ระยะ MA50 เทียบ MA150 (%)
-                        rows[tf]["pct"].configure(text=f"{cpct:+.2f}%", text_color=pct_color(cpct))
-                    # ป้าย MA100-200 / MA200 ถูกเอาออกจากการ์ด (ดูรายละเอียดได้ในหน้าต่างอธิบายเมื่อคลิกการ์ด)
+                            self._set_badge(self.card_trend["badge"], "BUY / SELL", "#132036", COLOR_CYAN_ACCENT)
 
-                if hasattr(self, 'card_sr'):
-                    price = float(bid or radar.get("price", 0.0) or 0.0)
-                    for tf, row in self.card_sr["rows"].items():
-                        sup = float(radar.get(f"{tf.lower()}_support", 0.0) or 0.0)
-                        res = float(radar.get(f"{tf.lower()}_resistance", 0.0) or 0.0)
-                        sup_stars = float(radar.get(f"{tf.lower()}_sup_stars", 0.0) or 0.0)
-                        res_stars = float(radar.get(f"{tf.lower()}_res_stars", 0.0) or 0.0)
-                        ok = sup > 0 and res > 0
-                        row["res"].configure(text=f"▲ {res:,.2f}" if ok else "▲ —")
-                        row["sup"].configure(text=f"▼ {sup:,.2f}" if ok else "▼ —")
-                        if "res_star" in row:
-                            row["res_star"].configure(text=self._format_sr_stars(res_stars) if (ok and res_stars >= 0) else "")
-                        if "sup_star" in row:
-                            row["sup_star"].configure(text=self._format_sr_stars(sup_stars) if (ok and sup_stars >= 0) else "")
-                        st = row["state"]
-                        if (st["sup"], st["res"], st["price"]) != (sup, res, price):
-                            st.update(sup=sup, res=res, price=price)
-                            self._draw_sr_bar(row["bar"], st)
+                        # สภาวะตลาด H1/H4: MA50 < MA100 < MA150 = ขาลง · MA50 > MA100 > MA150 = ขาขึ้น · แบบอื่น = ไซด์เวย์
+                        for tf, key in (("H1", "h1_cond"), ("H4", "h4_cond")):
+                            cond = radar.get(key)
+                            if cond is None or not analyzed:
+                                rows[tf]["val"].configure(text="รอเริ่มบอท" if tf == "H4" and not analyzed else "—", text_color=COLOR_TEXT_MUTED)
+                                rows[tf]["pct"].configure(text="")
+                                continue
+                            cond = int(cond)
+                            if cond == 1:
+                                rows[tf]["val"].configure(text="▲ Uptrend", text_color=COLOR_SUCCESS_GREEN)
+                            elif cond == -1:
+                                rows[tf]["val"].configure(text="▼ Downtrend", text_color=COLOR_DANGER_RED)
+                            else:
+                                rows[tf]["val"].configure(text="◆ Sideway", text_color=COLOR_CYAN_ACCENT)
+                            cpct = float(radar.get(f"{key}_pct", 0.0) or 0.0)  # ระยะ MA50 เทียบ MA150 (%)
+                            rows[tf]["pct"].configure(text=f"{cpct:+.2f}%", text_color=pct_color(cpct))
+                        # ป้าย MA100-200 / MA200 ถูกเอาออกจากการ์ด (ดูรายละเอียดได้ในหน้าต่างอธิบายเมื่อคลิกการ์ด)
+                except Exception:
+                    pass
 
-                    # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 3/4)
-                    h1_state = self.card_sr["rows"]["H1"]["state"]
-                    pos = self._sr_position(h1_state["sup"], h1_state["res"], price)
-                    if pos is None:
-                        self._set_badge(self.card_sr["badge"], "")
-                    elif pos > 1:
-                        self._set_badge(self.card_sr["badge"], "เหนือแนวต้าน", "#0F2A20", COLOR_SUCCESS_GREEN)
-                    elif pos < 0:
-                        self._set_badge(self.card_sr["badge"], "หลุดแนวรับ", "#2A1414", COLOR_DANGER_RED)
-                    elif pos <= 0.25:
-                        self._set_badge(self.card_sr["badge"], "ใกล้แนวรับ", "#0F2A20", COLOR_SUCCESS_GREEN)
-                    elif pos >= 0.75:
-                        self._set_badge(self.card_sr["badge"], "ใกล้แนวต้าน", "#2A1414", COLOR_DANGER_RED)
-                    else:
-                        self._set_badge(self.card_sr["badge"], "กลางกรอบ")
+                # อัปเดตแนวรับ - แนวต้าน
+                try:
+                    if hasattr(self, 'card_sr'):
+                        price = float(bid or radar.get("price", 0.0) or 0.0)
+                        for tf, row in self.card_sr["rows"].items():
+                            sup = float(radar.get(f"{tf.lower()}_support", 0.0) or 0.0)
+                            res = float(radar.get(f"{tf.lower()}_resistance", 0.0) or 0.0)
+                            sup_stars = float(radar.get(f"{tf.lower()}_sup_stars", 0.0) or 0.0)
+                            res_stars = float(radar.get(f"{tf.lower()}_res_stars", 0.0) or 0.0)
+                            ok = sup > 0 and res > 0
+                            row["res"].configure(text=f"▲ {res:,.2f}" if ok else "▲ —")
+                            row["sup"].configure(text=f"▼ {sup:,.2f}" if ok else "▼ —")
+                            if "res_star" in row:
+                                row["res_star"].configure(text=self._format_sr_stars(res_stars) if (ok and res_stars >= 0) else "")
+                            if "sup_star" in row:
+                                row["sup_star"].configure(text=self._format_sr_stars(sup_stars) if (ok and sup_stars >= 0) else "")
+                            st = row["state"]
+                            if (st["sup"], st["res"], st["price"]) != (sup, res, price):
+                                st.update(sup=sup, res=res, price=price)
+                                self._draw_sr_bar(row["bar"], st)
+
+                        # ป้ายสรุปตำแหน่งราคาเทียบกรอบ H1 (กรอบที่บอทใช้เข้าไม้ Plan 3/4)
+                        h1_state = self.card_sr["rows"]["H1"]["state"]
+                        pos = self._sr_position(h1_state["sup"], h1_state["res"], price)
+                        if pos is None:
+                            self._set_badge(self.card_sr["badge"], "")
+                        elif pos > 1:
+                            self._set_badge(self.card_sr["badge"], "เหนือแนวต้าน", "#0F2A20", COLOR_SUCCESS_GREEN)
+                        elif pos < 0:
+                            self._set_badge(self.card_sr["badge"], "หลุดแนวรับ", "#2A1414", COLOR_DANGER_RED)
+                        elif pos <= 0.25:
+                            self._set_badge(self.card_sr["badge"], "ใกล้แนวรับ", "#0F2A20", COLOR_SUCCESS_GREEN)
+                        elif pos >= 0.75:
+                            self._set_badge(self.card_sr["badge"], "ใกล้แนวต้าน", "#2A1414", COLOR_DANGER_RED)
+                        else:
+                            self._set_badge(self.card_sr["badge"], "กลางกรอบ")
+                except Exception:
+                    pass
 
                 # อัปเดตสถิติ 5 แผน (ตาราง: ไม้ / WR / กำไร)
                 if hasattr(self, 'plan_stat_badges'):

@@ -311,11 +311,17 @@ class BotController:
             sym = self.get_gold_symbol()
             tick = mt5.symbol_info_tick(sym)
             if tick:
-                data["xau_bid"] = tick.bid
-                data["xau_ask"] = tick.ask
+                data["xau_bid"] = float(tick.bid)
+                data["xau_ask"] = float(tick.ask)
                 sym_info = mt5.symbol_info(sym)
                 if sym_info and sym_info.point > 0:
                     data["spread_pts"] = int(round((tick.ask - tick.bid) / sym_info.point))
+            if not tick or data["xau_bid"] <= 0:
+                rates_last = mt5.copy_rates_from_pos(sym, mt5.TIMEFRAME_M15, 0, 1)
+                if rates_last is not None and len(rates_last) > 0:
+                    last_c = float(rates_last[0]["close"])
+                    data["xau_bid"] = last_c
+                    data["xau_ask"] = last_c
             data["gold_symbol"] = sym
             data["radar"] = bot_core.latest_radar_cache.get(sym) or bot_core.latest_radar_cache.get("XAUUSD", {})
 
@@ -744,14 +750,69 @@ class BotController:
             if mt5.terminal_info() is None and not mt5.initialize():
                 return None
             out = {}
+            dfs = {}
             for tf_name, tf in (("H1", mt5.TIMEFRAME_H1), ("H4", mt5.TIMEFRAME_H4)):
                 rates = mt5.copy_rates_from_pos(symbol, tf, 0, 260)
                 if rates is None or len(rates) < 210:
                     continue
-                c = pd.Series([float(r["close"]) for r in rates])
+                df_cur = pd.DataFrame(rates)
+                dfs[tf_name] = df_cur
+                c = df_cur["close"]
                 ma = {n: float(c.rolling(n).mean().iloc[-2]) for n in (10, 30, 50, 100, 150, 200)}
                 out[tf_name] = {"close": float(c.iloc[-2]), "ma": ma,
                                 "diff_pct": (ma[10] / ma[30] - 1.0) * 100.0}
+
+            # อัปเดต latest_radar_cache ล่วงหน้า เพื่อให้การ์ดสภาวะตลาดและแนวรับ-ต้านแสดงผลได้ทันทีแม้ยังไม่เริ่มบอท
+            if "H1" in dfs and "H4" in dfs:
+                try:
+                    df_h1 = dfs["H1"]
+                    df_h4 = dfs["H4"]
+                    cached = bot_core.latest_radar_cache.get(symbol, {})
+                    if not self.is_active or cached.get("h1_support", 0.0) == 0.0 or cached.get("h4_trend") in ("ANALYZING...", None):
+                        cur_price = float(df_h1["close"].iloc[-1])
+                        sr_h1 = bot_core.find_sr_levels(df_h1, cur_price, df_h4=df_h4)
+                        sr_h4 = bot_core.find_sr_levels(df_h4, cur_price)
+                        h1_cond, h1_cond_pct = bot_core.ma_condition(df_h1["close"])
+                        h4_cond, h4_cond_pct = bot_core.ma_condition(df_h4["close"])
+
+                        df_h4["ma_fast_h4"] = df_h4["close"].rolling(10).mean()
+                        df_h4["ma_slow_h4"] = df_h4["close"].rolling(30).mean()
+                        atr_h4 = bot_core._atr_series(df_h4)
+                        is_up_h4, diff_pct_h4, _ = bot_core.closed_trend(df_h4["ma_fast_h4"], df_h4["ma_slow_h4"], atr=atr_h4)
+                        h4_cloud = f"SIDEWAY ({diff_pct_h4:+.2f}%)" if abs(diff_pct_h4) < 0.20 else (f"BULLISH (+{diff_pct_h4:.2f}%)" if is_up_h4 else f"BEARISH ({diff_pct_h4:.2f}%)")
+
+                        df_h1["ma_fast_h1"] = df_h1["close"].rolling(10).mean()
+                        df_h1["ma_slow_h1"] = df_h1["close"].rolling(30).mean()
+                        atr_h1 = bot_core._atr_series(df_h1)
+                        is_up_h1, diff_pct_h1, _ = bot_core.closed_trend(df_h1["ma_fast_h1"], df_h1["ma_slow_h1"], atr=atr_h1)
+                        h1_cloud = f"SIDEWAY ({diff_pct_h1:+.2f}%)" if abs(diff_pct_h1) < 0.20 else (f"BULLISH (+{diff_pct_h1:.2f}%)" if is_up_h1 else f"BEARISH ({diff_pct_h1:.2f}%)")
+
+                        bot_core.latest_radar_cache[symbol] = {
+                            "symbol": symbol,
+                            "status": "[STANDBY]" if not self.is_active else "[WAIT OUTSIDE ZONE]",
+                            "up_prob": 0.50,
+                            "price": cur_price,
+                            "is_in_zone": False,
+                            "h4_trend": h4_cloud,
+                            "h4_diff_pct": round(diff_pct_h4, 2),
+                            "h1_trend": h1_cloud,
+                            "h1_diff_pct": round(diff_pct_h1, 2),
+                            "h1_support": round(float(sr_h1.get("support", 0.0) or 0.0), 2),
+                            "h1_resistance": round(float(sr_h1.get("resistance", 0.0) or 0.0), 2),
+                            "h1_sup_stars": float(sr_h1.get("sup_stars", 6.0) or 6.0),
+                            "h1_res_stars": float(sr_h1.get("res_stars", 6.0) or 6.0),
+                            "h4_support": round(float(sr_h4.get("support", 0.0) or 0.0), 2),
+                            "h4_resistance": round(float(sr_h4.get("resistance", 0.0) or 0.0), 2),
+                            "h4_sup_stars": float(sr_h4.get("sup_stars", 6.0) or 6.0),
+                            "h4_res_stars": float(sr_h4.get("res_stars", 6.0) or 6.0),
+                            "h1_cond": int(h1_cond),
+                            "h1_cond_pct": round(h1_cond_pct, 2),
+                            "h4_cond": int(h4_cond),
+                            "h4_cond_pct": round(h4_cond_pct, 2),
+                        }
+                except Exception:
+                    pass
+
             return out or None
         except Exception:
             return None
