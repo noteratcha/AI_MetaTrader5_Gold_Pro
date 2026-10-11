@@ -899,19 +899,25 @@ def p6_trail_sl(pos, df_h1, sar, dr, sar_fast, dr_fast, atr_series, tick, info):
 
 
 def touches_to_stars(touches: int, is_extreme: bool = False) -> float:
-    """แปลงจำนวนครั้งที่ราคามาทดสอบโซนเป็นคะแนนความแข็งแกร่ง 0.00 - 10.00 (ทศนิยม 2 ตำแหน่ง)"""
+    """
+    แปลงจำนวนครั้งที่ราคามาทดสอบโซนเป็นคะแนนความแข็งแกร่ง 0.00 - 10.00 (ทศนิยม 2 ตำแหน่ง)
+    ตามหลัก SMC Liquidity Mitigation:
+      - ยิ่งโซนสดใหม่ (Fresh / 1 Touch) ยิ่งมี Unfilled Orders หนาแน่น แข็งแกร่งที่สุด (ดาวสูงสุด)
+      - หากถูกทดสอบหรือถูกใช้มาก่อน (Tested / Used Multiple Times) ความแข็งแกร่งจะลดลงเรื่อยๆ
+        เนื่องจากสภาพคล่องถูกดูดซับไปแล้ว และเสี่ยงต่อการเกิด Breakout / Sweep
+    """
     if touches <= 0:
         base = 0.0
     elif touches == 1:
-        base = 4.0 if is_extreme else 3.0
+        base = 9.5 if is_extreme else 9.0
     elif touches == 2:
-        base = 5.0
-    elif touches == 3:
         base = 7.0
+    elif touches == 3:
+        base = 5.0
     elif touches == 4:
-        base = 9.0
+        base = 3.5
     else:
-        base = 10.0
+        base = 2.0
     return round(min(10.0, max(0.0, float(base))), 2)
 
 
@@ -1068,8 +1074,13 @@ def recommend_sr_focus(sup_levels, res_levels, price, atr):
 
 def _extract_sr_zones(df, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_ZONE_ATR):
     """
-    สกัดคลัสเตอร์จุดกลับตัวแนวรับ/ต้านดิบ (Raw S&R Zones) พร้อมคำนวณความแข็งแกร่ง (Stars 2.00 - 10.00)
+    สกัดคลัสเตอร์จุดกลับตัวแนวรับ/ต้านดิบ (Raw S&R Zones) พร้อมคำนวณความแข็งแกร่ง (Stars 1.50 - 10.00)
     จากแท่งเทียนย้อนหลัง lookback (1,000 แท่ง)
+    ตามหลัก SMC Liquidity Mitigation:
+      - Fresh Zone (Untested / 1 Touch): มี Unfilled Orders เต็มเปี่ยม แข็งแกร่งที่สุด (Base 9.0 - 9.5)
+      - Tested / Used (Touches >= 2): หากถูกทดสอบหลายครั้ง ความแข็งแกร่งจะลดลง (Touch Decay)
+      - Used / Mitigated by Subsequent Bars: หากมีแท่งเทียนหลังจากนั้นวิ่งเข้ามาแตะ/ทดสอบโซน (Used Hits)
+        จะหักคะแนนความแข็งแกร่งลงตามสัดส่วน (Used Penalty) เพราะสภาพคล่องถูกดูดซับไปแล้ว
     """
     if df is None or len(df) < 2 * k + 10:
         return [], 1.0
@@ -1087,11 +1098,11 @@ def _extract_sr_zones(df, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_Z
     for idx, val in piv_hi.items():
         age = total_len - 1 - idx
         recency = max(0.20, 1.0 - 0.80 * (age / actual_lookback))
-        pivots.append({'price': float(val), 'type': 'HIGH', 'age': age, 'recency': recency})
+        pivots.append({'price': float(val), 'type': 'HIGH', 'age': age, 'recency': recency, 'idx': idx})
     for idx, val in piv_lo.items():
         age = total_len - 1 - idx
         recency = max(0.20, 1.0 - 0.80 * (age / actual_lookback))
-        pivots.append({'price': float(val), 'type': 'LOW', 'age': age, 'recency': recency})
+        pivots.append({'price': float(val), 'type': 'LOW', 'age': age, 'recency': recency, 'idx': idx})
     pivots.sort(key=lambda x: x['price'])
 
     raw_zones = []
@@ -1101,6 +1112,7 @@ def _extract_sr_zones(df, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_Z
             z['touches'] += 1
             z['sum_weight'] += p['recency']
             z['min_age'] = min(z['min_age'], p['age'])
+            z['last_idx'] = max(z.get('last_idx', 0), p['idx'])
             if p['type'] == 'LOW': z['low_cnt'] += 1
             else: z['high_cnt'] += 1
             z['price'] = z['price'] + (p['price'] - z['price']) / z['touches']
@@ -1111,24 +1123,57 @@ def _extract_sr_zones(df, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_Z
                 'touches': 1,
                 'sum_weight': p['recency'],
                 'min_age': p['age'],
+                'last_idx': p['idx'],
                 'low_cnt': 1 if p['type'] == 'LOW' else 0,
                 'high_cnt': 1 if p['type'] == 'HIGH' else 0,
             })
 
     for z in raw_zones:
         n = z['touches']
-        if n == 1: base = 3.5
-        elif n == 2: base = 5.5
-        elif n == 3: base = 7.5
-        elif n == 4: base = 9.0
-        else: base = 10.0
-        latest_rec = max(0.25, 1.0 - 0.75 * (z['min_age'] / actual_lookback))
+
+        # 1. Base Score ตามหลัก SMC Liquidity (ยิ่งชนซ้ำ ยิ่งถูกใช้ สภาพคล่องยิ่งลดลง):
+        if n == 1:
+            base = 9.2   # Fresh Zone สดใหม่ ยังไม่เคยชนซ้ำ แข็งแกร่งที่สุด
+        elif n == 2:
+            base = 7.2   # เคยทดสอบซ้ำ 1 ครั้ง
+        elif n == 3:
+            base = 5.2   # เคยทดสอบซ้ำ 2 ครั้ง สภาพคล่องเริ่มหมด
+        elif n == 4:
+            base = 3.8   # ทดสอบบ่อย เริ่มเปราะบาง
+        else:
+            base = 2.5   # ทดสอบ 4+ ครั้ง ถูกดูดซับสภาพคล่องไปหมดแล้ว เสี่ยงทะลุสูงมาก
+
+        # 2. ตรวจสอบว่าโซนนี้ถูกราคาหลังจากเกิดจุดกลับตัวเข้ามาทดสอบ/ใช้หรือไม่ (Mitigation by Subsequent Price Action)
+        last_idx = z.get('last_idx', 0)
+        subsequent_bars = d.loc[last_idx + 1:] if last_idx in d.index else None
+        used_hits = 0
+        if subsequent_bars is not None and len(subsequent_bars) > 0:
+            is_res = z['high_cnt'] >= z['low_cnt']
+            if is_res:
+                used_hits = int((subsequent_bars['high'] >= z['price'] - 0.25 * atr).sum())
+            else:
+                used_hits = int((subsequent_bars['low'] <= z['price'] + 0.25 * atr).sum())
+
+        z['used_hits'] = used_hits
+        z['mitigated'] = bool(used_hits > 0 or n >= 2)
+        z['fresh'] = bool(n == 1 and used_hits == 0)
+
+        # หักคะแนนความแข็งแกร่งหากแนวนั้นถูกใช้มาก่อน (Used Penalty)
+        used_penalty = min(2.5, used_hits * 0.35) if used_hits > 0 else 0.0
+
+        # 3. Recency Factor (แนวที่เกิดล่าสุดมีความหมายกว่าแนวในอดีตนานมาแล้ว)
+        latest_rec = max(0.35, 1.0 - 0.65 * (z['min_age'] / actual_lookback))
         avg_rec = z['sum_weight'] / n
         rec_factor = 0.65 * latest_rec + 0.35 * avg_rec
-        raw_score = base * rec_factor
-        if z['min_age'] <= 36 and n >= 2:
-            raw_score = min(10.0, raw_score * 1.25)
-        z['stars'] = round(min(10.0, max(2.0, raw_score)), 2)
+
+        effective_base = max(1.5, base - used_penalty)
+        raw_score = effective_base * rec_factor
+
+        # โซนสดใหม่ใกล้ปัจจุบัน (Fresh Swing Pivot ใน 48 แท่ง และยังไม่เคยถูกแตะ) ให้ความสำคัญสูงสุด
+        if z['min_age'] <= 48 and n == 1 and used_hits == 0:
+            raw_score = min(10.0, raw_score * 1.10)
+
+        z['stars'] = round(min(10.0, max(1.5, raw_score)), 2)
 
     return raw_zones, atr
 
@@ -1137,11 +1182,10 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
     """
     หาแนวรับ/แนวต้าน 5 ระดับ (S1..S5 และ R1..R5) จากโซนที่ราคาเคยกลับตัวในแท่งที่ปิดแล้วย้อนหลัง `lookback` (1,000 แท่ง)
     พร้อมการผสานความแข็งแกร่งข้าม Timeframe (Multi-Timeframe H1 + H4 Confluence Engine):
-      1. Recency Decay: ให้น้ำหนักจากล่าสุดไปอดีต (มากไปน้อย)
-      2. Touch Frequency: เกิดซ้ำบริเวณนั้นบ่อย ยิ่งแข็งแกร่งมาก
+      1. SMC Liquidity & Mitigation: Fresh Zone ได้ดาวสูงสุด ส่วนแนวที่ถูกใช้/ทดสอบบ่อยจะลดความแข็งแกร่งลง
+      2. Recency Decay: ให้น้ำหนักจากล่าสุดไปอดีต (มากไปน้อย)
       3. Multi-Timeframe H1 + H4 Confluence: นำคลัสเตอร์ระดับ H4 (1,000 แท่ง ~8 เดือน) มาตรวจสอบการทับซ้อน
-         หากแนวรับ/ต้าน H1 ตรงกับโซนสำคัญของ H4 จะได้รับ H4 Confluence Boost (+1.5 ดาว และถ่วงน้ำหนักระดับ Macro)
-         ทำให้จุดกลับตัวสำคัญของ H4 (เช่น Swing High/Low) มีความแข็งแกร่งหนักแน่นอย่างแท้จริง
+         หากแนวรับ/ต้าน H1 ตรงกับโซนสำคัญของ H4 จะได้รับ H4 Confluence Boost (+1.2 ดาว และถ่วงน้ำหนักระดับ Macro)
       4. Role Purity: คัดกรองแนวรับต้องมี Swing Low จริง (ไม่เอายอดต้านเก่าที่ไม่มีแรงรับจริงมาเป็น S1)
     คืน dict:
       - support..support5 / resistance..resistance5
@@ -1213,8 +1257,8 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
                 z['h4_price'] = matched_h4['price']
                 # ถ่วงน้ำหนักผสาน Macro Structure H4
                 blended = 0.55 * z['stars'] + 0.45 * matched_h4['stars']
-                if matched_h4['stars'] >= 8.0 or matched_h4['touches'] >= 3:
-                    blended += 1.5
+                if matched_h4['stars'] >= 7.5:
+                    blended += 1.2
                 z['stars'] = round(min(10.0, max(z['stars'], blended)), 2)
             else:
                 z['h4_conf'] = False
