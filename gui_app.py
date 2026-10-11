@@ -2273,11 +2273,13 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 n_bars = 120
             sr_range_limit = 600 if tf == "H4" else (250 if n_bars >= 200 else 60)
             if self.ind_toggles.get("support", True):
-                for _, s_val, _, _, _, _, _ in sup_list:
+                for item in sup_list:
+                    s_val = item[1]
                     if s_val and not (isinstance(s_val, float) and math.isnan(s_val)) and abs(s_val - cur_price) <= sr_range_limit:
                         vals.append(s_val)
             if self.ind_toggles.get("resistance", True):
-                for _, r_val, _, _, _, _, _ in res_list:
+                for item in res_list:
+                    r_val = item[1]
                     if r_val and not (isinstance(r_val, float) and math.isnan(r_val)) and abs(r_val - cur_price) <= sr_range_limit:
                         vals.append(r_val)
 
