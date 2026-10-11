@@ -1272,17 +1272,64 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
             z['h4_touches'] = 0
             z['h4_price'] = 0.0
 
-    # คัดกรองบทบาทแนวรับ/แนวต้านที่แท้จริง (Role Purity):
+    # =========================================================================
+    # 🛡️ ตัวกรองสัญญาณแนวรับ–แนวต้านหลอก (False S&R Signals Elimination Filter)
+    # =========================================================================
+    # กำจัดสัญญาณแนวรับ/ต้านหลอกตาม 5 มิติหลัก:
+    #   1. Proximity Buffer Filter: กรองแนวที่อยู่ชิดราคาปัจจุบันเกินไป (< 0.15 ATR) ซึ่งเป็น noise สะบัด
+    #   2. Clean Invalidation / Breached: กรองแนวต้านที่เคยถูกราคาปิดทะลุผ่านขึ้นไปเกิน 0.35 ATR
+    #      หรือแนวรับที่เคยถูกราคาปิดทะลุผ่านลงไปเกิน 0.35 ATR (Broken / Sliced Levels)
+    #   3. Exhaustion Chop Filter: กรองแนวที่ถูกแท่งเทียนวิ่งพาดผ่านไปมาจนพรุน (used_hits >= 15)
+    #      ซึ่งเป็นโซน Fair Value กลางกรอบไซด์เวย์ ไม่ใช่ขอบแนวรับต้านจริง
+    #   4. Role Purity: แนวรับต้องมี Low touches และแนวต้านต้องมี High touches
+    #   5. Minimum Quality: คัดกรองโซนขยะที่มีคะแนนต่ำเรี่ยดิน (stars < 2.2) ออก
+    # =========================================================================
+    def _filter_clean_sr(zones_pool, side):
+        clean = []
+        for z in zones_pool:
+            p = z['price']
+            u = z.get('used_hits', 0)
+            s = z.get('stars', 0.0)
+            if s < 2.2:
+                continue
+            if u >= 15:
+                continue
+            last_idx = z.get('last_idx', 0)
+            sub = df.loc[last_idx + 1:] if last_idx in df.index else None
+            if side == 'SUP':
+                if (price - p) < 0.15 * atr or z.get('low_cnt', 0) == 0:
+                    continue
+                if sub is not None and len(sub) > 0:
+                    breaches = int((sub['close'] < p - 0.35 * atr).sum())
+                    if breaches >= 2 and z.get('min_age', 0) > 8:
+                        continue
+            else:
+                if (p - price) < 0.15 * atr or z.get('high_cnt', 0) == 0:
+                    continue
+                if sub is not None and len(sub) > 0:
+                    breaches = int((sub['close'] > p + 0.35 * atr).sum())
+                    if breaches >= 2 and z.get('min_age', 0) > 8:
+                        continue
+            clean.append(z)
+        return clean
+
+    clean_below = _filter_clean_sr(raw_zones, 'SUP')
+    clean_above = _filter_clean_sr(raw_zones, 'RES')
+
     below_all = [z for z in raw_zones if z['price'] < price]
     above_all = [z for z in raw_zones if z['price'] > price]
 
+    # ใช้ clean zones ที่ผ่านตัวกรองหลอก หากน้อยกว่า 2 ระดับให้เสริมด้วย valid_below/above
     valid_below = [z for z in below_all if z['low_cnt'] > 0 or (z['min_age'] <= 36 and z['high_cnt'] >= 2)]
     valid_above = [z for z in above_all if z['high_cnt'] > 0 or (z['min_age'] <= 36 and z['low_cnt'] >= 2)]
 
-    cand_below = sorted(valid_below or below_all, key=lambda z: z['price'], reverse=True)
-    cand_above = sorted(valid_above or above_all, key=lambda z: z['price'])
+    cand_below = clean_below if len(clean_below) >= 2 else (clean_below + [z for z in (valid_below or below_all) if z not in clean_below])
+    cand_above = clean_above if len(clean_above) >= 2 else (clean_above + [z for z in (valid_above or above_all) if z not in clean_above])
 
-    min_gap = max(0.75 * atr, 4.0)
+    cand_below.sort(key=lambda z: z['price'], reverse=True)
+    cand_above.sort(key=lambda z: z['price'])
+
+    min_gap = max(1.0 * atr, 6.0)
 
     # 1. คัดเลือกแนวรับ 5 ระดับ (S1, S2, S3, S4, S5)
     sup_levels = []
