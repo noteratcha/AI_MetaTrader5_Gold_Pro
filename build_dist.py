@@ -43,23 +43,30 @@ def create_quickstart_guide(out_dir):
 1. การเปิดใช้งาน:
    - ดับเบิ้ลคลิกที่ไฟล์ AI_Gold_Commander_Pro.exe เพื่อเปิดหน้าต่างควบคุม
 
-2. สิทธิ์การใช้งาน (Trial & Product Key):
+2. โบรกเกอร์และบัญชี MT5 (สำหรับผู้เริ่มต้น):
+   - หากยังไม่มีโบรกเกอร์ สามารถทดลองเปิดบัญชี MT5 ได้ที่:
+     https://www.xmglobal.com/referral?token=H6macbsWn_6B1_6ia0byuw
+   - รองรับบัญชีทดลอง (Demo) หรือ Standard / Micro MT5 สำหรับทองคำ XAUUSD
+
+3. สิทธิ์การใช้งาน (Trial & Product Key):
    - สมาชิกใหม่ที่เข้าสู่ระบบครั้งแรก รับฟรีทันที 48.00 ชั่วโมง!
    - เมื่อชั่วโมงหมด สามารถซื้อ Product Key ได้ที่ร้านค้า GoldBot24:
      https://goldbot24.vercel.app/store (รองรับสแกนสลิปผ่าน SlipOK และ PromptPay)
    - นำ Product Key (รูปแบบ: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX) 
      มากดปุ่ม "เติมชั่วโมง" ในโปรแกรมเพื่อบวกเพิ่มชั่วโมงทันที
 
-3. แผนการเทรด 100% Pure Gold Specialist (XAUUSD):
-   - Plan 1: MA-Cross-Trend (MA5 x MA10 M15 + ตัวกรองเทรนด์ใหญ่ H1)
+4. แผนการเทรด 100% Pure Gold Specialist (XAUUSD):
+   - Plan 1: MA-Cross-Trend (MA5 x MA13 M15 + ตัวกรองเทรนด์ใหญ่ H1)
    - Plan 2: MA-Cross-H1-Trend (MA5 x MA10 H1 + ตัวกรองเทรนด์ใหญ่ H4)
    - Plan 3: SMC-LiquidityHunt (กวาดสภาพคล่องแนวรับ/ต้าน H1 + เทรนด์ H1)
    - Plan 4: SR-SwingBounce (เด้งโซนแนวรับ/ต้าน H1 + RSI Divergence)
    - Plan 5: BB-H1-Reversion (เด้งขอบแบนด์ H1 2STD + MACD Confluence)
+   - Plan 6: PSAR-H1-Trend (Parabolic SAR H1 + เทรนด์ H4 MA10/30)
 
-4. คำแนะนำความปลอดภัย:
-   - ตรวจสอบให้แน่ใจว่าได้เปิดโปรแกรม MetaTrader 5 และล็อกอินบัญชี FBS เรียบร้อยแล้ว
+5. คำแนะนำความปลอดภัย & คู่มือการใช้งาน:
+   - ตรวจสอบให้แน่ใจว่าได้เปิดโปรแกรม MetaTrader 5 และล็อกอินบัญชีเรียบร้อยแล้ว
    - เปิดใช้งานปุ่ม "Algo Trading" บน MT5 ให้เป็นสีเขียว
+   - อ่านคู่มือการใช้งานฉบับเต็มได้ที่: https://goldbot24.vercel.app/guide
 =======================================================
 """
     guide_path = os.path.join(out_dir, "QUICK_START_GUIDE.txt")

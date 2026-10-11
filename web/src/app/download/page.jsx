@@ -13,7 +13,26 @@ const STEPS = [
     title: 'ติดตั้งโปรแกรม',
     text: 'ดับเบิลคลิกไฟล์ Setup → Next จนเสร็จ (ไม่ต้องใช้สิทธิ์ Admin) · ถ้า Windows ขึ้น “Windows protected your PC” ให้กด More info → Run anyway',
   },
-  { title: 'เปิด MetaTrader 5', text: 'ล็อกอินบัญชี FBS ใน MT5 ค้างไว้ และเปิด Algo Trading' },
+  {
+    title: 'เปิด MetaTrader 5',
+    text: (
+      <>
+        ล็อกอินบัญชี MT5 (เช่น XM Global หรือ FBS) ค้างไว้ และเปิด Algo Trading{' '}
+        <span className="tiny">
+          — ถ้ายังไม่มีโบรกเกอร์{' '}
+          <a
+            href="https://www.xmglobal.com/referral?token=H6macbsWn_6B1_6ia0byuw"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gold"
+            style={{ textDecoration: 'underline' }}
+          >
+            ทดลองเปิดบัญชี XM Global ได้ที่นี่
+          </a>
+        </span>
+      </>
+    ),
+  },
   { title: 'เปิดโปรแกรม', text: 'ดับเบิลคลิกไอคอน “AI Gold Commander Pro” บน Desktop แล้วเข้าสู่ระบบด้วยบัญชีเดียวกับเว็บนี้' },
   { title: 'เริ่มบอท', text: 'กด “เริ่มการทำงานบอท” — ติดตามพอร์ตได้ที่หน้า “พอร์ตสด” บนเว็บ' },
 ];

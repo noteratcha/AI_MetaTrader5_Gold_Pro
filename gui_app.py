@@ -4150,6 +4150,26 @@ class MainTradingApp(ctk.CTk):
         lbl_web.pack()
         lbl_web.bind("<Button-1>", lambda e: webbrowser.open("https://goldbot24.vercel.app"))
 
+        lbl_guide = ctk.CTkLabel(
+            link_frame,
+            text="📖 คู่มือการใช้งานโปรแกรมฉบับเต็ม",
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True),
+            text_color=COLOR_GOLD_PRIMARY,
+            cursor="hand2"
+        )
+        lbl_guide.pack(pady=(2, 0))
+        lbl_guide.bind("<Button-1>", lambda e: webbrowser.open("https://goldbot24.vercel.app/guide"))
+
+        lbl_broker = ctk.CTkLabel(
+            link_frame,
+            text="🎯 ยังไม่มีโบรกเกอร์? ทดลองเปิดบัญชี MT5 ได้ที่ XM Global",
+            font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True),
+            text_color=COLOR_GOLD_WARM,
+            cursor="hand2"
+        )
+        lbl_broker.pack(pady=(2, 0))
+        lbl_broker.bind("<Button-1>", lambda e: webbrowser.open("https://www.xmglobal.com/referral?token=H6macbsWn_6B1_6ia0byuw"))
+
     def _on_auth_tab_change(self, selected_value: str):
         """สลับหน้าระหว่างโหมดเข้าสู่ระบบ และ สมัครสมาชิกใหม่"""
         self.lbl_login_status.configure(text="")
@@ -4397,6 +4417,8 @@ class MainTradingApp(ctk.CTk):
     STORE_URL = "https://goldbot24.vercel.app/store"
     DOWNLOAD_URL = "https://goldbot24.vercel.app/download"
     WEB_URL = "https://goldbot24.vercel.app"
+    GUIDE_URL = "https://goldbot24.vercel.app/guide"
+    BROKER_URL = "https://www.xmglobal.com/referral?token=H6macbsWn_6B1_6ia0byuw"
     LOW_HOURS_MINUTES = 5 * 60
     LOW_HOURS_ALERTS = (5 * 60, 60)   # เตือนด้วยหน้าต่าง + เสียงเมื่อเหลือ 5 ชม. และ 1 ชม. (ครั้งละครั้ง)
 
@@ -4491,6 +4513,8 @@ class MainTradingApp(ctk.CTk):
             menu.add_command(label=f"  {email}", state="disabled")
             menu.add_separator()
         menu.add_command(label="  🌐  เปิดเว็บ GoldBot24 (พอร์ตสด)", command=lambda: webbrowser.open(self.WEB_URL))
+        menu.add_command(label="  📖  คู่มือการใช้งานออนไลน์", command=lambda: webbrowser.open(self.GUIDE_URL))
+        menu.add_command(label="  🎯  เปิดบัญชีทดลองเทรด (XM Global)", command=lambda: webbrowser.open(self.BROKER_URL))
         menu.add_command(label="  🛒  ซื้อชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
         menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
         menu.add_command(label="  💬  ติดต่อแอดมิน (LINE)", command=lambda: ContactDialog(self))

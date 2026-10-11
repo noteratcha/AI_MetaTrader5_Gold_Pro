@@ -1951,6 +1951,41 @@ select.input {
 .guide-note-red .guide-note-label {
   color: var(--red);
 }
+.guide-broker-box {
+  background: linear-gradient(135deg, rgba(242, 193, 78, 0.08) 0%, rgba(96, 165, 250, 0.06) 100%);
+  border: 1px solid rgba(242, 193, 78, 0.3);
+  border-radius: var(--r-md);
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+.guide-broker-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(to bottom, var(--gold), var(--sky));
+}
+.guide-broker-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--gold);
+  background: rgba(242, 193, 78, 0.12);
+  border: 1px solid rgba(242, 193, 78, 0.25);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  margin-bottom: 8px;
+}
+.guide-broker-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+}
 .guide-table-wrap {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
