@@ -51,7 +51,7 @@ export default function StorePage() {
       .catch(() => setPackages(PACKAGES));
   }, []);
 
-  const discountPct = user?.online?.discount?.percent || 0;   // ส่วนลดรางวัลออนไลน์ (ใช้ได้ 1 รายการ)
+  const discountPct = (user?.online?.discount?.percent || 0) + (user?.online?.level?.discountPct || 0);   // ส่วนลดออนไลน์ 100 ชม. (1 รายการ) + ระดับสมาชิก (ถาวร)
 
   const buy = (pkg) => {
     if (!user) {
@@ -463,7 +463,7 @@ function CheckoutModal({ pkg, onClose }) {
                     </div>
                     {order.discount_pct > 0 && (
                       <div className="tiny text-green">
-                        ส่วนลดออนไลน์ครบ {order.discount_pct}% จาก <span style={{ textDecoration: 'line-through' }}>{formatThb(order.original_amount_thb)}</span>
+                        ส่วนลด {order.discount_pct}%{order.level_discount_pct > 0 ? ` (ระดับสมาชิก ${order.level_discount_pct}%${order.online_discount_pct > 0 ? ` + ออนไลน์ 100 ชม. ${order.online_discount_pct}%` : ''})` : ''} จาก <span style={{ textDecoration: 'line-through' }}>{formatThb(order.original_amount_thb)}</span>
                       </div>
                     )}
                   </div>

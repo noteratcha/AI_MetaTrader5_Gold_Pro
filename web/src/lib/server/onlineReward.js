@@ -1,5 +1,5 @@
 import { getAdminClient } from './supabaseAdmin';
-import { ONLINE_GOAL_HOURS, ONLINE_DISCOUNT_PCT, ONLINE_DISCOUNT_DAYS } from '../onlineReward';
+import { ONLINE_GOAL_HOURS, ONLINE_DISCOUNT_PCT, ONLINE_DISCOUNT_DAYS, levelInfo } from '../onlineReward';
 
 // รางวัลออนไลน์: นาทีที่หักจริงจาก /api/auth/meter สะสมเป็นรอบ (supabase_online_reward_patch_07.sql)
 // ครบ 100 ชม. → ส่วนลด 5% ซื้อชั่วโมงครั้งถัดไป 1 รายการ ใช้ได้ภายใน 3 วัน (เมื่อได้รับแล้วเริ่มนับชั่วโมงใหม่ทันที)
@@ -57,6 +57,7 @@ export async function getRewardStatus(userId) {
       goalMinutes: GOAL_MIN,
       cycles: Number(row?.cycles) || 0,
       discount: d ? { percent: Number(d.percent), expiresAt: d.expires_at, earnedAt: d.earned_at } : null,
+      level: levelInfo((Number(row?.cycles) || 0) * GOAL_MIN + (Number(row?.minutes) || 0)),
     };
   } catch {
     return null;
@@ -92,6 +93,18 @@ export async function markDiscountUsed(order) {
       .eq('id', order.discount_id);
   } catch (err) {
     console.error('[onlineReward] mark used failed:', err?.message || err);
+  }
+}
+
+/** ส่วนลดถาวรจากระดับสมาชิก (Lv.) — ชั่วโมงสะสมทั้งหมด = รอบที่ครบ × 100 ชม. + นาทีรอบปัจจุบัน */
+export async function levelDiscountPct(userId) {
+  try {
+    const { data: row, error } = await getAdminClient()
+      .from('online_progress').select('minutes, cycles').eq('user_id', String(userId)).maybeSingle();
+    if (error || !row) return 0;
+    return levelInfo((Number(row.cycles) || 0) * GOAL_MIN + (Number(row.minutes) || 0)).discountPct;
+  } catch {
+    return 0;
   }
 }
 

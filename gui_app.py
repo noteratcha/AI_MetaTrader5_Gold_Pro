@@ -6672,7 +6672,7 @@ class MainTradingApp(ctk.CTk):
         if not hasattr(self, "reward_box"):
             return
         o = license_mgr.online_status()
-        key = (None if not o else (o["minutes"], bool(o.get("discount"))), low)
+        key = (None if not o else (o["minutes"], bool(o.get("discount")), (o.get("level") or {}).get("level")), low)
         if key == self._reward_shown:
             return
         self._reward_shown = key
@@ -6690,10 +6690,12 @@ class MainTradingApp(ctk.CTk):
         cv.create_rectangle(0, 0, 118, 6, fill="#3A3220", outline="")
         frac = min(1.0, o["minutes"] / goal)
         cv.create_rectangle(0, 0, 118 * frac, 6, fill=COLOR_SUCCESS_GREEN if frac >= 1 else COLOR_GOLD_PRIMARY, outline="")
+        lv = o.get("level") or {}
+        lv_txt = f"Lv.{lv.get('level', 0)} · " if lv else ""
         if d:
-            self.lbl_reward.configure(text=f"ส่วนลด {d['percent']}% พร้อมใช้ ›", text_color=COLOR_SUCCESS_GREEN)
+            self.lbl_reward.configure(text=f"{lv_txt}ส่วนลด {d['percent']}% พร้อมใช้ ›", text_color=COLOR_SUCCESS_GREEN)
         else:
-            self.lbl_reward.configure(text=f"ออนไลน์ {o['minutes'] / 60:.1f}/{goal // 60} ชม.", text_color=COLOR_GOLD_PRIMARY)
+            self.lbl_reward.configure(text=f"{lv_txt}ออนไลน์ {o['minutes'] / 60:.1f}/{goal // 60} ชม.", text_color=COLOR_GOLD_PRIMARY)
 
     def _reward_tip(self):
         o = license_mgr.online_status()
@@ -6702,6 +6704,11 @@ class MainTradingApp(ctk.CTk):
         goal = int(o.get("goalMinutes") or self.ONLINE_GOAL_HOURS * 60) // 60
         tip = (f"ออนไลน์ครบ {goal} ชม. รับส่วนลด 5% ซื้อชั่วโมงครั้งถัดไป 1 รายการ\n"
                f"นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมง · รอบปัจจุบัน {o['minutes'] / 60:.1f} ชม.")
+        lv = o.get("level")
+        if lv:
+            nxt = "ระดับสูงสุดแล้ว" if lv.get("maxed") else f"อีก {lv['levelHours'] - lv['hoursIntoLevel']:,.1f} ชม. ขึ้น Lv.{lv['level'] + 1}"
+            tip += (f"\nระดับสมาชิก Lv.{lv['level']}/100 · สะสม {lv['totalHours']:,.1f} ชม. · {nxt}\n"
+                    f"ส่วนลดถาวรทุกการซื้อ {lv['discountPct']}% (ทุก 10 Lv. เพิ่ม 1% · ไม่รีเซ็ต)")
         d = o.get("discount")
         if d:
             try:
