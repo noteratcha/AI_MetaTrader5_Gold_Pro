@@ -26,6 +26,7 @@ import { PLAN_LIST } from '../lib/packages';
 import { planDisplay } from '../lib/plans';
 import { CandleCard, DailyPnlCard, NewsImpactCard, OutlookCard } from '../components/LiveInsights';
 import TradeHistory from '../components/TradeHistory';
+import MyTradeStats from '../components/MyTradeStats';
 import { NextNewsCard, useCalendar } from '../components/EconCalendar';
 
 export default function HomePage() {
@@ -177,6 +178,8 @@ function LiveMonitor() {
             <DailyPnlCard rows={radar?.daily_pnl} />
             <NewsImpactCard news={radar?.news} />
           </div>
+
+          <MyTradeStats />
 
           <div className="grid grid-main-side section" style={{ alignItems: 'start' }}>
             <TradeHistory />
