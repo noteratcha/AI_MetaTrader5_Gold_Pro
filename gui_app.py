@@ -22,6 +22,7 @@ import urllib.parse
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
+import MetaTrader5 as _mt5
 
 from license_manager import (
     license_mgr,
@@ -1033,6 +1034,220 @@ def brand_name(parent, font, height=None):
     ctk.CTkLabel(box, text="Gold", font=font, text_color=COLOR_TEXT_PRIMARY, **kw).pack(side="left")
     ctk.CTkLabel(box, text=" Bot 24", font=font, text_color=COLOR_GOLD_PRIMARY, **kw).pack(side="left")
     return box
+
+
+class NewsDialog(ctk.CTkToplevel):
+    """ข่าวสารและโปรโมชันจากแอดมิน (ชุดเดียวกับเว็บ /news) — รูป + ข้อความ + ปุ่มลิงก์ · โหลดรูปในเธรดเบื้องหลัง"""
+    WEB_NEWS = "https://goldbot24.vercel.app/news"
+
+    def __init__(self, parent, items, title="ข่าวสารและโปรโมชัน"):
+        super().__init__(parent)
+        self.title(title)
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.geometry("600x640")
+        self.minsize(480, 360)
+        apply_dark_title_bar(self)
+        self._imgs, self._pending, self._loaded = {}, {}, {}
+
+        def f(size, weight="normal"):
+            return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
+
+        head = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=0)
+        head.pack(fill="x")
+        ctk.CTkLabel(head, text=title, font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(14, 0))
+        ctk.CTkLabel(head, text="ข่าวจากทีม Gold Bot 24 · แสดงตรงกันทั้งในโปรแกรมและบนเว็บ", font=f(11),
+                     text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=20, pady=(0, 12))
+
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=12, pady=12)
+        if not items:
+            ctk.CTkLabel(body, text="ยังไม่มีข่าวสาร", font=f(13), text_color=COLOR_TEXT_MUTED).pack(pady=40)
+        for it in items:
+            card = ctk.CTkFrame(body, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+            card.pack(fill="x", pady=(0, 12), padx=2)
+            top = ctk.CTkFrame(card, fg_color="transparent")
+            top.pack(fill="x", padx=16, pady=(14, 6))
+            ctk.CTkLabel(top, text=it.get("title", ""), font=f(15, "bold"), text_color=COLOR_TEXT_PRIMARY,
+                         justify="left", anchor="w", wraplength=420).pack(side="left", fill="x", expand=True)
+            try:
+                from datetime import datetime
+                ts = datetime.fromisoformat(str(it.get("startsAt")).replace("Z", "+00:00")).timestamp()
+                ctk.CTkLabel(top, text=thai_time.from_epoch(ts, "%d/%m/%Y"), font=f(10), text_color=COLOR_TEXT_MUTED).pack(side="right")
+            except Exception:
+                pass
+            if it.get("imageUrl"):
+                holder = ctk.CTkLabel(card, text="กำลังโหลดรูป…", font=f(11), text_color=COLOR_TEXT_MUTED, height=60)
+                holder.pack(padx=16, pady=(0, 8))
+                self._pending[it["id"]] = (holder, it["imageUrl"])
+            if it.get("body"):
+                ctk.CTkLabel(card, text=it["body"], font=f(12), text_color=COLOR_TEXT_PRIMARY, justify="left",
+                             anchor="w", wraplength=520).pack(fill="x", padx=16, pady=(0, 10))
+            link = it.get("linkUrl")
+            if link:
+                url = link if link.lower().startswith("http") else "https://goldbot24.vercel.app" + link
+                ctk.CTkButton(card, text=it.get("linkLabel") or "ดูรายละเอียด", height=32, corner_radius=8, font=f(12, "bold"),
+                              fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_PRIMARY, text_color="#1A1406",
+                              command=lambda u=url: (self.destroy(), webbrowser.open(u))).pack(anchor="w", padx=16, pady=(0, 14))
+            else:
+                ctk.CTkFrame(card, fg_color="transparent", height=4).pack()
+
+        foot = ctk.CTkFrame(self, fg_color="transparent")
+        foot.pack(fill="x", padx=16, pady=(0, 14))
+        ctk.CTkButton(foot, text="ดูบนเว็บ", width=100, height=32, font=f(12), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
+                      border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_PRIMARY,
+                      command=lambda: (self.destroy(), webbrowser.open(self.WEB_NEWS))).pack(side="left")
+        ctk.CTkButton(foot, text="ปิด", width=100, height=32, font=f(12, "bold"), fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_PRIMARY,
+                      text_color="#1A1406", command=self.destroy).pack(side="right")
+
+        if self._pending:
+            threading.Thread(target=self._load_images, daemon=True).start()
+            self.after(200, self._apply_images)
+
+    def _load_images(self):
+        import news_feed
+        for nid, (_h, url) in list(self._pending.items()):
+            self._loaded[nid] = news_feed.fetch_image(url, 520) or False
+
+    def _apply_images(self):
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+        for nid, img in list(self._loaded.items()):
+            holder, _u = self._pending.pop(nid, (None, None))
+            self._loaded.pop(nid, None)
+            if holder is None:
+                continue
+            if img:
+                self._imgs[nid] = ctk.CTkImage(light_image=img, dark_image=img, size=img.size)
+                holder.configure(text="", image=self._imgs[nid], height=img.size[1])
+            else:
+                holder.pack_forget()
+        if self._pending:
+            self.after(200, self._apply_images)
+
+
+class HoursHistoryDialog(ctk.CTkToplevel):
+    """ประวัติการสะสมชั่วโมง (เวลาที่บอททำงานและถูกหักจริง) รายวัน + ระดับสมาชิก — ข้อมูลเดียวกับเว็บ /dashboard"""
+    RANGES = ((7, "7 วัน"), (30, "30 วัน"), (90, "90 วัน"), (365, "1 ปี"))
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("ประวัติการสะสมชั่วโมง")
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.geometry("760x440")
+        self.minsize(600, 380)
+        apply_dark_title_bar(self)
+        self._days, self._result, self._busy, self._data, self._series, self._bars = 30, None, False, None, [], []
+
+        def f(size, weight="normal"):
+            return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
+
+        head = ctk.CTkFrame(self, fg_color="transparent")
+        head.pack(fill="x", padx=20, pady=(16, 6))
+        ctk.CTkLabel(head, text="ประวัติการสะสมชั่วโมง", font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(side="left")
+        self._btns = {}
+        for d, label in reversed(self.RANGES):
+            b = ctk.CTkButton(head, text=label, width=64, height=28, corner_radius=8, font=f(11, "bold"), command=lambda v=d: self._load(v))
+            b.pack(side="right", padx=(6, 0))
+            self._btns[d] = b
+        self.lbl_sum = ctk.CTkLabel(self, text="กำลังโหลด…", font=f(13), text_color=COLOR_TEXT_PRIMARY, anchor="w", justify="left")
+        self.lbl_sum.pack(fill="x", padx=20)
+        self.cv = tk.Canvas(self, bg=COLOR_CARD_BG, highlightthickness=0, height=240)
+        self.cv.pack(fill="both", expand=True, padx=20, pady=(8, 6))
+        self.cv.bind("<Configure>", lambda e: self._draw())
+        self.cv.bind("<Motion>", self._hover)
+        self.lbl_hover = ctk.CTkLabel(self, text="นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมงจริง · วันตามเวลาไทย · ชี้ที่แท่งเพื่อดูรายละเอียด",
+                                      font=f(11), text_color=COLOR_TEXT_MUTED)
+        self.lbl_hover.pack(pady=(0, 12))
+        self._load(30)
+
+    def _load(self, days):
+        self._days = days
+        for d, b in self._btns.items():
+            on = d == days
+            b.configure(fg_color=COLOR_GOLD_WARM if on else COLOR_CARD_BG, text_color="#1A1406" if on else COLOR_TEXT_PRIMARY,
+                        hover_color=COLOR_GOLD_PRIMARY if on else COLOR_CARD_HOVER)
+        if self._busy:
+            return
+        self._busy = True
+        import news_feed
+
+        def work():
+            self._result = news_feed.fetch_hours_history(days) or {"rows": [], "available": False, "failed": True}
+        threading.Thread(target=work, daemon=True).start()
+        self.after(150, self._wait)
+
+    def _wait(self):
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+        if self._result is None:
+            self.after(150, self._wait)
+            return
+        self._busy = False
+        self._data, self._result = self._result, None
+        if self._data.get("failed"):
+            self.lbl_sum.configure(text="โหลดประวัติไม่ได้ — ตรวจการเชื่อมต่ออินเทอร์เน็ต")
+        elif not self._data.get("available"):
+            self.lbl_sum.configure(text="ระบบประวัติรายวันยังไม่เปิดใช้งาน (รอแอดมินอัปเดตฐานข้อมูล)")
+        self._build_series()
+        self._draw()
+
+    def _build_series(self):
+        from datetime import timedelta
+        rows = {r["day"]: r["minutes"] for r in (self._data or {}).get("rows", [])}
+        today = thai_time.now().date()
+        days = [today - timedelta(days=i) for i in range(self._days - 1, -1, -1)]
+        series = [(d, d, rows.get(d.isoformat(), 0) / 60) for d in days]
+        if self._days > 62:   # รวมรายสัปดาห์
+            series = [(series[i][0], series[min(i + 6, len(series) - 1)][1], sum(x[2] for x in series[i:i + 7]))
+                      for i in range(0, len(series), 7)]
+        self._series = series
+        data = self._data or {}
+        if data.get("available"):
+            total = sum(x[2] for x in series)
+            active = sum(1 for x in series if x[2] > 0)
+            lv = (data.get("online") or {}).get("level")
+            txt = f"สะสมช่วงนี้ {total:,.1f} ชม. · {'สัปดาห์' if self._days > 62 else 'วัน'}ที่บอททำงาน {active}/{len(series)}"
+            if lv:
+                txt += f"   ·   สะสมทั้งหมด {lv['totalHours']:,.1f} ชม. · Lv.{lv['level']} (ส่วนลดถาวร {lv['discountPct']}%)"
+            self.lbl_sum.configure(text=txt)
+
+    def _draw(self):
+        cv = self.cv
+        cv.delete("all")
+        series = self._series
+        if not series:
+            return
+        W, H = cv.winfo_width(), cv.winfo_height()
+        pl, pr, pt, pb = 40, 12, 14, 26
+        mx = max(1.0, max(x[2] for x in series))
+        n = len(series)
+        bw = (W - pl - pr) / n
+        for k in range(3):
+            y = H - pb - (H - pt - pb) * k / 2
+            cv.create_line(pl, y, W - pr, y, fill="#262B36", dash=(3, 3))
+            cv.create_text(pl - 6, y, text=f"{mx * k / 2:.0f}", fill=COLOR_TEXT_MUTED, anchor="e", font=(app_fonts.UI, 9))
+        self._bars = []
+        gap = 1 if n > 40 else 2
+        for i, (d0, d1, h) in enumerate(series):
+            x0, x1 = pl + i * bw + gap, pl + (i + 1) * bw - gap
+            y = H - pb - (H - pt - pb) * (h / mx)
+            cv.create_rectangle(x0, min(y, H - pb - 1), x1, H - pb, fill=COLOR_GOLD_WARM if h > 0 else "#262B36", outline="")
+            self._bars.append((x0, x1, d0, d1, h))
+        for i in sorted({0, n // 2, n - 1}):
+            cv.create_text(pl + (i + 0.5) * bw, H - 10, text=series[i][0].strftime("%d/%m"), fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
+
+    def _hover(self, e):
+        for x0, x1, d0, d1, h in self._bars:
+            if x0 - 1 <= e.x <= x1 + 1:
+                rng = d0.strftime("%d/%m/%Y") + (f" – {d1.strftime('%d/%m')}" if d1 != d0 else "")
+                self.lbl_hover.configure(text=f"{rng} · {h:,.1f} ชม.", text_color=COLOR_GOLD_PRIMARY)
+                return
 
 
 class ContactDialog(ctk.CTkToplevel):
@@ -4557,6 +4772,8 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  🛒  ซื้อชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
         menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
         menu.add_command(label="  ⚙️  จัดการ Profile & MT5 Terminal", command=self._open_profile_manager_modal)
+        menu.add_command(label="  📢  ข่าวสารและโปรโมชัน", command=self._open_news)
+        menu.add_command(label="  ⏳  ประวัติการสะสมชั่วโมง / Lv.", command=lambda: HoursHistoryDialog(self))
         menu.add_command(label="  💬  ติดต่อแอดมิน (LINE)", command=lambda: ContactDialog(self))
         menu.add_command(label="  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
         menu.add_separator()
@@ -4567,6 +4784,45 @@ class MainTradingApp(ctk.CTk):
             menu.tk_popup(x, y)
         finally:
             menu.grab_release()
+
+    def _open_news(self):
+        """รายการข่าวทั้งหมด (ดึงใหม่ในเธรดเบื้องหลัง)"""
+        import news_feed
+        box = {}
+        threading.Thread(target=lambda: box.setdefault("items", news_feed.fetch_announcements()), daemon=True).start()
+
+        def wait():
+            if "items" not in box:
+                self.after(150, wait)
+                return
+            news_feed.mark_seen(i["id"] for i in box["items"])
+            NewsDialog(self, box["items"])
+        wait()
+
+    def _news_tick(self):
+        """ตรวจข่าวใหม่ทุก 15 นาที — ข่าวที่ตั้งเด้งป๊อปอัปและผู้ใช้ยังไม่เคยเห็น แสดงหน้าต่างข่าวครั้งเดียว"""
+        import news_feed
+        st = self.__dict__.setdefault("_news_state", {"busy": False, "items": None})
+        if st["items"] is not None:
+            items, st["items"] = st["items"], None
+            seen = news_feed.seen_ids()
+            fresh = [i for i in items if i.get("popup") and i.get("id") not in seen]
+            if fresh and self.is_logged_in:
+                news_feed.mark_seen(i["id"] for i in fresh)
+                try:
+                    NewsDialog(self, fresh, title="ข่าวใหม่จาก Gold Bot 24")
+                except Exception:
+                    pass
+            self.after(15 * 60 * 1000, self._news_tick)
+            return
+        if not st["busy"]:
+            st["busy"] = True
+
+            def work():
+                st["items"] = news_feed.fetch_announcements()
+                st["busy"] = False
+            threading.Thread(target=work, daemon=True).start()
+        self.after(500, self._news_tick)
 
     def _open_profile_manager_modal(self):
         try:
@@ -5307,12 +5563,14 @@ class MainTradingApp(ctk.CTk):
             self.plan_total_labels.append(lbl)
         self.after(300, self._plan_checks_tick)
         self.after(1000, self._plan_live_tick)
+        self.after(8000, self._news_tick)
 
     def _plan_live_tick(self):
         """แสดงป้ายสถานะเงื่อนไขการเข้าไม้เรียลไทม์ และป้าย ● BUY / ● SELL ที่แผนที่มีไม้เปิดอยู่ตอนนี้"""
         try:
             sym = bot_ctrl.get_gold_symbol()
             gold_syms = {sym.upper(), "XAUUSD", "GOLD"}
+            open_by_plan = {}
             for p in _mt5.positions_get() or []:
                 if p.symbol.upper() not in gold_syms:
                     continue
@@ -5689,9 +5947,12 @@ class MainTradingApp(ctk.CTk):
         table.pack(fill="both", expand=True, padx=6, pady=(0, 4))
         head = ctk.CTkFrame(table, fg_color="transparent")
         head.pack(fill="x", padx=6, pady=(8, 0))
+        self._pos_head = head
+        table.bind("<Configure>", lambda e: self.after(60, self._sync_position_header), add="+")
         self._configure_position_grid(head)
         for col, (title, _, anchor) in enumerate(self.POSITION_COLUMNS):
-            ctk.CTkLabel(head, text=title, font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor, height=22).grid(row=0, column=col, sticky="ew", padx=4)
+            ctk.CTkLabel(head, text=title, font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED, anchor=anchor, height=22,
+                         width=self._pos_col_width(col)).grid(row=0, column=col, sticky="ew", padx=4)
         ctk.CTkFrame(table, fg_color=COLOR_CARD_BORDER, height=1).pack(fill="x", padx=10, pady=(4, 0))
 
         self.positions_body = ctk.CTkScrollableFrame(table, fg_color="transparent")
@@ -5703,9 +5964,46 @@ class MainTradingApp(ctk.CTk):
         self.lbl_positions_empty.pack(pady=40)
         self._position_rows = {}
 
+    def _pos_col_width(self, col):
+        """ความกว้างคอลัมน์คงที่ = ค่าที่กำหนด หรือความกว้างหัวคอลัมน์/ค่าตัวอย่างที่ยาวสุด (กันหัวกับแถวกว้างไม่เท่ากัน)"""
+        if not getattr(self, "_pos_widths", None):
+            import tkinter.font as tkfont
+            try:
+                fb = tkfont.Font(family=app_fonts.UI, size=-15, weight="bold")
+                fn = tkfont.Font(family=app_fonts.UI, size=-16)
+            except Exception:
+                fb = fn = None
+            samples = ["#1015762483", "SELL", "", "10.00", "4,170.57", "4,171.25", "4,174.68", "-1,411.00", "รันเทรนด์", "23ชม 59น", "-1,068.00", "", ""]
+            ws = []
+            for i, (title, width, _) in enumerate(self.POSITION_COLUMNS):
+                need = width
+                if fb is not None:
+                    need = max(need, fb.measure(title) + 6, fn.measure(samples[i]) + 6 if samples[i] else 0)
+                ws.append(int(need))
+            self._pos_widths = ws
+        return self._pos_widths[col]
+
     def _configure_position_grid(self, frame):
-        for col, (_, width, _) in enumerate(self.POSITION_COLUMNS):
-            frame.grid_columnconfigure(col, minsize=width, weight=1 if col == 2 else 0)
+        # คอลัมน์ "แผน" ยืดได้คอลัมน์เดียว · ที่เหลือกว้างคงที่ — หัวตารางกับทุกแถวจึงตรงกัน
+        for col in range(len(self.POSITION_COLUMNS)):
+            frame.grid_columnconfigure(col, minsize=self._pos_col_width(col), weight=1 if col == 2 else 0)
+
+    def _sync_position_header(self):
+        """หัวตารางอยู่นอกกรอบเลื่อน (มีแถบเลื่อนด้านขวา) — จัดขอบซ้าย/ขวาของหัวให้ตรงกับแถวจริง"""
+        rows = list(getattr(self, "_position_rows", {}).values())
+        head = getattr(self, "_pos_head", None)
+        if not rows or head is None:
+            return
+        try:
+            fr = rows[0]["frame"]
+            fr.update_idletasks()
+            parent_x = head.master.winfo_rootx()
+            left = fr.winfo_rootx() - parent_x
+            right = head.master.winfo_width() - (left + fr.winfo_width())
+            if left > 0 and right >= 0:
+                head.pack_configure(padx=(left, right))
+        except Exception:
+            pass
 
     @staticmethod
     def _fmt_duration(seconds):
@@ -5741,7 +6039,7 @@ class MainTradingApp(ctk.CTk):
                         lbl.grid(row=0, column=col, padx=4)
                         HoverTip(lbl, lambda tk_=t: self._advice_tip(tk_))
                     else:
-                        lbl = ctk.CTkLabel(frame, text="", font=self._font(12), anchor=anchor, height=32)
+                        lbl = ctk.CTkLabel(frame, text="", font=self._font(12), anchor=anchor, height=32, width=self._pos_col_width(col))
                         lbl.grid(row=0, column=col, sticky="ew", padx=4)
                     cells.append(lbl)
                 btn = ctk.CTkButton(
@@ -5759,6 +6057,7 @@ class MainTradingApp(ctk.CTk):
                 self._position_rows[t] = {"frame": frame, "cells": cells}
             if tickets:
                 self.lbl_positions_empty.pack_forget()
+                self.after(120, self._sync_position_header)
             else:
                 self.lbl_positions_empty.pack(pady=40)
             position_advisor.request_refresh()

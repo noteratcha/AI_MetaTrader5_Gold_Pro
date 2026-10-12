@@ -158,6 +158,8 @@ def build_gui_app(mode="pyinstaller"):
             "--hidden-import=in_place_updater",
             "--hidden-import=mt5_terminal_manager",
             "--hidden-import=profile_dialog",
+            "--hidden-import=instance_guard",
+            "--hidden-import=news_feed",
             f"--name={APP_NAME}",
             "gui_app.py"
         ]
