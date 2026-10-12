@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { BarChart3, Clock, Key, Lock, RefreshCw, ShoppingBag, Sparkles } from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronUp, Clock, Key, Lock, Receipt, RefreshCw, ShoppingBag, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import RedeemCard from '../../components/RedeemCard';
 import OnlineRewardCard from '../../components/OnlineRewardCard';
 import HoursHistoryCard from '../../components/HoursHistoryCard';
+import KeyVault from '../../components/KeyVault';
 import { Alert, AuthGate, PageHeader, PageLoading, Spinner, StatCard } from '../../components/ui';
 import { formatHHMM, formatKeyInput } from '../../lib/format';
 import { LOW_HOURS } from '../../lib/hours';
@@ -17,12 +19,26 @@ export default function DashboardPage() {
   if (!user) {
     return <AuthGate icon={Lock} title="เข้าสู่ระบบเพื่อดูกระเป๋าเวลา" description="จัดการชั่วโมงใช้งาน เติม Product Key และดูสถิติการเทรดแยกตามแผนของคุณ" />;
   }
-  return <Dashboard />;
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <Dashboard />
+    </Suspense>
+  );
 }
 
 function Dashboard() {
   const { user, refreshUser } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  // คีย์ของฉัน: ซ่อนไว้ กดปุ่มเพื่อเปิด · ลิงก์ /dashboard?keys=1 (หรือ /my-keys เดิม) เปิดให้อัตโนมัติ
+  const params = useSearchParams();
+  const [showKeys, setShowKeys] = useState(false);
+  const keysRef = useRef(null);
+  useEffect(() => {
+    if (params?.get('keys') === '1') {
+      setShowKeys(true);
+      setTimeout(() => keysRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    }
+  }, [params]);
 
   const refreshAll = async () => {
     setRefreshing(true);
@@ -80,11 +96,27 @@ function Dashboard() {
             </div>
           </div>
           <Link href="/store" className="btn btn-primary btn-block" style={{ marginTop: 20 }}>
-            <ShoppingBag size={16} /> ซื้อชั่วโมงเพิ่ม
+            <ShoppingBag size={16} /> เติมชั่วโมงเพิ่ม
           </Link>
         </div>
 
         <RedeemCard />
+      </div>
+
+      <div className="section" ref={keysRef} id="my-keys">
+        <div className="row wrap" style={{ gap: 8 }}>
+          <button type="button" className={`btn ${showKeys ? 'btn-secondary' : 'btn-outline-gold'}`} onClick={() => setShowKeys((v) => !v)} aria-expanded={showKeys}>
+            <Key size={16} /> {showKeys ? 'ซ่อนคีย์ของฉัน' : 'ดูคีย์ของฉัน'} {showKeys ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          <Link href="/receipts" className="btn btn-ghost">
+            <Receipt size={16} /> ใบเสร็จของฉัน
+          </Link>
+        </div>
+        {showKeys && (
+          <div style={{ marginTop: 16 }}>
+            <KeyVault />
+          </div>
+        )}
       </div>
 
       <div className="section">

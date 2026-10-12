@@ -10,7 +10,7 @@ import { formatThaiDateTime, formatThb } from '../../lib/format';
 export default function ReceiptsPage() {
   const { user, isLoading } = useAuth();
   if (isLoading) return <PageLoading />;
-  if (!user) return <AuthGate icon={Lock} title="เข้าสู่ระบบเพื่อดูใบเสร็จ" description="ใบเสร็จการซื้อชั่วโมงทั้งหมดของคุณเก็บไว้ที่นี่" />;
+  if (!user) return <AuthGate icon={Lock} title="เข้าสู่ระบบเพื่อดูใบเสร็จ" description="ใบเสร็จการเติมชั่วโมงทั้งหมดของคุณเก็บไว้ที่นี่" />;
   return <ReceiptList />;
 }
 
@@ -40,7 +40,7 @@ function ReceiptList() {
         description="ใบเสร็จรับเงินออกอัตโนมัติทุกครั้งที่ชำระเงินสำเร็จ และส่งสำเนาไปที่อีเมลของคุณ"
         actions={
           <Link href="/store" className="btn btn-primary btn-sm">
-            <ShoppingBag size={15} /> ซื้อชั่วโมงเพิ่ม
+            <ShoppingBag size={15} /> เติมชั่วโมงเพิ่ม
           </Link>
         }
       />
@@ -54,7 +54,7 @@ function ReceiptList() {
       ) : receipts.length === 0 ? (
         <div className="card">
           <EmptyState icon={Receipt} title="ยังไม่มีใบเสร็จ">
-            ใบเสร็จจะแสดงที่นี่หลังจากซื้อชั่วโมงสำเร็จ
+            ใบเสร็จจะแสดงที่นี่หลังจากเติมชั่วโมงสำเร็จ
           </EmptyState>
         </div>
       ) : (

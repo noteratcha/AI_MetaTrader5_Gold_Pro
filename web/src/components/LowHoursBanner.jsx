@@ -32,7 +32,7 @@ export default function LowHoursBanner() {
         </span>
         <span className="row" style={{ gap: 8 }}>
           {pathname !== '/store' && (
-            <Link href="/store" className="btn btn-primary btn-sm">ซื้อชั่วโมง</Link>
+            <Link href="/store" className="btn btn-primary btn-sm">เติมชั่วโมง</Link>
           )}
           {pathname !== '/redeem' && (
             <Link href="/redeem" className="btn btn-secondary btn-sm">เติมคีย์</Link>

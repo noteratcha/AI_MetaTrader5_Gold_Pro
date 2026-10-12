@@ -89,7 +89,7 @@ export default async function handler(req, res) {
           console.error('[checkout/verify-slip] SlipOK merchant error:', code, slipokData.message);
           if (Date.now() - lastMerchantAlert > 3600000) {
             lastMerchantAlert = Date.now();
-            await notifyAdmins(`⚠️ ระบบตรวจสลิป SlipOK ขัดข้อง\nรหัส ${code}: ${slipokData.message || '-'}\nลูกค้าซื้อชั่วโมงไม่ได้ — ตรวจแพ็กเกจ/โควตา SlipOK`);
+            await notifyAdmins(`⚠️ ระบบตรวจสลิป SlipOK ขัดข้อง\nรหัส ${code}: ${slipokData.message || '-'}\nลูกค้าเติมชั่วโมงไม่ได้ — ตรวจแพ็กเกจ/โควตา SlipOK`);
           }
           return res.status(503).json({
             success: false,

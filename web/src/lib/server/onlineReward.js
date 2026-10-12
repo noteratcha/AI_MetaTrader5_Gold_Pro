@@ -2,7 +2,7 @@ import { getAdminClient } from './supabaseAdmin';
 import { ONLINE_GOAL_HOURS, ONLINE_DISCOUNT_PCT, ONLINE_DISCOUNT_DAYS, levelInfo } from '../onlineReward';
 
 // รางวัลออนไลน์: นาทีที่หักจริงจาก /api/auth/meter สะสมเป็นรอบ (supabase_online_reward_patch_07.sql)
-// ครบ 100 ชม. → ส่วนลด 5% ซื้อชั่วโมงครั้งถัดไป 1 รายการ ใช้ได้ภายใน 3 วัน (เมื่อได้รับแล้วเริ่มนับชั่วโมงใหม่ทันที)
+// ครบ 100 ชม. → ส่วนลด 5% เติมชั่วโมงครั้งถัดไป 1 รายการ ใช้ได้ภายใน 3 วัน (เมื่อได้รับแล้วเริ่มนับชั่วโมงใหม่ทันที)
 const GOAL_MIN = ONLINE_GOAL_HOURS * 60;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** บวกนาทีออนไลน์ (atomic ใน Postgres) · ครบ 100 ชม. → ออกส่วนลด (อายุ 3 วัน) และเริ่มนับรอบใหม่ทันที (เศษยกไป) */

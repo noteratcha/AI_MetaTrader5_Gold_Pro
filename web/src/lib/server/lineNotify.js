@@ -72,7 +72,7 @@ export function notifyNewMember({ email, displayName, hours, ip }) {
 export function notifyPurchase({ email, amountThb, hours, orderId, productKey, method }) {
   return notifyAdmins(
     [
-      '💰 ซื้อชั่วโมงสำเร็จ',
+      '💰 เติมชั่วโมงสำเร็จ',
       `ผู้ซื้อ: ${email || '-'}`,
       `ยอดชำระ: ฿${Number(amountThb).toLocaleString('th-TH')}`,
       `ชั่วโมง: +${hours} ชม.`,

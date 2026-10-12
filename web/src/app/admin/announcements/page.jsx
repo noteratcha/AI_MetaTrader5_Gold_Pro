@@ -146,7 +146,7 @@ export default function AdminAnnouncementsPage() {
             </label>
             <label className="stack" style={{ gap: 4 }}>
               <span className="small muted">ข้อความปุ่ม</span>
-              <input className="input" value={form.linkLabel} onChange={set('linkLabel')} maxLength={60} placeholder="ซื้อชั่วโมงเลย" />
+              <input className="input" value={form.linkLabel} onChange={set('linkLabel')} maxLength={60} placeholder="เติมชั่วโมงเลย" />
             </label>
             <label className="stack" style={{ gap: 4 }}>
               <span className="small muted">เริ่มแสดง (เวลาไทย)</span>

@@ -44,12 +44,12 @@ export default function RedeemContent() {
           <li>ชั่วโมงบวกเพิ่มจากยอดเดิมทันที และใช้ได้ทั้งบนเว็บและในโปรแกรม Gold Bot 24</li>
           <li>คีย์แต่ละรหัสใช้ได้ครั้งเดียว คีย์โปรโมชันบางรหัสมีวันหมดอายุ</li>
           <li>
-            ยังไม่มีคีย์? <Link href="/store" className="text-sky">ซื้อชั่วโมง</Link> หรือดูคีย์ที่ซื้อไว้ที่{' '}
-            <Link href="/my-keys" className="text-sky">คีย์ของฉัน</Link>
+            ยังไม่มีคีย์? <Link href="/store" className="text-sky">เติมชั่วโมง</Link> หรือดูคีย์ที่ซื้อไว้ที่{' '}
+            <Link href="/dashboard?keys=1" className="text-sky">คีย์ของฉัน</Link>
           </li>
         </ul>
         <Link href="/store" className="btn btn-secondary btn-sm" style={{ marginTop: 6 }}>
-          <ShoppingBag size={15} /> ไปหน้าซื้อชั่วโมง
+          <ShoppingBag size={15} /> ไปหน้าเติมชั่วโมง
         </Link>
       </div>
     </div>

@@ -4687,7 +4687,7 @@ class MainTradingApp(ctk.CTk):
     LOW_HOURS_ALERTS = (5 * 60, 60)   # เตือนด้วยหน้าต่าง + เสียงเมื่อเหลือ 5 ชม. และ 1 ชม. (ครั้งละครั้ง)
 
     def _build_top_header(self):
-        """แถบบน: แบรนด์ + สถานะเวอร์ชัน | กระเป๋าเวลา (เติมคีย์/ซื้อชั่วโมง) | เมนูผู้ใช้"""
+        """แถบบน: แบรนด์ + สถานะเวอร์ชัน | กระเป๋าเวลา (เติมคีย์/เติมชั่วโมง) | เมนูผู้ใช้"""
         header = ctk.CTkFrame(self.dashboard_view, fg_color=COLOR_CARD_BG, height=60, corner_radius=0)
         header.pack(fill="x", side="top", pady=(0, 10))
         h_inner = ctk.CTkFrame(header, fg_color="transparent")
@@ -4739,7 +4739,7 @@ class MainTradingApp(ctk.CTk):
             w.bind("<Enter>", lambda e: avatar.configure(fg_color=COLOR_GOLD_PRIMARY))
             w.bind("<Leave>", lambda e: avatar.configure(fg_color=COLOR_GOLD_WARM))
 
-        # --- ขวา: กระเป๋าเวลา (เวลาคงเหลือ + เติมคีย์ + ซื้อชั่วโมง)
+        # --- ขวา: กระเป๋าเวลา (เวลาคงเหลือ + เติมคีย์ + เติมชั่วโมง)
         self.time_pill_frame = ctk.CTkFrame(h_inner, fg_color=COLOR_GOLD_BG, corner_radius=12, border_width=1, border_color="#5A4519")
         self.time_pill_frame.pack(side="right", padx=(0, 16))
         wallet = ctk.CTkFrame(self.time_pill_frame, fg_color="transparent")
@@ -4755,7 +4755,7 @@ class MainTradingApp(ctk.CTk):
         self.lbl_metering_status = ctk.CTkLabel(hours_box, text="⏸ หยุดนับเวลา", font=self._font(10), text_color=COLOR_TEXT_MUTED, height=14)
         self.lbl_metering_status.pack(anchor="w")
 
-        # รางวัลออนไลน์: สะสมครบ 100 ชม. → ส่วนลด 5% ซื้อชั่วโมงครั้งถัดไป (ใช้ได้ 3 วัน · เริ่มรอบใหม่ทันที) คลิกเปิดหน้าร้าน
+        # รางวัลออนไลน์: สะสมครบ 100 ชม. → ส่วนลด 5% เติมชั่วโมงครั้งถัดไป (ใช้ได้ 3 วัน · เริ่มรอบใหม่ทันที) คลิกเปิดหน้าร้าน
         self.reward_box = ctk.CTkFrame(wallet, fg_color="transparent", cursor="hand2")
         self.lbl_reward = ctk.CTkLabel(self.reward_box, text="", font=self._font(11, "bold"), text_color=COLOR_GOLD_PRIMARY, height=16)
         self.lbl_reward.pack(anchor="w")
@@ -4766,9 +4766,9 @@ class MainTradingApp(ctk.CTk):
         HoverTip(self.reward_box, self._reward_tip)
         self._reward_shown = None
 
-        # ปุ่ม "เติมคีย์" ซ่อนไว้ (ผู้ใช้ซื้อชั่วโมงผ่านเว็บ — ระบบเติมเข้าบัญชีอัตโนมัติ)
+        # ปุ่ม "เติมคีย์" ซ่อนไว้ (ผู้ใช้เติมชั่วโมงผ่านเว็บ — ระบบเติมเข้าบัญชีอัตโนมัติ)
         ctk.CTkButton(
-            wallet, text="🛒 ซื้อชั่วโมง", font=self._font(12, "bold"), fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK,
+            wallet, text="🛒 เติมชั่วโมง", font=self._font(12, "bold"), fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK,
             text_color="#1A1406", height=32, width=104, corner_radius=8,
             command=lambda: webbrowser.open(self.STORE_URL),
         ).pack(side="left")
@@ -4790,7 +4790,7 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  🌐  เปิดเว็บ GoldBot24 (พอร์ตสด)", command=lambda: webbrowser.open(self.WEB_URL))
         menu.add_command(label="  📖  คู่มือการใช้งานออนไลน์", command=lambda: webbrowser.open(self.GUIDE_URL))
         menu.add_command(label="  🎯  เปิดบัญชีทดลองเทรด (XM Global)", command=lambda: webbrowser.open(self.BROKER_URL))
-        menu.add_command(label="  🛒  ซื้อชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
+        menu.add_command(label="  🛒  เติมชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
         menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
         menu.add_command(label="  ⚙️  จัดการ Profile & MT5 Terminal", command=self._open_profile_manager_modal)
         menu.add_command(label="  📢  ข่าวสารและโปรโมชัน", command=self._open_news)
@@ -7118,7 +7118,7 @@ class MainTradingApp(ctk.CTk):
         if not o:
             return ""
         goal = int(o.get("goalMinutes") or self.ONLINE_GOAL_HOURS * 60) // 60
-        tip = (f"ออนไลน์ครบ {goal} ชม. รับส่วนลด 5% ซื้อชั่วโมงครั้งถัดไป 1 รายการ\n"
+        tip = (f"ออนไลน์ครบ {goal} ชม. รับส่วนลด 5% เติมชั่วโมงครั้งถัดไป 1 รายการ\n"
                f"นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมง · รอบปัจจุบัน {o['minutes'] / 60:.1f} ชม.")
         lv = o.get("level")
         if lv:
@@ -7132,7 +7132,7 @@ class MainTradingApp(ctk.CTk):
                 exp = thai_time.from_epoch(datetime.fromisoformat(str(d["expiresAt"]).replace("Z", "+00:00")).timestamp(), "%d/%m %H:%M")
             except Exception:
                 exp = "-"
-            tip += f"\nมีส่วนลด {d['percent']}% ใช้ได้ถึง {exp} น. (ภายใน 3 วัน) — คลิกเพื่อซื้อชั่วโมง\nเมื่อได้รับส่วนลดแล้ว ระบบจะเริ่มนับชั่วโมงใหม่ทันที"
+            tip += f"\nมีส่วนลด {d['percent']}% ใช้ได้ถึง {exp} น. (ภายใน 3 วัน) — คลิกเพื่อเติมชั่วโมง\nเมื่อได้รับส่วนลดแล้ว ระบบจะเริ่มนับชั่วโมงใหม่ทันที"
         return tip
 
     def _check_low_hours_alert(self, mins_left):
@@ -7162,7 +7162,7 @@ class MainTradingApp(ctk.CTk):
                 "เวลาใช้งานใกล้หมด",
                 f"ชั่วโมงใช้งานเหลือ {left}\n"
                 "เมื่อหมดบอทจะหยุดเอง · ไม้ที่เปิดอยู่ยังอยู่ใน MT5 พร้อม SL/TP เดิม",
-                "warning", ok_text="ซื้อชั่วโมง", cancel_text="ไว้ทีหลัง",
+                "warning", ok_text="เติมชั่วโมง", cancel_text="ไว้ทีหลัง",
             )
             if buy:
                 webbrowser.open(self.STORE_URL)

@@ -46,7 +46,7 @@ export default function RedeemCard() {
         เติม Product Key
       </div>
       <p className="small muted" style={{ marginBottom: 18 }}>
-        กรอกรหัส 24 หลักจากหน้าซื้อชั่วโมงหรือคีย์โปรโมชัน ชั่วโมงจะถูกบวกเพิ่มจากยอดเดิมทันที
+        กรอกรหัส 24 หลักจากหน้าเติมชั่วโมงหรือคีย์โปรโมชัน ชั่วโมงจะถูกบวกเพิ่มจากยอดเดิมทันที
       </p>
       <form onSubmit={onSubmit} className="stack" style={{ gap: 14 }}>
         {status && <Alert type={status.type}>{status.message}</Alert>}
@@ -61,7 +61,7 @@ export default function RedeemCard() {
         />
         <div className="row-between tiny faint">
           <span>{key.replace(/-/g, '').length}/24 ตัวอักษร</span>
-          <Link href="/my-keys" className="text-sky">
+          <Link href="/dashboard?keys=1" className="text-sky">
             ดูคีย์ของฉัน
           </Link>
         </div>

@@ -193,7 +193,7 @@ export default function DownloadPage() {
           {user && (
             <Link href="/store" className="card card-pad card-interactive small" style={{ display: 'block' }}>
               <strong>เวลาใช้งานไม่พอ?</strong>
-              <div className="muted">ซื้อชั่วโมงเพิ่ม 1 บาท/ชั่วโมง →</div>
+              <div className="muted">เติมชั่วโมงเพิ่ม 1 บาท/ชั่วโมง →</div>
             </Link>
           )}
         </div>

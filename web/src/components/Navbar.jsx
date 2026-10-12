@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, BarChart3, BookOpen, CalendarDays, Download, Eye, FlaskConical, Key, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, CalendarDays, Download, Eye, FlaskConical, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatHHMM } from '../lib/format';
 import { LOW_HOURS } from '../lib/hours';
@@ -14,8 +14,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'กระเป๋าเวลา', icon: BarChart3 },
   { href: '/calendar', label: 'ปฏิทินข่าว', icon: CalendarDays },
   { href: '/backtest', label: 'แผนเทรด', icon: FlaskConical },
-  { href: '/store', label: 'ซื้อชั่วโมง', icon: ShoppingBag },
-  { href: '/my-keys', label: 'คีย์ของฉัน', icon: Key },
+  { href: '/store', label: 'เติมชั่วโมง', icon: ShoppingBag },
   { href: '/guide', label: 'คู่มือ', icon: BookOpen },
 ];
 
