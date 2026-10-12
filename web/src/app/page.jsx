@@ -27,6 +27,7 @@ import { planDisplay } from '../lib/plans';
 import { CandleCard, DailyPnlCard, NewsImpactCard, OutlookCard } from '../components/LiveInsights';
 import TradeHistory from '../components/TradeHistory';
 import MyTradeStats from '../components/MyTradeStats';
+import { AdvisorCard, MarketCard, PlanConditionsCard } from '../components/LiveExtras';
 import { NextNewsCard, useCalendar } from '../components/EconCalendar';
 
 export default function HomePage() {
@@ -174,10 +175,11 @@ function LiveMonitor() {
               <PositionsCard positions={positions} loading={loading} showAccount={overview} />
               <RadarCard radar={radar} loading={loading} />
             </div>
+            {!overview && <AdvisorCard advice={radar?.advice} />}
           </Group>
 
           <Group id="live-results" title="ผลการเทรด" sub="สถิติรายแผน · กำไรรายวัน · ประวัติการเทรด (ซิงค์จากโปรแกรม)">
-            <MyTradeStats bare />
+            <MyTradeStats bare accountStats={selAcc ? radar?.plan_stats || [] : null} accountLabel={selAcc?.login} />
             <div className="section">
               <DailyPnlCard rows={radar?.daily_pnl} />
             </div>
@@ -187,7 +189,11 @@ function LiveMonitor() {
           </Group>
 
           {/* ข้อมูลชุดเดียวกับโปรแกรม Gold Bot 24: AI คาดการณ์ · แท่งเทียน M15 */}
-          <Group id="live-market" title="ตลาดและ AI" sub="AI คาดการณ์ 1 ชม. / 4 ชม. / 1 วัน · แท่งเทียน M15">
+          <Group id="live-market" title="ตลาดและ AI" sub="สภาวะตลาด H1/H4 · เงื่อนไขเข้าไม้รายแผน · AI คาดการณ์ · แท่งเทียน M15">
+            <div className="grid grid-2" style={{ alignItems: 'start', marginBottom: 'var(--gap, 20px)' }}>
+              <MarketCard market={radar?.market} />
+              <PlanConditionsCard plans={radar?.plans} />
+            </div>
             <div className="grid grid-2" style={{ alignItems: 'start' }}>
               <OutlookCard outlook={radar?.outlook} />
               <CandleCard candles={radar?.candles} price={radar?.price} />

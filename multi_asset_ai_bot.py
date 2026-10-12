@@ -305,6 +305,70 @@ def _web_extras():
         extra["daily_pnl"] = _web_extra_cache["pnl"]
     except Exception:
         pass
+    # ข้อมูลเพิ่มสำหรับเว็บ (12 ต.ค. 2026): เงื่อนไขเข้าไม้รายแผน · สภาวะตลาด H1/H4 · AI วิเคราะห์ไม้ที่ถืออยู่
+    try:
+        from bot_controller import bot_ctrl
+        st = bot_ctrl.get_plans_condition_status() or {}
+        extra["plans"] = {k: {"label": v.get("label"), "side": v.get("side"), "matched": v.get("matched"), "total": v.get("total"),
+                              "enabled": v.get("enabled", True),
+                              "items": [{"name": i.get("name"), "ok": bool(i.get("ok")), "desc": i.get("desc")} for i in (v.get("items") or [])]}
+                          for k, v in st.items() if isinstance(v, dict)}
+    except Exception:
+        pass
+    try:
+        if time.time() - _web_extra_cache.get("mkt_at", 0) > 30:
+            from bot_controller import bot_ctrl
+            ex = bot_ctrl.get_market_explain() or {}
+            mkt = {}
+            for tf in ("H1", "H4"):
+                d = ex.get(tf)
+                if not d:
+                    continue
+                ma = d["ma"]
+                order = 1 if ma[50] > ma[100] > ma[150] else (-1 if ma[50] < ma[100] < ma[150] else 0)
+                mkt[tf] = {"dir": order, "pct": round((ma[50] / ma[150] - 1.0) * 100.0, 2), "close": round(d["close"], 2),
+                           "ma50": round(ma[50], 2), "ma100": round(ma[100], 2), "ma150": round(ma[150], 2), "ma200": round(ma[200], 2),
+                           "diff_pct": round(d.get("diff_pct", 0.0), 2)}
+            _web_extra_cache["mkt"], _web_extra_cache["mkt_at"] = mkt, time.time()
+        if _web_extra_cache.get("mkt"):
+            extra["market"] = _web_extra_cache["mkt"]
+    except Exception:
+        pass
+    # สถิติรายแผนของ "บัญชี MT5 นี้" จาก Deal จริง 365 วัน (เว็บใช้เมื่อเลือกดูทีละบัญชี) — คำนวณใหม่ทุก 5 นาที
+    try:
+        if time.time() - _web_extra_cache.get("ps_at", 0) > 300:
+            from bot_controller import bot_ctrl
+            agg = {}
+            for r in bot_ctrl.get_trade_history(days=365):
+                if r.get("status") != "CLOSED":
+                    continue
+                key = plan_config.base_plan(r.get("plan") or "") or ("Manual" if str(r.get("plan") or "").startswith("Manual") or not r.get("plan") else str(r.get("plan")))
+                a = agg.setdefault(key, {"name": key, "trades": 0, "win": 0, "loss": 0, "profit": 0.0, "gp": 0.0, "gl": 0.0})
+                p = float(r.get("profit") or 0.0)
+                a["trades"] += 1
+                a["profit"] += p
+                if p > 0:
+                    a["win"] += 1
+                    a["gp"] += p
+                elif p < 0:
+                    a["loss"] += 1
+                    a["gl"] += -p
+            _web_extra_cache["ps"] = [{"name": a["name"], "trades": a["trades"], "win": a["win"], "loss": a["loss"],
+                                       "profit": round(a["profit"], 2), "gp": round(a["gp"], 2), "gl": round(a["gl"], 2),
+                                       "winRate": round(a["win"] / (a["win"] + a["loss"]) * 100, 1) if a["win"] + a["loss"] else 0.0,
+                                       "pf": round(a["gp"] / a["gl"], 2) if a["gl"] > 0 else round(a["gp"], 2)} for a in agg.values()]
+            _web_extra_cache["ps_at"] = time.time()
+        extra["plan_stats"] = _web_extra_cache.get("ps", [])
+    except Exception:
+        pass
+    try:
+        import position_advisor
+        adv = position_advisor.latest() or {}
+        extra["advice"] = [{"ticket": a["ticket"], "side": a["side"], "plan": a["plan"], "profit": a["profit"], "verdict": a["verdict"],
+                            "verdict_text": a["verdict_text"], "score": a["score"], "advice": a["advice"], "reasons": a["reasons"][:6]}
+                           for a in adv.values()]
+    except Exception:
+        pass
     return extra
 
 

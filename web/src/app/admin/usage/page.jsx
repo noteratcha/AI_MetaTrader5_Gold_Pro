@@ -188,6 +188,7 @@ export default function AdminUsagePage() {
                   </div>
                 ))
               )}
+              {u && u.versions.length > 0 && <Patch11Status versions={u.versions} />}
             </div>
           </div>
 
@@ -217,5 +218,36 @@ export default function AdminUsagePage() {
         </div>
       </div>
     </AdminShell>
+  );
+}
+
+// Patch 11 (ปิดการเขียนข้อมูลด้วย anon key) — รันได้เมื่อผู้ใช้ส่วนใหญ่ใช้โปรแกรมที่ส่งข้อมูลผ่าน bot_ingest แล้ว (v2026.1012.1932 ขึ้นไป)
+const SECURE_SINCE = '2026.1012.1932';
+const verNum = (v) => String(v || '').split('.').map((x) => Number(x) || 0);
+const verGte = (a, b) => {
+  const x = verNum(a);
+  const y = verNum(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  }
+  return true;
+};
+
+function Patch11Status({ versions }) {
+  const total = versions.reduce((a, v) => a + (Number(v.users) || 0), 0);
+  const ok = versions.filter((v) => verGte(v.version, SECURE_SINCE)).reduce((a, v) => a + (Number(v.users) || 0), 0);
+  const pct = total ? Math.round((ok / total) * 100) : 0;
+  const ready = pct >= 90;
+  return (
+    <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, border: `1px solid ${ready ? 'var(--green, #34d399)' : 'var(--gold, #f2c14e)'}` }}>
+      <div className="row-between small" style={{ marginBottom: 4 }}>
+        <strong>ความพร้อมรัน Patch 11</strong>
+        <span className={`badge ${ready ? 'badge-green' : 'badge-gold'}`}>{ready ? 'พร้อมรันแล้ว' : 'ยังไม่พร้อม'}</span>
+      </div>
+      <div className="tiny muted">
+        ใช้เวอร์ชัน v{SECURE_SINCE} ขึ้นไป {ok}/{total} คน ({pct}%) — แนะนำรัน <span className="mono">supabase_revoke_anon_write_patch_11.sql</span> เมื่อถึง 90%
+        (ผู้ที่ยังใช้รุ่นเก่าจะส่งพอร์ตสด/ประวัติขึ้นเว็บไม่ได้จนกว่าจะอัปเดต)
+      </div>
+    </div>
   );
 }
