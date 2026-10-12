@@ -1,4 +1,4 @@
-import { adjustHours, allowMethods, requireUser } from '../../../lib/server/auth';
+import { adjustHoursDetailed, allowMethods, requireUser } from '../../../lib/server/auth';
 import { isMailConfigured, sendLowHoursEmail } from '../../../lib/server/mailer';
 import { LOW_HOURS } from '../../../lib/hours';
 import { addOnlineMinutes, getRewardStatus } from '../../../lib/server/onlineReward';
@@ -17,9 +17,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const hoursRemaining = await adjustHours(auth.row.id, -(minutes / 60));
+    const { before, after: hoursRemaining } = await adjustHoursDetailed(auth.row.id, -(minutes / 60));
+    // นับรางวัล/ระดับเฉพาะนาทีที่หักได้จริง (ชั่วโมงหมดแล้ว = ไม่ได้นาทีสะสม — กันส่งนาทีปลอมเพื่อปั๊ม Lv./ส่วนลด)
+    const credited = Math.max(0, Math.min(minutes, Math.round((before - hoursRemaining) * 60)));
     // เวลาลดลงข้ามเกณฑ์ใกล้หมดในการหักครั้งนี้ → อีเมลเตือนครั้งเดียว (เติมชั่วโมงแล้วลดลงมาใหม่จะเตือนอีกครั้ง)
-    const before = hoursRemaining + minutes / 60;
     if (before > LOW_HOURS && hoursRemaining <= LOW_HOURS && hoursRemaining > 0 && isMailConfigured()) {
       try {
         await sendLowHoursEmail(auth.user.email, auth.user.displayName, hoursRemaining);
@@ -28,9 +29,9 @@ export default async function handler(req, res) {
       }
     }
     // สะสมชั่วโมงออนไลน์รายสัปดาห์ (ครบ 100 ชม. ได้ส่วนลด 5%) — นับเฉพาะนาทีที่หักจริง
-    await addOnlineMinutes(auth.user, minutes);
+    if (credited > 0) await addOnlineMinutes(auth.user, credited);
     const online = await getRewardStatus(auth.user.id);
-    return res.status(200).json({ success: true, minutesDeducted: minutes, hoursRemaining, online });
+    return res.status(200).json({ success: true, minutesDeducted: credited, hoursRemaining, online });
   } catch (err) {
     console.error('[auth/meter] error:', err);
     return res.status(500).json({ success: false, error: err.message || 'ไม่สามารถหักเวลาได้' });

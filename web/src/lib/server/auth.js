@@ -207,6 +207,11 @@ export async function requireAdmin(req, res) {
  * deltaHours: บวก = เติม, ลบ = หัก — ยอดไม่ต่ำกว่า 0
  */
 export async function adjustHours(userId, deltaHours) {
+  return (await adjustHoursDetailed(userId, deltaHours)).after;
+}
+
+/** ปรับชั่วโมงแบบ atomic (compare-and-swap) → { before, after } (ไม่ติดลบ) */
+export async function adjustHoursDetailed(userId, deltaHours) {
   const supabase = getAdminClient();
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data: row, error } = await supabase.from('bot_config').select('id, lot_size').eq('id', userId).maybeSingle();
@@ -220,7 +225,7 @@ export async function adjustHours(userId, deltaHours) {
       .eq('lot_size', row.lot_size)
       .select('id');
     if (updErr) throw new Error('ไม่สามารถอัปเดตชั่วโมงได้');
-    if (updated && updated.length === 1) return next;
+    if (updated && updated.length === 1) return { before: current, after: next };
   }
   throw new Error('ระบบไม่ว่าง กรุณาลองใหม่อีกครั้ง');
 }

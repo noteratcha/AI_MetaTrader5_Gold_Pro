@@ -6,6 +6,7 @@ import { BarChart3, Clock, Key, Lock, RefreshCw, ShoppingBag, Sparkles, Target, 
 import { useAuth } from '../../context/AuthContext';
 import RedeemCard from '../../components/RedeemCard';
 import OnlineRewardCard from '../../components/OnlineRewardCard';
+import HoursHistoryCard from '../../components/HoursHistoryCard';
 import { Alert, AuthGate, PageHeader, PageLoading, Spinner, StatCard } from '../../components/ui';
 import { formatHHMM, formatKeyInput, formatUsd } from '../../lib/format';
 import { planDisplay } from '../../lib/plans';
@@ -63,6 +64,7 @@ function Dashboard() {
       />
 
       {user?.online && <OnlineRewardCard online={user.online} />}
+      {user && <HoursHistoryCard />}
 
       <div className="grid grid-2">
         <div className={`card card-pad ${out ? '' : 'card-gold'}`}>

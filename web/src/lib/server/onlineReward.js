@@ -12,6 +12,9 @@ export async function addOnlineMinutes(user, minutes) {
       p_user: String(user.id), p_email: user.email, p_minutes: Math.floor(minutes), p_goal: GOAL_MIN,
     });
     if (error) throw error;
+    // ประวัติรายวัน (เวลาไทย) สำหรับหน้าประวัติการสะสมชั่วโมง — Patch 09 · ยังไม่ได้รัน = ข้าม
+    const day = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+    await getAdminClient().rpc('add_online_daily', { p_user: String(user.id), p_day: day, p_minutes: Math.floor(minutes) }).then(() => {}, () => {});
     const r = Array.isArray(data) ? data[0] : data;
     const earned = Number(r?.earned) || 0;
     const cycles = Number(r?.cycles) || 0;
@@ -110,4 +113,12 @@ export async function levelDiscountPct(userId) {
 
 export function discountedPrice(price, percent) {
   return Math.round(Number(price) * (100 - percent)) / 100;
+}
+
+/** ประวัติการสะสมชั่วโมงรายวัน (ย้อนหลัง n วัน, เวลาไทย) + สรุประดับ */
+export async function getHoursHistory(userId, days = 90) {
+  const since = new Date(Date.now() + 7 * 3600000 - days * DAY_MS).toISOString().slice(0, 10);
+  const { data, error } = await getAdminClient()
+    .from('online_daily').select('day, minutes').eq('user_id', String(userId)).gte('day', since).order('day', { ascending: true });
+  return { rows: error ? null : (data || []).map((r) => ({ day: r.day, minutes: Number(r.minutes) || 0 })), status: await getRewardStatus(userId) };
 }
