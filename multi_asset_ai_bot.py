@@ -3345,6 +3345,9 @@ def main():
                         print(f"{Colors.YELLOW}[VOLATILITY ALERT] {sym} ตลาดผันผวนแรงผิดปกติ ({vol_reason}) -> บังคับเปิด Take Profit {target_pts:g} จุด สำหรับทุกแผน!{Colors.RESET}")
 
                     for pos in positions:
+                        # ไม้ของบอทโปรไฟล์อื่น (magic อื่นที่ไม่ใช่ 0) — ห้ามแตะทุกกฎ (Multi-Profile แยกขาด)
+                        if pos.magic not in (0, get_profile_magic_number()):
+                            continue
                         # 0.0 ปิดไม้เมื่อกำไรถึงเป้าเงิน $ ที่ผู้ใช้ตั้ง (ทุกแผน · เฉพาะไม้ของบอท)
                         if tp_usd and pos.magic == get_profile_magic_number():
                             net = float(pos.profit) + float(getattr(pos, 'swap', 0.0) or 0.0)
