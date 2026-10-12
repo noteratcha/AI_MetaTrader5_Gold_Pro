@@ -54,6 +54,30 @@ def download_file_with_progress(
         return False
 
 
+TRUSTED_PREFIX = "https://github.com/noteratcha/AI_MetaTrader5_Gold_Pro/releases/download/"
+
+
+def verify_update(path: str, url: str, sha256: Optional[str] = None, size_bytes: int = 0) -> tuple[bool, str]:
+    """ก่อนติดตั้ง: ไฟล์ต้องมาจาก GitHub Release ของโปรเจกต์ · ขนาดตรง · SHA-256 ตรง (ถ้ามี) — กันไฟล์ถูกสลับ/เสียระหว่างทาง"""
+    import hashlib
+    if not str(url or "").startswith(TRUSTED_PREFIX):
+        return False, "แหล่งดาวน์โหลดไม่ใช่ GitHub Release ของ Gold Bot 24 — ยกเลิกการติดตั้ง"
+    try:
+        actual_size = os.path.getsize(path)
+        if size_bytes and int(size_bytes) > 0 and actual_size != int(size_bytes):
+            return False, "ขนาดไฟล์ไม่ตรงกับเวอร์ชันที่ประกาศ (ดาวน์โหลดไม่ครบ) — ลองใหม่อีกครั้ง"
+        if sha256:
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                    h.update(chunk)
+            if h.hexdigest().lower() != str(sha256).lower():
+                return False, "ลายเซ็นไฟล์ (SHA-256) ไม่ตรง — ไฟล์อาจถูกแก้ไข ยกเลิกการติดตั้ง"
+    except Exception as e:
+        return False, f"ตรวจสอบไฟล์ไม่สำเร็จ: {e}"
+    return True, ""
+
+
 def launch_in_place_patch(patch_file: str, is_installer: bool = True) -> tuple[bool, str]:
     """
     เรียกใช้ตัวติดตั้งหรือแพตช์ทับ Path เดิม และเริ่มโปรแกรมใหม่:

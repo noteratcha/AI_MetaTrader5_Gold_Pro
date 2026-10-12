@@ -243,3 +243,21 @@ export function allowMethods(req, res, methods) {
   }
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Patch 10: ส่งความลับ Token ให้ฐานข้อมูลตรวจลายเซ็นเอง (RPC bot_ingest — โปรแกรมเขียนข้อมูลด้วย Token)
+// เขียนครั้งเดียวต่อ instance ของ Server · ยังไม่ได้รัน Patch 10 = ข้ามเงียบ ๆ
+// ---------------------------------------------------------------------------
+let ingestSecretSynced = false;
+export async function ensureIngestSecret() {
+  if (ingestSecretSynced) return;
+  ingestSecretSynced = true;
+  try {
+    const { error } = await getAdminClient()
+      .from('bot_ingest_secret')
+      .upsert({ id: 1, secret: getAuthSecret(), updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    if (error) ingestSecretSynced = false;
+  } catch {
+    ingestSecretSynced = false;
+  }
+}

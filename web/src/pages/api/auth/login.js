@@ -9,6 +9,7 @@ import {
   signToken,
   toUserPayload,
   verifyPassword,
+  ensureIngestSecret,
 } from '../../../lib/server/auth';
 import { countRecentFailedLogins, LOGIN_LOCK_MINUTES, LOGIN_MAX_FAILED, logActivity } from '../../../lib/server/activity';
 import { notifyAccountLocked } from '../../../lib/server/lineNotify';
@@ -18,6 +19,7 @@ const MAX_FAILED = LOGIN_MAX_FAILED;
 const LOCK_MINUTES = LOGIN_LOCK_MINUTES;
 
 export default async function handler(req, res) {
+  ensureIngestSecret();
   if (!allowMethods(req, res, ['POST'])) return;
 
   try {

@@ -1,8 +1,9 @@
-import { allowMethods, requireUser } from '../../../lib/server/auth';
+import { allowMethods, requireUser, ensureIngestSecret } from '../../../lib/server/auth';
 import { getRewardStatus } from '../../../lib/server/onlineReward';
 
 // ข้อมูลบัญชีของผู้ใช้ที่ล็อกอินอยู่ (ต้องส่ง Authorization: Bearer <token>)
 export default async function handler(req, res) {
+  ensureIngestSecret();
   if (!allowMethods(req, res, ['GET'])) return;
   const auth = await requireUser(req, res);
   if (!auth) return;

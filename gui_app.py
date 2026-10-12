@@ -786,6 +786,15 @@ class UpdateDialog(ctk.CTkToplevel):
                     self.after(0, lambda: self._update_failed("ดาวน์โหลดแพตช์ไม่สำเร็จ กรุณาลองใหม่หรือดาวน์โหลดผ่านหน้าเว็บ"))
                 return
 
+            ok_v, why = in_place_updater.verify_update(dest_file, url, self.info.get("checksum_sha256"), self.info.get("size_bytes") or 0)
+            if not ok_v:
+                try:
+                    os.remove(dest_file)
+                except Exception:
+                    pass
+                self.after(0, lambda m=why: self._update_failed(m))
+                return
+
             self.after(0, lambda: self._update_complete_and_launch(dest_file))
 
         self._download_thread = threading.Thread(target=_worker, daemon=True)
@@ -6274,6 +6283,20 @@ class MainTradingApp(ctk.CTk):
         self._hist_fit_job = None
         top = ctk.CTkFrame(parent, fg_color="transparent")
         top.pack(fill="x", padx=6, pady=(0, 8))
+        # เลือกช่วงวัน (ค่าเริ่มต้น 30 วัน — ผู้ใช้กำหนด 12 ต.ค. 2026)
+        rng = ctk.CTkFrame(parent, fg_color="transparent")
+        rng.pack(fill="x", padx=6, pady=(0, 6))
+        ctk.CTkLabel(rng, text="ช่วงเวลา", font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(0, 8))
+        self._hist_range = {"preset": "30 วัน", "start": None, "end": None}
+        self.seg_history_range = ctk.CTkSegmentedButton(
+            rng, values=list(self.HISTORY_PRESETS) + ["กำหนดเอง"], command=self._on_history_range,
+            font=self._font(11, "bold"), height=28, fg_color=COLOR_CARD_BG, selected_color=COLOR_GOLD_WARM,
+            selected_hover_color=COLOR_GOLD_PRIMARY, unselected_color=COLOR_CARD_BG, unselected_hover_color=COLOR_CARD_HOVER,
+            text_color=COLOR_TEXT_PRIMARY)
+        self.seg_history_range.set("30 วัน")
+        self.seg_history_range.pack(side="left")
+        self.lbl_history_range = ctk.CTkLabel(rng, text="", font=self._font(11), text_color=COLOR_GOLD_PRIMARY)
+        self.lbl_history_range.pack(side="left", padx=10)
         self.lbl_history_summary = ctk.CTkLabel(top, text="กำลังโหลดประวัติจาก MT5...", font=self._font(12), text_color=COLOR_TEXT_MUTED)
         self.lbl_history_summary.pack(side="left")
         self._refresh_button(top, lambda: self._refresh_history_async(force=True)).pack(side="right")
@@ -6368,13 +6391,94 @@ class MainTradingApp(ctk.CTk):
         self._render_history()
         self._schedule_history_fit()   # ตรวจซ้ำหลังจัดวางใหม่ (ขนาดแถวจริงอาจต่างเล็กน้อย)
 
+    HISTORY_PRESETS = {"วันนี้": 0, "7 วัน": 6, "30 วัน": 29, "90 วัน": 89, "1 ปี": 364}
+
+    def _history_bounds(self):
+        """ช่วงวันที่ (เวลาไทย) ที่เลือก → (วันเริ่ม, วันสิ้นสุด) แบบ date"""
+        from datetime import timedelta
+        st = getattr(self, "_hist_range", None) or {"preset": "30 วัน"}
+        today = thai_time.now().date()
+        if st.get("preset") == "กำหนดเอง" and st.get("start") and st.get("end"):
+            return st["start"], st["end"]
+        return today - timedelta(days=self.HISTORY_PRESETS.get(st.get("preset"), 29)), today
+
+    def _history_range_text(self):
+        a, b = self._history_bounds()
+        return a.strftime("%d/%m/%Y") if a == b else f"{a.strftime('%d/%m/%Y')} – {b.strftime('%d/%m/%Y')}"
+
+    def _on_history_range(self, value):
+        if value == "กำหนดเอง":
+            self._ask_history_range()
+            return
+        self._hist_range = {"preset": value, "start": None, "end": None}
+        self._history_page = 0
+        self._refresh_history_async(force=True)
+
+    def _ask_history_range(self):
+        """กล่องกำหนดช่วงวันเอง (วว/ดด/ปปปป ค.ศ. · เวลาไทย)"""
+        from datetime import datetime
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("เลือกช่วงวัน")
+        dlg.configure(fg_color=COLOR_BG_DARK)
+        dlg.resizable(False, False)
+        dlg.transient(self)
+        apply_dark_title_bar(dlg)
+        a, b = self._history_bounds()
+        ctk.CTkLabel(dlg, text="ดูประวัติการเทรดช่วงวัน", font=self._font(15, "bold"), text_color=COLOR_GOLD_PRIMARY).grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 8))
+        ents = []
+        for i, (lbl, d) in enumerate((("ตั้งแต่วันที่", a), ("ถึงวันที่", b))):
+            ctk.CTkLabel(dlg, text=lbl, font=self._font(12), text_color=COLOR_TEXT_MUTED).grid(row=i + 1, column=0, sticky="w", padx=18, pady=4)
+            e = ctk.CTkEntry(dlg, width=140, font=self._font(13), placeholder_text="วว/ดด/ปปปป")
+            e.insert(0, d.strftime("%d/%m/%Y"))
+            e.grid(row=i + 1, column=1, sticky="w", padx=(0, 18), pady=4)
+            ents.append(e)
+        err = ctk.CTkLabel(dlg, text="รูปแบบ วว/ดด/ปปปป (ค.ศ.) เช่น 01/10/2026", font=self._font(10), text_color=COLOR_TEXT_MUTED)
+        err.grid(row=3, column=0, columnspan=2, sticky="w", padx=18)
+
+        def ok():
+            try:
+                d1 = datetime.strptime(ents[0].get().strip(), "%d/%m/%Y").date()
+                d2 = datetime.strptime(ents[1].get().strip(), "%d/%m/%Y").date()
+            except ValueError:
+                err.configure(text="วันที่ไม่ถูกต้อง — ใช้รูปแบบ วว/ดด/ปปปป เช่น 01/10/2026", text_color=COLOR_DANGER_RED)
+                return
+            if d1 > d2:
+                d1, d2 = d2, d1
+            if (thai_time.now().date() - d1).days > 3 * 365:
+                err.configure(text="ย้อนหลังได้ไม่เกิน 3 ปี", text_color=COLOR_DANGER_RED)
+                return
+            self._hist_range = {"preset": "กำหนดเอง", "start": d1, "end": d2}
+            self._history_page = 0
+            dlg.destroy()
+            self._refresh_history_async(force=True)
+
+        def cancel():
+            dlg.destroy()
+            self.seg_history_range.set(getattr(self, "_hist_range", {}).get("preset") or "30 วัน")
+
+        btns = ctk.CTkFrame(dlg, fg_color="transparent")
+        btns.grid(row=4, column=0, columnspan=2, sticky="e", padx=18, pady=(10, 14))
+        ctk.CTkButton(btns, text="ยกเลิก", width=80, fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, font=self._font(12), command=cancel).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(btns, text="ดูประวัติ", width=100, fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_PRIMARY, text_color="#1A1406",
+                      font=self._font(12, "bold"), command=ok).pack(side="left")
+        dlg.protocol("WM_DELETE_WINDOW", cancel)
+
     def _refresh_history_async(self, force=False):
         if self._history_loading and not force:
             return
         self._history_loading = True
+        start, end = self._history_bounds()
+        days = max(1, (thai_time.now().date() - start).days + 1)
+
+        def in_range(r):
+            ts = r.get("close_time") or r.get("open_time")
+            if not ts:
+                return True
+            d = thai_time.now().fromtimestamp(thai_time.server_to_epoch(ts), thai_time.TH).date()
+            return start <= d <= end
 
         def worker():
-            rows = bot_ctrl.get_trade_history(days=90)
+            rows = [r for r in bot_ctrl.get_trade_history(days=days) if r.get("status") != "CLOSED" or in_range(r)]
             self._history_rows = rows
             self._history_dirty = True
             self._history_loading = False
@@ -6429,7 +6533,7 @@ class MainTradingApp(ctk.CTk):
         net = sum(r["profit"] for r in closed)
         open_count = total - len(closed)
         self.lbl_history_summary.configure(
-            text=f"90 วันล่าสุด · ปิดแล้ว {len(closed)} ไม้ (ชนะ {wins} / แพ้ {len(closed) - wins})"
+            text=f"{self._history_range_text()} · ปิดแล้ว {len(closed)} ไม้ (ชนะ {wins} / แพ้ {len(closed) - wins})"
             f" · เปิดอยู่ {open_count} · กำไรสุทธิ {'+' if net >= 0 else '-'}{abs(net):,.2f}",
             text_color=COLOR_SUCCESS_GREEN if net > 0 else (COLOR_DANGER_RED if net < 0 else COLOR_TEXT_MUTED),
         )

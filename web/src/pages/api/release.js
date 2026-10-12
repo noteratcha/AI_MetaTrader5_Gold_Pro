@@ -29,7 +29,7 @@ async function fromGitHub() {
   const zip = assets.find((a) => /\.zip$/i.test(a.name));
   const asset = assets.find((a) => /setup.*\.exe$/i.test(a.name)) || zip || assets[0];
   if (!asset) return null;
-  const sha = /SHA-256:\s*`?([a-f0-9]{64})`?/i.exec(d.body || '');
+  const sha = /SHA-256(?:\s*\((?:Setup|ZIP)\))?:\s*`?([a-f0-9]{64})`?/i.exec(d.body || '');   // ตัวแรก = Setup
   return {
     version: String(d.tag_name || '').replace(/^v/i, ''),
     download_url: asset.browser_download_url,

@@ -65,6 +65,19 @@ def _make_request(endpoint, method="GET", payload=None, extra_headers=None):
         # เงียบไว้เพื่อไม่ให้รบกวนลูปเทรดหลักกรณีเน็ตหลุดชั่วคราว
         return None
 
+def _ingest(kind, payload):
+    """เขียนข้อมูลผ่าน RPC bot_ingest ที่ตรวจ Token ของผู้ใช้ในฐานข้อมูล (Patch 10 — ปลอมเป็นผู้ใช้อื่นไม่ได้)
+    คืน True ถ้าสำเร็จ · None ถ้ายังไม่ล็อกอิน/ฐานข้อมูลยังไม่ได้รัน Patch 10 (ผู้เรียกจะใช้ทางเดิมแทนชั่วคราว)"""
+    try:
+        from license_manager import license_mgr
+        token = license_mgr.session_data.get("token")
+    except Exception:
+        token = None
+    if not token:
+        return None
+    return _make_request("rpc/bot_ingest", method="POST", payload={"p_token": token, "p_type": kind, "p": payload})
+
+
 def update_telemetry(balance, equity, floating_profit, margin_free, open_positions, radar_signals, status="ONLINE", row_id=1, login=None, profile=None):
     """ส่งสถานะพอร์ตและสัญญาณ AI ล่าสุดขึ้นไปแสดงบนเว็บ Dashboard (1 แถวต่อ 1 บัญชีผู้ใช้ GoldBot24)"""
     payload = {
@@ -78,6 +91,8 @@ def update_telemetry(balance, equity, floating_profit, margin_free, open_positio
         "radar_signals": radar_signals,
     }
     # เขียนผ่านฟังก์ชัน SECURITY DEFINER (anon เขียนได้อย่างเดียว อ่านพอร์ตของคนอื่นไม่ได้) — ดู supabase_security_rls_patch_01.sql
+    if _ingest("telemetry", {**payload, "login": int(login or 0), "profile": profile or "default"}):
+        return True
     res = _make_request("rpc/bot_upsert_telemetry", method="POST", payload={"p": payload})
     # แถวแยกตามบัญชี MT5 (หลาย Profile/หลายบัญชี → เว็บเลือกดูทีละบัญชีหรือรวมได้) — supabase_multi_account_patch_08.sql
     # ฐานข้อมูลยังไม่ได้รัน Patch 08 → RPC ไม่มี คืน error เงียบ ๆ ไม่กระทบแถวหลัก
@@ -105,6 +120,8 @@ def log_trade(ticket, symbol, action, plan, price, lot, sl=0, tp=0, profit=0, co
         payload["user_id"] = str(user_id)
     if email:
         payload["email"] = str(email)
+    if _ingest("trade", payload):
+        return True
     res = _make_request("trade_logs", method="POST", payload=payload)
     if res is None and ("user_id" in payload or "email" in payload):
         # ฐานข้อมูลที่ยังไม่ได้รัน migration จะไม่มีคอลัมน์ user_id/email — ส่งซ้ำแบบไม่ระบุผู้ใช้
@@ -129,6 +146,8 @@ def sync_user_plan_stats(user_id, email, plan_name, total_trades, win_trades, lo
         # profit factor เป็น inf ได้ (ยังไม่เคยแพ้) — JSON ไม่รองรับ inf
         "profit_factor": min(float(profit_factor), 9999.0) if math.isfinite(float(profit_factor)) else 9999.0,
     }
+    if _ingest("plan_stats", payload):
+        return True
     return _make_request("rpc/bot_upsert_plan_stats", method="POST", payload={"p": payload})
 
 def _current_user():
@@ -142,6 +161,8 @@ def _current_user():
 
 def _insert_with_user(table, payload):
     """แนบ user_id/email ให้ log (ถ้าฐานข้อมูลยังไม่มีคอลัมน์ จะส่งซ้ำแบบไม่แนบ)"""
+    if _ingest({"signal_logs": "signal", "risk_events": "risk"}.get(table, table), payload):
+        return True
     user_id, email = _current_user()
     if user_id or email:
         res = _make_request(table, method="POST", payload={**payload, "user_id": user_id and str(user_id), "email": email})

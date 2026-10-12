@@ -499,10 +499,16 @@ def fetch_app_version_info(current_version: str) -> dict:
         "zip_url": latest.get("zip_url"),
         "file_name": latest.get("file_name"),
         "size_bytes": latest.get("size_bytes", 0),
+        "checksum_sha256": latest.get("checksum_sha256") or _sha_from_notes(latest.get("changelog") or latest.get("body") or ""),
         "is_installer": bool(latest.get("is_installer", True)),
         "changelog": latest.get("changelog"),
         "mandatory": bool(latest.get("mandatory")),
     }
+
+
+def _sha_from_notes(text):
+    m = re.search(r"SHA-256(?:\s*\((?:Setup|ZIP)\))?:\s*`?([a-f0-9]{64})", str(text), re.I)
+    return m.group(1).lower() if m else None
 
 
 # Global Singleton instance
