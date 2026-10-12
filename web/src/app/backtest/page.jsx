@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { FlaskConical, LineChart, ShieldAlert, Target, TrendingDown, TrendingUp } from 'lucide-react';
+import { FlaskConical, LineChart, ShieldAlert, Target, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { Alert, EmptyState, PageHeader, PageLoading, StatCard } from '../../components/ui';
-import { planDisplay } from '../../lib/plans';
+import { PLAN_NAMES, planDisplay } from '../../lib/plans';
 
 const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa', 6: '#fb923c' };
 
@@ -29,7 +29,7 @@ const PLAN_INFO = {
   3: {
     type: 'กวาดสภาพคล่อง · M15',
     rules: [
-      'ราคาทะลุแนวรับ/ต้าน H1 (โซนกลับตัว 500 แท่ง) แล้วดึงกลับ พร้อมไส้เทียน 0.4–1.0 ATR',
+      'ราคาทะลุแนวรับ/ต้าน H1 (โซนกลับตัว 1,000 แท่ง + ยืนยันด้วย H4) แล้วดึงกลับ พร้อมไส้เทียน 0.4–1.0 ATR',
       'ต้องตามเทรนด์ H1 (MA10/30 และ MA100/150/200 เรียงตามทิศ) และ AI ยืนยันทิศ ≥ 50%',
       'SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (50% / 40%) · ล็อกกำไรที่ 70% ของเป้า',
     ],
@@ -37,7 +37,7 @@ const PLAN_INFO = {
   4: {
     type: 'เด้งแนวรับ/ต้าน · M15',
     rules: [
-      'ราคาเข้าใกล้แนวรับ/ต้าน H1 (500 แท่ง) ไม่เกิน 0.75 ATR + แท่งปฏิเสธราคา',
+      'ราคาเข้าใกล้แนวรับ/ต้าน H1 (1,000 แท่ง + ยืนยันด้วย H4) ไม่เกิน 0.75 ATR + แท่งปฏิเสธราคา',
       'ต้องมี RSI Divergence · H1 MA100/150/200 ไม่เรียงสวนทิศ และ AI ยืนยันทิศ ≥ 55%',
       'SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (50% / 40%) · ล็อกกำไรที่ 70% ของเป้า',
     ],
@@ -107,6 +107,96 @@ function EquityChart({ equity, plans, visible }) {
         ))}
       </svg>
     </div>
+  );
+}
+
+const usd = (v) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}$${Math.abs(Number(v)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+const ago = (iso) => {
+  if (!iso) return '—';
+  const m = Math.max(0, (Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 60) return `${Math.round(m)} นาทีที่แล้ว`;
+  if (m < 1440) return `${Math.round(m / 60)} ชม.ที่แล้ว`;
+  return `${Math.round(m / 1440)} วันที่แล้ว`;
+};
+
+/** ผลเทรดจริงของผู้ใช้ทุกคนรวมกัน (จาก /api/plan-stats · ไม่ระบุตัวตน) */
+function LiveResults() {
+  const [live, setLive] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    fetch('/api/plan-stats')
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => (d.success ? setLive(d) : setFailed(true)))
+      .catch(() => setFailed(true));
+  }, []);
+  if (failed) return null;
+  if (!live) return <div className="card section card-pad muted small">กำลังโหลดผลเทรดจริงของผู้ใช้…</div>;
+  const t = live.total;
+  return (
+    <>
+      <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '8px 0 12px' }}>ผลเทรดจริงของผู้ใช้ทุกคน</h2>
+      <div className="grid grid-4">
+        <StatCard icon={Users} label="ผู้ใช้ที่มีไม้ปิดแล้ว" value={live.users.toLocaleString()} tone="sky" sub="นับเฉพาะบัญชีที่โปรแกรมซิงค์สถิติขึ้นมา" />
+        <StatCard icon={Target} label="ไม้ที่ปิดแล้ว / ชนะ" value={t.trades.toLocaleString()} tone="gold" sub={`อัตราชนะ ${t.winRate ?? '—'}%`} />
+        <StatCard icon={LineChart} label="Profit Factor" value={t.pf ?? '—'} tone="sky" sub="กำไรรวม ÷ ขาดทุนรวม ของทุกบัญชี" />
+        <StatCard icon={TrendingUp} label="กำไรสุทธิรวม" value={usd(t.net)} tone={t.net >= 0 ? 'green' : 'red'} sub="รวมทุก Lot ทุกบัญชี" />
+      </div>
+      <div className="card section">
+        <div className="card-header">
+          <h3>
+            <Users size={17} className="text-gold" /> ผลจริงแยกตามแผน
+          </h3>
+          <span className="tiny faint">อัปเดตทุก 5 นาที</span>
+        </div>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>แผน</th>
+                <th className="num">ผู้ใช้</th>
+                <th className="num">ไม้</th>
+                <th className="num">ชนะ / แพ้</th>
+                <th className="num">อัตราชนะ</th>
+                <th className="num">PF</th>
+                <th className="num">กำไรสุทธิ</th>
+                <th className="num">เฉลี่ย/ไม้</th>
+                <th className="num">ไม้ล่าสุด</th>
+              </tr>
+            </thead>
+            <tbody>
+              {live.plans.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="muted">ยังไม่มีไม้ที่ปิดแล้ว</td>
+                </tr>
+              )}
+              {live.plans.map((p) => (
+                <tr key={p.key}>
+                  <td className="nowrap">
+                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, marginRight: 8, background: PLAN_COLORS[p.key] || '#6b7385' }} />
+                    {p.key === 'manual' ? 'เข้าไม้เอง' : PLAN_NAMES[p.key]}
+                  </td>
+                  <td className="num">{p.users}</td>
+                  <td className="num">{p.trades.toLocaleString()}</td>
+                  <td className="num">
+                    <span className="text-green">{p.win}</span> / <span className="text-red">{p.loss}</span>
+                  </td>
+                  <td className="num">{p.winRate ?? '—'}%</td>
+                  <td className="num">{p.pf ?? '—'}</td>
+                  <td className={`num ${tone(p.net)}`}>{usd(p.net)}</td>
+                  <td className={`num ${tone(p.avg)}`}>{usd(p.avg)}</td>
+                  <td className="num muted nowrap">{ago(p.lastTradeAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="card-body">
+          <p className="tiny faint" style={{ margin: 0 }}>
+            ข้อมูลจริงจากโปรแกรม Gold Bot 24 ของผู้ใช้ทุกคนรวมกัน แสดงเฉพาะยอดรวม ไม่ระบุตัวตน · ผู้ใช้แต่ละคนใช้ Lot และโบรกเกอร์ต่างกัน กำไรเป็นเงินจึงเปรียบเทียบข้ามแผนได้ไม่ตรงนัก ให้ดูอัตราชนะและ PF ประกอบ · ผลในอดีตไม่รับประกันผลในอนาคต
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -187,7 +277,9 @@ export default function BacktestPage() {
         })}
       </div>
 
-      <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '8px 0 12px' }}>ผลทดสอบย้อนหลังรวมทุกแผน</h2>
+      <LiveResults />
+
+      <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '24px 0 12px' }}>ผลทดสอบย้อนหลังรวมทุกแผน</h2>
 
       <div className="grid grid-4">
         <StatCard icon={TrendingUp} label="กำไรสุทธิรวม (0.01 lot)" value={`${pts(s.net)} จุด`} tone={s.net >= 0 ? 'green' : 'red'} sub={`≈ $${Math.round(s.net).toLocaleString()}`} />
