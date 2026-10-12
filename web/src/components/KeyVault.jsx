@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Gift, Inbox, Key, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Alert, CopyButton, EmptyState, Spinner } from './ui';
+import { Alert, CopyButton, EmptyState, Pager, Spinner } from './ui';
 import { formatThaiDateTime, formatThb } from '../lib/format';
 import { markLocalKeyRedeemed, readLocalKeys } from '../lib/localKeys';
 
@@ -13,6 +13,7 @@ export default function KeyVault() {
   const { user, apiFetch, redeemKey } = useAuth();
   const [serverKeys, setServerKeys] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
   const [busyKey, setBusyKey] = useState(null);
   const [notice, setNotice] = useState(null);
 
@@ -39,7 +40,11 @@ export default function KeyVault() {
     return merged.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   }, [serverKeys, user.email]);
 
-  const visible = (keys || []).filter((k) => filter === 'all' || (filter === 'unused' ? k.status !== 'REDEEMED' : k.status === 'REDEEMED'));
+  const PAGE_SIZE = 5;   // หน้าละไม่เกิน 5 รายการ
+  const filtered = (keys || []).filter((k) => filter === 'all' || (filter === 'unused' ? k.status !== 'REDEEMED' : k.status === 'REDEEMED'));
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const curPage = Math.min(page, pages);
+  const visible = filtered.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
   const unusedCount = (keys || []).filter((k) => k.status !== 'REDEEMED').length;
 
   const redeem = async (keyCode) => {
@@ -76,7 +81,7 @@ export default function KeyVault() {
             ['unused', `พร้อมใช้ (${unusedCount})`],
             ['used', 'ใช้แล้ว'],
           ].map(([value, label]) => (
-            <button key={value} className={filter === value ? 'is-active' : ''} onClick={() => setFilter(value)}>
+            <button key={value} className={filter === value ? 'is-active' : ''} onClick={() => { setFilter(value); setPage(1); }}>
               {label}
             </button>
           ))}
@@ -155,6 +160,7 @@ export default function KeyVault() {
               </div>
             );
           })}
+          <Pager page={curPage} totalPages={pages} total={filtered.length} onChange={setPage} />
         </div>
       )}
     </div>

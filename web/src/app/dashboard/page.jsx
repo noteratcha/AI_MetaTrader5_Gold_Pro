@@ -103,6 +103,11 @@ function Dashboard() {
         <RedeemCard />
       </div>
 
+      <div className="section">
+        {user?.online && <OnlineRewardCard online={user.online} />}
+        {user && <HoursHistoryCard />}
+      </div>
+
       <div className="section" ref={keysRef} id="my-keys">
         <div className="row wrap" style={{ gap: 8 }}>
           <button type="button" className={`btn ${showKeys ? 'btn-secondary' : 'btn-outline-gold'}`} onClick={() => setShowKeys((v) => !v)} aria-expanded={showKeys}>
@@ -117,11 +122,6 @@ function Dashboard() {
             <KeyVault />
           </div>
         )}
-      </div>
-
-      <div className="section">
-        {user?.online && <OnlineRewardCard online={user.online} />}
-        {user && <HoursHistoryCard />}
       </div>
 
     </div>

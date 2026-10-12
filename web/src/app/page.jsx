@@ -150,6 +150,9 @@ function LiveMonitor() {
         </div>
       ) : (
         <>
+          <LiveNav />
+
+          <Group id="live-account" title="บัญชีและพอร์ต" sub="ยอดเงิน · Equity · กำไรลอยตัว · หลักประกันว่าง">
           <div className="grid grid-4">
             <StatCard icon={Wallet} label="Balance" value={formatUsd(t?.balance)} loading={loading} />
             <StatCard icon={CircleDollarSign} label="Equity" value={formatUsd(t?.equity)} tone="sky" loading={loading} />
@@ -164,27 +167,39 @@ function LiveMonitor() {
             <StatCard icon={Gauge} label="หลักประกันว่าง" value={formatUsd(t?.margin_free)} tone="gold" sub="1 ไม้ ต่อหลักประกัน 100 (Lot 0.01 · ปัดขึ้น)" loading={loading} />
           </div>
 
-          <div className="grid grid-main-side section">
-            <PositionsCard positions={positions} loading={loading} showAccount={overview} />
-            <RadarCard radar={radar} loading={loading} />
-          </div>
+          </Group>
 
-          {/* ข้อมูลชุดเดียวกับโปรแกรม Gold Bot 24: AI คาดการณ์ · แท่งเทียน M15 · กำไรรายวัน · ข่าวพร้อมผลต่อทอง */}
-          <div className="grid grid-2 section" style={{ alignItems: 'start' }}>
-            <OutlookCard outlook={radar?.outlook} />
-            <CandleCard candles={radar?.candles} price={radar?.price} />
-          </div>
-          <div className="grid grid-2 section" style={{ alignItems: 'start' }}>
-            <DailyPnlCard rows={radar?.daily_pnl} />
-            <NewsImpactCard news={radar?.news} />
-          </div>
+          <Group id="live-orders" title="ออเดอร์และสัญญาณ" sub="ไม้ที่เปิดอยู่ตอนนี้ · AI Radar แนวรับ-ต้าน">
+            <div className="grid grid-main-side">
+              <PositionsCard positions={positions} loading={loading} showAccount={overview} />
+              <RadarCard radar={radar} loading={loading} />
+            </div>
+          </Group>
 
-          <MyTradeStats />
+          <Group id="live-results" title="ผลการเทรด" sub="สถิติรายแผน · กำไรรายวัน · ประวัติการเทรด (ซิงค์จากโปรแกรม)">
+            <MyTradeStats bare />
+            <div className="section">
+              <DailyPnlCard rows={radar?.daily_pnl} />
+            </div>
+            <div className="section">
+              <TradeHistory />
+            </div>
+          </Group>
 
-          <div className="grid grid-main-side section" style={{ alignItems: 'start' }}>
-            <TradeHistory />
-            <NextNewsCard events={calendar.events} />
-          </div>
+          {/* ข้อมูลชุดเดียวกับโปรแกรม Gold Bot 24: AI คาดการณ์ · แท่งเทียน M15 */}
+          <Group id="live-market" title="ตลาดและ AI" sub="AI คาดการณ์ 1 ชม. / 4 ชม. / 1 วัน · แท่งเทียน M15">
+            <div className="grid grid-2" style={{ alignItems: 'start' }}>
+              <OutlookCard outlook={radar?.outlook} />
+              <CandleCard candles={radar?.candles} price={radar?.price} />
+            </div>
+          </Group>
+
+          <Group id="live-news" title="ข่าวเศรษฐกิจ" sub="ผลต่อทอง · ข่าว USD สำคัญถัดไป">
+            <div className="grid grid-main-side" style={{ alignItems: 'start' }}>
+              <NewsImpactCard news={radar?.news} />
+              <NextNewsCard events={calendar.events} />
+            </div>
+          </Group>
         </>
       )}
     </div>
@@ -199,6 +214,42 @@ function BotStatus({ online, paused, heartbeat, hasData }) {
     <span className="badge badge-red" title={heartbeat ? `อัปเดตล่าสุด ${formatThaiDateTime(heartbeat)}` : undefined}>
       <span className="dot dot-red" /> ออฟไลน์ · {timeAgo(heartbeat)}
     </span>
+  );
+}
+
+const LIVE_GROUPS = [
+  ['live-account', 'บัญชีและพอร์ต'],
+  ['live-orders', 'ออเดอร์และสัญญาณ'],
+  ['live-results', 'ผลการเทรด'],
+  ['live-market', 'ตลาดและ AI'],
+  ['live-news', 'ข่าวเศรษฐกิจ'],
+];
+
+/** แถบทางลัดไปแต่ละหมวด (หน้าพอร์ตสด) */
+function LiveNav() {
+  return (
+    <div className="row wrap" style={{ gap: 6, marginBottom: 18 }}>
+      {LIVE_GROUPS.map(([id, label]) => (
+        <a key={id} href={`#${id}`} className="btn btn-ghost btn-sm" style={{ border: '1px solid var(--border, #262B36)' }}>
+          {label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/** หัวหมวดของหน้าพอร์ตสด */
+function Group({ id, title, sub, children }) {
+  return (
+    <section id={id} style={{ marginBottom: 32, scrollMarginTop: 90 }}>
+      <div className="section-title" style={{ marginBottom: 12 }}>
+        <div>
+          <h2>{title}</h2>
+          {sub && <p>{sub}</p>}
+        </div>
+      </div>
+      {children}
+    </section>
   );
 }
 

@@ -8,7 +8,7 @@ import { formatUsd } from '../lib/format';
 import { planDisplay } from '../lib/plans';
 
 /** ผลการเทรดของผู้ใช้รายแผน (/api/user/stats · ซิงค์จากโปรแกรมเมื่อออเดอร์ปิด) — แสดงในหน้าพอร์ตสด */
-export default function MyTradeStats() {
+export default function MyTradeStats({ bare = false }) {
   const { apiFetch } = useAuth();
   const [stats, setStats] = useState(null);
 
@@ -28,13 +28,15 @@ export default function MyTradeStats() {
 
   const o = stats?.overall;
   return (
-    <div className="section">
-      <div className="section-title">
-        <div>
-          <h2>ผลการเทรดของคุณ</h2>
-          <p>ซิงค์จากโปรแกรม Gold Bot 24 เมื่อออเดอร์ปิด</p>
+    <div className={bare ? '' : 'section'}>
+      {!bare && (
+        <div className="section-title">
+          <div>
+            <h2>ผลการเทรดของคุณ</h2>
+            <p>ซิงค์จากโปรแกรม Gold Bot 24 เมื่อออเดอร์ปิด</p>
+          </div>
         </div>
-      </div>
+      )}
       <div className="grid grid-4">
         <StatCard icon={Target} label="ออเดอร์ทั้งหมด" value={o ? o.trades : '—'} loading={!stats} />
         <StatCard icon={Trophy} label="Win Rate" value={o ? `${o.winRate.toFixed(1)}%` : '—'} tone="gold" sub={o ? `ชนะ ${o.win} · แพ้ ${o.loss}` : undefined} loading={!stats} />

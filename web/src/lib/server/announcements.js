@@ -29,11 +29,15 @@ export async function listPublic(limit = 20) {
     .select(COLS)
     .eq('active', true)
     .lte('starts_at', now)
-    .or(`ends_at.is.null,ends_at.gt.${now}`)
     .order('starts_at', { ascending: false })
-    .limit(limit);
-  if (error) return { error };
-  return { items: (data || []).map(shape) };
+    .limit(limit * 3);
+  if (error) {
+    console.error('[announcements] list error:', error.message);
+    return { error };
+  }
+  // กรองข่าวหมดอายุในโค้ด (ตัวกรอง .or() ของ PostgREST พังเมื่อค่าเวลามีเครื่องหมาย : — เดิมคืนรายการว่าง)
+  const t = Date.now();
+  return { items: (data || []).filter((a) => !a.ends_at || new Date(a.ends_at).getTime() > t).slice(0, limit).map(shape) };
 }
 
 export async function listAll() {
