@@ -119,26 +119,73 @@ export default function HoursHistoryCard() {
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: series.length > 40 ? 1 : 3, height: 140, borderBottom: '1px solid var(--border, #262B36)' }}>
+            <div
+              style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', gap: series.length > 40 ? 1 : 3, height: 140, borderBottom: '1px solid var(--border, #262B36)' }}
+              onMouseLeave={() => setHover(null)}
+            >
               {series.map((x, i) => (
-                <div
-                  key={x.day}
-                  onMouseEnter={() => setHover(i)}
-                  onMouseLeave={() => setHover(null)}
-                  style={{
-                    flex: 1,
-                    height: `${Math.max(x.hours > 0 ? 3 : 1, (x.hours / max) * 100)}%`,
-                    display: 'flex',
-                    flexDirection: 'column-reverse',
-                    background: x.hours > 0 ? 'transparent' : 'var(--border, #262B36)',
-                    borderRadius: '3px 3px 0 0',
-                    overflow: 'hidden',
-                    opacity: hover === null || hover === i ? 1 : 0.55,
-                  }}
-                >
-                  {x.hours > 0 && Object.entries(x.parts).map(([k, m]) => <div key={k} style={{ height: `${(m / 60 / x.hours) * 100}%`, background: colorOf(k) }} />)}
+                // คอลัมน์สูงเต็มกราฟ = พื้นที่ชี้เมาส์ (ชี้วันที่ไม่มีชั่วโมงได้ด้วย) · แท่งจริงอยู่ด้านล่าง
+                <div key={x.day} onMouseEnter={() => setHover(i)} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', cursor: 'default' }}>
+                  <div
+                    style={{
+                      width: '100%',
+                      height: `${Math.max(x.hours > 0 ? 3 : 1, (x.hours / max) * 100)}%`,
+                      display: 'flex',
+                      flexDirection: 'column-reverse',
+                      background: x.hours > 0 ? 'transparent' : 'var(--border, #262B36)',
+                      borderRadius: '3px 3px 0 0',
+                      overflow: 'hidden',
+                      opacity: hover === null || hover === i ? 1 : 0.55,
+                    }}
+                  >
+                    {x.hours > 0 && Object.entries(x.parts).map(([k, m]) => <div key={k} style={{ height: `${(m / 60 / x.hours) * 100}%`, background: colorOf(k) }} />)}
+                  </div>
                 </div>
               ))}
+              {h && (
+                <div
+                  role="tooltip"
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% - 8px)',
+                    ...(hover / series.length > 0.6
+                      ? { right: `${100 - ((hover + 1) / series.length) * 100}%` }
+                      : { left: `${(hover / series.length) * 100}%` }),
+                    minWidth: 190,
+                    padding: '10px 12px',
+                    background: '#14171e',
+                    border: '1px solid var(--gold, #f2c14e)',
+                    borderRadius: 10,
+                    boxShadow: '0 10px 30px rgba(0,0,0,.45)',
+                    pointerEvents: 'none',
+                    zIndex: 5,
+                    fontSize: 12,
+                    lineHeight: 1.55,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: 'var(--gold, #f2c14e)', marginBottom: 4 }}>
+                    {fmtDay(h.day)}
+                    {h.to ? ` – ${fmtDay(h.to)}` : ''}
+                  </div>
+                  <div className="row-between" style={{ gap: 16 }}>
+                    <span className="muted">รวม</span>
+                    <strong className="mono">{h.hours.toLocaleString('th-TH', { maximumFractionDigits: 1 })} ชม.</strong>
+                  </div>
+                  {Object.entries(h.parts).map(([k, m]) => (
+                    <div key={k} className="row-between" style={{ gap: 16 }}>
+                      <span>
+                        {dot(colorOf(k))}
+                        {k === 'other' ? 'ไม่ระบุบัญชี' : `#${k}`}
+                      </span>
+                      <span className="mono">
+                        {hrs(m)} ชม. <span className="faint">({h.hours > 0 ? Math.round((m / 60 / h.hours) * 100) : 0}%)</span>
+                      </span>
+                    </div>
+                  ))}
+                  {h.hours === 0 && <div className="faint">บอทไม่ได้ทำงาน</div>}
+                </div>
+              )}
             </div>
             <div className="row-between tiny faint" style={{ marginTop: 6, gap: 8 }}>
               <span>{series[0] ? fmtDay(series[0].day) : ''}</span>

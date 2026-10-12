@@ -1140,6 +1140,8 @@ class NewsDialog(ctk.CTkToplevel):
 class HoursHistoryDialog(ctk.CTkToplevel):
     """ประวัติการสะสมชั่วโมง (เวลาที่บอททำงานและถูกหักจริง) รายวัน + ระดับสมาชิก — ข้อมูลเดียวกับเว็บ /dashboard"""
     RANGES = ((7, "7 วัน"), (30, "30 วัน"), (90, "90 วัน"), (365, "1 ปี"))
+    ACC_COLORS = ("#F2C14E", "#60A5FA", "#34D399", "#F472B6", "#A78BFA", "#FB923C")   # สีบัญชีเดียวกับเว็บ
+    OTHER_COLOR = "#4B5263"
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -1148,7 +1150,7 @@ class HoursHistoryDialog(ctk.CTkToplevel):
         self.geometry("780x500")
         self.minsize(600, 380)
         apply_dark_title_bar(self)
-        self._days, self._result, self._busy, self._data, self._series, self._bars = 30, None, False, None, [], []
+        self._days, self._result, self._busy, self._data, self._series, self._bars, self._parts = 30, None, False, None, [], [], []
 
         def f(size, weight="normal"):
             return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
@@ -1167,6 +1169,7 @@ class HoursHistoryDialog(ctk.CTkToplevel):
         self.cv.pack(fill="both", expand=True, padx=20, pady=(8, 6))
         self.cv.bind("<Configure>", lambda e: self._draw())
         self.cv.bind("<Motion>", self._hover)
+        self.cv.bind("<Leave>", lambda e: self.cv.delete("tip"))
         self.lbl_hover = ctk.CTkLabel(self, text="นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมงจริง · วันตามเวลาไทย · ชี้ที่แท่งเพื่อดูรายละเอียด",
                                       font=f(11), text_color=COLOR_TEXT_MUTED)
         self.lbl_hover.pack(pady=(0, 12))
@@ -1212,10 +1215,32 @@ class HoursHistoryDialog(ctk.CTkToplevel):
         today = thai_time.now().date()
         days = [today - timedelta(days=i) for i in range(self._days - 1, -1, -1)]
         series = [(d, d, rows.get(d.isoformat(), 0) / 60) for d in days]
+        # นาทีแยกตามบัญชี MT5 ต่อวัน (ส่วนที่ไม่มีเลขบัญชี = "other")
+        by_day = {}
+        for r in ((self._data or {}).get("accounts") or {}).get("days", []):
+            by_day.setdefault(r["day"], {})[r["login"]] = by_day.get(r["day"], {}).get(r["login"], 0) + r["minutes"]
+        parts = []
+        for d in days:
+            p = dict(by_day.get(d.isoformat(), {}))
+            known = sum(p.values())
+            tot = max(rows.get(d.isoformat(), 0), known)
+            if tot - known > 0.5:
+                p["other"] = tot - known
+            parts.append(p)
         if self._days > 62:   # รวมรายสัปดาห์
             series = [(series[i][0], series[min(i + 6, len(series) - 1)][1], sum(x[2] for x in series[i:i + 7]))
                       for i in range(0, len(series), 7)]
-        self._series = series
+            merged = []
+            for i in range(0, len(parts), 7):
+                m = {}
+                for p in parts[i:i + 7]:
+                    for k, v in p.items():
+                        m[k] = m.get(k, 0) + v
+                merged.append(m)
+            parts = merged
+        self._series, self._parts = series, parts
+        accs = ((self._data or {}).get("accounts") or {}).get("list") or []
+        self._acc_colors = {a["login"]: self.ACC_COLORS[i % len(self.ACC_COLORS)] for i, a in enumerate(accs)}
         data = self._data or {}
         if data.get("available"):
             total = sum(x[2] for x in series)
@@ -1258,17 +1283,54 @@ class HoursHistoryDialog(ctk.CTkToplevel):
         for i, (d0, d1, h) in enumerate(series):
             x0, x1 = pl + i * bw + gap, pl + (i + 1) * bw - gap
             y = H - pb - (H - pt - pb) * (h / mx)
-            cv.create_rectangle(x0, min(y, H - pb - 1), x1, H - pb, fill=COLOR_GOLD_WARM if h > 0 else "#262B36", outline="")
+            if h <= 0:
+                cv.create_rectangle(x0, H - pb - 1, x1, H - pb, fill="#262B36", outline="")
+            else:   # แท่งซ้อนสีตามบัญชี
+                yb = H - pb
+                for k, m in (self._parts[i] if i < len(self._parts) else {}).items():
+                    hh = (H - pt - pb) * (m / 60 / mx)
+                    cv.create_rectangle(x0, yb - hh, x1, yb, fill=self._color_of(k), outline="")
+                    yb -= hh
+                if not self._parts or not self._parts[i]:
+                    cv.create_rectangle(x0, min(y, H - pb - 1), x1, H - pb, fill=COLOR_GOLD_WARM, outline="")
             self._bars.append((x0, x1, d0, d1, h))
         for i in sorted({0, n // 2, n - 1}):
             cv.create_text(pl + (i + 0.5) * bw, H - 10, text=series[i][0].strftime("%d/%m"), fill=COLOR_TEXT_MUTED, font=(app_fonts.UI, 9))
 
+    def _color_of(self, k):
+        return self.OTHER_COLOR if k == "other" else getattr(self, "_acc_colors", {}).get(k, self.OTHER_COLOR)
+
     def _hover(self, e):
-        for x0, x1, d0, d1, h in self._bars:
-            if x0 - 1 <= e.x <= x1 + 1:
-                rng = d0.strftime("%d/%m/%Y") + (f" – {d1.strftime('%d/%m')}" if d1 != d0 else "")
-                self.lbl_hover.configure(text=f"{rng} · {h:,.1f} ชม.", text_color=COLOR_GOLD_PRIMARY)
-                return
+        """ชี้ที่แท่ง → กล่องข้อมูล (tipbox) บนกราฟ: วันที่ · รวม · แยกตามบัญชี MT5"""
+        cv = self.cv
+        cv.delete("tip")
+        for i, (x0, x1, d0, d1, h) in enumerate(self._bars):
+            if not (x0 - 1 <= e.x <= x1 + 1):
+                continue
+            rng = d0.strftime("%d/%m/%Y") + (f" – {d1.strftime('%d/%m')}" if d1 != d0 else "")
+            lines = [(f"รวม  {h:,.1f} ชม.", COLOR_TEXT_PRIMARY, None)]
+            for k, m in (self._parts[i] if i < len(self._parts) else {}).items():
+                pct = (m / 60 / h * 100) if h > 0 else 0
+                lines.append((f"{'ไม่ระบุบัญชี' if k == 'other' else '#' + str(k)}  {m / 60:,.1f} ชม. ({pct:.0f}%)", COLOR_TEXT_PRIMARY, self._color_of(k)))
+            if h <= 0:
+                lines.append(("บอทไม่ได้ทำงาน", COLOR_TEXT_MUTED, None))
+            fnt, fnt_b = (app_fonts.UI, 10), (app_fonts.UI, 10, "bold")
+            W, lh, pad = 220, 18, 10
+            Hh = pad * 2 + lh * (len(lines) + 1)
+            cx = (x0 + x1) / 2
+            bx = cx + 12 if cx + 12 + W < cv.winfo_width() else cx - 12 - W
+            by = max(4, min(e.y - Hh / 2, cv.winfo_height() - Hh - 4))
+            cv.create_rectangle(bx, by, bx + W, by + Hh, fill="#14171E", outline=COLOR_GOLD_PRIMARY, width=1, tags="tip")
+            cv.create_text(bx + pad, by + pad, text=rng, fill=COLOR_GOLD_PRIMARY, anchor="nw", font=fnt_b, tags="tip")
+            for j, (txt, col, dot) in enumerate(lines):
+                ty = by + pad + lh * (j + 1)
+                tx = bx + pad
+                if dot:
+                    cv.create_rectangle(tx, ty + 4, tx + 9, ty + 13, fill=dot, outline="", tags="tip")
+                    tx += 15
+                cv.create_text(tx, ty, text=txt, fill=col, anchor="nw", font=fnt, tags="tip")
+            self.lbl_hover.configure(text=f"{rng} · {h:,.1f} ชม.", text_color=COLOR_GOLD_PRIMARY)
+            return
 
 
 class ContactDialog(ctk.CTkToplevel):
