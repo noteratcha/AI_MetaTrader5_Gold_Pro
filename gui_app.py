@@ -5325,8 +5325,9 @@ class MainTradingApp(ctk.CTk):
                 for w in (box, val, ttl):
                     w.configure(cursor="hand2")
                     w.bind("<Button-1>", lambda e: self.main_tabs.set(self.TAB_POSITIONS))
-            if key == "margin":  # หลักประกันล็อก 400 ต่อไม้ (ตั้งเองไม่ได้) — ชี้ดูวิธีคิดจำนวนไม้
-                HoverTip(box, lambda: "จำนวนไม้สูงสุด = หลักประกันว่าง ÷ 400 ต่อไม้ (ที่ Lot 0.01 · เศษปัดขึ้น)")
+            if key == "margin":  # ชี้ดูวิธีคิดจำนวนไม้สูงสุด
+                HoverTip(box, lambda: "จำนวนไม้สูงสุด = ยอดเงิน (Balance) ÷ (100 × Lot/0.01) เศษปัดขึ้น · อย่างน้อย 1 ไม้\n"
+                                      "นับทุกไม้ในบัญชี (บอท + เข้าเอง) · ไม่ลดลงตามไม้ที่เปิด")
 
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(8, 12))
@@ -7523,7 +7524,8 @@ class MainTradingApp(ctk.CTk):
                 if hasattr(self, 'ctl_stat_labels'):
                     n_open = len(telemetry.get("open_positions") or [])
                     free_m = float(telemetry.get("free_margin", 0.0) or 0.0)
-                    n_max = plan_config.max_positions(free_m, self._load_lot()) if telemetry.get("is_connected") else 0
+                    cap_base = float(telemetry.get("balance", 0.0) or 0.0)   # เพดานไม้คิดจากยอดเงิน (เหมือนบอท)
+                    n_max = plan_config.max_positions(cap_base, self._load_lot()) if telemetry.get("is_connected") else 0
                     self.ctl_stat_labels["open"].configure(
                         text=f"{n_open} / {n_max}",
                         text_color=COLOR_DANGER_RED if n_max and n_open >= n_max else (COLOR_CYAN_ACCENT if n_open else COLOR_TEXT_PRIMARY))

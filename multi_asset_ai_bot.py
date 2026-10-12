@@ -3057,11 +3057,13 @@ def main():
                         all_open_pos = mt5.positions_get()
                         total_open_pos = len(all_open_pos) if all_open_pos else 0
                         free_margin = float(acc_info.margin_free) if acc_info else 0.0
-                        # หลักประกันต่อไม้: 100 USD ที่ Lot 0.01 ปรับตามขนาดไม้
-                        max_allowed = plan_config.max_positions(free_margin, current_lot())  # อย่างน้อย 1 ไม้
+                        # เพดานไม้คิดจากยอดเงิน (Balance) — เดิมคิดจากหลักประกันว่างซึ่งลดลงทุกครั้งที่เปิดไม้
+                        # ทำให้เพดานหดตามไม้ที่เปิด (เปิด 2 ไม้แล้วเพดานเหลือ 1 → แสดง 2/1) · แก้ 12 ต.ค. 2026
+                        cap_base = float(acc_info.balance) if acc_info else 0.0
+                        max_allowed = plan_config.max_positions(cap_base, current_lot())  # อย่างน้อย 1 ไม้
                         if total_open_pos >= max_allowed:
                             if is_in_zone:
-                                print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} หลักประกันว่าง {free_margin:,.0f} → เปิดได้สูงสุด {max_allowed} ไม้ (เปิดอยู่แล้ว {total_open_pos} ไม้) — รอให้มีหลักประกันเพิ่มหรือปิดไม้เดิมก่อน{Colors.RESET}")
+                                print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} ยอดเงิน {cap_base:,.0f} → เปิดได้สูงสุด {max_allowed} ไม้ (เปิดอยู่แล้ว {total_open_pos} ไม้) — รอให้มีหลักประกันเพิ่มหรือปิดไม้เดิมก่อน{Colors.RESET}")
                                 log_signal_event(sym, 'RISK_BLOCKED', status_text, 'N/A', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'MAX_POS_BLOCKED', f'Margin ${free_margin:.0f} max allowed {max_allowed} (Already open {total_open_pos})')
                             break
 

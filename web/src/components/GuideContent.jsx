@@ -110,7 +110,7 @@ function Toc() {
   );
 }
 
-/** จำนวนไม้สูงสุด = หลักประกันว่าง ÷ (หลักประกันต่อไม้ × Lot/0.01) ปัดขึ้น อย่างน้อย 1 ไม้ — สูตรเดียวกับ plan_config.max_positions */
+/** จำนวนไม้สูงสุด = ยอดเงิน (Balance) ÷ (หลักประกันต่อไม้ × Lot/0.01) ปัดขึ้น อย่างน้อย 1 ไม้ — สูตรเดียวกับ plan_config.max_positions */
 function MarginCalc() {
   const [free, setFree] = useState('250');
   const [lot, setLot] = useState('0.01');
@@ -122,7 +122,7 @@ function MarginCalc() {
     <form className="guide-calc" onSubmit={(e) => e.preventDefault()} autoComplete="off">
       <div className="guide-calc-inputs">
         <label className="field" htmlFor="calc-free">
-          <span className="label">หลักประกันว่าง</span>
+          <span className="label">ยอดเงิน (Balance)</span>
           <input id="calc-free" className="input mono" type="number" inputMode="decimal" min="0" step="1" value={free} onChange={(e) => setFree(e.target.value)} />
         </label>
         <label className="field" htmlFor="calc-lot">
@@ -248,7 +248,7 @@ const PROTECTIONS = [
   ['บล็อกทิศเดิม', 'แผนใดแพ้ จะไม่เข้าทิศเดิมซ้ำ 60 นาที (ปลดเมื่อชนะ)'],
   ['พักหลังปิดไม้', 'เว้น 10 นาทีหลังปิดไม้ กันการเข้าซ้ำตอนราคาสะบัด'],
   ['1 ไม้ต่อ 1 สัญญาณ', 'P1/P2 ไม่เข้าซ้ำบนสัญญาณ MA ตัดเดิม'],
-  ['จำกัดจำนวนไม้', 'ตามหลักประกันว่าง (ข้อ 6)'],
+  ['จำกัดจำนวนไม้', 'ตามยอดเงินในบัญชี (ข้อ 6)'],
   ['ล็อกกำไร', 'กำไรถึง 70% ของเป้า เลื่อน SL มาล็อกกำไร +0.35 ATR'],
   ['ขยาย TP', 'กำไรถึง 80% ของเป้าและ AI ยังมั่นใจ ≥ 54% ขยาย TP อีก 1 ATR'],
   ['เลื่อน SL ขั้นบันได', 'P1, P3, P4, P5: ทุกกำไร 5 จุด เลื่อน SL เข้าหาราคา ขั้นแรก 50% ขั้นถัดไป 40% ของระยะ SL ถึงราคา (เช่น SELL เข้า 4,125.57 SL 4,131.85: กำไร +5 → SL 4,126.21 · +10 → 4,121.95 · +15 → 4,117.40)'],
@@ -425,7 +425,7 @@ export default function GuideContent() {
                   <tr><td className="nowrap">ปิดไม้เข้าเองกำไรถึง (จุด)</td><td>ติ๊กเพื่อเปิดใช้แล้วเลือก 100–500 จุด (หรือพิมพ์เอง ค่าเริ่มต้น 100) ไม้ที่เข้าเองมีกำไรถึงจำนวนจุดนี้นับจากราคาเข้า บอทจะปิดทันที · ช่วงตลาดผันผวนผิดปกติ บอทใช้ค่านี้กับทุกไม้ให้อัตโนมัติ (ข้อ 12)</td></tr>
                   <tr><td className="nowrap">ออเดอร์ / สูงสุด</td><td>จำนวนไม้ที่เปิดอยู่เทียบกับจำนวนสูงสุดที่หลักประกันรองรับ ตัวเลขเป็นสีแดงเมื่อเต็ม</td></tr>
                   <tr><td className="nowrap">กำไรลอยตัว</td><td>กำไร/ขาดทุนรวมของไม้ที่ยังเปิดอยู่</td></tr>
-                  <tr><td className="nowrap">หลักประกันว่าง</td><td>หลักประกันที่เหลือในบัญชี ใช้คิดจำนวนไม้สูงสุด (100 ต่อไม้ · ข้อ 6)</td></tr>
+                  <tr><td className="nowrap">หลักประกันว่าง</td><td>หลักประกันที่เหลือในบัญชี (จำนวนไม้สูงสุดคิดจากยอดเงิน 100 ต่อไม้ · ข้อ 6)</td></tr>
                   <tr><td className="nowrap">เวลาทำงาน</td><td>เวลาที่บอททำงานในรอบนี้</td></tr>
                   <tr><td className="nowrap"><Ui tone="buy">▲ BUY</Ui> <Ui tone="sell">▼ SELL</Ui></td><td>เข้าไม้เองทันที (ข้อ 7)</td></tr>
                   <tr><td className="nowrap">ปิดทั้งหมด (n)</td><td>ปิดทุกไม้ที่เปิดอยู่ ต้องกดยืนยันก่อน</td></tr>
@@ -466,11 +466,11 @@ export default function GuideContent() {
           </Section>
 
           <Section id="margin">
-            <p>บอทจำกัดจำนวนไม้ที่เปิดพร้อมกันตามหลักประกันว่าง ระบบล็อกไว้ที่ <strong>หลักประกัน 100 ต่อ 1 ไม้ที่ Lot 0.01</strong> (ผู้ใช้ปรับไม่ได้) นับแบบปัดเศษขึ้น และเปิดได้อย่างน้อย 1 ไม้เสมอ แต่ละแผนถือได้ครั้งละไม่เกิน 1 ไม้ ไม้ที่เข้าเองก็นับรวมในจำนวนนี้</p>
+            <p>บอทจำกัดจำนวนไม้ที่เปิดพร้อมกันตาม<strong>ยอดเงิน (Balance)</strong> ระบบล็อกไว้ที่ <strong>100 ต่อ 1 ไม้ที่ Lot 0.01</strong> (ผู้ใช้ปรับไม่ได้) นับแบบปัดเศษขึ้น และเปิดได้อย่างน้อย 1 ไม้เสมอ แต่ละแผนถือได้ครั้งละไม่เกิน 1 ไม้ ไม้ที่เข้าเองก็นับรวมในจำนวนนี้</p>
             <div className="table-wrap guide-table-wrap">
               <table className="table guide-table">
                 <thead>
-                  <tr><th>หลักประกันว่าง (100 ต่อไม้)</th><th className="num">เปิดได้สูงสุด</th></tr>
+                  <tr><th>ยอดเงิน (100 ต่อไม้)</th><th className="num">เปิดได้สูงสุด</th></tr>
                 </thead>
                 <tbody>
                   <tr><td>ไม่เกิน 100</td><td className="num">1 ไม้</td></tr>
@@ -482,7 +482,7 @@ export default function GuideContent() {
             <p>ถ้าใช้ Lot ใหญ่ขึ้น หลักประกันต่อไม้จะคูณตาม เช่น Lot 0.02 นับ 200 ต่อไม้</p>
             <h3>ลองคำนวณ</h3>
             <MarginCalc />
-            <p className="muted">หลักประกันว่างลดลงทุกครั้งที่เปิดไม้ จำนวนไม้สูงสุดจึงลดลงตามได้</p>
+            <p className="muted">เพดานคิดจากยอดเงิน จึงไม่ลดลงเมื่อเปิดไม้ — นับรวมทุกไม้ในบัญชี ทั้งไม้ของบอทและไม้ที่กด BUY/SELL เอง (ปุ่มเข้าไม้จะไม่ให้เปิดเกินเพดาน)</p>
           </Section>
 
           <Section id="manual">

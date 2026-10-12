@@ -817,6 +817,15 @@ class BotController:
                 return False, "อ่านราคาไม่ได้ (ตลาดอาจปิด)"
             if sl_pts <= 0:
                 return False, "ต้องตั้ง SL มากกว่า 0"
+            # เพดานจำนวนไม้เดียวกับบอท (ยอดเงิน ÷ หลักประกันต่อไม้ × Lot) — นับทุกไม้ในบัญชี
+            import plan_config
+            acc = mt5.account_info()
+            if acc is not None:
+                n_open = len(mt5.positions_get() or [])
+                n_max = plan_config.max_positions(float(acc.balance), bot_core.current_lot())
+                if n_open >= n_max:
+                    return False, (f"เปิดไม้ครบเพดานแล้ว ({n_open} / {n_max} ไม้)\n"
+                                   f"ยอดเงิน {float(acc.balance):,.2f} ที่ Lot {bot_core.current_lot():.2f} เปิดได้สูงสุด {n_max} ไม้ — ปิดไม้เดิมหรือลด Lot ก่อน")
             digits = int(info.digits)
             if side == "BUY":
                 price, otype = float(tick.ask), mt5.ORDER_TYPE_BUY
