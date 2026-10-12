@@ -93,3 +93,13 @@ supabase/
 
 # API guides with sensitive data
 SlipOK api guide/
+
+# ข้อมูลผู้ใช้/บัญชี — ห้าม commit (repo เป็น public) · ข้อมูลจริงอยู่ที่ %APPDATA%\GoldBot24
+credentials.json
+license_store.json
+user_stats_store.json
+calendar_cache.json
+/*.csv
+
+# สื่อดิบสำหรับการตลาด (ไม่ใช้ในโปรแกรม)
+assets/*.mp4

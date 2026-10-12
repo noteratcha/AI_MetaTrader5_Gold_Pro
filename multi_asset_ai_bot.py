@@ -1490,7 +1490,7 @@ def log_signal_event(symbol, signal_type, plan, direction, price, ai_up, ai_down
                 return False
                 
     _last_logged_signals[key] = (now, status, divergence)
-    time_str = time.strftime('%Y-%m-%d %H:%M:%S')
+    time_str = thai_time.fmt_now('%Y-%m-%d %H:%M:%S')
     
     # 1. บันทึกลงไฟล์ signal_history.csv
     sig_file = SIGNAL_HISTORY_CSV
@@ -1978,7 +1978,7 @@ def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
             if not file_exists:
                 writer.writerow(['Time', 'Symbol', 'Action', 'Plan', 'Price', 'Lot', 'SL', 'TP', 'Profit', 'Risk_Event'])
             writer.writerow([
-                time.strftime('%Y-%m-%d %H:%M:%S'),
+                thai_time.fmt_now('%Y-%m-%d %H:%M:%S'),
                 symbol,
                 'BUY' if order_type == 0 else 'SELL',
                 plan_name,
@@ -2084,7 +2084,7 @@ def close_position(position, comment="AI Reversal Close"):
         with open(TRADE_HISTORY_CSV, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([
-                time.strftime('%Y-%m-%d %H:%M:%S'),
+                thai_time.fmt_now('%Y-%m-%d %H:%M:%S'),
                 sym,
                 'CLOSE',
                 'AI Reversal',
@@ -2128,7 +2128,7 @@ def modify_position(position, new_sl, new_tp, reason="Break-Even Lock"):
     }
     res = mt5.order_send(request)
     if res is not None and res.retcode == mt5.TRADE_RETCODE_DONE:
-        time_str = time.strftime('%Y-%m-%d %H:%M:%S')
+        time_str = thai_time.fmt_now('%Y-%m-%d %H:%M:%S')
         action_name = "LOCK_SL" if float(new_sl) != float(old_sl) else "EXTEND_TP"
         tick = mt5.symbol_info_tick(position.symbol)
         curr_price = tick.bid if tick else position.price_open
@@ -2208,7 +2208,7 @@ def prune_old_csv_records(days=365):
     ตรวจสอบและลบรายการที่มีอายุเกิน 1 ปี (365 วัน)
     ครอบคลุม trade_history.csv, trade_modifications.csv, signal_history.csv
     """
-    cutoff_time = datetime.now() - timedelta(days=days)
+    cutoff_time = thai_time.now().replace(tzinfo=None) - timedelta(days=days)  # เวลาใน CSV = เวลาไทย
     target_files = [TRADE_HISTORY_CSV, TRADE_MODS_CSV, SIGNAL_HISTORY_CSV]
 
     for filepath in target_files:
@@ -3359,7 +3359,8 @@ def main():
                         # 0.05 ปิดไม้ตามเป้าจุด (Points Take Profit)
                         # - สภาวะปกติ: ใช้กับไม้ที่เข้าเอง (manual / magic 0) เมื่อเปิดใช้งาน (manual_tp_pts_enabled)
                         # - สภาวะผันผวนแรงผิดปกติ: ต้องเปิดใช้เสมอและมีผลต่อทุกแผน (ทั้งไม้เข้าเองและไม้ของบอท)
-                        is_manual_pos = (pos.magic == 0 or (pos.comment or "").startswith("Manual") or pos.magic != get_profile_magic_number())
+                        # ไม้ของบอทโปรไฟล์อื่น (magic อื่นที่ไม่ใช่ 0) ไม่ใช่ไม้เข้าเอง — ห้ามแตะ (Multi-Profile)
+                        is_manual_pos = (pos.magic == 0 or (pos.comment or "").startswith("Manual"))
                         should_check_pts = is_volatile or (tp_pts_enabled and is_manual_pos)
 
                         if should_check_pts:

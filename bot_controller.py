@@ -424,7 +424,7 @@ class BotController:
                     t["profit"] += float(d.profit) + float(getattr(d, "commission", 0.0)) + float(getattr(d, "swap", 0.0))
                     if d.entry == 0:  # DEAL_ENTRY_IN
                         t["side"] = "BUY" if d.type == 0 else "SELL"
-                        t["plan"] = d.comment or ("Manual" if d.magic != get_profile_magic_number() else "")
+                        t["plan"] = d.comment or ("Manual" if d.magic == 0 else "")
                         t["volume"] = float(d.volume)
                         t["open_time"] = int(d.time)
                         t["open_price"] = float(d.price)

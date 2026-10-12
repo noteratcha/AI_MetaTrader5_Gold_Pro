@@ -1,11 +1,11 @@
 ---
 name: ai-trading-bot
-description: Knowledge, skills, techniques, execution style, the 5 XAUUSD trading plans (MA-Cross M15/H1, SMC Sweep, SR-Bounce, BB-H1), SL/TP and trailing rules, risk management, AI direction model + AI Outlook, news-impact analysis, desktop GUI (AI Gold Commander Pro) UI/UX rules, and GoldBot24 web/Supabase/payment integrations for the AI MetaTrader 5 Gold bot.
+description: Knowledge, skills, techniques, execution style, the 5 XAUUSD trading plans (MA-Cross M15/H1, SMC Sweep, SR-Bounce, BB-H1), SL/TP and trailing rules, risk management, AI direction model + AI Outlook, news-impact analysis, desktop GUI (Gold Bot 24) UI/UX rules, and GoldBot24 web/Supabase/payment integrations for the AI MetaTrader 5 Gold bot.
 ---
 
-# AI Gold Commander Pro — XAUUSD Gold Specialist (อัปเดต 6 ต.ค. 2026)
+# Gold Bot 24 — XAUUSD Gold Specialist (อัปเดต 6 ต.ค. 2026)
 
-บอทเทรดทองคำ **XAUUSD อย่างเดียว** เชื่อม MetaTrader 5 (FBS) ด้วย Python + โปรแกรม **AI Gold Commander Pro** (CustomTkinter) + เว็บ **GoldBot24** (Next.js บน Vercel + Supabase)
+บอทเทรดทองคำ **XAUUSD อย่างเดียว** เชื่อม MetaTrader 5 (FBS) ด้วย Python + โปรแกรม **Gold Bot 24** (CustomTkinter) + เว็บ **GoldBot24** (Next.js บน Vercel + Supabase)
 รายละเอียดเต็มและกฎวิศวกรรมทั้งหมดอยู่ใน `AGENTS.md` — ไฟล์นี้คือสรุปสกิล/เทคนิค/สไตล์ที่ต้องใช้ทุกครั้งที่ทำงานกับโปรเจกต์
 
 > 📌 เลขเวอร์ชัน `YYYY.MMDD.HHMM` แหล่งเดียวคือ `version.py` — แก้โค้ดทุกครั้งรัน `python tools/bump_version.py` ก่อน commit
@@ -76,7 +76,7 @@ description: Knowledge, skills, techniques, execution style, the 5 XAUUSD tradin
 
 ---
 
-## 6. โปรแกรม AI Gold Commander Pro (UI/UX)
+## 6. โปรแกรม Gold Bot 24 (UI/UX)
 
 - **แท็บ**: Console · ออเดอร์ที่เปิดอยู่ · ประวัติการเทรด (10 รายการ/หน้า + คอลัมน์ "ปิดโดย") · ปฏิทินเศรษฐกิจ (+ ผลต่อทอง คลิกดูรายละเอียด) · AI คาดการณ์
 - **การ์ดคลิกได้** (`_make_clickable`, เปิดหน้าต่างเดียว): ยอดเงินในพอร์ต → กราฟแท่งกำไร/ขาดทุนรายวัน (7/14/30/เดือนนี้/90 วัน/กำหนดเอง) · ราคาทองคำ → แท่งเทียน M15 เรียลไทม์ (16–500 แท่ง ค่าเริ่มต้น 120, MA5/13, Bid/Ask/Spread, เส้นราคาเข้า/TP/SL/Lot, กำไรรวม, เต็มจอ F11)
@@ -89,7 +89,7 @@ description: Knowledge, skills, techniques, execution style, the 5 XAUUSD tradin
   - ดูกราฟสด H4 มีการแสดงผลเส้นแนวนอนแนวรับ–แนวต้านระดับ H4 (เส้นประสีแดง/เขียว พร้อมป้ายราคา) สอดคล้องกับ H1
   - มีระบบตรวจจับและนับถอยหลังเวลาเปิด-ปิดตลาด พร้อมป้องกันข้อความแจ้งเตือนซ้ำซ้อนในคอนโซล (Duplicate Suppression)
   - แสดงสถานะเงื่อนไขการเข้าไม้เรียลไทม์ (Live Entry Condition Score & Real-time Checklist): หน้าต่างดูกราฟสด `GoldCandleDialog` มีป้ายนับเงื่อนไขบนปุ่มแผน (เช่น `P2 · H1 (3/4)`, ไฮไลต์เขียว `★ (4/4)` เมื่อเข้าครบ 100%) และแถบสถานะเงื่อนไขด้านล่าง (`cond_frame`: Checklist ชิป `✓`/`✗` พร้อมตัวเลขจริงและ Tooltip) + หน้า Dashboard ตารางแผนแสดงจำนวนข้อที่เข้า ณ ขณะนั้น (เช่น `▲ 3/4 ข้อ`) แทนช่องว่างเมื่อยังไม่มีไม้เปิด
-  - คำเทรนด์ภาษาอังกฤษ (Uptrend/Downtrend/Sideway) · ชื่อแผน `P1 · MA M15` … · เรียก "โปรแกรม AI Gold Commander Pro" · ค่าบริการ "บาท/ชม."
+  - คำเทรนด์ภาษาอังกฤษ (Uptrend/Downtrend/Sideway) · ชื่อแผน `P1 · MA M15` … · เรียก "โปรแกรม Gold Bot 24" · ค่าบริการ "บาท/ชม."
   - ตัวเลขมีคอมมา · การ์ดแผนเทรดไม่ใส่ $ · ข้อความแจ้งเวอร์ชันใหม่ใช้ `UpdateDialog`
   - ค่าตั้งของผู้ใช้เก็บใน `%APPDATA%\GoldBot24\bot_settings.json` ผ่าน `_save_setting` (รวมค่า ไม่ทับ) — คีย์: `lot`, `tp_usd_enabled`, `tp_usd`, `console_autoclear`, `user_plans`
 - **Smoke test**: สร้างหน้าต่างจริง + `attributes("-topmost", True)` แล้ว `PIL.ImageGrab` — ระวังจับภาพโปรแกรมของผู้ใช้ที่เปิดอยู่

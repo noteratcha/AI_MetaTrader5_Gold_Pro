@@ -9,7 +9,7 @@ import { PLAN_NAMES } from '../lib/plans';
 import { LINE_ID, LINE_URL } from '../lib/contact';
 import { formatThb } from '../lib/format';
 
-// คู่มือการใช้งานโปรแกรม AI Gold Commander Pro (หน้า /guide) — อ้างอิงพฤติกรรมของโปรแกรมเวอร์ชัน 2026.1007.0830
+// คู่มือการใช้งานโปรแกรม Gold Bot 24 (หน้า /guide) — อ้างอิงพฤติกรรมของโปรแกรมเวอร์ชัน 2026.1007.0830
 const SECTIONS = [
   ['prepare', 'สิ่งที่ต้องเตรียม'],
   ['start', 'เริ่มต้นใช้งาน 6 ขั้นตอน'],
@@ -146,7 +146,7 @@ function ScreenMap() {
       <div className="guide-screen" role="img" aria-label="แผนผังหน้าจอหลักของโปรแกรม แบ่งเป็นส่วน A ถึง E">
         <div className="guide-zone z-head">
           <span className="guide-zone-key">A</span>
-          <b>AI Gold Commander Pro</b>
+          <b>Gold Bot 24</b>
           <div className="guide-chips">
             <span className="r">ข่าว USD · อีก 16 ชม.</span>
             <span className="y">32.37 ชม.</span>
@@ -287,7 +287,7 @@ export default function GuideContent() {
       <PageHeader
         eyebrow="คู่มือการใช้งาน"
         icon={BookOpen}
-        title="คู่มือการใช้งาน AI Gold Commander Pro"
+        title="คู่มือการใช้งาน Gold Bot 24"
         description="ตั้งแต่สมัครสมาชิก ติดตั้งโปรแกรม เริ่มบอท ไปจนถึงการติดตามไม้และการซื้อชั่วโมงใช้งาน"
       />
 
@@ -359,7 +359,7 @@ export default function GuideContent() {
                     </>
                   ),
                 },
-                { title: 'เข้าสู่ระบบโปรแกรม', body: <>เปิดโปรแกรม <strong>AI Gold Commander Pro</strong> แล้วเข้าสู่ระบบด้วยอีเมลและรหัสผ่านเดียวกับเว็บ ถ้าติ๊ก <Ui>จดจำการเข้าสู่ระบบในเครื่องนี้</Ui> ครั้งต่อไปไม่ต้องกรอกใหม่ ข้อมูลถูกเข้ารหัสเก็บไว้ในเครื่อง</> },
+                { title: 'เข้าสู่ระบบโปรแกรม', body: <>เปิดโปรแกรม <strong>Gold Bot 24</strong> แล้วเข้าสู่ระบบด้วยอีเมลและรหัสผ่านเดียวกับเว็บ ถ้าติ๊ก <Ui>จดจำการเข้าสู่ระบบในเครื่องนี้</Ui> ครั้งต่อไปไม่ต้องกรอกใหม่ ข้อมูลถูกเข้ารหัสเก็บไว้ในเครื่อง</> },
                 { title: 'ตั้งค่า แล้วเริ่มบอท', body: <>ตรวจขนาดไม้ (Lot) และแผนเทรดที่ติ๊กไว้ แล้วกด <Ui tone="gold">▶ เริ่มการทำงานบอท</Ui> ที่แผงควบคุมด้านขวา บอทจะเริ่มสแกนตลาดและเข้าไม้เองเมื่อเงื่อนไขครบ</> },
               ]}
             />

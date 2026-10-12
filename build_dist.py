@@ -36,7 +36,7 @@ def check_compiler():
 def create_quickstart_guide(out_dir):
     """สร้างคู่มือเริ่มต้นใช้งานฉบับย่อใส่ในโฟลเดอร์สำหรับผู้ใช้"""
     guide_text = f"""=======================================================
-👑 AI Gold Commander Pro (GoldBot24) {VERSION_STR}
+👑 Gold Bot 24 {VERSION_STR}
 คู่มือเริ่มต้นใช้งานฉบับย่อ (Quick Start Guide)
 =======================================================
 

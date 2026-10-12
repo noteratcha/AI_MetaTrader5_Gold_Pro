@@ -3,7 +3,7 @@ chcp 65001 >nul
 title GoldBot24 Multi-Instance Launcher
 cd /d "%~dp0"
 echo ========================================================
-echo   GoldBot24 - AI Gold Commander Pro Multi-Instance
+echo   Gold Bot 24 Multi-Instance
 echo ========================================================
 echo   [1] เปิด Profile: FBS
 echo   [2] เปิด Profile: XM

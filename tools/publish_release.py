@@ -25,7 +25,7 @@ TAG = f"v{APP_VERSION}"
 ZIP = os.path.join(ROOT, "dist", f"AI_Gold_Commander_Pro_{TAG}.zip")
 SETUP = os.path.join(ROOT, "dist", f"GoldBot24_Setup_{TAG}.exe")
 
-RELEASE_NOTES = f"""## AI Gold Commander Pro {TAG}
+RELEASE_NOTES = f"""## Gold Bot 24 {TAG}
 
 ### แสดง Magic Number บนการ์ดบัญชี MT5 (Card 1)
 - แสดงป้าย Magic Number บนการ์ดบัญชี MT5 (การ์ดที่ 1) ฝั่งขวาของเลขที่บัญชี MT5 อย่างเด่นชัดและสวยงามด้วยสไตล์ Gold Pill Badge
@@ -111,7 +111,7 @@ def main():
     payload = {
         "tag_name": TAG,
         "target_commitish": "main",
-        "name": f"AI Gold Commander Pro {TAG}",
+        "name": f"Gold Bot 24 {TAG}",
         "body": body_text,
         "draft": False,
         "prerelease": False,

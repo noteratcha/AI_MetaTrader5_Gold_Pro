@@ -75,7 +75,7 @@ function KeyVault() {
         eyebrow="Key Vault"
         icon={Key}
         title="คีย์ของฉัน"
-        description="Product Key ที่คุณซื้อ ใช้เติมชั่วโมงได้ทั้งบนเว็บและในโปรแกรม AI Gold Commander Pro"
+        description="Product Key ที่คุณซื้อ ใช้เติมชั่วโมงได้ทั้งบนเว็บและในโปรแกรม Gold Bot 24"
         actions={
           <>
             <Link href="/receipts" className="btn btn-secondary btn-sm">

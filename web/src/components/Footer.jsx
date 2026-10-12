@@ -67,7 +67,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <div className="footer-title">โปรแกรม AI Gold Commander Pro</div>
+            <div className="footer-title">โปรแกรม Gold Bot 24</div>
             <p className="small muted" style={{ marginBottom: 12 }}>
               ติดตั้งบน Windows 10/11 หรือ VPS ใช้งานคู่กับ MetaTrader 5
               {release?.version && (

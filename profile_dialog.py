@@ -1,6 +1,6 @@
 """
 หน้าต่างจัดการ Profile และเชื่อมต่อ MT5 Terminal สำหรับระบบ Multi-Instance
-(AI Gold Commander Pro - GoldBot24)
+(Gold Bot 24)
 - สลับ / สร้าง Profile เพื่อรันบอทหลายบัญชีพร้อมกันบนเครื่องเดียวกัน
 - กำหนด MT5 Terminal Path (เช่น FBS MetaTrader 5, XM Global MT5) ประจำ Profile
 - กำหนด Magic Number ประจำ Profile ไม่ให้ออเดอร์ชนกัน
@@ -377,7 +377,7 @@ class ProfileManagerDialog(ctk.CTkToplevel):
             subprocess.Popen(args, close_fds=True)
             messagebox.showinfo(
                 "เปิดหน้าต่างใหม่สำเร็จ",
-                f"กำลังเปิด AI Gold Commander Pro สำหรับ Profile [{profile_name}] ขึ้นมาอีกหน้าต่าง...\n"
+                f"กำลังเปิด Gold Bot 24 สำหรับ Profile [{profile_name}] ขึ้นมาอีกหน้าต่าง...\n"
                 f"โปรแกรมจะทำงานคู่ขนานโดยไม่กระทบหน้าต่างนี้",
             )
         except Exception as e:

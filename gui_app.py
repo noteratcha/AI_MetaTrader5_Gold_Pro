@@ -155,7 +155,7 @@ class HoverTip:
             self.job = None
 
     def _build_plan_card(self, tw, data):
-        """สร้างการ์ด Tooltip เงื่อนไขแผนเทรดแบบโมเดิร์น สวยงามระดับพรีเมียม สไตล์ AI Gold Commander Pro"""
+        """สร้างการ์ด Tooltip เงื่อนไขแผนเทรดแบบโมเดิร์น สวยงามระดับพรีเมียม สไตล์ Gold Bot 24"""
         # Outer Border Frame (สีทองหรูหรา 1px)
         border_frame = tk.Frame(tw, bg=COLOR_GOLD_PRIMARY, bd=0)
         border_frame.pack(fill="both", expand=True)
@@ -656,7 +656,7 @@ class UpdateDialog(ctk.CTkToplevel):
         super().__init__(parent)
         import re
         import threading
-        self.title("มีเวอร์ชันใหม่ - AI Gold Commander Pro")
+        self.title("มีเวอร์ชันใหม่ - Gold Bot 24")
         w, h = 580, 600
         self.configure(fg_color=COLOR_BG_DARK)
         self.transient(parent)
@@ -3838,7 +3838,7 @@ class MainTradingApp(ctk.CTk):
 
         prof = get_active_profile()
         prof_suffix = f" [{prof}]" if prof != "default" else ""
-        self.title(f"AI Gold Commander Pro{prof_suffix} - GoldBot24 (v{APP_VERSION})")
+        self.title(f"Gold Bot 24{prof_suffix} (v{APP_VERSION})")
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{min(1320, sw - 40)}x{min(840, sh - 90)}")
         self.minsize(min(1040, sw - 40), min(620, sh - 90))
@@ -3933,7 +3933,7 @@ class MainTradingApp(ctk.CTk):
 
         ctk.CTkLabel(
             inner,
-            text="AI Gold Commander Pro",
+            text="Gold Bot 24",
             font=ctk.CTkFont(family=app_fonts.UI, size=22, weight="bold"),
             text_color=COLOR_GOLD_PRIMARY
         ).pack()
@@ -4439,7 +4439,7 @@ class MainTradingApp(ctk.CTk):
         ctk.CTkLabel(brand, text="👑", font=ctk.CTkFont(size=24)).pack(side="left", padx=(0, 10))
         brand_text = ctk.CTkFrame(brand, fg_color="transparent")
         brand_text.pack(side="left")
-        ctk.CTkLabel(brand_text, text="AI Gold Commander Pro", font=self._font(17, "bold"), text_color=COLOR_GOLD_PRIMARY, height=24).pack(anchor="w")
+        ctk.CTkLabel(brand_text, text="Gold Bot 24", font=self._font(17, "bold"), text_color=COLOR_GOLD_PRIMARY, height=24).pack(anchor="w")
         ver_row = ctk.CTkFrame(brand_text, fg_color="transparent")
         ver_row.pack(anchor="w")
         ctk.CTkLabel(ver_row, text=f"v{APP_VERSION} · XAUUSD Gold", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18).pack(side="left")
@@ -5519,7 +5519,7 @@ class MainTradingApp(ctk.CTk):
         mkt = thai_time.get_gold_market_status()
         status_tag = "profit" if mkt.get("is_open") else ("warn" if mkt.get("state") == "DAILY_BREAK" else "error")
         return [
-            (f"🏆 AI Gold Commander Pro v{APP_VERSION}\n", "close"),
+            (f"🏆 Gold Bot 24 v{APP_VERSION}\n", "close"),
             ("XAUUSD · P1 SL 1.0 ATR ไม่ตั้ง TP · P2 SL 1.25 ATR (H1) ไม่ตั้ง TP · P3–P4 SL 1.0 / TP 2.0 ATR · P5 SL 0.75 ATR · TP RRR 1:1.5 · P6 SL ตาม SAR ไม่ตั้ง TP\n", "muted"),
             (f"{mkt['headline']} · {mkt['subtext']}\n", status_tag),
             ("คิดเวลาเฉพาะตอนบอททำงาน (ช่วงตลาดปิดไม่หักชั่วโมงการใช้งาน)\n", "muted"),
@@ -7156,7 +7156,7 @@ def _focus_existing_window():
                     buf = ctypes.create_unicode_buffer(length + 1)
                     user32.GetWindowTextW(hwnd, buf, length + 1)
                     title = buf.value
-                    if "AI Gold Commander Pro" in title or "GoldBot24" in title:
+                    if "Gold Bot 24" in title or "GoldBot24" in title or "AI Gold Commander Pro" in title:
                         if target_token:
                             if target_token not in title:
                                 return True

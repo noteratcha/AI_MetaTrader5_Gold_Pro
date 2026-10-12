@@ -65,7 +65,7 @@ export default function Navbar() {
             <span className="nav-brand-name">
               Gold<span className="text-gold">Bot24</span>
             </span>
-            <span className="nav-brand-sub">AI Gold Commander Pro · XAUUSD</span>
+            <span className="nav-brand-sub">AI Gold Trading · XAUUSD</span>
           </span>
         </Link>
 

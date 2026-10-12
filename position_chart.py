@@ -10,6 +10,7 @@ import csv
 import math
 import re
 import time
+from datetime import datetime
 
 import MetaTrader5 as mt5
 import pandas as pd
@@ -433,7 +434,7 @@ def get(ticket, count=80, fallback=None):
 def _sl_tp_at_close(pid, open_time, close_time, close_comment, offset):
     """
     SL/TP ตอนปิดไม้ + เส้นทางการเลื่อน [(เวลาเซิร์ฟเวอร์, sl, tp)]
-    1) ค่าเริ่มต้นจาก Order เปิดไม้ 2) การเลื่อนที่บอทบันทึกใน trade_modifications.csv (เวลาเครื่อง → เวลาเซิร์ฟเวอร์)
+    1) ค่าเริ่มต้นจาก Order เปิดไม้ 2) การเลื่อนที่บอทบันทึกใน trade_modifications.csv (เวลาไทย → เวลาเซิร์ฟเวอร์)
     3) ราคาที่ชนจริงจากคอมเมนต์ Deal ปิด เช่น "[sl 4168.67]" / "[tp 4161.38]"
     """
     sl = tp = 0.0
@@ -447,7 +448,7 @@ def _sl_tp_at_close(pid, open_time, close_time, close_comment, offset):
             for row in csv.DictReader(f):
                 if str(row.get("Ticket", "")).strip() != str(pid):
                     continue
-                t_srv = int(time.mktime(time.strptime(row["Time"].strip(), "%Y-%m-%d %H:%M:%S")) + offset)
+                t_srv = int(datetime.strptime(row["Time"].strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=thai_time.TH).timestamp() + offset)
                 if t_srv > close_time + 60:
                     continue
                 sl, tp = float(row.get("New_SL") or 0), float(row.get("New_TP") or 0)

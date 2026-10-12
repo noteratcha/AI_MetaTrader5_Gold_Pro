@@ -28,7 +28,7 @@ export function buildKeysHtml(list, origin) {
             <img class="logo" src="${logo}" alt="GoldBot24" />
             <div>
               <div class="brand">GoldBot24</div>
-              <div class="sub">AI Gold Commander Pro · คีย์เติมชั่วโมงใช้งาน</div>
+              <div class="sub">AI Gold Trading · คีย์เติมชั่วโมงใช้งาน</div>
             </div>
             <div class="no">#${i + 1}</div>
           </header>

@@ -33,7 +33,7 @@ const STEPS = [
       </>
     ),
   },
-  { title: 'เปิดโปรแกรม', text: 'ดับเบิลคลิกไอคอน “AI Gold Commander Pro” บน Desktop แล้วเข้าสู่ระบบด้วยบัญชีเดียวกับเว็บนี้' },
+  { title: 'เปิดโปรแกรม', text: 'ดับเบิลคลิกไอคอน “Gold Bot 24” บน Desktop แล้วเข้าสู่ระบบด้วยบัญชีเดียวกับเว็บนี้' },
   { title: 'เริ่มบอท', text: 'กด “เริ่มการทำงานบอท” — ติดตามพอร์ตได้ที่หน้า “พอร์ตสด” บนเว็บ' },
 ];
 
@@ -74,7 +74,7 @@ export default function DownloadPage() {
       <PageHeader
         eyebrow="Download"
         icon={MonitorDown}
-        title="ดาวน์โหลดโปรแกรม AI Gold Commander Pro"
+        title="ดาวน์โหลดโปรแกรม Gold Bot 24"
         description="โปรแกรมเทรดทองคำอัตโนมัติสำหรับ Windows 10/11 ใช้งานคู่กับ MetaTrader 5"
       />
 

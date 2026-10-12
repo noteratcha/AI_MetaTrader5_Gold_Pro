@@ -1,5 +1,5 @@
 ; ==============================================================================
-; AI Gold Commander Pro (GoldBot24) — ตัวติดตั้ง Windows (Inno Setup 6)
+; Gold Bot 24 — ตัวติดตั้ง Windows (Inno Setup 6)
 ; สร้างโดย build_dist.py: ISCC /DAppVersion=<เวอร์ชัน> installer\goldbot24.iss
 ;   - ติดตั้งแบบผู้ใช้ปัจจุบัน ไม่ต้องใช้สิทธิ์ Admin (%LOCALAPPDATA%\Programs\GoldBot24)
 ;   - สร้าง Icon บน Desktop + Start Menu และถอนการติดตั้งได้จาก Settings → Apps
@@ -9,7 +9,7 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
-#define AppName "AI Gold Commander Pro"
+#define AppName "Gold Bot 24"
 #define AppExe "AI_Gold_Commander_Pro.exe"
 #define SourceDir "..\dist\AI_Gold_Commander_Pro"
 
@@ -55,6 +55,10 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [InstallDelete]
 ; ล้างไฟล์โปรแกรมเวอร์ชันเก่าก่อนติดตั้งทับ (ไม่แตะข้อมูลผู้ใช้ใน %APPDATA%)
 Type: filesandordirs; Name: "{app}\_internal"
+; ลบไอคอนชื่อเดิม (ก่อนเปลี่ยนชื่อเป็น Gold Bot 24 — 12 ต.ค. 2026) — ชื่อไฟล์ .exe คงเดิมเพื่อให้ตัวอัปเดตทำงานต่อได้
+Type: files; Name: "{autoprograms}\AI Gold Commander Pro.lnk"
+Type: files; Name: "{autoprograms}\Uninstall AI Gold Commander Pro.lnk"
+Type: files; Name: "{autodesktop}\AI Gold Commander Pro.lnk"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"

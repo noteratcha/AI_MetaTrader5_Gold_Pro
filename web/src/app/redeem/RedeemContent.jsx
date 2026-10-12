@@ -41,7 +41,7 @@ export default function RedeemContent() {
         </div>
         <ul className="small muted" style={{ paddingLeft: 18, lineHeight: 1.8 }}>
           <li>คีย์มี 24 ตัวอักษร (6 กลุ่ม) พิมพ์หรือวางได้เลย ระบบใส่ขีดให้เอง</li>
-          <li>ชั่วโมงบวกเพิ่มจากยอดเดิมทันที และใช้ได้ทั้งบนเว็บและในโปรแกรม AI Gold Commander Pro</li>
+          <li>ชั่วโมงบวกเพิ่มจากยอดเดิมทันที และใช้ได้ทั้งบนเว็บและในโปรแกรม Gold Bot 24</li>
           <li>คีย์แต่ละรหัสใช้ได้ครั้งเดียว คีย์โปรโมชันบางรหัสมีวันหมดอายุ</li>
           <li>
             ยังไม่มีคีย์? <Link href="/store" className="text-sky">ซื้อชั่วโมง</Link> หรือดูคีย์ที่ซื้อไว้ที่{' '}

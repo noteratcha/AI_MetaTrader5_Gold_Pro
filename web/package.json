@@ -1,7 +1,7 @@
 {
   "name": "goldbot24",
   "version": "1.0.0",
-  "description": "GoldBot24 - AI Gold Commander Pro Store & Web Portal (XAUUSD Specialist)",
+  "description": "Gold Bot 24 Store & Web Portal (XAUUSD Specialist)",
   "private": true,
   "scripts": {
     "dev": "next dev",
