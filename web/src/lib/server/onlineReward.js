@@ -6,7 +6,7 @@ import { ONLINE_GOAL_HOURS, ONLINE_DISCOUNT_PCT, ONLINE_DISCOUNT_DAYS, levelInfo
 const GOAL_MIN = ONLINE_GOAL_HOURS * 60;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** บวกนาทีออนไลน์ (atomic ใน Postgres) · ครบ 100 ชม. → ออกส่วนลด (อายุ 3 วัน) และเริ่มนับรอบใหม่ทันที (เศษยกไป) */
-export async function addOnlineMinutes(user, minutes) {
+export async function addOnlineMinutes(user, minutes, login = 0) {
   try {
     const { data, error } = await getAdminClient().rpc('add_online_minutes', {
       p_user: String(user.id), p_email: user.email, p_minutes: Math.floor(minutes), p_goal: GOAL_MIN,
@@ -15,6 +15,12 @@ export async function addOnlineMinutes(user, minutes) {
     // ประวัติรายวัน (เวลาไทย) สำหรับหน้าประวัติการสะสมชั่วโมง — Patch 09 · ยังไม่ได้รัน = ข้าม
     const day = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
     await getAdminClient().rpc('add_online_daily', { p_user: String(user.id), p_day: day, p_minutes: Math.floor(minutes) }).then(() => {}, () => {});
+    // แยกตามบัญชี MT5 (Patch 12) — โปรแกรมรุ่นเก่าไม่ส่งเลขบัญชี = ข้าม
+    if (login > 0) {
+      await getAdminClient()
+        .rpc('add_online_daily_account', { p_user: String(user.id), p_day: day, p_login: login, p_minutes: Math.floor(minutes) })
+        .then(() => {}, () => {});
+    }
     const r = Array.isArray(data) ? data[0] : data;
     const earned = Number(r?.earned) || 0;
     const cycles = Number(r?.cycles) || 0;
@@ -120,5 +126,30 @@ export async function getHoursHistory(userId, days = 90) {
   const since = new Date(Date.now() + 7 * 3600000 - days * DAY_MS).toISOString().slice(0, 10);
   const { data, error } = await getAdminClient()
     .from('online_daily').select('day, minutes').eq('user_id', String(userId)).gte('day', since).order('day', { ascending: true });
-  return { rows: error ? null : (data || []).map((r) => ({ day: r.day, minutes: Number(r.minutes) || 0 })), status: await getRewardStatus(userId) };
+  // แยกตามบัญชี MT5: รายวันในช่วงที่เลือก + ยอดสะสมทั้งหมดต่อบัญชี (Patch 12 · ยังไม่ได้รัน = null)
+  let accounts = null;
+  const sb = getAdminClient();
+  const { data: accRows, error: accErr } = await sb
+    .from('online_daily_accounts').select('day, login, minutes').eq('user_id', String(userId)).gte('day', since).order('day', { ascending: true });
+  if (!accErr) {
+    const { data: allRows } = await sb.from('online_daily_accounts').select('login, minutes').eq('user_id', String(userId));
+    const lifetime = {};
+    for (const r of allRows || []) lifetime[r.login] = (lifetime[r.login] || 0) + (Number(r.minutes) || 0);
+    const inRange = {};
+    for (const r of accRows || []) inRange[r.login] = (inRange[r.login] || 0) + (Number(r.minutes) || 0);
+    // ชื่อโบรกเกอร์/Profile ล่าสุดของแต่ละบัญชี (จาก bot_telemetry_accounts · Patch 08)
+    const { data: tel } = await sb.from('bot_telemetry_accounts').select('login, profile, radar_signals').eq('user_id', Number(userId));
+    const meta = {};
+    for (const t of tel || []) {
+      const acc = Array.isArray(t.radar_signals) ? t.radar_signals[0]?.account : null;
+      meta[t.login] = { profile: t.profile || null, server: acc?.server || null, mode: acc?.mode || null };
+    }
+    accounts = {
+      days: (accRows || []).map((r) => ({ day: r.day, login: Number(r.login), minutes: Number(r.minutes) || 0 })),
+      list: Object.keys(lifetime)
+        .map((k) => ({ login: Number(k), minutesInRange: inRange[k] || 0, minutesTotal: lifetime[k], ...(meta[k] || {}) }))
+        .sort((a, b) => b.minutesTotal - a.minutesTotal),
+    };
+  }
+  return { rows: error ? null : (data || []).map((r) => ({ day: r.day, minutes: Number(r.minutes) || 0 })), accounts, status: await getRewardStatus(userId) };
 }

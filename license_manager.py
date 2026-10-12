@@ -334,7 +334,15 @@ class LicenseManager:
         if pending <= 0 or not self.session_data.get("token"):
             return
         meter_url = f"{API_BASE_URL.rstrip('/')}/api/auth/meter"
-        payload = json.dumps({"minutes": pending}).encode("utf-8")
+        body = {"minutes": pending}
+        try:   # เลขบัญชี MT5 ที่ใช้อยู่ — เว็บแยกชั่วโมงสะสมตามบัญชี (Patch 12)
+            import MetaTrader5 as _mt5
+            acc = _mt5.account_info() if _mt5.terminal_info() is not None else None
+            if acc is not None and int(acc.login) > 0:
+                body["login"] = int(acc.login)
+        except Exception:
+            pass
+        payload = json.dumps(body).encode("utf-8")
         try:
             req = urllib.request.Request(meter_url, data=payload, headers=self._auth_headers(), method="POST")
             with urllib.request.urlopen(req, timeout=5) as resp:

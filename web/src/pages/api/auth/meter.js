@@ -29,7 +29,9 @@ export default async function handler(req, res) {
       }
     }
     // สะสมชั่วโมงออนไลน์รายสัปดาห์ (ครบ 100 ชม. ได้ส่วนลด 5%) — นับเฉพาะนาทีที่หักจริง
-    if (credited > 0) await addOnlineMinutes(auth.user, credited);
+    // เลขบัญชี MT5 ที่บอทใช้อยู่ (โปรแกรมส่งมา) — ใช้แยกชั่วโมงสะสมตามบัญชี
+    const login = Math.floor(Number(req.body?.login) || 0);
+    if (credited > 0) await addOnlineMinutes(auth.user, credited, login > 0 && login < 1e12 ? login : 0);
     const online = await getRewardStatus(auth.user.id);
     return res.status(200).json({ success: true, minutesDeducted: credited, hoursRemaining, online });
   } catch (err) {

@@ -1145,7 +1145,7 @@ class HoursHistoryDialog(ctk.CTkToplevel):
         super().__init__(parent)
         self.title("ประวัติการสะสมชั่วโมง")
         self.configure(fg_color=COLOR_BG_DARK)
-        self.geometry("760x440")
+        self.geometry("780x500")
         self.minsize(600, 380)
         apply_dark_title_bar(self)
         self._days, self._result, self._busy, self._data, self._series, self._bars = 30, None, False, None, [], []
@@ -1224,6 +1224,18 @@ class HoursHistoryDialog(ctk.CTkToplevel):
             txt = f"สะสมช่วงนี้ {total:,.1f} ชม. · {'สัปดาห์' if self._days > 62 else 'วัน'}ที่บอททำงาน {active}/{len(series)}"
             if lv:
                 txt += f"   ·   สะสมทั้งหมด {lv['totalHours']:,.1f} ชม. · Lv.{lv['level']} (ส่วนลดถาวร {lv['discountPct']}%)"
+            # แยกตามบัญชี MT5 (ช่วงนี้ / สะสมทั้งหมด) — ส่วนที่เหลือ = ก่อนเริ่มแยกตามบัญชี
+            accs = ((data.get("accounts") or {}).get("list")) or []
+            if accs:
+                lines = []
+                for a in accs:
+                    share = (a["minutesInRange"] / 60 / total * 100) if total > 0 else 0
+                    where = " · ".join(x for x in (a.get("server"), a.get("profile") and f"Profile {a['profile']}") if x)
+                    lines.append(f"#{a['login']}{f' ({where})' if where else ''}:  ช่วงนี้ {a['minutesInRange'] / 60:,.1f} ชม. ({share:.0f}%)  ·  สะสม {a['minutesTotal'] / 60:,.1f} ชม.")
+                other = total - sum(a["minutesInRange"] for a in accs) / 60
+                if other > 0.05:
+                    lines.append(f"ไม่ระบุบัญชี (ก่อนเริ่มแยกตามบัญชี):  {other:,.1f} ชม.")
+                txt += "\n" + "\n".join(lines)
             self.lbl_sum.configure(text=txt)
 
     def _draw(self):
