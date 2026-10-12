@@ -5,6 +5,7 @@ import AuthModal from './AuthModal';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import LowHoursBanner from './LowHoursBanner';
+import { AnnouncementPopup } from './Announcements';
 
 export default function ClientLayoutWrapper({ children }) {
   return (
@@ -16,6 +17,7 @@ export default function ClientLayoutWrapper({ children }) {
         <Footer />
       </div>
       <AuthModal />
+      <AnnouncementPopup />
     </AuthProvider>
   );
 }

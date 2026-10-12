@@ -7,6 +7,7 @@ import { Activity, BarChart3, BookOpen, CalendarDays, Download, Eye, FlaskConica
 import { useAuth } from '../context/AuthContext';
 import { formatHHMM } from '../lib/format';
 import { LOW_HOURS } from '../lib/hours';
+import { NewsBell } from './Announcements';
 
 const NAV_ITEMS = [
   { href: '/', label: 'พอร์ตสด', icon: Activity },
@@ -94,6 +95,7 @@ export default function Navbar() {
         </nav>
 
         <div className="nav-actions">
+          <NewsBell />
           <Link href="/download" className={`btn btn-outline-gold btn-sm nav-download ${pathname === '/download' ? 'is-active' : ''}`} title="ดาวน์โหลดโปรแกรมเวอร์ชันล่าสุด">
             <Download size={15} />
             <span className="nav-download-label">ดาวน์โหลด</span>

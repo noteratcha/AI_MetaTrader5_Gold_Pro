@@ -1,0 +1,26 @@
+-- GoldBot24 — Patch 09: ข่าวสาร/โปรโมชัน (รูป + ข้อความ) แสดงทั้งเว็บและโปรแกรม — รันซ้ำได้ · ผู้ใช้รันเองใน Supabase SQL Editor
+CREATE TABLE IF NOT EXISTS announcements (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title       TEXT NOT NULL,
+    body        TEXT DEFAULT '',
+    image_url   TEXT,
+    link_url    TEXT,
+    link_label  TEXT,
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    popup       BOOLEAN NOT NULL DEFAULT TRUE,     -- เด้งหน้าต่างครั้งแรกที่ผู้ใช้ยังไม่เคยเห็น
+    starts_at   TIMESTAMPTZ DEFAULT NOW(),
+    ends_at     TIMESTAMPTZ,
+    created_by  TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_announcements_active ON announcements (active, starts_at DESC);
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON announcements FROM anon, authenticated;   -- อ่าน/เขียนผ่าน /api/* (Service Role) เท่านั้น
+
+-- ที่เก็บรูปข่าวสาร (อ่านได้สาธารณะ · อัปโหลดผ่าน /api/admin/announcements เท่านั้น)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('announcements', 'announcements', TRUE)
+ON CONFLICT (id) DO UPDATE SET public = TRUE;
+
+NOTIFY pgrst, 'reload schema';

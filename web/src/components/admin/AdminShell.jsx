@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Eye, KeyRound, LayoutDashboard, Package, Shield, ShieldAlert, ToggleRight, Users } from 'lucide-react';
+import { BarChart3, Eye, KeyRound, LayoutDashboard, Package, Shield, ShieldAlert, ToggleRight, Users, Megaphone } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Alert, AuthGate, EmptyState, Modal, PageLoading, Spinner } from '../ui';
 
@@ -13,6 +13,7 @@ const TABS = [
   { href: '/admin/packages', label: 'แพ็กเกจ', icon: Package },
   { href: '/admin/keys', label: 'คีย์ & คำสั่งซื้อ', icon: KeyRound },
   { href: '/admin/plans', label: 'แผนเทรด', icon: ToggleRight },
+  { href: '/admin/announcements', label: 'ข่าวสาร', icon: Megaphone },
   { href: '/admin/usage', label: 'ดาวน์โหลด & การใช้งาน', icon: BarChart3 },
 ];
 
