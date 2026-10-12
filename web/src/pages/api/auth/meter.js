@@ -27,7 +27,7 @@ export default async function handler(req, res) {
         console.error('[auth/meter] low-hours email failed:', mailErr?.message || mailErr);
       }
     }
-    // สะสมชั่วโมงออนไลน์รายสัปดาห์ (ครบ 100 ชม. ได้ส่วนลด 10%) — นับเฉพาะนาทีที่หักจริง
+    // สะสมชั่วโมงออนไลน์รายสัปดาห์ (ครบ 100 ชม. ได้ส่วนลด 5%) — นับเฉพาะนาทีที่หักจริง
     await addOnlineMinutes(auth.user, minutes);
     const online = await getRewardStatus(auth.user.id);
     return res.status(200).json({ success: true, minutesDeducted: minutes, hoursRemaining, online });

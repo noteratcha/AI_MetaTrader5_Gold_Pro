@@ -70,7 +70,26 @@ function LiveMonitor() {
     setRefreshing(false);
   };
 
-  const t = data?.telemetry;
+  // หลายบัญชี MT5 (หลาย Profile) — เลือกดูทีละบัญชี หรือภาพรวมทุกบัญชีที่ออนไลน์
+  const accounts = data?.accounts || [];
+  const onlineAccounts = accounts.filter((a) => secondsSince(a.last_heartbeat) < 60);
+  const multi = accounts.length >= 2;
+  const [selected, setSelected] = useState(() => {
+    try {
+      return localStorage.getItem('live_account') || 'all';
+    } catch {
+      return 'all';
+    }
+  });
+  const choose = (v) => {
+    setSelected(v);
+    try {
+      localStorage.setItem('live_account', v);
+    } catch {}
+  };
+  const selAcc = accounts.find((a) => String(a.login) === selected);
+  const overview = multi && !selAcc;
+  const t = !multi ? data?.telemetry : selAcc || aggregate(onlineAccounts.length ? onlineAccounts : accounts);
   const isOnline = t && secondsSince(t.last_heartbeat) < 60;
   const isPaused = isOnline && String(t.status || '').startsWith('PAUSED');
   const positions = t?.open_positions || [];
@@ -96,7 +115,9 @@ function LiveMonitor() {
 
       {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
 
-      {radar?.account && (
+      {multi && <AccountSwitcher accounts={accounts} selected={overview ? 'all' : selected} onChange={choose} onlineCount={onlineAccounts.length} />}
+
+      {!overview && radar?.account && (
         <div className="card account-strip">
           <span className="account-strip-title">
             <MonitorDown size={15} className="text-gold" /> บัญชี MT5 ที่เชื่อมต่อ
@@ -139,11 +160,11 @@ function LiveMonitor() {
               sub={`${positions.length} ออเดอร์ที่เปิดอยู่`}
               loading={loading}
             />
-            <StatCard icon={Gauge} label="หลักประกันว่าง" value={formatUsd(t?.margin_free)} tone="gold" sub="ค่าเริ่มต้น 1 ไม้ ต่อทุก $400 (ปัดขึ้น)" loading={loading} />
+            <StatCard icon={Gauge} label="หลักประกันว่าง" value={formatUsd(t?.margin_free)} tone="gold" sub="1 ไม้ ต่อหลักประกัน 100 (Lot 0.01 · ปัดขึ้น)" loading={loading} />
           </div>
 
           <div className="grid grid-main-side section">
-            <PositionsCard positions={positions} loading={loading} />
+            <PositionsCard positions={positions} loading={loading} showAccount={overview} />
             <RadarCard radar={radar} loading={loading} />
           </div>
 
@@ -178,7 +199,63 @@ function BotStatus({ online, paused, heartbeat, hasData }) {
   );
 }
 
-function PositionsCard({ positions, loading }) {
+/** รวมหลายบัญชีเป็นภาพรวม: ยอดเงินรวม + ไม้ทุกบัญชี (ติดป้ายเลขบัญชี) · ข้อมูลตลาด/AI ใช้ของบัญชีที่อัปเดตล่าสุด */
+function aggregate(list) {
+  if (!list.length) return null;
+  const sum = (k) => list.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+  const latest = [...list].sort((a, b) => new Date(b.last_heartbeat) - new Date(a.last_heartbeat))[0];
+  return {
+    status: list.every((a) => String(a.status || '').startsWith('PAUSED')) ? latest.status : `ONLINE ${String(latest.status || '').split(' ')[1] || ''}`.trim(),
+    balance: sum('balance'),
+    equity: sum('equity'),
+    floating_profit: sum('floating_profit'),
+    margin_free: sum('margin_free'),
+    open_positions: list.flatMap((a) => (a.open_positions || []).map((p) => ({ ...p, _account: a.login, _profile: a.profile }))),
+    radar_signals: latest.radar_signals,
+    last_heartbeat: latest.last_heartbeat,
+  };
+}
+
+function AccountSwitcher({ accounts, selected, onChange, onlineCount }) {
+  return (
+    <div className="card account-switcher" style={{ marginBottom: 16, padding: 12 }}>
+      <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+        <span className="small muted" style={{ marginRight: 4 }}>
+          <MonitorDown size={15} className="text-gold" style={{ verticalAlign: '-3px' }} /> เลือกบัญชี
+        </span>
+        <button type="button" className={`btn btn-sm ${selected === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onChange('all')}>
+          ภาพรวมทุกบัญชี ({onlineCount} ออนไลน์)
+        </button>
+        {accounts.map((a) => {
+          const on = secondsSince(a.last_heartbeat) < 60;
+          const acc = a.radar_signals?.[0]?.account;
+          return (
+            <button
+              key={a.login}
+              type="button"
+              className={`btn btn-sm ${selected === String(a.login) ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => onChange(String(a.login))}
+              title={`${acc?.server || ''} · Profile ${a.profile} · อัปเดต ${timeAgo(a.last_heartbeat)}`}
+            >
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 8, background: on ? '#34d399' : '#6b7385' }} />
+              #{a.login}
+              <span className="faint" style={{ fontWeight: 400 }}>
+                {' '}
+                · {a.profile}
+                {acc?.mode ? ` · ${acc.mode === 'REAL' ? 'จริง' : 'Demo'}` : ''}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="tiny faint" style={{ margin: '8px 0 0' }}>
+        ภาพรวมรวมยอดเงินและไม้ของทุกบัญชีที่ออนไลน์ (บัญชีเซ็นต์นับตามหน่วยของบัญชี) · ข้อมูล AI/ตลาดใช้ของบัญชีที่อัปเดตล่าสุด
+      </p>
+    </div>
+  );
+}
+
+function PositionsCard({ positions, loading, showAccount }) {
   return (
     <div className="card">
       <div className="card-header">
@@ -199,6 +276,7 @@ function PositionsCard({ positions, loading }) {
           <table className="table">
             <thead>
               <tr>
+                {showAccount && <th>บัญชี</th>}
                 <th>ฝั่ง</th>
                 <th>แผน</th>
                 <th className="num">Lot</th>
@@ -210,7 +288,8 @@ function PositionsCard({ positions, loading }) {
             </thead>
             <tbody>
               {positions.map((p) => (
-                <tr key={p.ticket}>
+                <tr key={`${p._account || ''}-${p.ticket}`}>
+                  {showAccount && <td className="small mono">#{p._account}</td>}
                   <td>
                     <span className={`badge ${p.type === 'BUY' ? 'badge-green' : 'badge-red'}`}>{p.type}</span>
                   </td>

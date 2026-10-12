@@ -18,6 +18,7 @@ import sound_manager
 import stats_manager
 import plan_config
 import thai_time
+from app_paths import get_active_profile
 from license_manager import license_mgr
 from mt5_terminal_manager import get_profile_magic_number, initialize_mt5
 from datetime import datetime, timedelta, timezone
@@ -390,7 +391,9 @@ def telemetry_background_worker():
                     open_positions=open_pos_list,
                     radar_signals=current_radar,
                     status=f"{'PAUSED' if BOT_PAUSED_FLAG else 'ONLINE'} v{BOT_VERSION}",
-                    row_id=row_id
+                    row_id=row_id,
+                    login=int(getattr(acc_info, "login", 0) or 0),
+                    profile=get_active_profile(),
                 )
         except Exception as telem_err:
             pass

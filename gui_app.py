@@ -1003,6 +1003,38 @@ class _StyledMessagebox:
 messagebox = _StyledMessagebox()
 
 
+_BRAND_LOGO_CACHE = {}
+
+
+def brand_logo(size: int):
+    """โลโก้เดียวกับหน้าเว็บ (assets/store_logo.png) — มุมโค้งมน + ขอบทองบาง เหมือน .logo-mark บนเว็บ"""
+    if size in _BRAND_LOGO_CACHE:
+        return _BRAND_LOGO_CACHE[size]
+    try:
+        from PIL import Image, ImageDraw
+        ss = size * 4                                         # วาดใหญ่แล้วย่อ ให้ขอบเนียน
+        img = Image.open(os.path.join(os.path.dirname(_app_icon_path()), "store_logo.png")).convert("RGBA").resize((ss, ss), Image.LANCZOS)
+        rad = int(ss * 10 / 36)
+        mask = Image.new("L", (ss, ss), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, ss - 1, ss - 1), radius=rad, fill=255)
+        img.putalpha(mask)
+        ImageDraw.Draw(img).rounded_rectangle((1, 1, ss - 2, ss - 2), radius=rad, outline=(242, 193, 78, 90), width=max(2, ss // 36))
+        img = img.resize((size, size), Image.LANCZOS)
+        _BRAND_LOGO_CACHE[size] = ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
+    except Exception:
+        _BRAND_LOGO_CACHE[size] = None
+    return _BRAND_LOGO_CACHE[size]
+
+
+def brand_name(parent, font, height=None):
+    """ชื่อโปรแกรมแบบหน้าเว็บ: "Gold" สีขาว + "Bot 24" สีทอง"""
+    box = ctk.CTkFrame(parent, fg_color="transparent")
+    kw = {"height": height} if height else {}
+    ctk.CTkLabel(box, text="Gold", font=font, text_color=COLOR_TEXT_PRIMARY, **kw).pack(side="left")
+    ctk.CTkLabel(box, text=" Bot 24", font=font, text_color=COLOR_GOLD_PRIMARY, **kw).pack(side="left")
+    return box
+
+
 class ContactDialog(ctk.CTkToplevel):
     """ติดต่อแอดมินทาง LINE OA — QR + ปุ่มเปิด LINE + คัดลอกไอดี"""
     LINE_ID = "@887aczyq"
@@ -3925,18 +3957,10 @@ class MainTradingApp(ctk.CTk):
         inner.pack(padx=32, pady=28, fill="both")
 
         # ตราสัญลักษณ์และชื่อโปรแกรม
-        ctk.CTkLabel(
-            inner,
-            text="👑",
-            font=ctk.CTkFont(size=40)
-        ).pack(pady=(0, 2))
-
-        ctk.CTkLabel(
-            inner,
-            text="Gold Bot 24",
-            font=ctk.CTkFont(family=app_fonts.UI, size=22, weight="bold"),
-            text_color=COLOR_GOLD_PRIMARY
-        ).pack()
+        logo = brand_logo(72)
+        if logo is not None:
+            ctk.CTkLabel(inner, text="", image=logo).pack(pady=(0, 8))
+        brand_name(inner, ctk.CTkFont(family=app_fonts.UI, size=24, weight="bold")).pack()
 
         ctk.CTkLabel(
             inner,
@@ -4436,10 +4460,12 @@ class MainTradingApp(ctk.CTk):
         # --- ซ้าย: แบรนด์ + เวอร์ชัน/สถานะอัปเดต
         brand = ctk.CTkFrame(h_inner, fg_color="transparent")
         brand.pack(side="left")
-        ctk.CTkLabel(brand, text="👑", font=ctk.CTkFont(size=24)).pack(side="left", padx=(0, 10))
+        logo = brand_logo(40)
+        if logo is not None:
+            ctk.CTkLabel(brand, text="", image=logo).pack(side="left", padx=(0, 10))
         brand_text = ctk.CTkFrame(brand, fg_color="transparent")
         brand_text.pack(side="left")
-        ctk.CTkLabel(brand_text, text="Gold Bot 24", font=self._font(17, "bold"), text_color=COLOR_GOLD_PRIMARY, height=24).pack(anchor="w")
+        brand_name(brand_text, self._font(17, "bold"), height=24).pack(anchor="w")
         ver_row = ctk.CTkFrame(brand_text, fg_color="transparent")
         ver_row.pack(anchor="w")
         ctk.CTkLabel(ver_row, text=f"v{APP_VERSION} · XAUUSD Gold", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18).pack(side="left")
@@ -4493,7 +4519,7 @@ class MainTradingApp(ctk.CTk):
         self.lbl_metering_status = ctk.CTkLabel(hours_box, text="⏸ หยุดนับเวลา", font=self._font(10), text_color=COLOR_TEXT_MUTED, height=14)
         self.lbl_metering_status.pack(anchor="w")
 
-        # รางวัลออนไลน์: สะสมครบ 100 ชม. → ส่วนลด 10% ซื้อชั่วโมงครั้งถัดไป (ใช้ได้ 3 วัน · เริ่มรอบใหม่ทันที) คลิกเปิดหน้าร้าน
+        # รางวัลออนไลน์: สะสมครบ 100 ชม. → ส่วนลด 5% ซื้อชั่วโมงครั้งถัดไป (ใช้ได้ 3 วัน · เริ่มรอบใหม่ทันที) คลิกเปิดหน้าร้าน
         self.reward_box = ctk.CTkFrame(wallet, fg_color="transparent", cursor="hand2")
         self.lbl_reward = ctk.CTkLabel(self.reward_box, text="", font=self._font(11, "bold"), text_color=COLOR_GOLD_PRIMARY, height=16)
         self.lbl_reward.pack(anchor="w")
@@ -6674,7 +6700,7 @@ class MainTradingApp(ctk.CTk):
         if not o:
             return ""
         goal = int(o.get("goalMinutes") or self.ONLINE_GOAL_HOURS * 60) // 60
-        tip = (f"ออนไลน์ครบ {goal} ชม. รับส่วนลด 10% ซื้อชั่วโมงครั้งถัดไป 1 รายการ\n"
+        tip = (f"ออนไลน์ครบ {goal} ชม. รับส่วนลด 5% ซื้อชั่วโมงครั้งถัดไป 1 รายการ\n"
                f"นับเฉพาะเวลาที่บอททำงานและถูกหักชั่วโมง · รอบปัจจุบัน {o['minutes'] / 60:.1f} ชม.")
         d = o.get("discount")
         if d:

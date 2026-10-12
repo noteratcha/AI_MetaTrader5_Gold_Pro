@@ -65,7 +65,7 @@ def _make_request(endpoint, method="GET", payload=None, extra_headers=None):
         # เงียบไว้เพื่อไม่ให้รบกวนลูปเทรดหลักกรณีเน็ตหลุดชั่วคราว
         return None
 
-def update_telemetry(balance, equity, floating_profit, margin_free, open_positions, radar_signals, status="ONLINE", row_id=1):
+def update_telemetry(balance, equity, floating_profit, margin_free, open_positions, radar_signals, status="ONLINE", row_id=1, login=None, profile=None):
     """ส่งสถานะพอร์ตและสัญญาณ AI ล่าสุดขึ้นไปแสดงบนเว็บ Dashboard (1 แถวต่อ 1 บัญชีผู้ใช้ GoldBot24)"""
     payload = {
         "id": int(row_id),
@@ -78,7 +78,13 @@ def update_telemetry(balance, equity, floating_profit, margin_free, open_positio
         "radar_signals": radar_signals,
     }
     # เขียนผ่านฟังก์ชัน SECURITY DEFINER (anon เขียนได้อย่างเดียว อ่านพอร์ตของคนอื่นไม่ได้) — ดู supabase_security_rls_patch_01.sql
-    return _make_request("rpc/bot_upsert_telemetry", method="POST", payload={"p": payload})
+    res = _make_request("rpc/bot_upsert_telemetry", method="POST", payload={"p": payload})
+    # แถวแยกตามบัญชี MT5 (หลาย Profile/หลายบัญชี → เว็บเลือกดูทีละบัญชีหรือรวมได้) — supabase_multi_account_patch_08.sql
+    # ฐานข้อมูลยังไม่ได้รัน Patch 08 → RPC ไม่มี คืน error เงียบ ๆ ไม่กระทบแถวหลัก
+    if login:
+        _make_request("rpc/bot_upsert_telemetry_account", method="POST",
+                      payload={"p": {**payload, "login": int(login), "profile": profile or "default"}})
+    return res
 
 def log_trade(ticket, symbol, action, plan, price, lot, sl=0, tp=0, profit=0, comment="", user_id=None, email=None):
     """บันทึกประวัติการเทรดลงตาราง trade_logs บน Supabase พร้อมระบุ User ID"""
