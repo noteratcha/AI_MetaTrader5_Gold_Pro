@@ -6842,6 +6842,12 @@ class MainTradingApp(ctk.CTk):
                     prev_login = getattr(self, "_algo_login", None)
                     self._algo_login = login_now
                     if prev_login is not None and prev_login != login_now:
+                        # บัญชีใหม่มีบอทหน้าต่างอื่นทำงานอยู่ → หยุดบอทหน้าต่างนี้ชั่วคราว (กันเข้าไม้ซ้ำ)
+                        if bot_ctrl.is_active and not bot_ctrl.is_paused:
+                            lock = bot_ctrl.account_lock_message()
+                            if lock:
+                                bot_ctrl.pause_bot()
+                                self.after(100, lambda m=lock: messagebox.showwarning("บัญชีนี้มีบอททำงานอยู่แล้ว", m))
                         why = f"เปลี่ยนเป็นบัญชี #{login_now} · "
                         self.after(3000, lambda w=why: self._auto_algo_trading(w, warn=False))   # MT5 อาจยังสลับไม่เสร็จ — ไม่เตือน
                         self.after(10000, lambda w=why: self._auto_algo_trading(w))
@@ -7127,9 +7133,8 @@ class MainTradingApp(ctk.CTk):
 
 def get_instance_mutex_name() -> str:
     """ชื่อ Mutex ประจำ Profile เพื่อให้รันขนานกันได้ระหว่าง Profile และกันเปิดซ้ำใน Profile เดียวกัน"""
-    prof = get_active_profile()
-    clean_prof = "".join(c for c in prof if c.isalnum() or c in ("_", "-"))
-    return f"Local\\GoldBot24_AI_Gold_Commander_Pro_{clean_prof or 'default'}"
+    import instance_guard
+    return instance_guard.profile_mutex_name()
 
 
 def _focus_existing_window():
@@ -7188,7 +7193,7 @@ def check_single_instance() -> tuple[bool, any]:
     """
     if sys.platform != "win32":
         return False, None
-    if "--multi-instance" in sys.argv or "--no-single-instance" in sys.argv:
+    if "--no-single-instance" in sys.argv:   # ทดสอบเท่านั้น (--multi-instance ไม่ข้ามการกันซ้ำแล้ว — แต่ละ Profile มี Mutex ของตัวเอง)
         return False, None
     try:
         import ctypes

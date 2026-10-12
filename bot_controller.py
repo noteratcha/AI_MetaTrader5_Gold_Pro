@@ -6,6 +6,7 @@ import re
 import MetaTrader5 as mt5
 import multi_asset_ai_bot as bot_core
 import mt5_algo
+import instance_guard
 import thai_time
 import sound_manager
 from license_manager import license_mgr
@@ -83,6 +84,10 @@ class BotController:
         if low:
             return False, low
 
+        lock = self.account_lock_message()
+        if lock:
+            return False, lock
+
         # ปุ่ม Algo Trading ใน MT5 ต้องเปิด (ปิดอยู่ → กด Ctrl+E ให้อัตโนมัติ) — ไม่งั้นบอทส่งคำสั่ง/เลื่อน SL ไม่ได้
         algo_ok, algo_msg = mt5_algo.ensure_enabled()
         if not algo_ok:
@@ -139,6 +144,10 @@ class BotController:
         if low:
             return False, low
 
+        lock = self.account_lock_message()
+        if lock:
+            return False, lock
+
         algo_ok, algo_msg = mt5_algo.ensure_enabled()
         if not algo_ok:
             return False, algo_msg
@@ -164,6 +173,19 @@ class BotController:
 
         if self.status_callback:
             self.status_callback("STOPPED")
+
+    def account_lock_message(self):
+        """1 บัญชี MT5 ให้บอททำงานได้ 1 หน้าต่าง (กันหลาย Profile เข้าไม้ซ้ำบนบัญชีเดียวกัน) — คืนข้อความ หรือ None ถ้าจองได้"""
+        try:
+            if mt5.terminal_info() is None and not initialize_mt5():
+                return None
+            acc = mt5.account_info()
+            if acc is None:
+                return None
+            ok, msg = instance_guard.acquire_account(acc.login)
+            return None if ok else msg
+        except Exception:
+            return None
 
     def _min_balance_message(self):
         """ยอดเงิน (Equity) ต้องมีอย่างน้อย 25 USD ระบบถึงจะทำงาน — คืนข้อความเตือน หรือ None ถ้าผ่าน/อ่าน MT5 ไม่ได้"""
