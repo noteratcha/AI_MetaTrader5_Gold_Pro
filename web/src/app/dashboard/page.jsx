@@ -48,9 +48,6 @@ function Dashboard() {
         }
       />
 
-      {user?.online && <OnlineRewardCard online={user.online} />}
-      {user && <HoursHistoryCard />}
-
       <div className="grid grid-2">
         <div className={`card card-pad ${out ? '' : 'card-gold'}`}>
           <div className="row-between" style={{ marginBottom: 14 }}>
@@ -88,6 +85,11 @@ function Dashboard() {
         </div>
 
         <RedeemCard />
+      </div>
+
+      <div className="section">
+        {user?.online && <OnlineRewardCard online={user.online} />}
+        {user && <HoursHistoryCard />}
       </div>
 
     </div>
