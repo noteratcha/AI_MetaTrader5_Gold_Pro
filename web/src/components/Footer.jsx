@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Download } from 'lucide-react';
-import { TrustStrip, useCountVisit } from './TrustStats';
+import { TrustList, useCountVisit } from './TrustStats';
 import { useAuth } from '../context/AuthContext';
 import { PLAN_LIST } from '../lib/packages';
 import { LINE_ID, LINE_URL } from '../lib/contact';
@@ -40,6 +40,7 @@ export default function Footer() {
             <a href={LINE_URL} target="_blank" rel="noopener noreferrer" className="small" style={{ color: '#06C755', fontWeight: 600 }}>
               ติดต่อแอดมิน LINE {LINE_ID}
             </a>
+            <TrustList />
           </div>
 
           <div>
@@ -84,8 +85,6 @@ export default function Footer() {
             </Link>
           </div>
         </div>
-
-        <TrustStrip />
 
         <div className="footer-bottom">
           <span>© {new Date().getFullYear()} GoldBot24 · AI MetaTrader 5 Gold Pro</span>

@@ -40,6 +40,37 @@ const ITEMS = (d) =>
     d.webVisits !== null && { key: 'visits', icon: Eye, value: n(d.webVisits), unit: 'ครั้ง', label: 'จำนวนครั้งที่เข้าชมเว็บ', color: 'var(--sky, #60a5fa)' },
   ].filter(Boolean);
 
+/** ตัวเลขสะสมแบบกล่องเล็ก (ใต้แบรนด์ท้ายเว็บ) */
+export function TrustList() {
+  const d = useTrustStats();
+  if (!d) return null;
+  const items = ITEMS(d);
+  if (!items.length) return null;
+  return (
+    <div style={{ marginTop: 16, maxWidth: 320, border: '1px solid var(--border, #262B36)', borderRadius: 12, background: 'var(--surface-2, #12151c)', overflow: 'hidden' }}>
+      <div className="row tiny" style={{ gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--border, #262B36)', color: 'var(--gold, #f2c14e)', fontWeight: 600 }}>
+        <ShieldCheck size={14} /> ใช้งานจริง · ตัวเลขสะสมจากระบบ
+      </div>
+      {items.map(({ key, icon: Icon, value, unit, label, color }, i) => (
+        <div key={key} className="row" style={{ gap: 12, padding: '9px 12px', borderTop: i ? '1px solid var(--border, #1d212a)' : 'none' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.04)', flexShrink: 0 }}>
+            <Icon size={16} style={{ color }} />
+          </span>
+          <span style={{ minWidth: 0, flex: 1 }}>
+            <span className="mono" style={{ fontSize: '1.05rem', fontWeight: 700, color }}>
+              {value}
+            </span>{' '}
+            <span className="tiny muted">{unit}</span>
+            <span className="tiny faint" style={{ display: 'block', lineHeight: 1.3 }}>
+              {label}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** แถบตัวเลขสะสมท้ายเว็บ */
 export function TrustStrip() {
   const d = useTrustStats();
