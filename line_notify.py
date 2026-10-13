@@ -25,6 +25,8 @@ _lock = threading.Lock()
 _worker_started = False
 _scheduler_started = False
 last_error = ""     # ข้อความ error ล่าสุด (แสดงในหน้าต่างตั้งค่า)
+_alerts = []        # แจ้งเตือนให้หน้าจอโปรแกรม (โควตาเต็ม / ใกล้เต็ม / Token ผิด) — หน้าจอดึงด้วย pop_alerts()
+QUOTA_WARN_RATIO = 0.9
 
 
 # ------------------------------------------------------------------ ตั้งค่า
@@ -75,28 +77,115 @@ def _request(method, path, token, body=None, timeout=10):
         return json.loads(raw)
 
 
+def _http_message(e) -> str:
+    if getattr(e, "_line_msg", None) is None:
+        try:
+            e._line_msg = json.loads(e.read().decode("utf-8")).get("message", "")
+        except Exception:
+            e._line_msg = ""
+    return e._line_msg
+
+
+def _is_monthly_limit(e) -> bool:
+    return isinstance(e, urllib.error.HTTPError) and e.code == 429 and "monthly limit" in _http_message(e).lower()
+
+
 def _explain(e) -> str:
     if isinstance(e, urllib.error.HTTPError):
-        try:
-            msg = json.loads(e.read().decode("utf-8")).get("message", "")
-        except Exception:
-            msg = ""
+        msg = _http_message(e)
+        if _is_monthly_limit(e):
+            return "โควตาข้อความ LINE OA เดือนนี้เต็มแล้ว — ส่งต่อไม่ได้จนถึงต้นเดือนหน้า (หรืออัปเกรดแพ็กเกจ OA)"
         if e.code == 401:
             return "Channel access token ไม่ถูกต้องหรือหมดอายุ"
         if e.code == 429:
-            return "โควตาข้อความของ LINE OA เดือนนี้หมดแล้ว (หรือส่งถี่เกินไป)"
+            return "ส่งถี่เกินไป (LINE จำกัดความถี่) — ระบบจะส่งรายการถัดไปตามปกติ"
         if e.code == 403:
             return "OA นี้ไม่มีสิทธิ์ส่ง Broadcast — ตรวจว่าเปิด Messaging API แล้ว"
         return f"LINE ตอบกลับ HTTP {e.code} {msg}".strip()
     return f"เชื่อมต่อ LINE ไม่ได้: {e}"
 
 
-def _broadcast(messages, token=None) -> tuple:
+def _month():
+    return thai_time.now().strftime("%Y-%m")
+
+
+def _alert(kind, title, text):
+    """แจ้งหน้าจอโปรแกรม 1 ครั้งต่อวันต่อประเภท (จำไว้ในไฟล์ตั้งค่า — เปิดโปรแกรมใหม่ไม่เด้งซ้ำ)"""
+    today = thai_time.now().strftime("%Y-%m-%d")
+    d = load_settings()
+    sent = d.get("alerted") or {}
+    if sent.get(kind) == today:
+        return
+    sent[kind] = today
+    d["alerted"] = sent
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    print(f"[LINE OA] {title}: {text}")
+    _alerts.append({"kind": kind, "title": title, "text": text})
+
+
+def pop_alerts():
+    out = list(_alerts)
+    _alerts.clear()
+    return out
+
+
+def quota_blocked() -> bool:
+    """โควตาเดือนนี้เต็มแล้ว (จำไว้ถึงสิ้นเดือน — ไม่ยิงซ้ำให้เสียเปล่า)"""
+    return load_settings().get("blocked_month") == _month()
+
+
+def _set_blocked(on: bool):
+    d = load_settings()
+    d["blocked_month"] = _month() if on else ""
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _quota_exceeded_alert():
+    _set_blocked(True)
+    _alert("quota_exceeded", "โควตา LINE OA เต็มแล้ว",
+           "ข้อความแจ้งเตือนเดือนนี้ส่งครบโควตาของ LINE OA แล้ว — แจ้งเตือนเข้าไม้/ปิดไม้จะหยุดส่งจนถึงต้นเดือนหน้า\n"
+           "แก้ได้โดยอัปเกรดแพ็กเกจ LINE OA หรือปิดการแจ้งบางเหตุการณ์ (บอทยังเทรดตามปกติ)")
+
+
+def check_quota_and_alert(token=None):
+    """ตรวจโควตา: ใช้ไป ≥ 90% → เตือน · เต็ม → เตือน + หยุดส่ง · เดือนใหม่/อัปเกรดแล้ว → ปลดบล็อก"""
+    token = token or get_token()
+    if not token:
+        return None
+    q = get_quota(token)
+    limit, used = q.get("limit"), int(q.get("used") or 0)
+    if q.get("type") == "none" or not limit:
+        if quota_blocked():
+            _set_blocked(False)
+        return q
+    if used >= limit:
+        _quota_exceeded_alert()
+    else:
+        if quota_blocked():
+            _set_blocked(False)
+        if used >= limit * QUOTA_WARN_RATIO:
+            _alert("quota_low", "โควตา LINE OA ใกล้เต็ม",
+                   f"ใช้ไป {used:,} / {limit:,} ข้อความ (เหลือ {limit - used:,}) — เมื่อเต็มแล้วแจ้งเตือนจะหยุดส่งจนถึงต้นเดือนหน้า")
+    return q
+
+
+def _broadcast(messages, token=None, test=False) -> tuple:
     """ส่งทันที (ใช้ในเธรดเบื้องหลัง / ปุ่มทดสอบ) → (สำเร็จ, ข้อความ)"""
     global last_error
     token = token or get_token()
     if not token:
         return False, "ยังไม่ได้ใส่ Channel access token"
+    if not test and quota_blocked():
+        last_error = "โควตาข้อความ LINE OA เดือนนี้เต็มแล้ว — หยุดส่งจนถึงต้นเดือนหน้า"
+        return False, last_error
     err = ""
     for attempt in range(3):
         try:
@@ -105,7 +194,13 @@ def _broadcast(messages, token=None) -> tuple:
             return True, "ส่งสำเร็จ"
         except urllib.error.HTTPError as e:
             err = _explain(e)
-            if e.code in (400, 401, 403, 429):
+            if _is_monthly_limit(e):
+                _quota_exceeded_alert()
+                break
+            if e.code == 401:
+                _alert("token_invalid", "LINE OA: Token ใช้ไม่ได้", "Channel access token ไม่ถูกต้องหรือหมดอายุ — แจ้งเตือนส่งไม่ได้ กรุณาออก Token ใหม่ในเมนู \"แจ้งเตือน LINE OA\"")
+                break
+            if e.code in (400, 403):
                 break   # ลองซ้ำไม่ช่วย
         except Exception as e:
             err = _explain(e)
@@ -309,9 +404,16 @@ def build_daily_summary(day):
 def _scheduler():
     """ทุก 1 นาที: ถึงเวลาที่ตั้ง (เวลาไทย) และวันนี้ยังไม่ส่ง → ส่งสรุปของเมื่อวาน"""
     from datetime import timedelta
+    last_quota = 0.0
     while True:
         try:
             s = load_settings()
+            if s.get("enabled") and s.get("token") and time.time() - last_quota > 6 * 3600:
+                last_quota = time.time()
+                try:
+                    check_quota_and_alert()
+                except Exception:
+                    pass
             now = thai_time.now()
             today = now.strftime("%Y-%m-%d")
             if s.get("enabled") and s.get("token") and s["events"].get("daily") and s.get("last_daily") != today \
@@ -338,4 +440,4 @@ def send_test(token=None):
                    [_row("สถานะ", "พร้อมแจ้งเข้าไม้ / ปิดไม้ / สรุปรายวัน", GREEN, bold=True),
                     _row("เวลา", thai_time.fmt_now("%d/%m/%Y %H:%M"))],
                    "Gold Bot 24 เชื่อมต่อ LINE OA ของคุณแล้ว")
-    return _broadcast(msgs, token=token)
+    return _broadcast(msgs, token=token, test=True)

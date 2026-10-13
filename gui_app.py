@@ -1442,7 +1442,11 @@ class LineNotifyDialog(ctk.CTkToplevel):
             self.lbl_state.configure(text="● เปิดใช้งานอยู่", text_color=COLOR_SUCCESS_GREEN)
         else:
             self.lbl_state.configure(text="ปิดอยู่", text_color=COLOR_TEXT_MUTED)
-        if self.ln.last_error:
+        if self.ln.quota_blocked():
+            self.lbl_state.configure(text="● โควตาเดือนนี้เต็ม", text_color=COLOR_DANGER_RED)
+            self.lbl_info.configure(text="โควตาข้อความ LINE OA เดือนนี้เต็มแล้ว — แจ้งเตือนหยุดส่งจนถึงต้นเดือนหน้า (อัปเกรดแพ็กเกจ OA แล้วกด \"ตรวจโควตา\" เพื่อส่งต่อ)",
+                                    text_color=COLOR_DANGER_RED)
+        elif self.ln.last_error:
             self.lbl_info.configure(text=f"ส่งล่าสุดไม่สำเร็จ: {self.ln.last_error}", text_color=COLOR_DANGER_RED)
 
     def _save(self):
@@ -1491,7 +1495,7 @@ class LineNotifyDialog(ctk.CTkToplevel):
 
         def get():
             try:
-                return True, self.ln.get_quota(token)
+                return True, self.ln.check_quota_and_alert(token)
             except Exception as e:
                 return False, self.ln._explain(e)
 
@@ -1504,8 +1508,10 @@ class LineNotifyDialog(ctk.CTkToplevel):
             else:
                 left = max(0, q["limit"] - q["used"])
                 low = left <= q["limit"] * 0.1
-                self.lbl_info.configure(text=f"โควตาเดือนนี้: ใช้ไป {q['used']:,} / {q['limit']:,} · เหลือ {left:,} ข้อความ" + (" — ใกล้หมด" if low else ""),
+                self.lbl_info.configure(text=f"โควตาเดือนนี้: ใช้ไป {q['used']:,} / {q['limit']:,} · เหลือ {left:,} ข้อความ"
+                                        + (" — เต็มแล้ว หยุดส่งจนถึงต้นเดือนหน้า" if left == 0 else " — ใกล้หมด" if low else ""),
                                         text_color=COLOR_DANGER_RED if low else COLOR_SUCCESS_GREEN)
+                self._refresh_state() if left == 0 else None
         self.lbl_info.configure(text="กำลังตรวจโควตา…", text_color=COLOR_GOLD_PRIMARY)
         self._run_bg(get, done)
 
@@ -5117,6 +5123,24 @@ class MainTradingApp(ctk.CTk):
         finally:
             menu.grab_release()
 
+    def _line_alert_tick(self):
+        """แจ้งเตือนจากระบบ LINE OA (โควตาเต็ม / ใกล้เต็ม / Token ผิด) → กล่องข้อความ + เสียง"""
+        try:
+            import line_notify
+            for a in line_notify.pop_alerts():
+                sound_manager.play_sl_hit() if a["kind"] != "quota_low" else None
+                messagebox.showwarning(a["title"], a["text"])
+                w = getattr(self, "_line_dialog", None)
+                if w is not None and w.winfo_exists():
+                    w._refresh_state()
+        except Exception:
+            pass
+        try:
+            if self.winfo_exists():
+                self.after(5000, self._line_alert_tick)
+        except Exception:
+            pass
+
     def _open_single(self, cls, attr):
         """เปิดหน้าต่างได้หน้าต่างเดียว — คลิกซ้ำดึงหน้าต่างเดิมขึ้นมา"""
         w = getattr(self, attr, None)
@@ -5917,6 +5941,7 @@ class MainTradingApp(ctk.CTk):
         try:
             import line_notify
             line_notify.start_scheduler()   # สรุปกำไรรายวันไป LINE OA (ถ้าผู้ใช้เปิดไว้)
+            self.after(5000, self._line_alert_tick)
         except Exception:
             pass
 
