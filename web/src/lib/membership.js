@@ -30,17 +30,33 @@ export function memberUntil(tags) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** สถานะสมาชิกจาก tags: { active, until (ISO|null), daysLeft } */
+// ---- นับตามวันปฏิทิน (เวลาไทย UTC+7 ไม่มี DST) · วันที่ซื้อ = วันที่ 1 · หมดอายุ 23:59:59 น. ของวันสุดท้าย ----
+const DAY = 86400000;
+const TH_OFFSET = 7 * 3600000;
+/** ลำดับวันตามปฏิทินไทยของเวลา ms */
+export function thaiDay(ms) {
+  return Math.floor((ms + TH_OFFSET) / DAY);
+}
+/** เวลาสิ้นวัน (23:59:59.999 น. เวลาไทย) ของลำดับวัน */
+export function thaiDayEnd(day) {
+  return (day + 1) * DAY - TH_OFFSET - 1;
+}
+
+/** สถานะสมาชิกจาก tags: { active, until (ISO|null), daysLeft = จำนวนวันปฏิทินที่เหลือ รวมวันนี้ } */
 export function memberInfo(tags, now = Date.now()) {
   const until = memberUntil(tags);
   if (!until) return { active: false, until: null, daysLeft: 0 };
-  const ms = until.getTime() - now;
-  return { active: ms > 0, until: until.toISOString(), daysLeft: ms > 0 ? Math.ceil(ms / 86400000) : 0 };
+  const active = until.getTime() > now;
+  return { active, until: until.toISOString(), daysLeft: active ? thaiDay(until.getTime()) - thaiDay(now) + 1 : 0 };
 }
 
-/** วันหมดอายุใหม่หลังต่ออายุ `days` วัน — ยังไม่หมด = ต่อจากวันเดิม · หมดแล้ว = นับจากตอนนี้ */
+/**
+ * วันหมดอายุใหม่หลังต่ออายุ `days` วัน (นับตามวันปฏิทินไทย)
+ * - ยังไม่หมด: บวกต่อจากวันสุดท้ายเดิม (เช่น ถึง 11 พ.ย. + 30 วัน → ถึง 11 ธ.ค.)
+ * - หมดแล้ว/ยังไม่เคยเป็น: วันนี้ = วันที่ 1 → ถึงสิ้นวันที่ (วันนี้ + days − 1)  เช่น ซื้อ 13 ต.ค. → ถึง 11 พ.ย. 23:59 น.
+ */
 export function extendedUntil(tags, days, now = Date.now()) {
   const cur = memberUntil(tags);
-  const base = cur && cur.getTime() > now ? cur.getTime() : now;
-  return new Date(base + days * 86400000);
+  if (cur && cur.getTime() > now) return new Date(thaiDayEnd(thaiDay(cur.getTime()) + Number(days)));
+  return new Date(thaiDayEnd(thaiDay(now) + Number(days) - 1));
 }

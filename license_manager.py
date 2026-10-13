@@ -337,14 +337,18 @@ class LicenseManager:
         if m.get("viaAdmin"):
             return {"active": True, "until": None, "daysLeft": 0, "viaAdmin": True}
         until = m.get("until")
-        left = 0.0
+        end = 0.0
         if until:
             try:
                 from datetime import datetime
-                left = datetime.fromisoformat(str(until).replace("Z", "+00:00")).timestamp() - time.time()
+                end = datetime.fromisoformat(str(until).replace("Z", "+00:00")).timestamp()
             except ValueError:
-                left = 0.0
-        return {"active": left > 0, "until": until, "daysLeft": int(-(-left // 86400)) if left > 0 else 0, "viaAdmin": False}
+                end = 0.0
+        now = time.time()
+        active = end > now
+        # เหลือกี่วัน = วันปฏิทินไทย (UTC+7) ถึงวันสุดท้าย รวมวันนี้ — ตรงกับ memberInfo ในเว็บ
+        th_day = lambda ts: int((ts + 7 * 3600) // 86400)
+        return {"active": active, "until": until, "daysLeft": th_day(end) - th_day(now) + 1 if active else 0, "viaAdmin": False}
 
     def is_member(self) -> bool:
         return bool(self.is_authenticated and self.membership_status()["active"])

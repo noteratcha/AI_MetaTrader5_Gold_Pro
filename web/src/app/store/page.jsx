@@ -78,7 +78,7 @@ export default function StorePage() {
         description={`${rateRange(packages)}ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ · สมาชิกรายเดือนปลดล็อกแผน P6–P8`}
       />
 
-      <MembershipCard membership={user?.membership} discountPct={user ? discountPct : 0} onBuy={() => buy(MEMBERSHIP)} />
+      <MembershipCard membership={user?.membership} showHistory={Boolean(user)} discountPct={user ? discountPct : 0} onBuy={() => buy(MEMBERSHIP)} />
 
       {user && <OnlineRewardCard online={user.online} />}
 

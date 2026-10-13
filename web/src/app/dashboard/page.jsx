@@ -105,7 +105,7 @@ function Dashboard() {
       </div>
 
       <div className="section">
-        {user && <MembershipCard membership={user.membership} compact onBuy={() => { window.location.href = '/store?member=1'; }} />}
+        {user && <MembershipCard membership={user.membership} compact showHistory onBuy={() => { window.location.href = '/store?member=1'; }} />}
         {user?.online && <OnlineRewardCard online={user.online} />}
         {user && <HoursHistoryCard />}
       </div>

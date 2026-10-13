@@ -155,7 +155,7 @@ export async function fulfillOrder(order, paymentRef) {
 /** คำสั่งซื้อสมาชิกรายเดือน (ล็อก PROCESSING แล้ว) → ต่ออายุ 30 วันให้เจ้าของคำสั่งซื้อ · ไม่ออก Product Key */
 async function fulfillMembership(order, paymentRef) {
   const supabase = getAdminClient();
-  const info = await extendMembership(order.owner_user_id, MEMBERSHIP.days, { reason: `ชำระ ${order.order_id}` });
+  const info = await extendMembership(order.owner_user_id, MEMBERSHIP.days, { reason: `ชำระ ฿${Number(order.amount_thb).toLocaleString('en-US')} (${order.order_id})` });
   if (!info) {
     await supabase.from('orders').update({ status: order.status === 'CANCELLED' ? 'CANCELLED' : 'PENDING' }).eq('order_id', order.order_id);
     return { ok: false, error: 'ต่ออายุสมาชิกไม่สำเร็จ กรุณาติดต่อแอดมิน' };

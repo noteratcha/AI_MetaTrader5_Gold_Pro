@@ -5160,6 +5160,7 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  📖  คู่มือการใช้งานออนไลน์", command=lambda: webbrowser.open(self.GUIDE_URL))
         menu.add_command(label="  🎯  เปิดบัญชีทดลองเทรด (XM Global)", command=lambda: webbrowser.open(self.BROKER_URL))
         menu.add_command(label="  🛒  เติมชั่วโมงเพิ่ม", command=lambda: webbrowser.open(self.STORE_URL))
+        menu.add_command(label="  👑  สมาชิกรายเดือน · ประวัติ", command=lambda: webbrowser.open("https://goldbot24.vercel.app/dashboard"))
         menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
         menu.add_command(label="  ⚙️  จัดการ Profile & MT5 Terminal", command=self._open_profile_manager_modal)
         menu.add_command(label="  📢  ข่าวสารและโปรโมชัน", command=self._open_news)
@@ -7579,9 +7580,9 @@ class MainTradingApp(ctk.CTk):
         mem = license_mgr.membership_status()
         if not mem["active"]:
             return ""
-        until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y %H:%M") if mem["until"] else "-"
-        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P8\nหมดอายุ {until} น. (อีก {mem['daysLeft']} วัน)\n"
-                "คลิกเพื่อต่ออายุ — ต่อก่อนหมดนับต่อจากวันเดิม")
+        until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y") if mem["until"] else "-"
+        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P8\nใช้ได้ถึงวันที่ {until} (23:59 น.) · เหลือ {mem['daysLeft']} วัน (รวมวันนี้)\n"
+                "คลิกเพื่อต่ออายุ — ต่อก่อนหมดนับต่อจากวันสุดท้ายเดิม")
 
     @staticmethod
     def _iso_epoch(iso):
@@ -7599,10 +7600,11 @@ class MainTradingApp(ctk.CTk):
         if self._member_alert_day == today:
             return
         self._member_alert_day = today
-        until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y %H:%M")
+        until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y")
+        left = "วันนี้เป็นวันสุดท้าย" if mem["daysLeft"] <= 1 else f"เหลืออีก {mem['daysLeft']} วัน (รวมวันนี้)"
         self.after(1500, lambda: messagebox.showwarning(
             "สมาชิกรายเดือนใกล้หมดอายุ",
-            f"สมาชิกหมดอายุในอีก {mem['daysLeft']} วัน ({until} น.)\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P8 ต่อ — ต่อก่อนหมดจะนับต่อจากวันเดิม"))
+            f"สมาชิกใช้ได้ถึงวันที่ {until} (23:59 น.) · {left}\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P8 ต่อ — ต่อก่อนหมดจะนับต่อจากวันสุดท้ายเดิม"))
 
     def _reward_tip(self):
         o = license_mgr.online_status()
