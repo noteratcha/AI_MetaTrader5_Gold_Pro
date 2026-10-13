@@ -326,6 +326,7 @@ def sim_fib(df):
     m1, m2, m3 = (cs.rolling(k).mean().values for k in (100, 150, 200))
     stk = np.where((m1 > m2) & (m2 > m3), 1, np.where((m1 < m2) & (m2 < m3), -1, 0))
     F = fp.FRACTAL
+    adx_, hist_ = fp.adx_macd_series(df)      # ตัวกรองสัญญาณหลอก ADX > 20 + MACD ยังไม่หันตามทิศไม้
     out, orders, pos = [], {}, None
     last_lo = last_hi = None
     for i in range(210, n_ - 1):
@@ -363,6 +364,8 @@ def sim_fib(df):
             if pos:
                 continue
             if l_[i] <= od["e"] <= h_[i]:
+                if not fp.entry_filter(adx_, hist_, i - 1, s_)[0]:
+                    del orders[s_]; continue       # ไม่ผ่านตัวกรอง = ทิ้งคลื่นนี้
                 if (l_[i] <= od["sl"]) if s_ == 1 else (h_[i] >= od["sl"]):
                     out.append(dict(time=t_[i], pnl=(od["sl"] - od["e"]) * s_ - SPREAD))
                 else:
@@ -389,7 +392,7 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · �
          6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100"),
          7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),
          8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด"),
-         9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)")}
+         9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · ADX > 20 + MACD ยังไม่หันตามทิศไม้ · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)")}
 plans_out, events = [], []
 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9):
     tr = ALL[k]

@@ -1983,6 +1983,8 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             od9 = min(p9_orders.values(), key=lambda o: abs(cur_price - o["entry"]))
             s9 = od9["side"]
             reached = (cur_price - od9["entry"]) * s9 <= 0
+            adx9, hist9 = fib_plan.adx_macd_series(df_h1)
+            _ok9, a9, t9 = fib_plan.entry_filter(adx9, hist9, len(df_h1) - 2, s9)
             p9_items = [
                 {"name": "คลื่น H1 ≥ 3 ATR", "ok": True,
                  "desc": f"คลื่น{'ลง' if s9 == -1 else 'ขึ้น'} {od9['a']:,.2f} → {od9['b']:,.2f} (0 → 1)"},
@@ -1991,6 +1993,10 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
                 {"name": "ราคาถึงระดับ 0.3", "ok": reached,
                  "desc": f"จุดเข้า {od9['entry']:,.2f} · SL {od9['sl']:,.2f} (0) · TP {od9['tp']:,.2f} (1.75) · "
                          + ("ถึงแล้ว" if reached else f"อีก {abs(cur_price - od9['entry']):,.2f} จุด") + f" · ออเดอร์รออีก {od9['bars_left']} ชม."},
+                {"name": "ADX > 20", "ok": a9 > fib_plan.ADX_MIN,
+                 "desc": f"ADX H1 {a9:.1f}" + ("" if a9 > fib_plan.ADX_MIN else " — ตลาดไม่มีแรง คลื่นมักหลอก")},
+                {"name": "MACD ยังไม่หันตามทิศไม้", "ok": t9 <= 0,
+                 "desc": "แรงย้อนยังไม่หมด — เข้าได้" if t9 <= 0 else f"MACD H1 หัน{'ขึ้น' if s9 == 1 else 'ลง'}ตามทิศไม้แล้ว — สัญญาณหลอกบ่อย"},
             ]
             p9_side = "BUY" if s9 == 1 else "SELL"
         else:
@@ -2000,11 +2006,13 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
                 {"name": "H1 MA100/150/200 สวนคลื่น", "ok": h1_stack_dir != 0,
                  "desc": "H1 เรียงขึ้น — รอคลื่นลง" if h1_stack_dir == 1 else ("H1 เรียงลง — รอคลื่นขึ้น" if h1_stack_dir == -1 else "H1 ไม่เรียงตัว — แผนนี้ไม่เข้า")},
                 {"name": "ราคาถึงระดับ 0.3", "ok": False, "desc": "ยังไม่มีจุดเข้า"},
+                {"name": "ADX > 20", "ok": False, "desc": "ตรวจตอนราคาถึงจุดเข้า"},
+                {"name": "MACD ยังไม่หันตามทิศไม้", "ok": False, "desc": "ตรวจตอนราคาถึงจุดเข้า"},
             ]
         m9 = sum(1 for it in p9_items if it["ok"])
         results["P9"] = {
             "name": P9_NAME, "label": "P9 · H1 (Fib)", "side": p9_side,
-            "matched": m9, "total": 3, "pct": int(m9 / 3 * 100), "items": p9_items,
+            "matched": m9, "total": len(p9_items), "pct": int(m9 / len(p9_items) * 100), "items": p9_items,
             "enabled": plan_config.is_enabled(P9_NAME),
             "disabled_reason": plan_config.disabled_reason(P9_NAME)
         }
@@ -3607,7 +3615,20 @@ def main():
                         # แผน 9: Fib-H1-Counter — ราคาถึงระดับ 0.3 ของคลื่น H1 (สวนเทรนด์ใหญ่ H1) · SL ระดับ 0 · TP 1.75 · ไม่ใช้ AI
                         elif p9_sig:
                             side9 = 'BUY' if p9_sig == 1 else 'SELL'
-                            if not _is_plan_blocked(side9, P9_NAME):
+                            # ตัวกรองสัญญาณหลอก: ADX > 20 + MACD histogram ยังไม่หันตามทิศไม้ (แท่ง H1 ที่ปิดล่าสุด)
+                            ok9, adx9, turn9 = fib_plan.entry_filter(*fib_plan.adx_macd_series(df_h1), len(df_h1) - 2, p9_sig)
+                            if not ok9:
+                                # ไม่ผ่าน = ทิ้งคลื่นนี้ (เหมือน Backtest — ไม่รอเข้าซ้ำบนคลื่นเดิม)
+                                if last_cross_entry_bar.get((sym, P9_NAME, side9)) != p9_bar_time:
+                                    last_cross_entry_bar[(sym, P9_NAME, side9)] = p9_bar_time
+                                    why9 = []
+                                    if adx9 <= fib_plan.ADX_MIN:
+                                        why9.append(f"ADX {adx9:.1f} (ต้อง > {fib_plan.ADX_MIN:g} — ตลาดไม่มีแรง)")
+                                    if turn9 > 0:
+                                        why9.append("MACD H1 หันตามทิศไม้ไปแล้ว")
+                                    print(f"{Colors.YELLOW}[FAKE SIGNAL FILTER] {sym} Plan 9 {side9} ข้ามคลื่นนี้ — {' · '.join(why9)}{Colors.RESET}")
+                                    log_signal_event(sym, 'RISK_BLOCKED', P9_NAME, side9, close_price, prob[1], prob[0], h4_cloud_status, div_name, 'FAKE_SIGNAL_FILTER', ' · '.join(why9))
+                            elif not _is_plan_blocked(side9, P9_NAME):
                                 price = tick.ask if p9_sig == 1 else tick.bid
                                 sl = round(p9_od['sl'], digits)
                                 tp = round(p9_od['tp'], digits)
