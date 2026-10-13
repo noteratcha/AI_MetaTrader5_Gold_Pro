@@ -49,7 +49,7 @@ export default function MembershipCard({ membership, onBuy, compact = false, sho
             )}
           </div>
         </div>
-        {onBuy && !m.viaAdmin && (
+        {onBuy && (   // แสดงกับทุกบัญชี (แอดมินใช้ได้ทุกแผนอยู่แล้ว แต่สมัครได้เพื่อทดสอบ/เก็บประวัติ)
           <div className="stack" style={{ alignItems: 'flex-end', gap: 6 }}>
             <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
               <span className="mono text-gold" style={{ fontSize: '1.35rem', fontWeight: 700 }}>
@@ -59,9 +59,9 @@ export default function MembershipCard({ membership, onBuy, compact = false, sho
             </div>
             <span className="tiny faint">ราคาเต็ม · ส่วนลด Lv./ออนไลน์ใช้กับการเติมชั่วโมงเท่านั้น</span>
             <button className="btn btn-primary" onClick={onBuy}>
-              <Crown size={16} /> {m.active ? 'ต่ออายุอีก 30 วัน' : 'สมัครสมาชิก'}
+              <Crown size={16} /> {m.active && !m.viaAdmin ? 'ต่ออายุอีก 30 วัน' : 'สมัครสมาชิก'}
             </button>
-            {m.active && <span className="tiny faint">ต่ออายุแล้วนับต่อจากวันหมดอายุเดิม</span>}
+            {m.active && !m.viaAdmin && <span className="tiny faint">ต่ออายุแล้วนับต่อจากวันหมดอายุเดิม</span>}
           </div>
         )}
       </div>
