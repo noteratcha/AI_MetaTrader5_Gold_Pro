@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Ban, Clock, KeyRound, LockOpen, Pencil, ScrollText, Trash2, UserCheck } from 'lucide-react';
+import { ArrowLeft, Ban, Clock, Crown, KeyRound, LockOpen, Pencil, ScrollText, Trash2, UserCheck } from 'lucide-react';
 import AdminShell from '../../../../components/admin/AdminShell';
 import { Alert, EmptyState, Modal, Pager, Spinner } from '../../../../components/ui';
 import { useAuth } from '../../../../context/AuthContext';
@@ -126,6 +126,16 @@ export default function AdminUserDetailPage() {
                 <Info label="Balance (ล่าสุด)" value={user.bot ? formatUsd(user.bot.balance) : '—'} />
                 <Info label="ออเดอร์เปิดอยู่" value={user.bot ? user.bot.openPositions : '—'} />
               </div>
+              <div className="small" style={{ marginTop: 12 }}>
+                สมาชิกรายเดือน:{' '}
+                {user.membership?.viaAdmin ? (
+                  <span className="badge badge-gold">แอดมิน (ทุกแผน)</span>
+                ) : user.membership?.active ? (
+                  <span className="badge badge-green">ใช้งานอยู่ · ถึง {formatThaiDateTime(user.membership.until)} (อีก {user.membership.daysLeft} วัน)</span>
+                ) : (
+                  <span className="badge badge-muted">ไม่ใช่สมาชิก{user.membership?.until ? ` · หมดอายุ ${formatThaiDateTime(user.membership.until)}` : ''}</span>
+                )}
+              </div>
               <div className="small muted" style={{ marginTop: 14 }}>
                 สมัครเมื่อ {user.registeredAt ? formatThaiDateTime(user.registeredAt) : '—'} · ID <span className="mono">{user.id}</span>
               </div>
@@ -144,6 +154,9 @@ export default function AdminUserDetailPage() {
                 </button>
                 <button className="btn btn-primary btn-block" disabled={locked} onClick={() => setModal('hours')}>
                   <Clock size={15} /> เพิ่ม / ลด / ตั้งชั่วโมง
+                </button>
+                <button className="btn btn-secondary btn-block" disabled={locked} onClick={() => setModal('member')}>
+                  <Crown size={15} /> สมาชิกรายเดือน (เพิ่ม / ลด / ยกเลิก)
                 </button>
                 <button className="btn btn-secondary btn-block" disabled={locked} onClick={() => setModal('name')}>
                   <Pencil size={15} /> แก้ไขชื่อที่แสดง
@@ -224,6 +237,7 @@ export default function AdminUserDetailPage() {
 
       {modal === 'hours' && user && <HoursModal user={user} onClose={() => setModal(null)} onSave={patch} />}
       {modal === 'name' && user && <NameModal user={user} onClose={() => setModal(null)} onSave={patch} />}
+      {modal === 'member' && user && <MemberModal user={user} onClose={() => setModal(null)} onSave={patch} />}
       {modal === 'password' && user && <PasswordModal onClose={() => setModal(null)} onSave={patch} />}
       {modal === 'delete' && user && (
         <DeleteModal
@@ -450,6 +464,47 @@ function HoursModal({ user, onClose, onSave }) {
         >
           {busy && <Spinner />} บันทึก
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+function MemberModal({ user, onClose, onSave }) {
+  const [days, setDays] = useState(30);
+  const { error, busy, run } = useSubmit(onSave);
+  const m = user.membership || {};
+  return (
+    <Modal title="สมาชิกรายเดือน" onClose={onClose} width={420}>
+      <div className="stack" style={{ gap: 12 }}>
+        {error && <Alert type="error">{error}</Alert>}
+        <div className="small muted">
+          ปัจจุบัน: {m.active ? <strong className="text-green">ถึง {formatThaiDateTime(m.until)} (อีก {m.daysLeft} วัน)</strong> : <strong>ไม่ใช่สมาชิก</strong>}
+          <br />
+          ยังไม่หมดอายุ = นับต่อจากวันหมดอายุเดิม · หมดแล้ว = นับจากวันนี้ · ใส่ค่าติดลบเพื่อลดวัน
+        </div>
+        <div className="row wrap" style={{ gap: 6 }}>
+          {[7, 30, 90].map((d) => (
+            <button key={d} className={`btn btn-sm ${Number(days) === d ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDays(d)}>
+              +{d} วัน
+            </button>
+          ))}
+        </div>
+        <label className="field">
+          <span className="label">จำนวนวัน</span>
+          <input className="input" type="number" step="1" value={days} onChange={(e) => setDays(e.target.value)} />
+        </label>
+        <button
+          className="btn btn-primary btn-block"
+          disabled={busy || !Number(days)}
+          onClick={() => run({ memberDays: Number(days) }, `ปรับสมาชิก ${Number(days) > 0 ? '+' : ''}${Number(days)} วันแล้ว`)}
+        >
+          {busy && <Spinner />} บันทึก
+        </button>
+        {m.until && (
+          <button className="btn btn-ghost btn-block text-red" disabled={busy} onClick={() => run({ cancelMembership: true }, 'ยกเลิกสมาชิกแล้ว')}>
+            ยกเลิกสมาชิกทันที
+          </button>
+        )}
       </div>
     </Modal>
   );

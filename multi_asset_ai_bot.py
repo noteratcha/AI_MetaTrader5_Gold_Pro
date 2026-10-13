@@ -2026,7 +2026,7 @@ def print_plans_condition_status(symbol: str = None):
             if matched == total:
                 status_note = f" {Colors.GREEN}★ ครบ 100% พร้อมออกออเดอร์{Colors.RESET}"
             elif not info.get("enabled", True):
-                reason = "แอดมินปิด" if info.get("disabled_reason") == "admin" else "ผู้ใช้ปิดไว้"
+                reason = {"admin": "แอดมินปิด", "member": "เฉพาะสมาชิกรายเดือน"}.get(info.get("disabled_reason"), "ผู้ใช้ปิดไว้")
                 status_note = f" {Colors.YELLOW}({reason}){Colors.RESET}"
 
             print(f"• {label} ({name}): {side_color}{arrow} {side}{Colors.RESET} [{bar}] {matched}/{total} ข้อ ({pct}%){status_note}")
@@ -3260,7 +3260,8 @@ def main():
                                 key = (sym, plan_config.base_plan(plan_name))
                                 if time.time() - _plan_disabled_logged.get(key, 0) > 600:
                                     _plan_disabled_logged[key] = time.time()
-                                    who = "ผู้ดูแลระบบ" if plan_config.disabled_reason(plan_name) == "admin" else "คุณ (เลือกไม่ใช้แผนนี้)"
+                                    why = plan_config.disabled_reason(plan_name)
+                                    who = {"admin": "ผู้ดูแลระบบ", "member": "ระบบ — แผนนี้ใช้ได้เฉพาะสมาชิกรายเดือน (สมัครที่หน้าเติมชั่วโมง)"}.get(why, "คุณ (เลือกไม่ใช้แผนนี้)")
                                     print(f"{Colors.YELLOW}[PLAN DISABLED] {sym} {plan_config.base_plan(plan_name)} ถูกปิดโดย{who} — ข้ามสัญญาณ {direction}{Colors.RESET}")
                                 return True
                             sym_plans = last_loss_plan.get(sym, {})

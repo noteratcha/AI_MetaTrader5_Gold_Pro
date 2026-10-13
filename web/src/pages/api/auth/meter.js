@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     const login = Math.floor(Number(req.body?.login) || 0);
     if (credited > 0) await addOnlineMinutes(auth.user, credited, login > 0 && login < 1e12 ? login : 0);
     const online = await getRewardStatus(auth.user.id);
-    return res.status(200).json({ success: true, minutesDeducted: credited, hoursRemaining, online });
+    return res.status(200).json({ success: true, minutesDeducted: credited, hoursRemaining, online, membership: auth.user.membership });
   } catch (err) {
     console.error('[auth/meter] error:', err);
     return res.status(500).json({ success: false, error: err.message || 'ไม่สามารถหักเวลาได้' });

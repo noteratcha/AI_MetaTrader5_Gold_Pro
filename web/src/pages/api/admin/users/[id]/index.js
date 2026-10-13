@@ -2,9 +2,10 @@ import { getAdminClient } from '../../../../../lib/server/supabaseAdmin';
 import { allowMethods, hashPassword, requireAdmin } from '../../../../../lib/server/auth';
 import { enrichUsers, isAdminRow, loadUserRow, rowTags, setTag, toggleTag } from '../../../../../lib/server/adminUsers';
 import { logActivity } from '../../../../../lib/server/activity';
+import { extendMembership } from '../../../../../lib/server/membership';
 
 // GET    รายละเอียดผู้ใช้ + สรุปการใช้งาน
-// PATCH  แก้ไข: displayName, hours (ตั้งค่า), addHours (บวก/ลบ), disabled, newPassword
+// PATCH  แก้ไข: displayName, hours (ตั้งค่า), addHours (บวก/ลบ), disabled, newPassword · memberDays (+/- วัน) / cancelMembership
 // DELETE ลบผู้ใช้ (ห้ามแก้/ลบบัญชีแอดมิน)
 export default async function handler(req, res) {
   if (!allowMethods(req, res, ['GET', 'PATCH', 'DELETE'])) return;
@@ -39,6 +40,19 @@ export default async function handler(req, res) {
 
   // PATCH
   const body = req.body || {};
+
+  // สมาชิกรายเดือน: memberDays (+/- วัน) หรือ cancelMembership — แยกจากการแก้ข้อมูลอื่น
+  if (body.cancelMembership === true || (body.memberDays !== undefined && body.memberDays !== null && body.memberDays !== '')) {
+    const days = body.cancelMembership === true ? null : Number(body.memberDays);
+    if (days !== null && (!Number.isFinite(days) || days === 0 || Math.abs(days) > 3650)) {
+      return res.status(400).json({ success: false, error: 'จำนวนวันสมาชิกไม่ถูกต้อง' });
+    }
+    const info = await extendMembership(row.id, days, { actor: auth.user.email, reason: 'แอดมิน' });
+    if (!info) return res.status(500).json({ success: false, error: 'บันทึกสมาชิกไม่สำเร็จ' });
+    const fresh = await loadUserRow(row.id);
+    const [user] = await enrichUsers([fresh || row]);
+    return res.status(200).json({ success: true, user });
+  }
   const update = {};
   const changes = [];
   let tags = rowTags(row);

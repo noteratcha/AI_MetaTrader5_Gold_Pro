@@ -4,6 +4,8 @@ import { logActivity } from './activity';
 import { notifyPurchase } from './lineNotify';
 import { issueReceipt } from './receipts';
 import { markDiscountUsed } from './onlineReward';
+import { extendMembership } from './membership';
+import { MEMBERSHIP, isMembershipPackage } from '../membership';
 
 export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // เวลาชำระตาม QR 15 นาที + เวลาแนบสลิปต่ออีก 10 นาที (ตรงกับตัวนับถอยหลังหน้าร้าน) — เกินแล้วยกเลิกคำสั่งซื้อ
@@ -64,6 +66,7 @@ export function publicOrder(order) {
     created_at: order.created_at,
     paid_at: order.paid_at,
     generated_key_code: isPaid ? order.generated_key_code : null,
+    is_membership: isMembershipPackage(order.package_id),
   };
 }
 
@@ -90,6 +93,8 @@ export async function fulfillOrder(order, paymentRef) {
     if (latest?.status === 'PAID') return { ok: true, productKey: latest.generated_key_code, alreadyPaid: true };
     return { ok: false, error: 'คำสั่งซื้อนี้กำลังถูกดำเนินการ กรุณารอสักครู่' };
   }
+
+  if (isMembershipPackage(order.package_id)) return fulfillMembership(order, paymentRef);
 
   // ชั่วโมงอ้างอิงจากคำสั่งซื้อ (บันทึกตอนสร้าง QR) — แพ็กเกจอาจถูกแก้ไขภายหลัง
   const baseHours = Number(order.hours_to_add) || 0;
@@ -145,4 +150,28 @@ export async function fulfillOrder(order, paymentRef) {
     productKey,
   });
   return { ok: true, productKey, alreadyPaid: false };
+}
+
+/** คำสั่งซื้อสมาชิกรายเดือน (ล็อก PROCESSING แล้ว) → ต่ออายุ 30 วันให้เจ้าของคำสั่งซื้อ · ไม่ออก Product Key */
+async function fulfillMembership(order, paymentRef) {
+  const supabase = getAdminClient();
+  const info = await extendMembership(order.owner_user_id, MEMBERSHIP.days, { reason: `ชำระ ${order.order_id}` });
+  if (!info) {
+    await supabase.from('orders').update({ status: order.status === 'CANCELLED' ? 'CANCELLED' : 'PENDING' }).eq('order_id', order.order_id);
+    return { ok: false, error: 'ต่ออายุสมาชิกไม่สำเร็จ กรุณาติดต่อแอดมิน' };
+  }
+  await supabase
+    .from('orders')
+    .update({ status: 'PAID', payment_ref: String(paymentRef || '').slice(0, 120), paid_at: new Date().toISOString() })
+    .eq('order_id', order.order_id);
+  await markDiscountUsed(order);
+  await logActivity({
+    userId: order.owner_user_id,
+    email: order.owner_email,
+    event: 'purchase_paid',
+    detail: `ชำระ ฿${Number(order.amount_thb)} (${order.order_id}) → สมาชิกรายเดือนถึง ${String(info.until).slice(0, 10)}`,
+  });
+  await issueReceipt({ ...order, payment_ref: paymentRef }, { paymentRef });
+  await notifyPurchase({ email: order.owner_email, amountThb: order.amount_thb, hours: 0, orderId: order.order_id, membershipUntil: info.until });
+  return { ok: true, productKey: null, membershipUntil: info.until, alreadyPaid: false };
 }

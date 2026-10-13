@@ -7,6 +7,7 @@ import { BarChart3, ChevronDown, ChevronUp, Clock, Key, Lock, Receipt, RefreshCw
 import { useAuth } from '../../context/AuthContext';
 import RedeemCard from '../../components/RedeemCard';
 import OnlineRewardCard from '../../components/OnlineRewardCard';
+import MembershipCard from '../../components/MembershipCard';
 import HoursHistoryCard from '../../components/HoursHistoryCard';
 import KeyVault from '../../components/KeyVault';
 import { Alert, AuthGate, PageHeader, PageLoading, Spinner, StatCard } from '../../components/ui';
@@ -104,6 +105,7 @@ function Dashboard() {
       </div>
 
       <div className="section">
+        {user && <MembershipCard membership={user.membership} compact onBuy={() => { window.location.href = '/store?member=1'; }} />}
         {user?.online && <OnlineRewardCard online={user.online} />}
         {user && <HoursHistoryCard />}
       </div>

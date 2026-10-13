@@ -10,6 +10,8 @@ import { formatThb } from '../../lib/format';
 import { LINE_ID, LINE_URL } from '../../lib/contact';
 import { markLocalKeyRedeemed, rememberLocalKey } from '../../lib/localKeys';
 import OnlineRewardCard from '../../components/OnlineRewardCard';
+import MembershipCard from '../../components/MembershipCard';
+import { MEMBERSHIP } from '../../lib/membership';
 
 const ACCENTS = {
   sky: { color: 'var(--sky)', icon: Zap },
@@ -39,7 +41,7 @@ function rateRange(packages) {
 }
 
 export default function StorePage() {
-  const { user, openAuthModal } = useAuth();
+  const { user, openAuthModal, refreshUser } = useAuth();
   const [checkoutPkg, setCheckoutPkg] = useState(null);
   const [packages, setPackages] = useState(null); // null = กำลังโหลด (ไม่แสดงชุดค่าเริ่มต้นก่อน กันภาพกระพริบ)
 
@@ -50,6 +52,12 @@ export default function StorePage() {
       .then((d) => setPackages(d.success && Array.isArray(d.packages) ? d.packages : PACKAGES))
       .catch(() => setPackages(PACKAGES));
   }, []);
+
+  // ลิงก์จากโปรแกรม /store?member=1 → เปิดหน้าต่างสมัครสมาชิกให้เลย (ล็อกอินแล้ว)
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('member') === '1') setCheckoutPkg((cur) => cur || MEMBERSHIP);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const discountPct = (user?.online?.discount?.percent || 0) + (user?.online?.level?.discountPct || 0);   // ส่วนลดออนไลน์ 100 ชม. (1 รายการ) + ระดับสมาชิก (ถาวร)
 
@@ -67,8 +75,10 @@ export default function StorePage() {
         eyebrow="Store"
         icon={ShoppingBag}
         title="เติมชั่วโมงใช้งาน"
-        description={`${rateRange(packages)}ไม่มีรายเดือน · ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ`}
+        description={`${rateRange(packages)}ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ · สมาชิกรายเดือนปลดล็อกแผน P6–P8`}
       />
+
+      <MembershipCard membership={user?.membership} discountPct={user ? discountPct : 0} onBuy={() => buy(MEMBERSHIP)} />
 
       {user && <OnlineRewardCard online={user.online} />}
 
@@ -159,7 +169,15 @@ export default function StorePage() {
         })}
       </div>
 
-      {checkoutPkg && <CheckoutModal pkg={checkoutPkg} onClose={() => setCheckoutPkg(null)} />}
+      {checkoutPkg && (
+        <CheckoutModal
+          pkg={checkoutPkg}
+          onClose={() => {
+            setCheckoutPkg(null);
+            if (checkoutPkg.kind === 'membership') refreshUser?.();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -196,7 +214,9 @@ function CheckoutSteps({ step }) {
 }
 
 function CheckoutModal({ pkg, onClose }) {
-  const { user, apiFetch, redeemKey } = useAuth();
+  const { user, apiFetch, redeemKey, refreshUser } = useAuth();
+  const isMember = pkg.kind === 'membership';
+  const [memberUntil, setMemberUntil] = useState(null); // สมัครสมาชิกสำเร็จ → วันหมดอายุใหม่
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
   const [remaining, setRemaining] = useState(PAY_WINDOW_SEC + SLIP_GRACE_SEC); // นับรวม: เวลาจ่าย + เวลาแนบสลิป
@@ -249,7 +269,8 @@ function CheckoutModal({ pkg, onClose }) {
     const id = setInterval(async () => {
       try {
         const res = await apiFetch(`/api/checkout/check-status?order_id=${encodeURIComponent(order.order_id)}`);
-        if (res.is_paid && res.generated_key_code) onPaid(res.generated_key_code);
+        if (res.is_paid && res.is_membership) onMemberPaid(null);
+        else if (res.is_paid && res.generated_key_code) onPaid(res.generated_key_code);
       } catch {
         /* ลองใหม่รอบถัดไป */
       }
@@ -291,6 +312,20 @@ function CheckoutModal({ pkg, onClose }) {
     if (productKey && !redeemState) redeemNow();
   }, [productKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // สมาชิก: ไม่มีคีย์ — ระบบต่ออายุให้บัญชีผู้ซื้อทันทีที่ชำระสำเร็จ
+  async function onMemberPaid(until) {
+    setProductKey('MEMBER');   // ใช้เป็นสถานะ "ชำระแล้ว" (หยุดนับเวลา/ตรวจสถานะ) — ไม่แสดงเป็นคีย์
+    setRetryIn(0);
+    setRedeemState({ type: 'success' });
+    if (until) setMemberUntil(until);
+    try {
+      const u = await refreshUser?.();
+      if (u?.membership?.until) setMemberUntil(u.membership.until);
+    } catch {
+      /* แสดงผลสำเร็จต่อได้ */
+    }
+  }
+
   function onPaid(key) {
     setProductKey(key);
     setRetryIn(0);
@@ -312,7 +347,8 @@ function CheckoutModal({ pkg, onClose }) {
         method: 'POST',
         body: JSON.stringify({ order_id: order.order_id, slip_base64: dataUrl, mime: 'image/jpeg' }),
       });
-      onPaid(res.product_key);
+      if (res.is_membership) onMemberPaid(res.membership_until);
+      else onPaid(res.product_key);
     } catch (err) {
       const data = err.data || {};
       if (data.retryAfterSec > 0) {
@@ -377,12 +413,27 @@ function CheckoutModal({ pkg, onClose }) {
           <div className="center" style={{ marginBottom: 14 }}>
             <span className="eyebrow">PromptPay QR</span>
             <h2 id="checkout-title" style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-              {pkg.name} · {Number(pkg.hours + pkg.bonus).toLocaleString('en-US')} ชั่วโมง
+              {isMember ? `${pkg.name} · ${pkg.days} วัน` : `${pkg.name} · ${Number(pkg.hours + pkg.bonus).toLocaleString('en-US')} ชั่วโมง`}
             </h2>
           </div>
           <CheckoutSteps step={step} />
 
-          {productKey ? (
+          {productKey && isMember ? (
+            <div className="center" style={{ marginTop: 18 }}>
+              <div className="empty-icon" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>
+                <Crown size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>สมัครสมาชิกสำเร็จ</h3>
+              <p className="small muted" style={{ marginBottom: 16 }}>
+                ปลดล็อกแผน P6–P8 แล้ว{memberUntil ? <> · ใช้ได้ถึง <strong className="text-gold">{new Date(memberUntil).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric' })}</strong></> : ''}
+                <br />
+                โปรแกรมรับสิทธิ์ภายใน ~1 นาที (ติ๊กเลือกแผนในการ์ดแผนเทรดได้เลย) · ส่งใบเสร็จไปที่อีเมลแล้ว
+              </p>
+              <button className="btn btn-primary btn-block" onClick={onClose}>
+                เสร็จสิ้น
+              </button>
+            </div>
+          ) : productKey ? (
             <div className="center" style={{ marginTop: 18 }}>
               <div className="empty-icon" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>
                 <Check size={28} />
@@ -573,7 +624,7 @@ function CheckoutModal({ pkg, onClose }) {
               )}
 
               <p className="tiny faint center" style={{ margin: 0 }}>
-                ระบบตรวจสลิปอัตโนมัติด้วย SlipOK (ยอดเงิน · บัญชีผู้รับ · สลิปซ้ำ) แล้วออก Product Key + ใบเสร็จทางอีเมลทันที
+                ระบบตรวจสลิปอัตโนมัติด้วย SlipOK (ยอดเงิน · บัญชีผู้รับ · สลิปซ้ำ) แล้ว{isMember ? 'ต่ออายุสมาชิก' : 'ออก Product Key'} + ใบเสร็จทางอีเมลทันที
               </p>
             </div>
           )}

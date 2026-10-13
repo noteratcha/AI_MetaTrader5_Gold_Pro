@@ -148,6 +148,7 @@ class LicenseManager:
                     self.session_data["user_id"] = str(u.get("id", ""))
                     self.session_data["token"] = data.get("token", "")
                     self.session_data["hours_remaining_minutes"] = int(round(hrs * 60))
+                    self.session_data["membership"] = u.get("membership")   # สมาชิกรายเดือน (ปลดล็อก P6–P8)
                     self.session_data["status"] = "AUTHENTICATED"
                     self.session_data["last_sync"] = int(time.time())
                     self.session_data["remember_me"] = bool(remember_me)
@@ -314,6 +315,7 @@ class LicenseManager:
                 if data.get("success") and data.get("user"):
                     hrs = float(data["user"].get("hoursRemaining", 0.0))
                     self.session_data["online"] = data["user"].get("online")   # รางวัลออนไลน์ครบ 100 ชม./สัปดาห์
+                    self.session_data["membership"] = data["user"].get("membership")
                     # หักนาทีที่ใช้ไปแล้วแต่ยังไม่ได้ส่งขึ้น Server ออกด้วย
                     pending = int(self.session_data.get("pending_meter_minutes", 0))
                     self.session_data["hours_remaining_minutes"] = max(0, int(round(hrs * 60)) - pending)
@@ -325,6 +327,27 @@ class LicenseManager:
             self._handle_auth_error(he.code)
         except Exception:
             pass
+
+    def membership_status(self):
+        """สมาชิกรายเดือน: {active, until (ISO UTC|None), daysLeft, viaAdmin} — คิด active ใหม่จากเวลาปัจจุบันเสมอ
+        (หมดอายุระหว่างรอบซิงค์ก็ล็อกแผนทันที) · ยังไม่เคยได้ข้อมูลจาก Server = ไม่ใช่สมาชิก"""
+        m = self.session_data.get("membership")
+        if not isinstance(m, dict):
+            return {"active": False, "until": None, "daysLeft": 0, "viaAdmin": False}
+        if m.get("viaAdmin"):
+            return {"active": True, "until": None, "daysLeft": 0, "viaAdmin": True}
+        until = m.get("until")
+        left = 0.0
+        if until:
+            try:
+                from datetime import datetime
+                left = datetime.fromisoformat(str(until).replace("Z", "+00:00")).timestamp() - time.time()
+            except ValueError:
+                left = 0.0
+        return {"active": left > 0, "until": until, "daysLeft": int(-(-left // 86400)) if left > 0 else 0, "viaAdmin": False}
+
+    def is_member(self) -> bool:
+        return bool(self.is_authenticated and self.membership_status()["active"])
 
     def online_status(self):
         """รางวัลออนไลน์ (จาก Server): {minutes, goalMinutes, weekStart, weekEnd, discount} หรือ None
@@ -379,6 +402,8 @@ class LicenseManager:
                     self.session_data["last_sync"] = int(time.time())
                     if data.get("online") is not None:
                         self.session_data["online"] = data["online"]
+                    if data.get("membership") is not None:
+                        self.session_data["membership"] = data["membership"]
                     self.save_local_store()
         except urllib.error.HTTPError as he:
             if he.code == 426:

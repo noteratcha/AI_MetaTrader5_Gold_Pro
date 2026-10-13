@@ -1,5 +1,6 @@
 import { allowMethods, requireUser } from '../../../lib/server/auth';
 import { fulfillOrder, getOrder, isOrderOwner, ORDER_MAX_AGE_MS } from '../../../lib/server/orders';
+import { isMembershipPackage } from '../../../lib/membership';
 import { notifyAdmins } from '../../../lib/server/lineNotify';
 
 const SLIPOK_BRANCH_ID = process.env.SLIPOK_BRANCH_ID || '';
@@ -40,7 +41,7 @@ export default async function handler(req, res) {
     return res.status(404).json({ success: false, error: 'ไม่พบคำสั่งซื้อ' });
   }
   if (order.status === 'PAID') {
-    return res.status(200).json({ success: true, product_key: order.generated_key_code, message: 'คำสั่งซื้อนี้ชำระเงินแล้ว' });
+    return res.status(200).json({ success: true, product_key: order.generated_key_code, is_membership: isMembershipPackage(order.package_id), message: 'คำสั่งซื้อนี้ชำระเงินแล้ว' });
   }
   if (order.created_at && Date.now() - new Date(order.created_at).getTime() > ORDER_MAX_AGE_MS) {
     return res.status(410).json({ success: false, error: 'คำสั่งซื้อนี้หมดอายุแล้ว กรุณาสร้างคำสั่งซื้อใหม่' });
@@ -123,6 +124,8 @@ export default async function handler(req, res) {
     order_id: order.order_id,
     product_key: result.productKey,
     hours: Number(order.hours_to_add),
-    message: 'ตรวจสลิปสำเร็จ! ออกรหัส Product Key เรียบร้อยแล้ว',
+    is_membership: Boolean(result.membershipUntil),
+    membership_until: result.membershipUntil || null,
+    message: result.membershipUntil ? 'ตรวจสลิปสำเร็จ! ต่ออายุสมาชิกรายเดือนเรียบร้อยแล้ว' : 'ตรวจสลิปสำเร็จ! ออกรหัส Product Key เรียบร้อยแล้ว',
   });
 }

@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCountdown, useCalendar } from './EconCalendar';
 import { formatHHMM } from '../lib/format';
 import { LOW_HOURS } from '../lib/hours';
+import { MEMBER_WARN_DAYS } from '../lib/membership';
 
 // ข้อความวิ่งใต้เมนู (ทุกหน้า): ข่าว USD ผลกระทบสูงถัดไป · ชั่วโมงใกล้หมด · โปรแกรมยังไม่ใช่เวอร์ชันล่าสุด
 // ชี้เมาส์เพื่อหยุด · คลิกข้อความเพื่อไปหน้าที่เกี่ยวข้อง
@@ -69,6 +70,11 @@ export default function TopTicker() {
       const hrs = Number(user.hoursRemaining) || 0;
       if (hrs <= 0) out.push({ key: 'hrs', tone: 'red', href: '/store', text: `ชั่วโมงใช้งานหมดแล้ว — บอทหยุดทำงาน · เติมชั่วโมงเพื่อใช้งานต่อ` });
       else if (hrs <= LOW_HOURS) out.push({ key: 'hrs', tone: 'gold', href: '/store', text: `ชั่วโมงใช้งานเหลือ ${formatHHMM(hrs)} ชม. — เติมชั่วโมงก่อนบอทหยุด` });
+      // สมาชิกรายเดือนใกล้หมดอายุ (≤ 3 วัน) — หมดแล้วบอทเข้าไม้ด้วย P6–P8 ไม่ได้
+      const mem = user.membership;
+      if (mem?.active && !mem.viaAdmin && mem.daysLeft <= MEMBER_WARN_DAYS) {
+        out.push({ key: 'member', tone: 'gold', href: '/store?member=1', text: `สมาชิกรายเดือนหมดอายุในอีก ${mem.daysLeft} วัน — ต่ออายุเพื่อใช้แผน P6–P8 ต่อ` });
+      }
       if (latest) {
         for (const m of mine.filter((x) => older(x.version, latest))) {
           out.push({

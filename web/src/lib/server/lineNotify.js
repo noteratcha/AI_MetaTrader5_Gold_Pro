@@ -69,13 +69,13 @@ export function notifyNewMember({ email, displayName, hours, ip }) {
   );
 }
 
-export function notifyPurchase({ email, amountThb, hours, orderId, productKey, method }) {
+export function notifyPurchase({ email, amountThb, hours, orderId, productKey, method, membershipUntil }) {
   return notifyAdmins(
     [
-      '💰 เติมชั่วโมงสำเร็จ',
+      membershipUntil ? '👑 สมัครสมาชิกรายเดือนสำเร็จ' : '💰 เติมชั่วโมงสำเร็จ',
       `ผู้ซื้อ: ${email || '-'}`,
       `ยอดชำระ: ฿${Number(amountThb).toLocaleString('th-TH')}`,
-      `ชั่วโมง: +${hours} ชม.`,
+      membershipUntil ? `สมาชิกถึง: ${String(membershipUntil).slice(0, 10)}` : `ชั่วโมง: +${hours} ชม.`,
       `คำสั่งซื้อ: ${orderId}`,
       productKey ? `คีย์: ${productKey}` : null,
       method ? `ช่องทาง: ${method}` : null,

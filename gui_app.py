@@ -5025,6 +5025,7 @@ class MainTradingApp(ctk.CTk):
     # Header + การ์ดสรุป
     # ---------------------------------------------------------------------
     STORE_URL = "https://goldbot24.vercel.app/store"
+    MEMBER_URL = "https://goldbot24.vercel.app/store?member=1"   # เปิดหน้าต่างสมัครสมาชิกรายเดือนให้เลย
     DOWNLOAD_URL = "https://goldbot24.vercel.app/download"
     WEB_URL = "https://goldbot24.vercel.app"
     GUIDE_URL = "https://goldbot24.vercel.app/guide"
@@ -5107,10 +5108,15 @@ class MainTradingApp(ctk.CTk):
         self.lbl_reward.pack(anchor="w")
         self.cv_reward = tk.Canvas(self.reward_box, width=118, height=6, bg=COLOR_GOLD_BG, highlightthickness=0, bd=0)
         self.cv_reward.pack(anchor="w", pady=(4, 0))
+        # สมาชิกรายเดือน (ปลดล็อก P6–P8): "● สมาชิก ถึง dd/mm" หรือ "สมัครสมาชิก ›" — คลิกเปิดหน้าสมัคร
+        self.lbl_member = ctk.CTkLabel(self.reward_box, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, height=14)
+        self.lbl_member.pack(anchor="w", pady=(2, 0))
         for w in (self.reward_box, self.lbl_reward, self.cv_reward):
             w.bind("<Button-1>", lambda e: webbrowser.open(self.STORE_URL))
+        self.lbl_member.bind("<Button-1>", lambda e: webbrowser.open(self.MEMBER_URL))
         HoverTip(self.reward_box, self._reward_tip)
         self._reward_shown = None
+        self._member_alert_day = None
 
         # ปุ่ม "เติมคีย์" ซ่อนไว้ (ผู้ใช้เติมชั่วโมงผ่านเว็บ — ระบบเติมเข้าบัญชีอัตโนมัติ)
         ctk.CTkButton(
@@ -6053,7 +6059,7 @@ class MainTradingApp(ctk.CTk):
                 items = open_by_plan.get(full.split(": ", 1)[-1], [])
                 if full in self.plan_checks:
                     chk, var = self.plan_checks[full]
-                    if plan_config.admin_enabled(full.split(": ", 1)[-1]):
+                    if plan_config.disabled_reason(full.split(": ", 1)[-1]) not in ("admin", "member"):
                         is_user_on = var.get() if var is not None else True
                         chk.configure(text_color=COLOR_SUCCESS_GREEN if items else (COLOR_TEXT_PRIMARY if is_user_on else COLOR_TEXT_MUTED))
                 elif getattr(self, "manual_plan_label", None) is not None:   # แถวเข้าไม้เอง
@@ -6119,8 +6125,12 @@ class MainTradingApp(ctk.CTk):
             row["lt"].configure(text=f"50{op1}100{op2}150", text_color=color)
 
     def _plan_checks_tick(self):
-        """อัปเดตสถานะช่องติ๊กแผน (แอดมินอาจเปิด/ปิดแผนจากเว็บ) ทุก 30 วินาที"""
+        """อัปเดตสถานะช่องติ๊กแผน (แอดมินอาจเปิด/ปิดแผนจากเว็บ · สมาชิกรายเดือนเปลี่ยน) ทุก 30 วินาที"""
         try:
+            now = time.time()
+            if license_mgr.is_authenticated and now - getattr(self, "_me_sync_at", 0) > 300 and not (bot_ctrl.is_active and not bot_ctrl.is_paused):
+                self._me_sync_at = now
+                threading.Thread(target=license_mgr.sync_latest_hours, daemon=True).start()
             self._sync_plan_checks()
         except Exception:
             pass
@@ -6138,15 +6148,19 @@ class MainTradingApp(ctk.CTk):
         self._sync_plan_checks()
 
     def _sync_plan_checks(self):
-        """แผนที่แอดมินปิด: เอาเครื่องหมายติ๊กออก + กดไม่ได้ + สีเทา + ป้าย "แอดมินปิด"
+        """แผนที่แอดมินปิด / แผนเฉพาะสมาชิก (ยังไม่เป็นสมาชิก): เอาเครื่องหมายติ๊กออก + กดไม่ได้ + สีเทา + ป้าย "แอดมินปิด" / "สมาชิก"
         (ไม่แตะค่าที่ผู้ใช้เลือกไว้ — เมื่อแอดมินเปิดคืน ช่องติ๊กกลับเป็นค่าเดิมของผู้ใช้)"""
         if not getattr(self, "plan_checks", None):
             return
         active = 0
         for full, (chk, var) in self.plan_checks.items():
             base = full.split(": ", 1)[-1]
-            admin_on = plan_config.admin_enabled(base)
+            lock = plan_config.disabled_reason(base)          # admin / member → ล็อกช่องติ๊ก
+            admin_on = lock not in ("admin", "member")
             label = next((f"{ic}  {sh}" for ic, sh, fl in self.PLAN_ROWS if fl == full), base)
+            if plan_config.is_member_plan(base) and not getattr(chk, "_member_click", False):
+                chk._member_click = True                       # แผนสมาชิกที่ล็อกอยู่: คลิกชื่อแผน → หน้าสมัครสมาชิก
+                chk.bind("<Button-1>", lambda e, b=base: plan_config.disabled_reason(b) == "member" and webbrowser.open(self.MEMBER_URL), add="+")
             if admin_on:
                 if chk.cget("state") == "disabled":          # แอดมินเพิ่งเปิดคืน → คืนค่าที่ผู้ใช้เลือก
                     var.set(plan_config.user_enabled(base))
@@ -6155,7 +6169,7 @@ class MainTradingApp(ctk.CTk):
                 active += 1 if var.get() else 0
             else:
                 var.set(False)                                  # แสดงเป็นไม่ได้เลือก (ไม่บันทึกทับค่าผู้ใช้)
-                chk.configure(state="disabled", text=f"{label}  · แอดมินปิด", fg_color="#3A3F4A",
+                chk.configure(state="disabled", text=f"{label}  · {'สมาชิก' if lock == 'member' else 'แอดมินปิด'}", fg_color="#3A3F4A",
                               border_color="#3A3F4A", text_color="#5A6070", text_color_disabled="#5A6070")
         if hasattr(self, "lbl_plans_title"):
             self.lbl_plans_title.configure(text=f"⚡ แผนเทรด (ใช้ {active}/{len(self.plan_checks)})")
@@ -7498,9 +7512,20 @@ class MainTradingApp(ctk.CTk):
         if not hasattr(self, "reward_box"):
             return
         o = license_mgr.online_status()
-        key = (None if not o else (o["minutes"], bool(o.get("discount")), (o.get("level") or {}).get("level")), low)
+        mem = license_mgr.membership_status()
+        self._check_member_expiry(mem)
+        key = (None if not o else (o["minutes"], bool(o.get("discount")), (o.get("level") or {}).get("level")), low,
+               (mem["active"], mem["until"], mem["daysLeft"], mem["viaAdmin"]))
         if key == self._reward_shown:
             return
+        if mem["viaAdmin"]:
+            self.lbl_member.configure(text="● แอดมิน · ใช้ได้ทุกแผน", text_color=COLOR_SUCCESS_GREEN)
+        elif mem["active"]:
+            until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m") if mem["until"] else ""
+            self.lbl_member.configure(text=f"● สมาชิก ถึง {until}" + (f" (อีก {mem['daysLeft']} วัน)" if mem["daysLeft"] <= 3 else ""),
+                                      text_color=COLOR_DANGER_RED if mem["daysLeft"] <= 3 else COLOR_SUCCESS_GREEN)
+        else:
+            self.lbl_member.configure(text="สมัครสมาชิก ปลดล็อก P6–P8 ›", text_color=COLOR_TEXT_MUTED)
         self._reward_shown = key
         if not o:
             self.reward_box.pack_forget()
@@ -7522,6 +7547,27 @@ class MainTradingApp(ctk.CTk):
             self.lbl_reward.configure(text=f"{lv_txt}ส่วนลด {d['percent']}% พร้อมใช้ ›", text_color=COLOR_SUCCESS_GREEN)
         else:
             self.lbl_reward.configure(text=f"{lv_txt}ออนไลน์ {o['minutes'] / 60:.1f}/{goal // 60} ชม.", text_color=COLOR_GOLD_PRIMARY)
+
+    @staticmethod
+    def _iso_epoch(iso):
+        from datetime import datetime
+        try:
+            return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return time.time()
+
+    def _check_member_expiry(self, mem):
+        """สมาชิกเหลือ ≤ 3 วัน → เตือน 1 ครั้งต่อวัน (หมดแล้วบอทเข้าไม้ด้วย P6–P8 ไม่ได้)"""
+        if not mem["active"] or mem["viaAdmin"] or mem["daysLeft"] > 3:
+            return
+        today = thai_time.fmt_now("%Y-%m-%d")
+        if self._member_alert_day == today:
+            return
+        self._member_alert_day = today
+        until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y %H:%M")
+        self.after(1500, lambda: messagebox.showwarning(
+            "สมาชิกรายเดือนใกล้หมดอายุ",
+            f"สมาชิกหมดอายุในอีก {mem['daysLeft']} วัน ({until} น.)\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P8 ต่อ — ต่อก่อนหมดจะนับต่อจากวันเดิม"))
 
     def _reward_tip(self):
         o = license_mgr.online_status()

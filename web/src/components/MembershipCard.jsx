@@ -1,0 +1,71 @@
+'use client';
+
+import { Check, Crown, Lock } from 'lucide-react';
+import { MEMBERSHIP, MEMBER_PLAN_NUMBERS, MEMBER_WARN_DAYS } from '../lib/membership';
+import { PLAN_NAMES } from '../lib/plans';
+import { formatThb } from '../lib/format';
+
+const fmtDate = (iso) =>
+  new Date(iso).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: 'numeric' });
+
+/**
+ * สมาชิกรายเดือน: สถานะปัจจุบัน + ปุ่มสมัคร/ต่ออายุ (onBuy เปิดหน้าต่างชำระเงินเดิม)
+ * compact = แสดงแค่สถานะ (หน้ากระเป๋าเวลา)
+ */
+export default function MembershipCard({ membership, discountPct = 0, onBuy, compact = false }) {
+  const m = membership || { active: false };
+  const warn = m.active && !m.viaAdmin && m.daysLeft <= MEMBER_WARN_DAYS;
+  const price = discountPct > 0 ? Math.round(MEMBERSHIP.price * (100 - discountPct)) / 100 : MEMBERSHIP.price;
+  return (
+    <div className={`card card-pad ${m.active ? 'card-gold' : ''}`} style={{ marginBottom: 18 }}>
+      <div className="row-between wrap" style={{ gap: 14 }}>
+        <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+          <span className="icon-chip text-gold" style={{ width: 40, height: 40 }}>
+            <Crown size={19} />
+          </span>
+          <div>
+            <div className="row wrap" style={{ gap: 8 }}>
+              <span style={{ fontWeight: 700 }}>{MEMBERSHIP.name}</span>
+              {m.active ? (
+                <span className={`badge ${warn ? 'badge-red' : 'badge-green'}`}>
+                  {m.viaAdmin ? 'แอดมิน · ใช้ได้ทุกแผน' : `ใช้งานอยู่ · ถึง ${fmtDate(m.until)} (อีก ${m.daysLeft} วัน)`}
+                </span>
+              ) : (
+                <span className="badge">ยังไม่เป็นสมาชิก{m.until ? ` · หมดอายุ ${fmtDate(m.until)}` : ''}</span>
+              )}
+            </div>
+            <div className="tiny muted" style={{ marginTop: 4 }}>
+              ผู้ใช้ทั่วไปใช้ได้แผน P1–P5 · สมาชิกปลดล็อกทุกแผน (P1–P8) · ยังหักชั่วโมงตามการใช้งานปกติ
+            </div>
+            {!compact && (
+              <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+                {MEMBER_PLAN_NUMBERS.map((n) => (
+                  <span key={n} className="badge badge-gold">
+                    {m.active ? <Check size={12} /> : <Lock size={12} />} {PLAN_NAMES[n]}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        {onBuy && !m.viaAdmin && (
+          <div className="stack" style={{ alignItems: 'flex-end', gap: 6 }}>
+            <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
+              {discountPct > 0 && (
+                <span className="mono faint" style={{ textDecoration: 'line-through' }}>{formatThb(MEMBERSHIP.price)}</span>
+              )}
+              <span className={`mono ${discountPct > 0 ? 'text-green' : 'text-gold'}`} style={{ fontSize: '1.35rem', fontWeight: 700 }}>
+                {formatThb(price)}
+              </span>
+              <span className="small muted">/ {MEMBERSHIP.days} วัน</span>
+            </div>
+            <button className="btn btn-primary" onClick={onBuy}>
+              <Crown size={16} /> {m.active ? 'ต่ออายุอีก 30 วัน' : 'สมัครสมาชิก'}
+            </button>
+            {m.active && <span className="tiny faint">ต่ออายุแล้วนับต่อจากวันหมดอายุเดิม</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

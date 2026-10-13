@@ -17,6 +17,8 @@ REFRESH_SECONDS = 300
 CACHE_FILE = data_path("plan_config.json")
 BASE_PLANS = ("SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "MA-Cross-Trend", "MA-Cross-H1-Trend", "PSAR-H1-Trend",
               "BB-H4-Reversion", "BB-H4-Free")
+# แผนเฉพาะสมาชิกรายเดือน (ผู้ใช้ทั่วไปใช้ได้ P1–P5) — ตรงกับ MEMBER_PLANS ใน web/src/lib/membership.js
+MEMBER_PLANS = ("PSAR-H1-Trend", "BB-H4-Reversion", "BB-H4-Free")
 
 _state = {"plans": {}, "fetched_at": 0.0}
 _lock = threading.Lock()
@@ -153,10 +155,25 @@ def max_positions(free_margin: float, lot: float, email: str = None, margin: flo
     return max(1, math.ceil(float(free_margin or 0) / per - 1e-9)) if per > 0 else 1
 
 
+def is_member_plan(plan_name: str) -> bool:
+    return base_plan(plan_name) in MEMBER_PLANS
+
+
+def member_ok() -> bool:
+    """ผู้ใช้ปัจจุบันเป็นสมาชิกรายเดือน (หรือแอดมิน) — import แบบ lazy กัน import วน"""
+    try:
+        from license_manager import license_mgr
+        return license_mgr.is_member()
+    except Exception:
+        return False
+
+
 def disabled_reason(plan_name: str):
-    """None = ใช้งานได้ · 'admin' = แอดมินปิด · 'user' = ผู้ใช้ปิดเอง"""
+    """None = ใช้งานได้ · 'admin' = แอดมินปิด · 'member' = ต้องเป็นสมาชิกรายเดือน · 'user' = ผู้ใช้ปิดเอง"""
     if not admin_enabled(plan_name):
         return "admin"
+    if is_member_plan(plan_name) and not member_ok():
+        return "member"
     if not user_enabled(plan_name):
         return "user"
     return None

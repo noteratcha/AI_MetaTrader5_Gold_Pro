@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getAdminClient } from './supabaseAdmin';
+import { memberInfo } from '../membership';
 
 // =============================================================================
 // GoldBot24 Auth (Server-only)
@@ -138,6 +139,11 @@ export function toUserPayload(row) {
     isAdmin,
     disabled: isDisabledRow(row),
     registeredAt: registeredTag ? registeredTag.slice('registered:'.length) : null,
+    // สมาชิกรายเดือน (ปลดล็อก P6–P8) · แอดมินใช้ได้ทุกแผนเสมอ (viaAdmin)
+    membership: (() => {
+      const m = memberInfo(rowTags(row));
+      return !m.active && isAdmin ? { ...m, active: true, viaAdmin: true } : m;
+    })(),
   };
 }
 

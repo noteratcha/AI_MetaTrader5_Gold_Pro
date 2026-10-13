@@ -4,6 +4,7 @@ import { generateOrderId } from '../../../lib/server/keys';
 import { getPackage } from '../../../lib/server/catalog';
 import { expireStaleOrders } from '../../../lib/server/orders';
 import { discountedPrice, levelDiscountPct, reserveDiscount } from '../../../lib/server/onlineReward';
+import { MEMBERSHIP, isMembershipPackage } from '../../../lib/membership';
 
 const PROMPTPAY_ID = process.env.PROMPTPAY_ID || '';
 
@@ -16,7 +17,8 @@ export default async function handler(req, res) {
   // ยกเลิกคำสั่งซื้อที่หมดเวลา QR แล้วค้างอยู่ (เช่น ลูกค้าปิดหน้าต่างไปก่อน)
   await expireStaleOrders();
 
-  const pkg = await getPackage(req.body?.package_id);
+  // สมาชิกรายเดือน (id 900) ราคาจากโค้ดฝั่ง Server · แพ็กเกจชั่วโมงอ่านจากตาราง packages
+  const pkg = isMembershipPackage(req.body?.package_id) ? MEMBERSHIP : await getPackage(req.body?.package_id);
   if (!pkg) {
     return res.status(400).json({ success: false, error: 'ไม่พบแพ็กเกจที่เลือก' });
   }
@@ -68,6 +70,8 @@ export default async function handler(req, res) {
     level_discount_pct: levelPct,
     online_discount_pct: discount ? discount.percent : 0,
     hours_to_add: pkg.hours + pkg.bonus,
+    is_membership: isMembershipPackage(pkg.id),
+    membership_days: isMembershipPackage(pkg.id) ? MEMBERSHIP.days : 0,
     qr_image_url: qrImageUrl,
     created_at: createdAt,
   });

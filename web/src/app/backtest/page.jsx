@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { FlaskConical, LineChart, ShieldAlert, Target, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { Alert, EmptyState, PageHeader, PageLoading, StatCard } from '../../components/ui';
 import { PLAN_NAMES, planDisplay } from '../../lib/plans';
+import { MEMBER_PLAN_NUMBERS } from '../../lib/membership';
+import Link from 'next/link';
 
 const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa', 6: '#fb923c', 7: '#c084fc', 8: '#2dd4bf' };
 
@@ -273,6 +275,11 @@ export default function BacktestPage() {
               <div className="row-between" style={{ marginBottom: 8, gap: 8 }}>
                 <strong>
                   {planDisplay(p.name)}
+                  {MEMBER_PLAN_NUMBERS.includes(Number(p.key)) && (
+                    <Link href="/store?member=1" className="badge badge-gold" style={{ marginLeft: 8 }} title="ใช้ได้เฉพาะสมาชิกรายเดือน">
+                      สมาชิก
+                    </Link>
+                  )}
                 </strong>
                 <span className="badge badge-muted">{info.type}</span>
               </div>

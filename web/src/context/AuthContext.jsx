@@ -91,8 +91,10 @@ export function AuthProvider({ children }) {
       // weakPassword ได้มาตอนล็อกอินเท่านั้น — เก็บไว้จนกว่าจะเปลี่ยนรหัสผ่าน
       const saved = readSession();
       persist(tokenRef.current, { ...data.user, weakPassword: saved?.user?.weakPassword || undefined });
+      return data.user;
     } catch {
       /* ออฟไลน์ — ใช้ข้อมูลเดิมไปก่อน */
+      return null;
     }
   }, [apiFetch, persist]);
 

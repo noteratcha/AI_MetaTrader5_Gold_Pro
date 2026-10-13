@@ -125,6 +125,11 @@ export default function AdminUsersPage() {
                       <div className="row" style={{ gap: 6 }}>
                         <strong>{u.displayName}</strong>
                         {u.isAdmin && <span className="badge badge-gold">Admin</span>}
+                        {!u.isAdmin && u.membership?.active && (
+                          <span className="badge badge-green" title={`สมาชิกรายเดือนถึง ${String(u.membership.until).slice(0, 10)}`}>
+                            สมาชิก · {u.membership.daysLeft} วัน
+                          </span>
+                        )}
                         {u.disabled && <span className="badge badge-red">ระงับ</span>}
                         {u.loginLock?.locked && <span className="badge badge-red">🔒 ถูกล็อก</span>}
                       </div>
