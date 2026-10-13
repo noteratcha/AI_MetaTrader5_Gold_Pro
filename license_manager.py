@@ -520,6 +520,9 @@ def fetch_app_version_info(current_version: str) -> dict:
             with urllib.request.urlopen(req, timeout=6) as resp:
                 rows = json.loads(resp.read().decode("utf-8"))
             latest = rows[0] if rows else None
+            # แหล่งสำรองนี้แก้ไขได้จากฐานข้อมูล — รับเฉพาะลิงก์ GitHub Release ของโปรเจกต์ (กันลิงก์ปลอม/ลิงก์ทดสอบ localhost)
+            if latest and not str(latest.get("download_url") or "").startswith("https://github.com/noteratcha/AI_MetaTrader5_Gold_Pro/releases/"):
+                latest = None
         except Exception:
             latest = None
 

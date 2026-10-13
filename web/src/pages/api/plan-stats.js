@@ -12,11 +12,19 @@ export default async function handler(req, res) {
     .select('user_id, plan_name, total_trades, win_trades, loss_trades, total_profit_usd, gross_profit_usd, gross_loss_usd, last_trade_at');
   if (error) return res.status(500).json({ success: false, error: 'โหลดสถิติไม่สำเร็จ' });
 
+  // กันสถิติปลอม: สถิติรายแผนมาจากโปรแกรมของผู้ใช้ (ส่งเองได้) — นับเฉพาะผู้ใช้ที่บอททำงานจริง ≥ 1 ชม. (หักชั่วโมงบน Server)
+  // และตัดแถวที่ตัวเลขผิดปกติ (ไม้เกินจริง · กำไรต่อไม้เกินจริง)
+  const { data: usage } = await getAdminClient().from('online_progress').select('user_id, minutes, cycles');
+  const realUsers = new Set((usage || []).filter((u) => (Number(u.cycles) || 0) * 6000 + (Number(u.minutes) || 0) >= 60).map((u) => String(u.user_id)));
   const plans = {};
   const allUsers = new Set();
   for (const r of rows || []) {
-    const trades = Number(r.total_trades) || 0;
+    // ชนะ+แพ้ เกินจำนวนไม้ได้จากการนับของโปรแกรมรุ่นเก่า → ใช้ค่าที่มากกว่าเป็นจำนวนไม้ (ไม่ตัดทิ้ง)
+    const wl = (Number(r.win_trades) || 0) + (Number(r.loss_trades) || 0);
+    const trades = Math.max(Number(r.total_trades) || 0, wl);
     if (!trades) continue;
+    if (usage && !realUsers.has(String(r.user_id))) continue;
+    if (trades > 20000 || Math.abs(Number(r.total_profit_usd) || 0) / trades > 5000) continue;
     const n = planNumber(r.plan_name);
     const key = n || (/manual/i.test(r.plan_name || '') ? 'manual' : null);
     if (!key) continue;

@@ -77,3 +77,25 @@ def clear_login() -> None:
         os.remove(REMEMBER_FILE)
     except OSError:
         pass
+
+
+def protect_text(text: str) -> str:
+    """เข้ารหัสข้อความด้วย DPAPI → base64 (ขึ้นต้น "dpapi:") · ไม่ใช่ Windows/ล้มเหลว = คืนค่าว่าง (ไม่เก็บข้อความธรรมดา)"""
+    if not text:
+        return ""
+    try:
+        return "dpapi:" + base64.b64encode(_dpapi(text.encode("utf-8"), True)).decode("ascii")
+    except Exception:
+        return ""
+
+
+def unprotect_text(value: str) -> str:
+    """ถอดรหัสค่าจาก protect_text · ค่าเก่าที่เป็นข้อความธรรมดา (ไม่มี "dpapi:") คืนตามเดิม"""
+    if not value:
+        return ""
+    if not str(value).startswith("dpapi:"):
+        return str(value)
+    try:
+        return _dpapi(base64.b64decode(str(value)[6:]), False).decode("utf-8")
+    except Exception:
+        return ""

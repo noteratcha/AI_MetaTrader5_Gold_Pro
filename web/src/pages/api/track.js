@@ -54,6 +54,21 @@ export default async function handler(req, res) {
     }
   }
 
+  // กันปั่นตัวนับ "รันบอทแล้ว" (ตัวเลขสาธารณะ): เริ่มบอทได้ไม่เกิน 30 ครั้ง/ชม. ต่อผู้ใช้
+  if (event === 'bot_start' && row) {
+    try {
+      const { count } = await getAdminClient()
+        .from('user_activity')
+        .select('id', { count: 'exact', head: true })
+        .eq('event', 'bot_start')
+        .eq('user_id', String(row.id))
+        .gte('created_at', new Date(Date.now() - 3600000).toISOString());
+      if ((count || 0) >= 30) return res.status(200).json({ success: true, limited: true });
+    } catch {
+      /* ข้าม */
+    }
+  }
+
   await logActivity({ userId: row?.id, email: row?.mt5_server, event, detail, ip });
   return res.status(200).json({ success: true });
 }

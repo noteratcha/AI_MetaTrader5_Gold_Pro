@@ -2341,8 +2341,16 @@ def main():
         except Exception:
             pass
 
+    import secure_store
     c_login = local_creds.get('mt5_login')
-    c_pass = local_creds.get('mt5_password')
+    # รหัสผ่าน MT5 เข้ารหัสด้วย Windows DPAPI (ค่าเก่าที่เป็นข้อความธรรมดาอ่านได้ แล้วถูกเข้ารหัสใหม่ด้านล่าง)
+    c_pass = secure_store.unprotect_text(local_creds.get('mt5_password') or "")
+    if local_creds.get('mt5_password') and not str(local_creds.get('mt5_password')).startswith("dpapi:"):
+        try:
+            with open(creds_path, "w", encoding="utf-8") as f:
+                json.dump({**local_creds, "mt5_password": secure_store.protect_text(c_pass)}, f, indent=2)
+        except Exception:
+            pass
     c_server = local_creds.get('mt5_server') or 'FBS-Real'
 
     # ไม่สั่ง login ซ้ำถ้า MT5 ล็อกอินบัญชีเดียวกันอยู่แล้ว — ถ้ารหัสที่เก็บไว้เก่า/ผิด การ login จะทำให้ MT5 หลุดจากบัญชี (Authorization failed)
@@ -2355,7 +2363,7 @@ def main():
             # เซฟลง credentials.json ไว้ใช้ถาวร
             try:
                 with open(creds_path, "w", encoding="utf-8") as f:
-                    json.dump({"mt5_login": int(c_login), "mt5_password": c_pass, "mt5_server": c_server}, f, indent=2)
+                    json.dump({"mt5_login": int(c_login), "mt5_password": secure_store.protect_text(c_pass), "mt5_server": c_server}, f, indent=2)
             except Exception:
                 pass
         else:
@@ -2367,7 +2375,7 @@ def main():
             print(f"[ACCOUNT] Current active MT5 Account #{acc.login} ({acc.server}) saved.{Colors.RESET}")
             try:
                 with open(creds_path, "w", encoding="utf-8") as f:
-                    json.dump({"mt5_login": acc.login, "mt5_password": local_creds.get("mt5_password", ""), "mt5_server": acc.server}, f, indent=2)
+                    json.dump({"mt5_login": acc.login, "mt5_password": secure_store.protect_text(c_pass) if c_pass else "", "mt5_server": acc.server}, f, indent=2)
             except Exception:
                 pass
 
