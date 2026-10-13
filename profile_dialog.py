@@ -93,7 +93,7 @@ class ProfileManagerDialog(ctk.CTkToplevel):
         self.msg = getattr(sys.modules.get(type(parent).__module__), "messagebox", None)
 
         self.title("จัดการ Profile และ MT5")
-        self.geometry("760x700")
+        self.geometry("780x760")
         self.minsize(680, 560)
         self.configure(fg_color=COLOR_BG_DARK)
         # ไม่ใช้ grab_set — ไม่งั้นกล่องข้อความของโปรแกรม (ลูกของหน้าต่างหลัก) กดไม่ได้
@@ -142,149 +142,241 @@ class ProfileManagerDialog(ctk.CTkToplevel):
                              text_color_disabled="#5B6270")
 
     def _build_ui(self):
-        # Header
+        # ---------- Header ----------
         header = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=0)
         header.pack(fill="x", side="top")
         h_box = ctk.CTkFrame(header, fg_color="transparent")
-        h_box.pack(fill="x", padx=22, pady=14)
+        h_box.pack(fill="x", padx=22, pady=(14, 12))
         top = ctk.CTkFrame(h_box, fg_color="transparent")
         top.pack(fill="x")
         ctk.CTkLabel(top, text="จัดการ Profile และ MT5", font=_font(18, "bold"),
                      text_color=COLOR_GOLD_PRIMARY).pack(side="left")
-        self._pill(top, f"หน้าต่างนี้: {self._active_prof}", COLOR_GOLD_PRIMARY, COLOR_GOLD_BG).pack(side="right")
-        ctk.CTkLabel(h_box, text="เปิดบอทหลายบัญชี / หลายโบรกเกอร์พร้อมกัน แต่ละ Profile แยกข้อมูลและไม้กันเด็ดขาด · 1 Profile เปิดได้ 1 หน้าต่าง · 1 บัญชี MT5 ให้บอททำงานได้ 1 หน้าต่าง",
-                     font=_font(12), text_color=COLOR_TEXT_MUTED, justify="left", anchor="w",
-                     wraplength=700).pack(fill="x", pady=(4, 0))
+        self._pill(top, f"หน้าต่างนี้ · {self._active_prof}", COLOR_GOLD_PRIMARY, COLOR_GOLD_BG).pack(side="right")
+        rules = ctk.CTkFrame(h_box, fg_color="transparent")
+        rules.pack(fill="x", pady=(8, 0))
+        for txt in ("1 Profile = 1 หน้าต่างบอท", "แยกข้อมูลและไม้กันเด็ดขาด", "1 บัญชี MT5 บอททำงานได้ 1 หน้าต่าง"):
+            chip = ctk.CTkFrame(rules, fg_color=COLOR_BTN_DARK, corner_radius=10)
+            chip.pack(side="left", padx=(0, 6))
+            ctk.CTkLabel(chip, text=f"✓  {txt}", font=_font(11), text_color=COLOR_TEXT_MUTED, height=22).pack(padx=10)
         ctk.CTkFrame(self, height=1, fg_color=COLOR_CARD_BORDER, corner_radius=0).pack(fill="x")
 
         content = ctk.CTkScrollableFrame(self, fg_color="transparent")
         content.pack(fill="both", expand=True, padx=14, pady=12)
 
         # ---------- การ์ด 1: Profile ทั้งหมด ----------
-        card_list = self._card(content, "Profile ทั้งหมด",
-                               "กดเปิดเพื่อเริ่มโปรแกรมอีกหน้าต่างสำหรับ Profile นั้น · Profile ที่เปิดอยู่แล้วเปิดซ้ำไม่ได้")
+        card_list = self._card(content, "Profile ทั้งหมด", "กด เปิด เพื่อเริ่มบอทอีกหน้าต่างสำหรับ Profile นั้น")
         self.list_box = ctk.CTkFrame(card_list, fg_color="transparent")
-        self.list_box.pack(fill="x", padx=16, pady=(0, 6))
+        self.list_box.pack(fill="x", padx=16, pady=(0, 4))
+        self.issue_box = ctk.CTkFrame(card_list, fg_color="transparent")
+        self.issue_box.pack(fill="x", padx=16)
         self._build_profile_rows()
 
+        ctk.CTkFrame(card_list, height=1, fg_color=COLOR_CARD_BORDER, corner_radius=0).pack(fill="x", padx=16, pady=(10, 0))
         new_row = ctk.CTkFrame(card_list, fg_color="transparent")
-        new_row.pack(fill="x", padx=16, pady=(6, 14))
-        ctk.CTkLabel(new_row, text="สร้าง Profile ใหม่", font=_font(12, "bold"),
-                     text_color=COLOR_TEXT_MUTED).pack(side="left")
-        self.entry_new_prof = ctk.CTkEntry(new_row, placeholder_text="เช่น XM, FBS2, Cent", width=180, height=30,
+        new_row.pack(fill="x", padx=16, pady=(10, 14))
+        ctk.CTkLabel(new_row, text="+ Profile ใหม่", font=_font(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        self.entry_new_prof = ctk.CTkEntry(new_row, placeholder_text="ชื่อภาษาอังกฤษ เช่น XM2, Cent", width=200, height=30,
                                            font=_font(12), fg_color=COLOR_BG_DARK, border_color=COLOR_CARD_BORDER)
         self.entry_new_prof.pack(side="left", padx=10)
-        self._btn(new_row, "+ สร้างและเปิด", self._create_and_launch_profile, "gold", 130).pack(side="left")
-        self._btn(new_row, "สร้างไฟล์เปิดด่วน (.bat)", self._generate_desktop_shortcuts, "dark", 170).pack(side="right")
+        self.entry_new_prof.bind("<Return>", lambda e: self._create_and_launch_profile())
+        self._btn(new_row, "สร้างและเปิด", self._create_and_launch_profile, "gold", 110).pack(side="left")
+        ctk.CTkButton(new_row, text="สร้างไฟล์เปิดด่วน (.bat) ›", command=self._generate_desktop_shortcuts, width=10, height=30,
+                      fg_color="transparent", hover_color=COLOR_BTN_DARK, text_color=COLOR_CYAN_ACCENT,
+                      font=_font(11, "bold")).pack(side="right")
 
-        # ---------- การ์ด 2: Profile ปัจจุบัน ----------
-        card_active = self._card(content, f"Profile ของหน้าต่างนี้  ·  {self._active_prof}")
-        p_dir = get_active_profile_dir()
-        grid = ctk.CTkFrame(card_active, fg_color="transparent")
-        grid.pack(fill="x", padx=30, pady=(4, 14))
-        grid.grid_columnconfigure(1, weight=1)
+        # ---------- การ์ด 2: ตั้งค่า Profile ของหน้าต่างนี้ (Magic + MT5 + ที่เก็บข้อมูล) ----------
+        card_me = self._card(content, f"ตั้งค่า Profile นี้  ·  {self._active_prof}")
+        body = ctk.CTkFrame(card_me, fg_color="transparent")
+        body.pack(fill="x", padx=16, pady=(4, 14))
 
-        ctk.CTkLabel(grid, text="ที่เก็บข้อมูล", font=_font(12, "bold"), text_color=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=4)
-        ctk.CTkLabel(grid, text=p_dir, font=_font(12), text_color=COLOR_CYAN_ACCENT, anchor="w", justify="left",
-                     wraplength=420).grid(row=0, column=1, sticky="w", padx=12)
-        self._btn(grid, "เปิดโฟลเดอร์", lambda: os.startfile(p_dir) if sys.platform == "win32" else None,
-                  "dark", 110).grid(row=0, column=2, sticky="e")
+        # (ก) บัญชี MT5 ที่ต่ออยู่ตอนนี้
+        acc = self._current_account_text()
+        acc_row = ctk.CTkFrame(body, fg_color=COLOR_BG_DARK, corner_radius=10)
+        acc_row.pack(fill="x", pady=(0, 12))
+        ctk.CTkLabel(acc_row, text="บัญชี MT5 ตอนนี้", font=_font(11, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(12, 8), pady=8)
+        ctk.CTkLabel(acc_row, text=acc[0], font=_font(12, "bold"), text_color=acc[1]).pack(side="left", pady=8)
 
-        ctk.CTkLabel(grid, text="Magic Number", font=_font(12, "bold"), text_color=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=4)
-        m_box = ctk.CTkFrame(grid, fg_color="transparent")
-        m_box.grid(row=1, column=1, columnspan=2, sticky="w", padx=12)
-        self.entry_magic = ctk.CTkEntry(m_box, width=120, height=30, font=_font(13, "bold"),
+        # (ข) Magic Number
+        self._section(body, "Magic Number", "บอทของหน้าต่างนี้ดูแลเฉพาะไม้ที่มี Magic นี้ และไม้ที่เข้าเอง (Magic 0)")
+        m_box = ctk.CTkFrame(body, fg_color="transparent")
+        m_box.pack(fill="x", pady=(4, 12))
+        self.entry_magic = ctk.CTkEntry(m_box, width=130, height=32, font=_font(14, "bold"),
                                         fg_color=COLOR_BG_DARK, border_color=COLOR_CARD_BORDER, text_color=COLOR_GOLD_PRIMARY)
         self.entry_magic.insert(0, str(get_profile_magic_number()))
         self.entry_magic.pack(side="left")
-        self._btn(m_box, "บันทึก", self._save_magic, "gold", 80).pack(side="left", padx=8)
-        ctk.CTkLabel(grid, text="บอทดูแลเฉพาะไม้ที่มี Magic Number นี้ และไม้ที่เข้าเอง (Magic 0) — ตั้งให้ไม่ซ้ำกับ Profile อื่น",
-                     font=_font(11), text_color=COLOR_TEXT_MUTED, anchor="w", justify="left",
-                     wraplength=560).grid(row=2, column=0, columnspan=3, sticky="w", pady=(2, 0))
+        self._btn(m_box, "บันทึก", self._save_magic, "gold", 80).pack(side="left", padx=(8, 4))
+        self._btn(m_box, "ใช้เลขที่ไม่ซ้ำ", self._fill_unique_magic, "dark", 120).pack(side="left", padx=4)
+        self.lbl_magic_state = ctk.CTkLabel(m_box, text="", font=_font(11, "bold"))
+        self.lbl_magic_state.pack(side="left", padx=8)
 
-        # ---------- การ์ด 3: MT5 Terminal ----------
-        card_mt5 = self._card(content, "MetaTrader 5 ของ Profile นี้",
-                              "เลือก MT5 ที่ Profile นี้ใช้ — Profile ต่างกันควรใช้ MT5 คนละตัว (คนละบัญชี) ไม่งั้นบอทจะทำงานซ้ำบนบัญชีเดียวกัน")
+        # (ค) MetaTrader 5 ของ Profile นี้ — ตัวเลือกเป็นแถว (ชื่อ + path จาง)
+        self._section(body, "MetaTrader 5 ที่ใช้", "Profile ต่างกันควรใช้ MT5 คนละตัว (คนละบัญชี)")
         self.term_choice_var = tk.StringVar(value="")
         cfg_norm = os.path.normcase(os.path.normpath(self._current_term_path)) if self._current_term_path else ""
+        opts = ctk.CTkFrame(body, fg_color="transparent")
+        opts.pack(fill="x", pady=(4, 0))
 
-        opts = ctk.CTkFrame(card_mt5, fg_color="transparent")
-        opts.pack(fill="x", padx=30, pady=(0, 4))
+        def option(title, sub, value):
+            row = ctk.CTkFrame(opts, fg_color=COLOR_BG_DARK, corner_radius=8)
+            row.pack(fill="x", pady=2)
+            rb = ctk.CTkRadioButton(row, text=title, variable=self.term_choice_var, value=value, font=_font(12, "bold"),
+                                    text_color=COLOR_TEXT_PRIMARY, fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_PRIMARY,
+                                    border_color="#4B5263", radiobutton_width=16, radiobutton_height=16,
+                                    command=self._on_term_choice)
+            rb.pack(side="left", padx=(12, 8), pady=8)
+            if sub:
+                ctk.CTkLabel(row, text=sub, font=_font(10), text_color="#6B7385", anchor="w").pack(side="left", padx=(0, 10))
+            for w in (row,):
+                w.bind("<Button-1>", lambda e, v=value: (self.term_choice_var.set(v), self._on_term_choice()))
 
-        def radio(text, value):
-            ctk.CTkRadioButton(opts, text=text, variable=self.term_choice_var, value=value, font=_font(12),
-                               text_color=COLOR_TEXT_PRIMARY, fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_PRIMARY,
-                               border_color="#4B5263").pack(anchor="w", pady=4)
-
-        radio("อัตโนมัติ (ใช้ MT5 ที่เปิดอยู่)", "")
+        option("อัตโนมัติ", "ใช้ MT5 ที่ Python เชื่อมได้ (ตัวที่เปิดอยู่)", "")
         matched = False
         for term in self._installed_terminals:
             if cfg_norm and os.path.normcase(os.path.normpath(term["path"])) == cfg_norm:
                 matched = True
                 self.term_choice_var.set(term["path"])
-            radio(f"{term['name']}   ·   {term['path']}", term["path"])
-        radio("กำหนดเอง", "CUSTOM")
+            option(term["name"], self._short_path(term["path"]), term["path"])
+        option("กำหนดเอง", "เลือกไฟล์ terminal64.exe", "CUSTOM")
 
-        custom_row = ctk.CTkFrame(card_mt5, fg_color="transparent")
-        custom_row.pack(fill="x", padx=56, pady=(0, 8))
-        self.entry_custom_path = ctk.CTkEntry(custom_row, placeholder_text="ไฟล์ terminal64.exe", height=30, font=_font(12),
+        self.custom_row = ctk.CTkFrame(body, fg_color="transparent")
+        self.entry_custom_path = ctk.CTkEntry(self.custom_row, placeholder_text="ไฟล์ terminal64.exe", height=30, font=_font(12),
                                               fg_color=COLOR_BG_DARK, border_color=COLOR_CARD_BORDER)
-        self.entry_custom_path.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.entry_custom_path.pack(side="left", fill="x", expand=True, padx=(28, 8))
+        self._btn(self.custom_row, "เลือกไฟล์", self._browse_custom_terminal, "dark", 90).pack(side="right")
         if cfg_norm and not matched:
             self.term_choice_var.set("CUSTOM")
             self.entry_custom_path.insert(0, self._current_term_path or "")
-        self._btn(custom_row, "เลือกไฟล์", self._browse_custom_terminal, "dark", 90).pack(side="right")
 
-        save_row = ctk.CTkFrame(card_mt5, fg_color="transparent")
-        save_row.pack(fill="x", padx=30, pady=(2, 14))
-        self._btn(save_row, "บันทึกและทดสอบเชื่อมต่อ", self._save_and_test_terminal, "gold", 200).pack(side="left")
-        self.lbl_term_status = ctk.CTkLabel(save_row, text="", font=_font(12, "bold"), text_color=COLOR_TEXT_MUTED)
+        self.save_row = ctk.CTkFrame(body, fg_color="transparent")
+        self.save_row.pack(fill="x", pady=(10, 12))
+        self._btn(self.save_row, "บันทึกและทดสอบเชื่อมต่อ", self._save_and_test_terminal, "gold", 190).pack(side="left")
+        self.lbl_term_status = ctk.CTkLabel(self.save_row, text="", font=_font(12, "bold"), text_color=COLOR_TEXT_MUTED)
         self.lbl_term_status.pack(side="left", padx=12)
+        self._on_term_choice()
+
+        # (ง) ที่เก็บข้อมูล
+        p_dir = get_active_profile_dir()
+        data_row = ctk.CTkFrame(body, fg_color="transparent")
+        data_row.pack(fill="x")
+        ctk.CTkLabel(data_row, text="ที่เก็บข้อมูล", font=_font(11, "bold"), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        ctk.CTkLabel(data_row, text=self._short_path(p_dir, 52), font=_font(11), text_color="#6B7385").pack(side="left", padx=10)
+        ctk.CTkButton(data_row, text="เปิดโฟลเดอร์ ›", width=10, height=26, fg_color="transparent", hover_color=COLOR_BTN_DARK,
+                      text_color=COLOR_CYAN_ACCENT, font=_font(11, "bold"),
+                      command=lambda: os.startfile(p_dir) if sys.platform == "win32" else None).pack(side="right")
+        self._update_magic_state()
+
+    def _section(self, parent, title, sub):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x")
+        ctk.CTkLabel(row, text=title, font=_font(13, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+        ctk.CTkLabel(row, text=f"  ·  {sub}", font=_font(11), text_color=COLOR_TEXT_MUTED).pack(side="left")
+
+    @staticmethod
+    def _short_path(path, limit=60):
+        path = str(path or "")
+        return path if len(path) <= limit else "…" + path[-(limit - 1):]
+
+    def _current_account_text(self):
+        """บัญชีที่ Python เชื่อม MT5 อยู่ตอนนี้ (หน้าต่างนี้)"""
+        try:
+            import MetaTrader5 as mt5
+            a = mt5.account_info()
+            if a is not None:
+                return (f"#{a.login}  ·  {a.server}", COLOR_SUCCESS_GREEN)
+        except Exception:
+            pass
+        return ("ยังไม่ได้เชื่อมต่อ", COLOR_TEXT_MUTED)
+
+    def _on_term_choice(self):
+        """แสดงช่องกรอก path เฉพาะเมื่อเลือก กำหนดเอง"""
+        if self.term_choice_var.get() == "CUSTOM":
+            if not self.custom_row.winfo_ismapped():
+                self.custom_row.pack(fill="x", pady=(4, 0), before=self.save_row)
+        elif self.custom_row.winfo_ismapped():
+            self.custom_row.pack_forget()
+
+    def _unique_magic(self):
+        """Magic ที่ไม่ซ้ำกับ Profile อื่น — เริ่มจากค่าคำนวณตามชื่อ Profile"""
+        used = {inf["magic"] for n, (_s, _b, inf) in self._rows.items() if n != self._active_prof}
+        m = 888000 + sum(ord(c) for c in self._active_prof) % 900
+        while m in used or m == 0:
+            m += 1
+        return m
+
+    def _fill_unique_magic(self):
+        self.entry_magic.delete(0, "end")
+        self.entry_magic.insert(0, str(self._unique_magic()))
+        self._update_magic_state(pending=True)
+
+    def _update_magic_state(self, pending=False):
+        if not hasattr(self, "lbl_magic_state"):
+            return
+        cur = get_profile_magic_number()
+        others = [n for n, (_s, _b, inf) in self._rows.items() if n != self._active_prof and inf["magic"] == cur]
+        if pending:
+            self.lbl_magic_state.configure(text="กด บันทึก เพื่อใช้เลขนี้", text_color=COLOR_GOLD_PRIMARY)
+        elif others:
+            self.lbl_magic_state.configure(text=f"! ซ้ำกับ {', '.join(others)}", text_color="#FBBF24")
+        else:
+            self.lbl_magic_state.configure(text="✓ ไม่ซ้ำ", text_color=COLOR_SUCCESS_GREEN)
 
     def _build_profile_rows(self):
         for w in self.list_box.winfo_children():
             w.destroy()
+        for w in self.issue_box.winfo_children():
+            w.destroy()
         self._rows = {}
-        head = ctk.CTkFrame(self.list_box, fg_color="transparent")
-        head.pack(fill="x", pady=(0, 2))
-        for col, (txt, w) in enumerate((("Profile", 150), ("MT5", 170), ("Magic", 90), ("สถานะ", 120), ("", 90))):
-            ctk.CTkLabel(head, text=txt, width=w, anchor="w", font=_font(11, "bold"),
-                         text_color=COLOR_TEXT_MUTED).grid(row=0, column=col, padx=(10 if col == 0 else 4, 4), sticky="w")
         names = list_profiles()
         infos = {n: _profile_info(n) for n in names}
-        magic_count, term_count = {}, {}
+        by_magic, by_term = {}, {}
         for n, inf in infos.items():
-            magic_count[inf["magic"]] = magic_count.get(inf["magic"], 0) + 1
+            by_magic.setdefault(inf["magic"], []).append(n)
             key = os.path.normcase(os.path.normpath(inf["terminal"])) if inf["terminal"] else ""
-            term_count[key] = term_count.get(key, 0) + 1
-        dup_names = []
-        for i, name in enumerate(names):
+            by_term.setdefault(key, []).append(n)
+
+        # ตารางเดียว (หัวตาราง + แถวอยู่ใน grid เดียวกัน คอลัมน์จึงตรงกัน)
+        table = ctk.CTkFrame(self.list_box, fg_color="transparent")
+        table.pack(fill="x")
+        for col, w in enumerate((1, 1, 0, 0, 0)):
+            table.grid_columnconfigure(col, weight=w)
+        for col, txt in enumerate(("Profile", "MT5", "Magic", "สถานะ", "")):
+            ctk.CTkLabel(table, text=txt, anchor="w", font=_font(11, "bold"), text_color=COLOR_TEXT_MUTED, height=20).grid(
+                row=0, column=col, padx=(12 if col == 0 else 8, 8), pady=(0, 2), sticky="w")
+        for i, name in enumerate(names, start=1):
             info = infos[name]
-            dup_magic = magic_count[info["magic"]] > 1
+            dup_magic = len(by_magic[info["magic"]]) > 1
             tkey = os.path.normcase(os.path.normpath(info["terminal"])) if info["terminal"] else ""
-            dup_term = term_count[tkey] > 1
-            if dup_magic or dup_term:
-                dup_names.append(name)
-            row = ctk.CTkFrame(self.list_box, fg_color=COLOR_ROW_ALT if i % 2 == 0 else "transparent", corner_radius=8, height=40)
-            row.pack(fill="x", pady=1)
-            ctk.CTkLabel(row, text=name, width=150, anchor="w", font=_font(13, "bold"),
-                         text_color=COLOR_GOLD_PRIMARY if name == self._active_prof else COLOR_TEXT_PRIMARY
-                         ).grid(row=0, column=0, padx=(10, 4), pady=6, sticky="w")
-            ctk.CTkLabel(row, text=_terminal_label(info["terminal"], self._installed_terminals), width=170, anchor="w",
-                         font=_font(12), text_color=COLOR_DANGER_RED if dup_term else COLOR_TEXT_PRIMARY).grid(row=0, column=1, padx=4, sticky="w")
-            ctk.CTkLabel(row, text=str(info["magic"]), width=90, anchor="w", font=_font(12, "bold" if dup_magic else "normal"),
-                         text_color=COLOR_DANGER_RED if dup_magic else COLOR_TEXT_MUTED).grid(row=0, column=2, padx=4, sticky="w")
-            status = ctk.CTkLabel(row, text="", width=120, anchor="w", font=_font(11, "bold"), corner_radius=8, height=22)
-            status.grid(row=0, column=3, padx=4, sticky="w")
-            btn = self._btn(row, "เปิด", lambda n=name: self._spawn_instance(n), "green", 80)
-            btn.grid(row=0, column=4, padx=(4, 8), pady=5, sticky="e")
+            dup_term = len(by_term[tkey]) > 1
+            bg = COLOR_ROW_ALT if i % 2 else COLOR_CARD_BG
+            ctk.CTkFrame(table, fg_color=bg, corner_radius=8, height=40).grid(row=i, column=0, columnspan=5, sticky="nsew", pady=1)
+            is_me = name == self._active_prof
+            ctk.CTkLabel(table, text=name, anchor="w", font=_font(13, "bold"), fg_color=bg,
+                         text_color=COLOR_GOLD_PRIMARY if is_me else COLOR_TEXT_PRIMARY).grid(row=i, column=0, padx=(12, 8), sticky="w")
+            ctk.CTkLabel(table, text=_terminal_label(info["terminal"], self._installed_terminals) + ("  !" if dup_term else ""),
+                         anchor="w", font=_font(12), fg_color=bg,
+                         text_color="#FBBF24" if dup_term else COLOR_TEXT_PRIMARY).grid(row=i, column=1, padx=8, sticky="w")
+            ctk.CTkLabel(table, text=str(info["magic"]) + ("  !" if dup_magic else ""), anchor="w", font=_font(12, "bold"), fg_color=bg,
+                         text_color="#FBBF24" if dup_magic else COLOR_TEXT_MUTED).grid(row=i, column=2, padx=8, sticky="w")
+            status = ctk.CTkLabel(table, text="", anchor="center", font=_font(11, "bold"), corner_radius=8, height=22, width=104, bg_color=bg)
+            status.grid(row=i, column=3, padx=8, sticky="w")
+            btn = self._btn(table, "เปิด", lambda n=name: self._spawn_instance(n), "green", 76)
+            btn.configure(bg_color=bg)
+            btn.grid(row=i, column=4, padx=(8, 10), pady=5, sticky="e")
             self._rows[name] = (status, btn, info)
-        if dup_names:
-            warn = ctk.CTkFrame(self.list_box, fg_color="#2A1215", corner_radius=8, border_width=1, border_color="#7F1D1D")
-            warn.pack(fill="x", pady=(8, 0))
-            ctk.CTkLabel(warn, text=f"✗ Profile [{', '.join(dup_names)}] ใช้ MT5 หรือ Magic Number ซ้ำกัน (ตัวสีแดง) — ถ้าเปิดพร้อมกันบนบัญชีเดียวกัน บอทจะเข้าไม้ซ้ำ · "
-                                    "ระบบให้บอทเริ่มทำงานได้หน้าต่างเดียวต่อ 1 บัญชี MT5 แต่ควรแก้ให้แต่ละ Profile ใช้ MT5 และ Magic ของตัวเอง",
-                         font=_font(11), text_color="#FCA5A5", justify="left", anchor="w", wraplength=640).pack(fill="x", padx=12, pady=8)
+
+        # ปัญหาที่ควรแก้ (สีเหลือง = ควรแก้ ไม่ใช่ error) — บอกชัดว่าซ้ำอะไร กับใคร และแก้ที่ไหน
+        issues = [f"Magic {m} ใช้ร่วมกัน: {', '.join(ns)}" for m, ns in by_magic.items() if len(ns) > 1]
+        issues += [f"MT5 {'อัตโนมัติ' if not k else _terminal_label(infos[ns[0]]['terminal'], self._installed_terminals)} ใช้ร่วมกัน: {', '.join(ns)}"
+                   for k, ns in by_term.items() if len(ns) > 1]
+        if issues:
+            box = ctk.CTkFrame(self.issue_box, fg_color="#2A2110", corner_radius=8, border_width=1, border_color="#6B4E12")
+            box.pack(fill="x", pady=(8, 0))
+            ctk.CTkLabel(box, text="!  ควรแก้: " + "  ·  ".join(issues), font=_font(11, "bold"), text_color="#FBBF24",
+                         anchor="w", justify="left", wraplength=640).pack(fill="x", padx=12, pady=(8, 2))
+            ctk.CTkLabel(box, text="ใช้ร่วมกันได้ถ้าแต่ละ Profile ต่อคนละบัญชี MT5 — แต่ถ้าเปิดบนบัญชีเดียวกัน บอทจะดูแลไม้ทับกัน · "
+                                   "แก้ที่ ตั้งค่า Profile นี้ ด้านล่าง (ปุ่ม ใช้เลขที่ไม่ซ้ำ) ในหน้าต่างของ Profile นั้น",
+                         font=_font(11), text_color=COLOR_TEXT_MUTED, anchor="w", justify="left", wraplength=640).pack(fill="x", padx=12, pady=(0, 8))
+        self._update_magic_state()
 
     def _refresh_status(self):
         """สถานะเปิดอยู่/ปิดอยู่ของทุก Profile (ตรวจ Mutex ทุก 2 วิ)"""
@@ -292,13 +384,13 @@ class ProfileManagerDialog(ctk.CTkToplevel):
             return
         for name, (status, btn, _info) in self._rows.items():
             if name == self._active_prof:
-                status.configure(text=" ● หน้าต่างนี้ ", text_color=COLOR_GOLD_PRIMARY, fg_color=COLOR_GOLD_BG)
+                status.configure(text="● หน้าต่างนี้", text_color=COLOR_GOLD_PRIMARY, fg_color=COLOR_GOLD_BG)
                 btn.configure(state="disabled", text="เปิดอยู่", fg_color=COLOR_BTN_DARK)
             elif instance_guard.is_profile_running(name):
-                status.configure(text=" ● เปิดอยู่ ", text_color=COLOR_SUCCESS_GREEN, fg_color="#0F2A20")
+                status.configure(text="● เปิดอยู่", text_color=COLOR_SUCCESS_GREEN, fg_color="#0F2A20")
                 btn.configure(state="disabled", text="เปิดอยู่", fg_color=COLOR_BTN_DARK)
             else:
-                status.configure(text=" ปิดอยู่ ", text_color=COLOR_TEXT_MUTED, fg_color=COLOR_BTN_DARK)
+                status.configure(text="ปิดอยู่", text_color=COLOR_TEXT_MUTED, fg_color=COLOR_BTN_DARK)
                 btn.configure(state="normal", text="เปิด", fg_color="#059669")
         self.after(2000, self._refresh_status)
 
@@ -315,6 +407,17 @@ class ProfileManagerDialog(ctk.CTkToplevel):
         for name, (_s, _b, info) in self._rows.items():
             if name != self._active_prof and info["magic"] == m:
                 self._show("showerror", "Magic Number ซ้ำ", f"Magic {m} ถูกใช้โดย Profile [{name}] แล้ว\nตั้งเลขอื่นเพื่อไม่ให้บอทดูแลไม้ทับกัน")
+                return
+        old = get_profile_magic_number()
+        if m != old:
+            try:
+                import MetaTrader5 as mt5
+                n_open = sum(1 for x in (mt5.positions_get() or ()) if x.magic == old)
+            except Exception:
+                n_open = 0
+            if n_open and not self._show("askyesno", "มีไม้เปิดอยู่ด้วย Magic เดิม",
+                                         f"มี {n_open} ไม้ที่เปิดด้วย Magic {old} — หลังเปลี่ยน บอทจะไม่ดูแลไม้เหล่านี้ต่อ (เลื่อน SL / ปิดตามแผน)\n"
+                                         "แนะนำให้รอปิดไม้ก่อนแล้วค่อยเปลี่ยน · ยืนยันเปลี่ยนตอนนี้?"):
                 return
         set_profile_magic_number(m)
         self._build_profile_rows()
