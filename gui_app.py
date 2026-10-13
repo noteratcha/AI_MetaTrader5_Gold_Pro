@@ -5028,7 +5028,7 @@ class MainTradingApp(ctk.CTk):
         brand_name(brand_text, self._font(17, "bold"), height=24).pack(anchor="w")
         ver_row = ctk.CTkFrame(brand_text, fg_color="transparent")
         ver_row.pack(anchor="w")
-        ctk.CTkLabel(ver_row, text=f"v{APP_VERSION} · XAUUSD Gold", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18).pack(side="left")
+        ctk.CTkLabel(ver_row, text=f"v{APP_VERSION}", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18).pack(side="left")
         self.btn_update_status = ctk.CTkButton(
             ver_row, text="กำลังตรวจสอบเวอร์ชัน…", font=self._font(10, "bold"), height=18, width=10,
             corner_radius=9, fg_color="#1F2430", hover_color="#262B36", text_color=COLOR_TEXT_MUTED,
