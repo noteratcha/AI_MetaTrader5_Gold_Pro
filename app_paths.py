@@ -3,6 +3,7 @@
 - เก็บใน %APPDATA%\\GoldBot24 เพื่อให้อยู่รอดเมื่ออัปเดตโปรแกรม (โฟลเดอร์โปรแกรม/dist ถูกลบสร้างใหม่ทุกครั้งที่ build)
 - ย้ายไฟล์เดิมจากโฟลเดอร์โปรแกรมมาให้อัตโนมัติครั้งแรก
 """
+import json
 import os
 import shutil
 import sys
@@ -96,9 +97,19 @@ def data_path(name: str) -> str:
             default_target = os.path.join(DATA_DIR, name)
             if name in ("bot_settings.json",) and os.path.exists(default_target) and os.path.getsize(default_target) > 100:
                 try:
-                    shutil.copy2(default_target, target)
+                    # คัดลอกค่าตั้งต้น (Lot, แผน, เป้ากำไร ฯลฯ) แต่ไม่เอาค่าประจำ Profile — magic_number / terminal_path
+                    # (เดิมคัดลอกทั้งไฟล์ ทำให้ Profile ใหม่ได้ Magic 888999 ซ้ำกับ default · แก้ 13 ต.ค. 2026)
+                    with open(default_target, encoding="utf-8") as f:
+                        tpl = json.load(f)
+                    if isinstance(tpl, dict):
+                        for k in ("magic_number", "terminal_path"):
+                            tpl.pop(k, None)
+                        with open(target, "w", encoding="utf-8") as f:
+                            json.dump(tpl, f, ensure_ascii=False, indent=2)
+                    else:
+                        shutil.copy2(default_target, target)
                     return target
-                except OSError:
+                except (OSError, ValueError):
                     pass
 
         # ตรวจสอบไฟล์เก่าจาก APP_DIR สำหรับ default profile
