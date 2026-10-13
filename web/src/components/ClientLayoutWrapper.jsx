@@ -5,6 +5,7 @@ import AuthModal from './AuthModal';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import LowHoursBanner from './LowHoursBanner';
+import TopTicker from './TopTicker';
 import { AnnouncementPopup } from './Announcements';
 
 export default function ClientLayoutWrapper({ children }) {
@@ -12,6 +13,7 @@ export default function ClientLayoutWrapper({ children }) {
     <AuthProvider>
       <div className="app-shell">
         <Navbar />
+        <TopTicker />
         <LowHoursBanner />
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>{children}</main>
         <Footer />

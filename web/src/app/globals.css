@@ -2286,3 +2286,59 @@ select.input {
   background: rgba(242, 193, 78, 0.05);
   font-weight: 600;
 }
+
+/* ข้อความวิ่งใต้เมนู (TopTicker) — ข่าว USD สำคัญ · ชั่วโมงใกล้หมด · โปรแกรมต้องอัปเดต · ชี้เมาส์เพื่อหยุด */
+.ticker {
+  overflow: hidden;
+  border-bottom: 1px solid var(--border, #262b36);
+  background: linear-gradient(90deg, rgba(242, 193, 78, 0.06), rgba(20, 23, 30, 0.6) 30%, rgba(20, 23, 30, 0.6) 70%, rgba(242, 193, 78, 0.06));
+  height: 34px;
+  display: flex;
+  align-items: center;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll linear infinite;
+}
+.ticker:hover .ticker-track {
+  animation-play-state: paused;
+}
+.ticker-group {
+  display: flex;
+  flex-shrink: 0;
+}
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 28px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.ticker-item:hover {
+  text-decoration: underline;
+}
+.ticker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+}
