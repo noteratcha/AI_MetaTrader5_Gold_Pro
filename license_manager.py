@@ -134,7 +134,7 @@ class LicenseManager:
         # 1. เรียก API Endpoint /api/auth/login
         login_url = f"{API_BASE_URL.rstrip('/')}/api/auth/login"
         payload = json.dumps({"email": email, "password": password}).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", "User-Agent": "GoldBot24-Desktop", "X-App-Version": self._app_version()}
 
         try:
             req = urllib.request.Request(login_url, data=payload, headers=headers, method="POST")
@@ -157,6 +157,8 @@ class LicenseManager:
                 else:
                     return False, data.get("error", "เข้าสู่ระบบไม่สำเร็จ")
         except urllib.error.HTTPError as he:
+            if he.code == 426:   # ต้องอัปเดตโปรแกรมก่อนล็อกอิน
+                return False, self._mark_update_required(he)
             try:
                 err_data = json.loads(he.read().decode("utf-8"))
                 return False, err_data.get("error", f"เกิดข้อผิดพลาดในการตรวจสอบ (HTTP {he.code})")
@@ -188,6 +190,8 @@ class LicenseManager:
                     return True, data.get("message", "ส่งรหัสยืนยันไปที่อีเมลแล้ว")
                 return False, data.get("error", "ส่งรหัสยืนยันไม่สำเร็จ")
         except urllib.error.HTTPError as he:
+            if he.code == 426:   # ต้องอัปเดตโปรแกรมก่อนล็อกอิน
+                return False, self._mark_update_required(he)
             try:
                 err_data = json.loads(he.read().decode("utf-8"))
                 return False, err_data.get("error", f"ส่งรหัสยืนยันไม่สำเร็จ (HTTP {he.code})")
@@ -239,6 +243,8 @@ class LicenseManager:
                 else:
                     return False, data.get("error", "สมัครสมาชิกไม่สำเร็จ")
         except urllib.error.HTTPError as he:
+            if he.code == 426:   # ต้องอัปเดตโปรแกรมก่อนล็อกอิน
+                return False, self._mark_update_required(he)
             try:
                 err_data = json.loads(he.read().decode("utf-8"))
                 return False, err_data.get("error", f"เกิดข้อผิดพลาดในการสมัครสมาชิก (HTTP {he.code})")
@@ -267,8 +273,25 @@ class LicenseManager:
             except Exception:
                 pass
 
+    @staticmethod
+    def _app_version():
+        try:
+            from version import APP_VERSION
+            return APP_VERSION
+        except Exception:
+            return ""
+
+    def _mark_update_required(self, he):
+        """Server ตอบ 426 = โปรแกรมเวอร์ชันนี้ต้องอัปเดตก่อนใช้งาน — หน้าจอจะหยุดบอทและเปิดหน้าต่างอัปเดต"""
+        try:
+            body = json.loads(he.read().decode("utf-8"))
+        except Exception:
+            body = {}
+        self.update_required = {"min": body.get("minVersion"), "message": body.get("error") or "กรุณาอัปเดตโปรแกรมเป็นเวอร์ชันล่าสุดก่อนใช้งาน"}
+        return self.update_required["message"]
+
     def _auth_headers(self) -> dict:
-        headers = {"Content-Type": "application/json", "User-Agent": "GoldBot24-Desktop"}
+        headers = {"Content-Type": "application/json", "User-Agent": "GoldBot24-Desktop", "X-App-Version": self._app_version()}
         token = self.session_data.get("token")
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -297,6 +320,8 @@ class LicenseManager:
                     self.session_data["last_sync"] = int(time.time())
                     self.save_local_store()
         except urllib.error.HTTPError as he:
+            if he.code == 426:
+                self._mark_update_required(he)
             self._handle_auth_error(he.code)
         except Exception:
             pass
@@ -356,6 +381,8 @@ class LicenseManager:
                         self.session_data["online"] = data["online"]
                     self.save_local_store()
         except urllib.error.HTTPError as he:
+            if he.code == 426:
+                self._mark_update_required(he)
             self._handle_auth_error(he.code)
         except Exception:
             pass  # เน็ตหลุด — เก็บยอดค้างไว้ส่งรอบถัดไป

@@ -1,3 +1,4 @@
+import { rejectOutdatedDesktop } from '../../../lib/server/clientVersion';
 import { adjustHoursDetailed, allowMethods, requireUser } from '../../../lib/server/auth';
 import { isMailConfigured, sendLowHoursEmail } from '../../../lib/server/mailer';
 import { LOW_HOURS } from '../../../lib/hours';
@@ -8,6 +9,7 @@ const MAX_MINUTES_PER_CALL = 24 * 60;
 
 export default async function handler(req, res) {
   if (!allowMethods(req, res, ['POST'])) return;
+  if (rejectOutdatedDesktop(req, res)) return;   // บังคับอัปเดตโปรแกรม (ไม่หักชั่วโมงให้รุ่นเก่า)
   const auth = await requireUser(req, res);
   if (!auth) return;
 

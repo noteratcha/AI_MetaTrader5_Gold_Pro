@@ -1,3 +1,4 @@
+import { rejectOutdatedDesktop } from '../../../lib/server/clientVersion';
 import { allowMethods, requireUser, ensureIngestSecret } from '../../../lib/server/auth';
 import { getRewardStatus } from '../../../lib/server/onlineReward';
 
@@ -5,6 +6,7 @@ import { getRewardStatus } from '../../../lib/server/onlineReward';
 export default async function handler(req, res) {
   ensureIngestSecret();
   if (!allowMethods(req, res, ['GET'])) return;
+  if (rejectOutdatedDesktop(req, res)) return;   // บังคับอัปเดตโปรแกรม
   const auth = await requireUser(req, res);
   if (!auth) return;
   res.setHeader('Cache-Control', 'no-store');

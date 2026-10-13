@@ -4581,6 +4581,10 @@ class MainTradingApp(ctk.CTk):
             self.after(350, self.show_dashboard_view)
         else:
             sound_manager.play_sl_hit()
+            if getattr(license_mgr, "update_required", None):   # ต้องอัปเดตโปรแกรมก่อน — เปิดหน้าต่างอัปเดตให้เลย
+                self.lbl_login_status.configure(text=msg, text_color=COLOR_GOLD_PRIMARY)
+                self.after(300, lambda: self._start_update_check(manual=True))
+                return
             self.lbl_login_status.configure(text=f"เข้าสู่ระบบไม่สำเร็จ: {msg}{self._password_hint(pwd)}", text_color=COLOR_DANGER_RED)
 
     def _do_register(self):
@@ -7346,6 +7350,13 @@ class MainTradingApp(ctk.CTk):
                 if hasattr(self, "ai_box"):
                     self._render_ai_outlook()
                 telemetry = bot_ctrl.get_telemetry()
+
+                # Server แจ้งว่าโปรแกรมเวอร์ชันนี้ต้องอัปเดต → หยุดบอท + เปิดหน้าต่างอัปเดต 1-Click (ครั้งเดียว)
+                if getattr(license_mgr, "update_required", None) and not getattr(self, "_update_forced", False):
+                    self._update_forced = True
+                    if bot_ctrl.is_active and not bot_ctrl.is_paused:
+                        bot_ctrl.pause_bot()
+                    self.after(200, lambda: self._start_update_check(manual=True))
 
                 # MT5 เปลี่ยนบัญชี → ตรวจ/เปิด Algo Trading ให้บัญชีใหม่ (รอ MT5 สลับเสร็จ 3 วิ แล้วตรวจซ้ำที่ 10 วิ)
                 login_now = int(telemetry.get("login") or 0)

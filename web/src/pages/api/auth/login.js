@@ -1,3 +1,4 @@
+import { rejectOutdatedDesktop } from '../../../lib/server/clientVersion';
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import {
   allowMethods,
@@ -21,6 +22,7 @@ const LOCK_MINUTES = LOGIN_LOCK_MINUTES;
 export default async function handler(req, res) {
   ensureIngestSecret();
   if (!allowMethods(req, res, ['POST'])) return;
+  if (rejectOutdatedDesktop(req, res, { isLogin: true })) return;   // บังคับอัปเดตโปรแกรม
 
   try {
     const email = normalizeEmail(req.body?.email);

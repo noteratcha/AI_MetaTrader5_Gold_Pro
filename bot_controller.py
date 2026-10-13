@@ -77,6 +77,9 @@ class BotController:
         if not license_mgr.is_authenticated:
             return False, "กรุณาเข้าสู่ระบบก่อนเริ่มต้นใช้งานบอท"
 
+        if getattr(license_mgr, "update_required", None):
+            return False, license_mgr.update_required["message"]
+
         if not license_mgr.has_active_hours():
             return False, "เวลาใช้งานหมดแล้ว! กรุณาเติมชั่วโมงด้วย Product Key ก่อนเริ่มต้น"
 
@@ -136,6 +139,9 @@ class BotController:
 
         if not license_mgr.is_authenticated:
             return False, "กรุณาเข้าสู่ระบบก่อนเริ่มต้นใช้งานบอท"
+
+        if getattr(license_mgr, "update_required", None):
+            return False, license_mgr.update_required["message"]
 
         if not license_mgr.has_active_hours():
             return False, "เวลาใช้งานหมดแล้ว! กรุณาเติมชั่วโมงก่อนกลับมาทำงาน"
