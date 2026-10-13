@@ -5881,8 +5881,52 @@ class MainTradingApp(ctk.CTk):
             text_color=COLOR_CYAN_ACCENT, width=64, height=24, corner_radius=6, command=self._open_user_stats_modal,
         ).pack(side="right")
 
-        table = ctk.CTkFrame(card, fg_color="#101218", corner_radius=10)
-        table.pack(fill="x", padx=14, pady=(0, 6))
+        # ตารางอยู่ใน Canvas — แถวเกินพื้นที่การ์ด (8 แผน + เข้าไม้เอง + รวม) แสดงสกรอลบาร์ให้เลื่อนลง · พอดีแล้วซ่อนสกรอลบาร์
+        holder = ctk.CTkFrame(card, fg_color="transparent")
+        holder.pack(fill="both", expand=True, padx=(14, 6), pady=(0, 6))
+        canvas = tk.Canvas(holder, bg=COLOR_CARD_BG, highlightthickness=0, bd=0, width=1, height=1, yscrollincrement=18)
+        sbar = ctk.CTkScrollbar(holder, orientation="vertical", command=canvas.yview, width=12, border_spacing=2,
+                                button_color="#4B5563", button_hover_color=COLOR_GOLD_WARM)
+        canvas.configure(yscrollcommand=sbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        table = ctk.CTkFrame(canvas, fg_color="#101218", corner_radius=10)
+        win = canvas.create_window(0, 0, window=table, anchor="nw")
+        self._plans_scroll_need = False
+
+        def _sync(_e=None):
+            try:
+                cw, ch = canvas.winfo_width(), canvas.winfo_height()
+                canvas.itemconfigure(win, width=max(cw, 1))
+                req = table.winfo_reqheight()
+                canvas.configure(scrollregion=(0, 0, cw, req))
+                need = req > ch + 1
+                if need != self._plans_scroll_need:
+                    self._plans_scroll_need = need
+                    if need:
+                        sbar.pack(side="right", fill="y", padx=(4, 0))
+                    else:
+                        sbar.pack_forget()
+                        canvas.yview_moveto(0)
+            except tk.TclError:
+                pass
+
+        def _wheel(e):
+            """ลูกล้อเมาส์เลื่อนตารางเมื่อชี้อยู่บนการ์ด (bind_all แบบเพิ่ม ไม่ทับตัวเลื่อนอื่น)"""
+            if not self._plans_scroll_need:
+                return
+            try:
+                w = self.winfo_containing(e.x_root, e.y_root)
+            except (tk.TclError, KeyError):
+                return
+            while w is not None:
+                if w is holder:
+                    canvas.yview_scroll(int(-e.delta / 120) or (-1 if e.delta > 0 else 1), "units")
+                    return
+                w = getattr(w, "master", None)
+
+        table.bind("<Configure>", _sync, add="+")
+        canvas.bind("<Configure>", _sync, add="+")
+        self.bind_all("<MouseWheel>", _wheel, add="+")
         table.grid_columnconfigure(0, weight=1)
         table.grid_columnconfigure(1, weight=0)
         for col, (title, anchor) in enumerate((("แผน", "w"), ("เงื่อนไข", "center"), ("ไม้", "e"), ("WR", "e"), ("กำไร", "e"))):
