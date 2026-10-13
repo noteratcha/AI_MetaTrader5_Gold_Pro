@@ -4271,7 +4271,7 @@ class MainTradingApp(ctk.CTk):
         version_badge.pack(pady=(0, 16))
         ctk.CTkLabel(
             version_badge,
-            text=f"v{APP_VERSION}  ·  1 บาท/ชม.",
+            text=f"v{APP_VERSION}",
             font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
             text_color=COLOR_GOLD_WARM
         ).pack(padx=10, pady=4)
