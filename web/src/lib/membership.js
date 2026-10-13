@@ -4,7 +4,8 @@
 
 // แพ็กเกจสมาชิก (ผู้ใช้กำหนด 13 ต.ค. 2026) — package_id 900–903 (ไม่ชนกับแพ็กเกจชั่วโมงในตาราง packages)
 // ราคาเต็ม = 99 บาท / 30 วัน · 360 วันลด 5% · ส่วนลด Lv./ออนไลน์ไม่ใช้กับค่าสมาชิก
-const plan = (id, days, label, fullPrice, discountPct = 0) => ({
+const plan = (id, days, label, fullPrice, discountPct = 0, featured = false) => ({
+  featured, // แพ็กเกจแนะนำ (เลือกไว้เป็นค่าเริ่มต้น + ไฮไลต์)
   id,
   kind: 'membership',
   name: `สมาชิก ${label}`,
@@ -20,7 +21,7 @@ export const MEMBERSHIP_PLANS = [
   plan(900, 30, '30 วัน', 99),
   plan(901, 90, '90 วัน', 297),
   plan(902, 180, '180 วัน', 594),
-  plan(903, 360, '360 วัน', 1188, 5),
+  plan(903, 360, '360 วัน', 1188, 5, true),   // แนะนำ (ผู้ใช้กำหนด 13 ต.ค. 2026)
 ];
 export const MEMBERSHIP = { ...MEMBERSHIP_PLANS[0], name: 'สมาชิกรายเดือน' }; // แพ็กเกจพื้นฐาน (ใช้แสดงชื่อ/ราคาเริ่มต้น)
 

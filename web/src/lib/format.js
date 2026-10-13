@@ -16,7 +16,8 @@ export function formatUsd(value, { sign = false } = {}) {
 }
 
 export function formatThb(value) {
-  return `฿${(Number(value) || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`;
+  const n = Number(value) || 0;   // มีเศษสตางค์ = แสดง 2 ตำแหน่งเสมอ (฿1,128.60) · จำนวนเต็มไม่แสดงทศนิยม (฿99)
+  return `฿${n.toLocaleString('th-TH', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
 }
 
 export function formatPrice(value, digits = 2) {
