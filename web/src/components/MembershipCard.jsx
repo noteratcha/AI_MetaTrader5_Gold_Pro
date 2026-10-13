@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Check, ChevronDown, Crown, History, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { MEMBERSHIP, MEMBER_PLAN_NUMBERS, MEMBER_WARN_DAYS } from '../lib/membership';
+import { MEMBERSHIP, MEMBERSHIP_PLANS, MEMBER_PLAN_NUMBERS, MEMBER_WARN_DAYS } from '../lib/membership';
 import { PLAN_NAMES } from '../lib/plans';
 import { formatThb } from '../lib/format';
 
@@ -18,7 +18,7 @@ export default function MembershipCard({ membership, onBuy, compact = false, sho
   const m = membership || { active: false };
   const warn = m.active && !m.viaAdmin && m.daysLeft <= MEMBER_WARN_DAYS;
   return (
-    <div className={`card card-pad ${m.active ? 'card-gold' : ''}`} style={{ marginBottom: 18 }}>
+    <div id="membership" className={`card card-pad ${m.active ? 'card-gold' : ''}`} style={{ marginBottom: 18, scrollMarginTop: 90 }}>
       <div className="row-between wrap" style={{ gap: 14 }}>
         <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
           <span className="icon-chip text-gold" style={{ width: 40, height: 40 }}>
@@ -49,23 +49,56 @@ export default function MembershipCard({ membership, onBuy, compact = false, sho
             )}
           </div>
         </div>
-        {onBuy && (   // แสดงกับทุกบัญชี (แอดมินใช้ได้ทุกแผนอยู่แล้ว แต่สมัครได้เพื่อทดสอบ/เก็บประวัติ)
-          <div className="stack" style={{ alignItems: 'flex-end', gap: 6 }}>
-            <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
-              <span className="mono text-gold" style={{ fontSize: '1.35rem', fontWeight: 700 }}>
-                {formatThb(MEMBERSHIP.price)}
-              </span>
-              <span className="small muted">/ {MEMBERSHIP.days} วัน</span>
-            </div>
-            <span className="tiny faint">ราคาเต็ม · ส่วนลด Lv./ออนไลน์ใช้กับการเติมชั่วโมงเท่านั้น</span>
-            <button className="btn btn-primary" onClick={onBuy}>
-              <Crown size={16} /> {m.active && !m.viaAdmin ? 'ต่ออายุอีก 30 วัน' : 'สมัครสมาชิก'}
-            </button>
-            {m.active && !m.viaAdmin && <span className="tiny faint">ต่ออายุแล้วนับต่อจากวันหมดอายุเดิม</span>}
-          </div>
+        {onBuy && compact && (
+          <button className="btn btn-primary" onClick={() => onBuy(null)}>
+            <Crown size={16} /> {m.active && !m.viaAdmin ? 'ต่ออายุสมาชิก' : 'สมัครสมาชิก'}
+          </button>
         )}
       </div>
+      {onBuy && !compact && <PlanPicker renew={m.active && !m.viaAdmin} onBuy={onBuy} />}
       {showHistory && <MembershipHistory />}
+    </div>
+  );
+}
+
+/** เลือกแพ็กเกจสมาชิก 30 / 90 / 180 / 360 วัน (360 วันลด 5%) แล้วกดสมัคร — แสดงกับทุกบัญชี (แอดมินสมัครได้เพื่อทดสอบ) */
+function PlanPicker({ renew, onBuy }) {
+  const [sel, setSel] = useState(MEMBERSHIP_PLANS[0].id);
+  const chosen = MEMBERSHIP_PLANS.find((p) => p.id === sel) || MEMBERSHIP_PLANS[0];
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div className="member-plans">
+        {MEMBERSHIP_PLANS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`member-plan ${p.id === sel ? 'is-active' : ''}`}
+            onClick={() => setSel(p.id)}
+            aria-pressed={p.id === sel}
+          >
+            {p.discountPct > 0 && <span className="badge badge-green member-plan-badge">ลด {p.discountPct}%</span>}
+            <span className="member-plan-days">{p.label}</span>
+            <span className="mono member-plan-price">{formatThb(p.price)}</span>
+            <span className="tiny faint">
+              {p.discountPct > 0 ? (
+                <>
+                  <span style={{ textDecoration: 'line-through' }}>{formatThb(p.fullPrice)}</span> · ตกเดือนละ {formatThb(Math.round((p.price / p.days) * 30 * 100) / 100)}
+                </>
+              ) : (
+                `ตกเดือนละ ${formatThb(Math.round((p.price / p.days) * 30 * 100) / 100)}`
+              )}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="row-between wrap" style={{ gap: 10, marginTop: 12 }}>
+        <span className="tiny faint">
+          นับตามวันปฏิทิน (วันที่ชำระ = วันที่ 1) · {renew ? 'ต่ออายุแล้วบวกต่อจากวันสุดท้ายเดิม · ' : ''}ส่วนลด Lv./ออนไลน์ใช้กับการเติมชั่วโมงเท่านั้น
+        </span>
+        <button className="btn btn-primary" onClick={() => onBuy(chosen)}>
+          <Crown size={16} /> {renew ? 'ต่ออายุ' : 'สมัครสมาชิก'} {chosen.label} · {formatThb(chosen.price)}
+        </button>
+      </div>
     </div>
   );
 }

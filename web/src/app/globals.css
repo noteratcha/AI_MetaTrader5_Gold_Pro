@@ -2383,3 +2383,51 @@ select.input {
     animation: none;
   }
 }
+
+/* แพ็กเกจสมาชิก 30 / 90 / 180 / 360 วัน (MembershipCard) */
+.member-plans {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.member-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.member-plan:hover {
+  border-color: var(--gold-line);
+}
+.member-plan.is-active {
+  border-color: #f6cd65;
+  background: rgba(246, 205, 101, 0.08);
+  box-shadow: 0 0 0 1px #f6cd65 inset;
+}
+.member-plan-days {
+  font-weight: 700;
+}
+.member-plan-price {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.member-plan-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+@media (max-width: 720px) {
+  .member-plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -53,11 +53,11 @@ export default function StorePage() {
       .catch(() => setPackages(PACKAGES));
   }, []);
 
-  // ลิงก์จากโปรแกรม /store?member=1 → เปิดหน้าต่างสมัครสมาชิกให้เลย (ล็อกอินแล้ว)
+  // ลิงก์จากโปรแกรม /store?member=1 → เลื่อนไปการ์ดสมาชิกให้เลือกแพ็กเกจ (30/90/180/360 วัน)
   useEffect(() => {
-    if (!user || typeof window === 'undefined') return;
-    if (new URLSearchParams(window.location.search).get('member') === '1') setCheckoutPkg((cur) => cur || MEMBERSHIP);
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (typeof window === 'undefined' || new URLSearchParams(window.location.search).get('member') !== '1') return;
+    setTimeout(() => document.getElementById('membership')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+  }, []);
 
   const discountPct = (user?.online?.discount?.percent || 0) + (user?.online?.level?.discountPct || 0);   // ส่วนลดออนไลน์ 100 ชม. (1 รายการ) + ระดับสมาชิก (ถาวร)
 
@@ -78,7 +78,7 @@ export default function StorePage() {
         description={`${rateRange(packages)}ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ · สมาชิกรายเดือนปลดล็อกแผน P6–P8`}
       />
 
-      <MembershipCard membership={user?.membership} showHistory={Boolean(user)} onBuy={() => buy(MEMBERSHIP)} />
+      <MembershipCard membership={user?.membership} showHistory={Boolean(user)} onBuy={(p) => buy(p || MEMBERSHIP)} />
 
       {user && <OnlineRewardCard online={user.online} />}
 
@@ -414,7 +414,7 @@ function CheckoutModal({ pkg, onClose }) {
           <div className="center" style={{ marginBottom: 14 }}>
             <span className="eyebrow">PromptPay QR</span>
             <h2 id="checkout-title" style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-              {isMember ? `${pkg.name} · ${pkg.days} วัน` : `${pkg.name} · ${Number(pkg.hours + pkg.bonus).toLocaleString('en-US')} ชั่วโมง`}
+              {isMember ? `${pkg.name}${pkg.discountPct ? ` · ลด ${pkg.discountPct}%` : ""}` : `${pkg.name} · ${Number(pkg.hours + pkg.bonus).toLocaleString('en-US')} ชั่วโมง`}
             </h2>
           </div>
           <CheckoutSteps step={step} member={isMember} />

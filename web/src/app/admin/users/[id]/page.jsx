@@ -483,7 +483,7 @@ function MemberModal({ user, onClose, onSave }) {
           ยังไม่หมดอายุ = นับต่อจากวันหมดอายุเดิม · หมดแล้ว = นับจากวันนี้ · ใส่ค่าติดลบเพื่อลดวัน
         </div>
         <div className="row wrap" style={{ gap: 6 }}>
-          {[7, 30, 90].map((d) => (
+          {[7, 30, 90, 180, 360].map((d) => (
             <button key={d} className={`btn btn-sm ${Number(days) === d ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDays(d)}>
               +{d} วัน
             </button>

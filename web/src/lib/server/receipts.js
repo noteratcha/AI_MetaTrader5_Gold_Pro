@@ -1,4 +1,4 @@
-import { MEMBERSHIP, isMembershipPackage } from '../membership';
+import { isMembershipPackage, membershipPlan } from '../membership';
 import { getAdminClient } from './supabaseAdmin';
 import { listPackages } from './catalog';
 import { toUserPayload } from './auth';
@@ -92,7 +92,7 @@ export async function issueReceipt(order, { productKey, paymentRef, sendEmail = 
           email: order.owner_email || null,
           customer_name: customerName || (order.owner_email || '').split('@')[0] || null,
           item_name: isMembershipPackage(order.package_id)
-            ? `${MEMBERSHIP.name} ${MEMBERSHIP.days} วัน (ปลดล็อกแผน P6–P8)`
+            ? `${membershipPlan(order.package_id).name} (ปลดล็อกแผน P6–P8)`
             : pkg?.name ? `${pkg.name} (${hours} ชั่วโมง)` : `เวลาใช้งาน GoldBot24 ${hours} ชั่วโมง`,
           hours,
           amount_thb: Number(order.amount_thb) || 0,

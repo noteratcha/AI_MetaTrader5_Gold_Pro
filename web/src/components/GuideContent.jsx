@@ -8,7 +8,7 @@ import { PACKAGES } from '../lib/packages';
 import { PLAN_NAMES } from '../lib/plans';
 import { LINE_ID, LINE_URL } from '../lib/contact';
 import { formatThb } from '../lib/format';
-import { MEMBERSHIP, MEMBER_PLAN_NUMBERS } from '../lib/membership';
+import { MEMBERSHIP, MEMBERSHIP_PLANS, MEMBER_PLAN_NUMBERS } from '../lib/membership';
 
 // คู่มือการใช้งานโปรแกรม Gold Bot 24 (หน้า /guide) — อ้างอิงพฤติกรรมของโปรแกรมเวอร์ชัน 2026.1013.1831
 const SECTIONS = [
@@ -793,9 +793,26 @@ export default function GuideContent() {
 
           <Section id="member">
             <p>
-              สมาชิกรายเดือนคือ<strong>การสมัครเพื่อเปิดใช้ทุกแผนเทรดที่มี</strong> · ผู้ใช้ทั่วไปใช้ได้แผน <strong>P1–P5</strong> · สมาชิก ({formatThb(MEMBERSHIP.price)} / {MEMBERSHIP.days} วัน) ใช้ได้ทุกแผน รวม{' '}
+              สมาชิกรายเดือนคือ<strong>การสมัครเพื่อเปิดใช้ทุกแผนเทรดที่มี</strong> · ผู้ใช้ทั่วไปใช้ได้แผน <strong>P1–P5</strong> · สมาชิก (เริ่ม {formatThb(MEMBERSHIP.price)} / {MEMBERSHIP.days} วัน · เลือกได้ 30 / 90 / 180 / 360 วัน) ใช้ได้ทุกแผน รวม{' '}
               {MEMBER_PLAN_NUMBERS.map((n) => PLAN_NAMES[n]).join(' · ')}
             </p>
+            <div className="table-wrap guide-table-wrap">
+              <table className="table guide-table">
+                <thead>
+                  <tr><th>แพ็กเกจสมาชิก</th><th className="num">ราคาเต็ม</th><th className="num">ส่วนลด</th><th className="num">ราคาที่จ่าย</th></tr>
+                </thead>
+                <tbody>
+                  {MEMBERSHIP_PLANS.map((p) => (
+                    <tr key={p.id}>
+                      <td className="nowrap">{p.label}</td>
+                      <td className="num">{formatThb(p.fullPrice)}</td>
+                      <td className="num">{p.discountPct ? `${p.discountPct}%` : '—'}</td>
+                      <td className="num">{formatThb(p.price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <Note tone="info" label="ชั่วโมงกับสมาชิกนับแยกกัน">
               สมัครสมาชิกไม่ได้ชั่วโมงเพิ่ม และเติมชั่วโมงไม่ได้ต่ออายุสมาชิก — ต้องมีทั้งสองอย่างจึงจะรันบอทด้วยแผน P6 ขึ้นไปได้
             </Note>
@@ -815,7 +832,7 @@ export default function GuideContent() {
               </table>
             </div>
             <ul>
-              <li>สมัคร/ต่ออายุที่หน้า <Link href="/store?member=1">เติมชั่วโมง</Link> (การ์ด “สมาชิกรายเดือน” ด้านบน) จ่ายด้วย PromptPay + แนบสลิปเหมือนเติมชั่วโมง — ชำระสำเร็จแล้วสิทธิ์เข้าบัญชีทันที ไม่ต้องกรอกคีย์ และได้ใบเสร็จทางอีเมล</li>
+              <li>สมัคร/ต่ออายุที่หน้า <Link href="/store?member=1">เติมชั่วโมง</Link> (การ์ด “สมาชิกรายเดือน” ด้านบน → เลือกแพ็กเกจ 30 / 90 / 180 / 360 วัน แล้วกดสมัคร) จ่ายด้วย PromptPay + แนบสลิปเหมือนเติมชั่วโมง — ชำระสำเร็จแล้วสิทธิ์เข้าบัญชีทันที ไม่ต้องกรอกคีย์ และได้ใบเสร็จทางอีเมล</li>
               <li>ค่าสมาชิกเป็น<strong>ราคาเต็มเสมอ</strong> — ส่วนลดระดับ Lv. และส่วนลดออนไลน์ 100 ชม. ใช้กับการเติมชั่วโมงเท่านั้น (สิทธิ์ส่วนลดไม่ถูกใช้ตอนสมัครสมาชิก)</li>
               <li><strong>ยังหักชั่วโมงตามปกติ</strong> — สมาชิกปลดล็อกแผน ไม่ได้ทำให้รันบอทฟรี</li>
               <li><strong>นับตามวันปฏิทิน (เวลาไทย)</strong> — วันที่ชำระคือวันที่ 1 ใช้ได้ถึง 23:59 น. ของวันที่ 30 ไม่ว่าจะชำระกี่โมง เช่น ชำระ 13 ต.ค. → ใช้ได้ถึง 11 พ.ย. 23:59 น. · “เหลือกี่วัน” นับรวมวันนี้ (วันสุดท้ายแสดง 1 วัน)</li>

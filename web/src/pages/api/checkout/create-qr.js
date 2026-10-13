@@ -4,7 +4,7 @@ import { generateOrderId } from '../../../lib/server/keys';
 import { getPackage } from '../../../lib/server/catalog';
 import { expireStaleOrders } from '../../../lib/server/orders';
 import { discountedPrice, levelDiscountPct, reserveDiscount } from '../../../lib/server/onlineReward';
-import { MEMBERSHIP, isMembershipPackage } from '../../../lib/membership';
+import { isMembershipPackage, membershipPlan } from '../../../lib/membership';
 import { ensureMembershipPackageRow } from '../../../lib/server/membership';
 
 const PROMPTPAY_ID = process.env.PROMPTPAY_ID || '';
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   await expireStaleOrders();
 
   // สมาชิกรายเดือน (id 900) ราคาจากโค้ดฝั่ง Server · แพ็กเกจชั่วโมงอ่านจากตาราง packages
-  const pkg = isMembershipPackage(req.body?.package_id) ? MEMBERSHIP : await getPackage(req.body?.package_id);
+  const pkg = membershipPlan(req.body?.package_id) || (await getPackage(req.body?.package_id));
   if (!pkg) {
     return res.status(400).json({ success: false, error: 'ไม่พบแพ็กเกจที่เลือก' });
   }
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     return res.status(503).json({ success: false, error: 'ร้านค้ายังไม่ได้ตั้งค่าบัญชีพร้อมเพย์ (PROMPTPAY_ID)' });
   }
 
-  if (isMembershipPackage(pkg.id)) await ensureMembershipPackageRow();   // FK orders.package_id → packages(id)
+  if (isMembershipPackage(pkg.id)) await ensureMembershipPackageRow(pkg);   // FK orders.package_id → packages(id)
 
   const orderId = generateOrderId();
   // ค่าสมาชิกรายเดือนราคาเต็มเสมอ — ส่วนลด Lv./ออนไลน์ใช้กับการเติมชั่วโมงเท่านั้น (ผู้ใช้กำหนด 13 ต.ค. 2026)
@@ -36,8 +36,10 @@ export default async function handler(req, res) {
   const discount = isMember ? null : await reserveDiscount(auth.user.id, orderId);
   // + ส่วนลดถาวรจากระดับสมาชิก (ทุก 10 Lv. = 1%) — บวกกับสิทธิ์ออนไลน์ได้
   const levelPct = isMember ? 0 : await levelDiscountPct(auth.user.id);
-  const totalPct = (discount ? discount.percent : 0) + levelPct;
-  const price = totalPct > 0 ? discountedPrice(pkg.price, totalPct) : pkg.price;
+  // สมาชิก: ราคาแพ็กเกจคิดส่วนลดในตัวแล้ว (360 วัน ลด 5%) — แสดงเป็นส่วนลดจากราคาเต็ม
+  const totalPct = isMember ? pkg.discountPct : (discount ? discount.percent : 0) + levelPct;
+  const fullPrice = isMember ? pkg.fullPrice : pkg.price;
+  const price = isMember ? pkg.price : totalPct > 0 ? discountedPrice(pkg.price, totalPct) : pkg.price;
   const amount = price.toFixed(2);
   const qrImageUrl = `https://promptpay.io/${encodeURIComponent(PROMPTPAY_ID)}/${amount}.png`;
   const createdAt = new Date().toISOString();
@@ -55,7 +57,7 @@ export default async function handler(req, res) {
       created_at: createdAt,
       owner_user_id: auth.user.id,
       owner_email: auth.user.email,
-      ...(totalPct > 0 ? { discount_id: discount ? discount.id : null, discount_pct: totalPct, original_amount_thb: pkg.price } : {}),
+      ...(totalPct > 0 ? { discount_id: discount ? discount.id : null, discount_pct: totalPct, original_amount_thb: fullPrice } : {}),
     },
     ['owner_user_id', 'owner_email']
   );
@@ -70,13 +72,14 @@ export default async function handler(req, res) {
     order_id: orderId,
     package_id: pkg.id,
     amount_thb: price,
-    original_amount_thb: pkg.price,
+    original_amount_thb: fullPrice,
     discount_pct: totalPct,
     level_discount_pct: levelPct,
     online_discount_pct: discount ? discount.percent : 0,
     hours_to_add: pkg.hours + pkg.bonus,
     is_membership: isMembershipPackage(pkg.id),
-    membership_days: isMembershipPackage(pkg.id) ? MEMBERSHIP.days : 0,
+    membership_days: isMember ? pkg.days : 0,
+    membership_discount_pct: isMember ? pkg.discountPct : 0,
     qr_image_url: qrImageUrl,
     created_at: createdAt,
   });

@@ -2,15 +2,32 @@
 // เก็บวันหมดอายุเป็น tag `member_until:<ISO UTC>` ใน bot_config.symbols_trading (ไม่ต้องมีตารางใหม่)
 // ราคา/จำนวนวันอ่านจากไฟล์นี้ฝั่ง Server เสมอ (ไม่เชื่อค่าจาก Browser)
 
-export const MEMBERSHIP = {
-  id: 900, // package_id ของคำสั่งซื้อสมาชิก (ไม่ชนกับแพ็กเกจชั่วโมงในตาราง packages)
+// แพ็กเกจสมาชิก (ผู้ใช้กำหนด 13 ต.ค. 2026) — package_id 900–903 (ไม่ชนกับแพ็กเกจชั่วโมงในตาราง packages)
+// ราคาเต็ม = 99 บาท / 30 วัน · 360 วันลด 5% · ส่วนลด Lv./ออนไลน์ไม่ใช้กับค่าสมาชิก
+const plan = (id, days, label, fullPrice, discountPct = 0) => ({
+  id,
   kind: 'membership',
-  name: 'สมาชิกรายเดือน',
-  days: 30,
-  price: 99,
+  name: `สมาชิก ${label}`,
+  label,
+  days,
+  fullPrice,
+  discountPct,
+  price: Math.round(fullPrice * (100 - discountPct)) / 100,
   hours: 0,
   bonus: 0,
-};
+});
+export const MEMBERSHIP_PLANS = [
+  plan(900, 30, '30 วัน', 99),
+  plan(901, 90, '90 วัน', 297),
+  plan(902, 180, '180 วัน', 594),
+  plan(903, 360, '360 วัน', 1188, 5),
+];
+export const MEMBERSHIP = { ...MEMBERSHIP_PLANS[0], name: 'สมาชิกรายเดือน' }; // แพ็กเกจพื้นฐาน (ใช้แสดงชื่อ/ราคาเริ่มต้น)
+
+/** แพ็กเกจสมาชิกจาก package_id (ไม่ใช่สมาชิก = null) */
+export function membershipPlan(id) {
+  return MEMBERSHIP_PLANS.find((p) => p.id === Number(id)) || null;
+}
 
 // แผนที่ต้องเป็นสมาชิก (ชื่อหลักแบบเดียวกับ plan_config.BASE_PLANS ในโปรแกรม)
 export const MEMBER_PLANS = ['PSAR-H1-Trend', 'BB-H4-Reversion', 'BB-H4-Free'];
@@ -19,7 +36,7 @@ export const MEMBER_TAG = 'member_until:';
 export const MEMBER_WARN_DAYS = 3;
 
 export function isMembershipPackage(id) {
-  return Number(id) === MEMBERSHIP.id;
+  return membershipPlan(id) !== null;
 }
 
 /** วันหมดอายุจาก tag (Date หรือ null) */

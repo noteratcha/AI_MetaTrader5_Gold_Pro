@@ -5,7 +5,7 @@ import { notifyPurchase } from './lineNotify';
 import { issueReceipt } from './receipts';
 import { markDiscountUsed } from './onlineReward';
 import { extendMembership } from './membership';
-import { MEMBERSHIP, isMembershipPackage } from '../membership';
+import { isMembershipPackage, membershipPlan } from '../membership';
 
 export const ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // เวลาชำระตาม QR 15 นาที + เวลาแนบสลิปต่ออีก 10 นาที (ตรงกับตัวนับถอยหลังหน้าร้าน) — เกินแล้วยกเลิกคำสั่งซื้อ
@@ -152,10 +152,11 @@ export async function fulfillOrder(order, paymentRef) {
   return { ok: true, productKey, alreadyPaid: false };
 }
 
-/** คำสั่งซื้อสมาชิกรายเดือน (ล็อก PROCESSING แล้ว) → ต่ออายุ 30 วันให้เจ้าของคำสั่งซื้อ · ไม่ออก Product Key */
+/** คำสั่งซื้อสมาชิก (ล็อก PROCESSING แล้ว) → ต่ออายุตามจำนวนวันของแพ็กเกจ (30/90/180/360) · ไม่ออก Product Key */
 async function fulfillMembership(order, paymentRef) {
   const supabase = getAdminClient();
-  const info = await extendMembership(order.owner_user_id, MEMBERSHIP.days, { reason: `ชำระ ฿${Number(order.amount_thb).toLocaleString('en-US')} (${order.order_id})` });
+  const plan = membershipPlan(order.package_id);
+  const info = await extendMembership(order.owner_user_id, plan.days, { reason: `ชำระ ฿${Number(order.amount_thb).toLocaleString('en-US')} (${order.order_id})` });
   if (!info) {
     await supabase.from('orders').update({ status: order.status === 'CANCELLED' ? 'CANCELLED' : 'PENDING' }).eq('order_id', order.order_id);
     return { ok: false, error: 'ต่ออายุสมาชิกไม่สำเร็จ กรุณาติดต่อแอดมิน' };
