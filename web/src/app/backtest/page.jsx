@@ -7,7 +7,7 @@ import { PLAN_NAMES, planDisplay } from '../../lib/plans';
 import { MEMBER_PLAN_NUMBERS } from '../../lib/membership';
 import Link from 'next/link';
 
-const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa', 6: '#fb923c', 7: '#c084fc', 8: '#2dd4bf', 9: '#f59e0b' };
+const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa', 6: '#fb923c', 7: '#c084fc', 8: '#2dd4bf', 9: '#f59e0b', 10: '#f472b6' };
 
 // หลักการของแต่ละแผน (ตรงกับกฎในโปรแกรมเวอร์ชันล่าสุด)
 const PLAN_INFO = {
@@ -88,6 +88,15 @@ const PLAN_INFO = {
       'SL ระดับ 0 · TP 1.75 · เลื่อน SL ขั้นบันได: ราคาปิด H1 ผ่าน 1 → SL 0.15 · ผ่าน 1.27 → SL 0.6 · ผ่าน 1.5 → SL 1',
       'กรองสัญญาณหลอก: ADX H1 > 20 และ MACD H1 ยังไม่หันตามทิศไม้ (ไม่ผ่าน = ข้ามคลื่นนั้น)',
       'ไม่ใช้ AI · ชนะราว 1 ใน 3 แต่กำไรต่อไม้สูง',
+    ],
+  },
+  10: {
+    type: 'Oversold / Overbought ตามเทรนด์ · H1',
+    rules: [
+      'BUY: ราคาปิด H1 เหนือ MA200 และ RSI(14) เพิ่งลงต่ำกว่า 30 (ซื้อตอนย่อในขาขึ้น)',
+      'SELL: ราคาปิด H1 ใต้ MA200 และ RSI(14) เพิ่งขึ้นเกิน 70 (ขายตอนเด้งในขาลง)',
+      'SL 2 ATR H1 · TP 3 ATR · ถือไม่เกิน 48 ชม. · ไม่เลื่อน SL · ไม่ใช้ AI',
+      'ทดสอบแล้ว: Overbought/Oversold แบบสวนเทรนด์ขาดทุนทุกเครื่องมือ (RSI · Stochastic · Williams %R · CCI) — ใช้ได้เฉพาะตามเทรนด์',
     ],
   },
 };

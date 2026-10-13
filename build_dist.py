@@ -64,6 +64,7 @@ def create_quickstart_guide(out_dir):
    - Plan 6: PSAR-H1-Trend (Parabolic SAR H1 + เทรนด์ H4 MA10/30)
    - Plan 7: BB-H4-Reversion (เด้งขอบแบนด์ H4 2STD + Divergence + AI + เทรนด์ H4)
    - Plan 8: BB-H4-Free (เด้งขอบแบนด์ H4 2STD + Divergence + AI · ไม่กรองเทรนด์ H4)
+   - Plan 10: RSI-H1-Trend (RSI 30/70 ตามเทรนด์ MA200 H1 · SL 2 / TP 3 ATR)
    - Plan 9: Fib-H1-Counter (Fibonacci 0.3 สวนเทรนด์ใหญ่ H1 · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได)
 
 5. คำแนะนำความปลอดภัย & คู่มือการใช้งาน:
@@ -165,6 +166,7 @@ def build_gui_app(mode="pyinstaller"):
             "--hidden-import=news_feed",
             "--hidden-import=line_notify",
             "--hidden-import=fib_plan",
+            "--hidden-import=rsi_plan",
             f"--name={APP_NAME}",
             "gui_app.py"
         ]

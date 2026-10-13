@@ -27,6 +27,7 @@ STANDARD_PLANS = [
     "Plan 7: BB-H4-Reversion",
     "Plan 8: BB-H4-Free",
     "Plan 9: Fib-H1-Counter",
+    "Plan 10: RSI-H1-Trend",
 ]
 
 def clean_plan_name(raw_plan: str) -> str:
@@ -37,6 +38,8 @@ def clean_plan_name(raw_plan: str) -> str:
     if "PSAR" in p:
         return "Plan 6: PSAR-H1-Trend"
     # BB-H4 ต้องเช็คก่อน "BB" (Plan 5) · Free ก่อน Reversion
+    if "RSI-H1" in p:
+        return "Plan 10: RSI-H1-Trend"
     if "Fib-H1" in p:
         return "Plan 9: Fib-H1-Counter"
     if "BB-H4-Free" in p:

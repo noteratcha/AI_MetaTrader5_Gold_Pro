@@ -186,6 +186,9 @@ P8_NAME = "BB-H4-Free"
 import fib_plan
 P9_NAME = fib_plan.NAME
 _p9_cache = {}   # {sym: (เวลาแท่ง H1 ปิดล่าสุด, ออเดอร์รอ)} — คำนวณใหม่เฉพาะเมื่อมีแท่ง H1 ใหม่
+# Plan 10 (13 ต.ค. 2026): RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 · SL 2 / TP 3 ATR H1 · ถือไม่เกิน 48 ชม. — กฎใน rsi_plan.py
+import rsi_plan
+P10_NAME = rsi_plan.NAME
 MANUAL_SL_ATR = 1.0   # ไม้ที่เข้าเองไม่มี SL → บอทตั้ง SL 1.0 ATR M15 (เท่าค่าเริ่มต้นของหน้าต่างเข้าไม้เอง)
 P6_SAR = (0.01, 0.1)
 P6_SAR_FAST = (0.02, 0.2)
@@ -1618,7 +1621,7 @@ def log_signal_event(symbol, signal_type, plan, direction, price, ai_up, ai_down
 
 def evaluate_plans_condition_status(symbol: str = None) -> dict:
     """
-    ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 9 แผนเทรด (P1-P9) ณ ราคาปัจจุบัน
+    ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 10 แผนเทรด (P1-P10) ณ ราคาปัจจุบัน
     คืนค่า dict ข้อมูลแต่ละแผน: label, side, matched (เข้าแล้วกี่ข้อ), total, pct, items ([✓/✗ ข้อความ])
     """
     if symbol is None:
@@ -2017,6 +2020,29 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             "disabled_reason": plan_config.disabled_reason(P9_NAME)
         }
 
+        # ===== Plan 10: RSI-H1-Trend =====
+        r10, m10, a10 = rsi_plan.indicators(df_h1)
+        k10 = len(df_h1) - 2
+        c10 = df_h1['close'].values
+        up10 = bool(c10[k10] > m10[k10]) if not np.isnan(m10[k10]) else True
+        sig10 = rsi_plan.signal_at(r10, m10, c10, k10)
+        p10_side = "BUY" if up10 else "SELL"
+        p10_items = [
+            {"name": "เทรนด์ MA200 H1", "ok": not np.isnan(m10[k10]),
+             "desc": f"ราคาปิด {c10[k10]:,.2f} {'เหนือ' if up10 else 'ใต้'} MA200 {m10[k10]:,.2f} — รอ{'ซื้อตอน Oversold' if up10 else 'ขายตอน Overbought'}"},
+            {"name": f"RSI(14) {'< 30' if up10 else '> 70'}", "ok": bool((r10[k10] < rsi_plan.OVERSOLD) if up10 else (r10[k10] > rsi_plan.OVERBOUGHT)),
+             "desc": f"RSI H1 {r10[k10]:.1f}"},
+            {"name": "เพิ่งตัดเข้าโซนบนแท่งปิด", "ok": sig10 != 0,
+             "desc": f"เข้า {p10_side} · SL 2 ATR · TP 3 ATR ({a10[k10]:,.2f} ต่อ ATR)" if sig10 else "รอแท่ง H1 ที่ RSI ตัดเข้าโซน"},
+        ]
+        m10n = sum(1 for it in p10_items if it["ok"])
+        results["P10"] = {
+            "name": P10_NAME, "label": "P10 · H1 (RSI)", "side": p10_side,
+            "matched": m10n, "total": 3, "pct": int(m10n / 3 * 100), "items": p10_items,
+            "enabled": plan_config.is_enabled(P10_NAME),
+            "disabled_reason": plan_config.disabled_reason(P10_NAME)
+        }
+
         for key, name, label, items in (("P7", P7_NAME, "P7 · H4 (BB)", p78_items + [h4_item]),
                                          ("P8", P8_NAME, "P8 · H4 (Free)", list(p78_items))):
             mk = sum(1 for it in items if it["ok"])
@@ -2047,7 +2073,7 @@ def print_plans_condition_status(symbol: str = None):
 
         print(f"\n{Colors.CYAN}{Colors.BOLD}[PLAN STATUS] ความพร้อมเงื่อนไขการเข้าไม้แต่ละแผน ({symbol} @ {price:,.2f}){Colors.RESET}")
 
-        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"]
+        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"]
         for pk in plan_order:
             info = status_map.get(pk)
             if not info:
@@ -2649,6 +2675,13 @@ def main():
                     if not _broke9 and (_px9 - _od9['entry']) * _s9 <= 0 and (_px9 - _od9['sl']) * _s9 > 0:
                         p9_sig, p9_od = _s9, _od9
                 p9_bar_time = p9_od['conf_time'] if p9_od else None
+                # ===== Plan 10: RSI-H1-Trend — สัญญาณจากแท่ง H1 ที่ปิดแล้ว =====
+                _r10, _m10, _a10 = rsi_plan.indicators(df_h1)
+                _k10 = len(df_h1) - 2
+                p10_sig = rsi_plan.signal_at(_r10, _m10, df_h1['close'].values, _k10) if _k10 >= 1 else 0
+                p10_atr = float(_a10[_k10]) if _k10 >= 0 else float('nan')
+                p10_rsi = float(_r10[_k10]) if _k10 >= 0 else float('nan')
+                p10_bar_time = df_h1['time'].iloc[-2]
                 # Plan 2 ออกไม้: MA5 ตัด MA20 H1 กลับขั้ว (แท่งที่ปิดแล้ว)
                 _ma_exit_h1 = df_h1['close'].rolling(P2_EXIT_MA).mean()
                 if len(df_h1) >= P2_EXIT_MA + 3:
@@ -3040,6 +3073,9 @@ def main():
                 elif bb4_sell_sig:
                     status_text = "[BB-H4 REVERSION SELL] Upper Band H4 + Div"
                     status_color = Colors.RED
+                elif p10_sig:
+                    status_text = f"[RSI-H1 {'BUY' if p10_sig == 1 else 'SELL'}] RSI {p10_rsi:.1f} {'< 30' if p10_sig == 1 else '> 70'} + MA200 trend"
+                    status_color = Colors.GREEN if p10_sig == 1 else Colors.RED
                 elif p9_sig:
                     status_text = f"[FIB-H1 {'BUY' if p9_sig == 1 else 'SELL'}] Fib 0.3 @ {p9_od['entry']:.2f} (counter H1 stack)"
                     status_color = Colors.GREEN if p9_sig == 1 else Colors.RED
@@ -3352,6 +3388,8 @@ def main():
                                 return p6_bar_time
                             if plan_name == P9_NAME:
                                 return p9_bar_time       # 1 ไม้ต่อ 1 คลื่น
+                            if plan_name == P10_NAME:
+                                return p10_bar_time      # 1 ไม้ต่อ 1 สัญญาณ
                             return None
 
                         def _record_plan(direction, plan_name):
@@ -3637,6 +3675,17 @@ def main():
                                 fib_plan.remember(p9_sig, p9_od['a'], p9_od['b'], tp)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', P9_NAME, side9, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} (Fib leg {p9_od["a"]:.2f}->{p9_od["b"]:.2f})')
                                 _record_plan(side9, P9_NAME)
+
+                        # แผน 10: RSI-H1-Trend — RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 · SL 2 / TP 3 ATR H1 · ไม่ใช้ AI
+                        if p10_sig and pd.notna(p10_atr) and p10_atr > 0:
+                            side10 = 'BUY' if p10_sig == 1 else 'SELL'
+                            if not _is_plan_blocked(side10, P10_NAME):
+                                price = tick.ask if p10_sig == 1 else tick.bid
+                                sl, tp = (round(v, digits) for v in rsi_plan.sl_tp(p10_sig, price, p10_atr))
+                                print(f"{Colors.GREEN if p10_sig == 1 else Colors.RED}[SIGNAL] {sym} {P10_NAME}: RSI(14) H1 {p10_rsi:.1f} {'< 30' if p10_sig == 1 else '> 70'} + {'above' if p10_sig == 1 else 'below'} MA200 -> SENDING {side10} ORDER (SL 2 ATR={sl:.{digits}f} / TP 3 ATR={tp:.{digits}f} · max 48h){Colors.RESET}")
+                                send_order(sym, mt5.ORDER_TYPE_BUY if p10_sig == 1 else mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=P10_NAME)
+                                log_signal_event(sym, 'ENTRY_SIGNAL', P10_NAME, side10, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} (RSI {p10_rsi:.1f})')
+                                _record_plan(side10, P10_NAME)
                 if has_position:
                     # เช็คเงื่อนไขการจัดการ Position (Plan 1 MA Exit + Plan 2 H1 MA Exit + AI Reversal + Early BE Lock + Unlimited Dynamic TP)
                     open_tickets = {p.ticket for p in positions}
@@ -3785,6 +3834,15 @@ def main():
                                     new9 = round(min(new9, px9 - gap9) if d9 == 1 else max(new9, px9 + gap9), 2)
                                     if not pos.sl or (new9 - float(pos.sl)) * d9 > 0.005:
                                         modify_position(pos, new9, pos.tp, reason=f"Fib Ladder ({pos.comment})")
+                            continue
+
+                        # 0.36 Plan 10 (RSI-H1-Trend): ถือไม่เกิน 48 ชม. (ครบแล้วปิด) · ไม่เลื่อน SL / ไม่ใช้ AI Reversal / ล็อกกำไร (ตรงกับ Backtest)
+                        if pos.comment.startswith(P10_NAME):
+                            if tick is not None and int(tick.time) - int(pos.time) >= rsi_plan.HOLD_HOURS * 3600:
+                                p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
+                                print(f"{Colors.YELLOW}[PLAN 10 EXIT] {sym} ถือครบ {rsi_plan.HOLD_HOURS} ชม. — ปิดไม้ Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                log_signal_event(sym, 'POSITION_MGMT', P10_NAME, 'SELL' if pos.type == mt5.ORDER_TYPE_BUY else 'BUY', tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'TIME_EXIT', f'Held {rsi_plan.HOLD_HOURS}h (Profit: ${pos.profit:.2f})')
+                                close_position(pos, comment=f"P10 Time Exit {rsi_plan.HOLD_HOURS}h")
                             continue
 
                         # 1. เช็คเงื่อนไขการตัดขาดทุนเมื่อทิศทางเปลี่ยน (AI Dynamic Exit พร้อม Whipsaw Protection)

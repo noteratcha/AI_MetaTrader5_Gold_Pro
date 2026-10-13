@@ -148,7 +148,7 @@ class LicenseManager:
                     self.session_data["user_id"] = str(u.get("id", ""))
                     self.session_data["token"] = data.get("token", "")
                     self.session_data["hours_remaining_minutes"] = int(round(hrs * 60))
-                    self.session_data["membership"] = u.get("membership")   # สมาชิกรายเดือน (ปลดล็อก P6–P9)
+                    self.session_data["membership"] = u.get("membership")   # สมาชิกรายเดือน (ปลดล็อก P6–P10)
                     self.session_data["status"] = "AUTHENTICATED"
                     self.session_data["last_sync"] = int(time.time())
                     self.session_data["remember_me"] = bool(remember_me)

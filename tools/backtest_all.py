@@ -1,6 +1,6 @@
 """Backtest ทุกแผนตามกฎปัจจุบัน บนข้อมูล MT5 จริง (XAUUSD) แล้วบันทึกผลเป็น web/public/backtest.json ให้หน้า /backtest
 วิธีใช้: เปิด MT5 ค้างไว้ แล้วรัน  python tools/backtest_all.py  (ประมาณ 3–4 นาที) จากนั้น deploy เว็บ
-P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free · P9 Fib H1
+P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free · P9 Fib H1 · P10 RSI H1
 - AI: Walk-forward (เทรน 5000 แท่ง M15 → ทายแท่งถัดไป 500 แท่ง แล้วเลื่อน) ด้วย build_ai_features / AI_FEATURES ของบอท
 - ข้อมูลที่ใช้ตัดสินใจ = แท่งที่ปิดแล้ว (เข้าไม้ที่ราคาเปิดแท่งถัดไป) · หักสเปรด 0.35 จุด/ไม้ · 1 ไม้ต่อแผนในเวลาเดียวกัน
 - ไม่จำลอง: Cooldown, Circuit Breaker, Loss Block, การแย่งเข้าไม้ระหว่างแผน
@@ -377,6 +377,34 @@ def sim_fib(df):
 rows.append(stats("P7 BB-H4", keep(7, sim_ai_plan(sig_bb4, step=5.0, frac=0.4, first_frac=0.5))))
 rows.append(stats("P8 BB-H4 Free", keep(8, sim_ai_plan(sig_bb4, step=5.0, frac=0.4, first_frac=0.5, use_h4=False))))
 rows.append(stats("P9 Fib H1", keep(9, sim_fib(h1))))
+
+
+def sim_rsi(df):
+    """Plan 10: RSI-H1-Trend (กฎใน rsi_plan.py) — RSI(14) แตะ 30/70 ตามเทรนด์ MA200 H1 · SL 2 / TP 3 ATR · ถือไม่เกิน 48 แท่ง"""
+    import rsi_plan as rp
+    o_, h_, l_, c_ = (df[k].values for k in ("open", "high", "low", "close"))
+    t_ = df.time.values
+    rsi_, ma_, atr_ = rp.indicators(df)
+    out, pos = [], None
+    for i in range(210, len(df) - 1):
+        if pos:
+            s_, e, sl, tp, ei = pos
+            rr = None
+            if (l_[i] <= sl) if s_ == 1 else (h_[i] >= sl): rr = (sl - e) * s_
+            elif (h_[i] >= tp) if s_ == 1 else (l_[i] <= tp): rr = (tp - e) * s_
+            elif i - ei >= rp.HOLD_HOURS: rr = (o_[i + 1] - e) * s_
+            if rr is not None:
+                out.append(dict(time=t_[ei], pnl=rr - SPREAD)); pos = None
+            continue
+        sg = rp.signal_at(rsi_, ma_, c_, i)
+        if sg and not np.isnan(atr_[i]):
+            e = o_[i + 1]
+            sl, tp = e - sg * rp.SL_ATR * atr_[i], e + sg * rp.TP_ATR * atr_[i]
+            pos = (sg, e, sl, tp, i + 1)
+    return out
+
+
+rows.append(stats("P10 RSI H1", keep(10, sim_rsi(h1))))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
 print(pd.DataFrame(rows).to_string(index=False))
@@ -392,9 +420,10 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · �
          6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100"),
          7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),
          8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด"),
-         9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · ADX > 20 + MACD ยังไม่หันตามทิศไม้ · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)")}
+         9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · ADX > 20 + MACD ยังไม่หันตามทิศไม้ · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)"),
+         10: ("Plan 10", "RSI-H1-Trend", "RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 (ซื้อ Oversold ในขาขึ้น / ขาย Overbought ในขาลง) · SL 2 ATR · TP 3 ATR · ถือไม่เกิน 48 ชม.")}
 plans_out, events = [], []
-for k in (1, 2, 3, 4, 5, 6, 7, 8, 9):
+for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
     tr = ALL[k]
     st = stats(NAMES[k][1], tr)
     df_t = pd.DataFrame(tr)
@@ -406,7 +435,7 @@ for k in (1, 2, 3, 4, 5, 6, 7, 8, 9):
             events.append((pd.Timestamp(x["time"]), k, float(x["pnl"])))
     plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly))
 events.sort(key=lambda e: e[0])
-eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9)}
+eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)}
 total = 0.0
 for t, k, pnl in events:
     cum[k] += pnl; total += pnl

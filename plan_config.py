@@ -16,9 +16,9 @@ from license_manager import API_BASE_URL
 REFRESH_SECONDS = 300
 CACHE_FILE = data_path("plan_config.json")
 BASE_PLANS = ("SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "MA-Cross-Trend", "MA-Cross-H1-Trend", "PSAR-H1-Trend",
-              "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter")
+              "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend")
 # แผนเฉพาะสมาชิกรายเดือน (ผู้ใช้ทั่วไปใช้ได้ P1–P5) — ตรงกับ MEMBER_PLANS ใน web/src/lib/membership.js
-MEMBER_PLANS = ("PSAR-H1-Trend", "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter")
+MEMBER_PLANS = ("PSAR-H1-Trend", "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend")
 
 _state = {"plans": {}, "fetched_at": 0.0}
 _lock = threading.Lock()

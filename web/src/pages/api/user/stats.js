@@ -11,6 +11,7 @@ const PLAN_ORDER = [
   'Plan 7: BB-H4-Reversion',
   'Plan 8: BB-H4-Free',
   'Plan 9: Fib-H1-Counter',
+  'Plan 10: RSI-H1-Trend',
 ];
 
 // สถิติการเทรดรายแผนของผู้ใช้ (ซิงค์จาก Desktop App → user_plan_stats)

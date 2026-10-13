@@ -568,7 +568,7 @@ class BotController:
             if tf_upper == "H1":
                 mt5_tf = mt5.TIMEFRAME_H1
                 bar_seconds = 3600
-                warmup = max(extra, 150)
+                warmup = max(extra, 220)   # MA200 H1 (Plan 10) ต้องการ 200 แท่งก่อนแท่งแรกที่แสดง
             elif tf_upper == "H4":
                 mt5_tf = mt5.TIMEFRAME_H4
                 bar_seconds = 14400
@@ -645,6 +645,7 @@ class BotController:
                 # Plan 6: SAR & EMA100
                 sar_vals, _ = bot_core.psar_series(df["high"].values, df["low"].values, *bot_core.P6_SAR)
                 ema100_s = df["close"].ewm(span=bot_core.P6_EXIT_EMA, adjust=False).mean()
+                ma200_h1_s = df["close"].rolling(200).mean()        # Plan 10: เทรนด์ MA200 H1
 
                 for i in range(max(0, len(rates) - count), len(rates)):
                     r = rates[i]
@@ -664,6 +665,7 @@ class BotController:
                         "h1_bb_lo": _clean(bb_lo_s.iloc[i]),
                         "h1_sar": _clean(sar_v),
                         "h1_ema100": _clean(ema100_s.iloc[i]),
+                        "h1_ma200": _clean(ma200_h1_s.iloc[i]),
                     })
             else:  # H4
                 # H4 Trend: MA10, MA30, MA200
@@ -958,7 +960,7 @@ class BotController:
         if not s or "Manual" in s or s in ("เข้าเอง", "อื่นๆ"):
             return "เข้าเอง"
         for base in ("MA-Cross-H1-Trend", "MA-Cross-Trend", "SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "PSAR-H1-Trend",
-                     "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter"):
+                     "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend"):
             if base in s:
                 return base
         if "Plan 1" in s: return "MA-Cross-Trend"
@@ -970,6 +972,7 @@ class BotController:
         if "Plan 7" in s: return "BB-H4-Reversion"
         if "Plan 8" in s: return "BB-H4-Free"
         if "Plan 9" in s: return "Fib-H1-Counter"
+        if "Plan 10" in s: return "RSI-H1-Trend"
         try:
             import plan_config
             return plan_config.base_plan(s) or "อื่นๆ"
