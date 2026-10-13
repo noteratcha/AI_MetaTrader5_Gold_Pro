@@ -178,9 +178,35 @@ export function CandleCard({ candles, price }) {
 }
 
 /* ---------------------------------------------------------------- กำไร/ขาดทุนรายวัน */
+const PNL_RANGES = [
+  [7, '7 วัน'],
+  [14, '14 วัน'],
+  [30, '30 วัน'],
+  [90, '90 วัน'],
+];
+const todayTh = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+const addDays = (d, n) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
+
 export function DailyPnlCard({ rows }) {
   const [hover, setHover] = useState(null);
-  const data = rows || [];
+  // ช่วงเวลา: ค่าเริ่มต้น 30 วัน · เลือก 7/14/30/90 วัน หรือกำหนดวันเอง (ข้อมูลจากโปรแกรมย้อนหลังได้สูงสุด 90 วัน)
+  const [range, setRange] = useState(30);
+  const [custom, setCustom] = useState({ from: '', to: '' });
+  const all = rows || [];
+  const minDay = all[0]?.date || addDays(todayTh(), -89);
+  const maxDay = todayTh();
+  const from = range === 'custom' ? custom.from || minDay : addDays(maxDay, -(range - 1));
+  const to = range === 'custom' ? custom.to || maxDay : maxDay;
+  const daily = all.filter((r) => r.date >= from && r.date <= to);
+  const days = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+  // เกิน 62 วันรวมเป็นรายสัปดาห์ (แท่งไม่เล็กเกินไป)
+  const weekly = days > 62;
+  const data = weekly
+    ? Array.from({ length: Math.ceil(daily.length / 7) }, (_, i) => {
+        const chunk = daily.slice(i * 7, i * 7 + 7);
+        return { date: chunk[0].date, to: chunk[chunk.length - 1].date, profit: chunk.reduce((a, x) => a + x.profit, 0), closed: chunk.reduce((a, x) => a + (x.closed || 0), 0) };
+      })
+    : daily;
   const W = 640;
   const H = 220;
   const L = 52;
@@ -248,7 +274,7 @@ export function DailyPnlCard({ rows }) {
         </svg>
         <div className="tiny muted" style={{ minHeight: 18, marginTop: 4 }}>
           {hover
-            ? `${thDate(hover.date)} · ${hover.profit > 0.005 ? 'กำไร' : hover.profit < -0.005 ? 'ขาดทุน' : 'ไม่มีกำไร/ขาดทุน'} ${money(hover.profit)} · ปิดไม้ ${hover.closed} ไม้`
+            ? `${thDate(hover.date)}${hover.to ? ` – ${thDate(hover.to)}` : ''} · ${hover.profit > 0.005 ? 'กำไร' : hover.profit < -0.005 ? 'ขาดทุน' : 'ไม่มีกำไร/ขาดทุน'} ${money(hover.profit)} · ปิดไม้ ${hover.closed} ไม้`
             : 'ทั้งบัญชี MT5 รวม commission/swap · เวลาไทย · ชี้ที่แท่งเพื่อดูรายละเอียด'}
         </div>
       </>
@@ -258,11 +284,35 @@ export function DailyPnlCard({ rows }) {
     <div className="card">
       <div className="card-header">
         <h3>
-          <BarChart3 size={17} className="text-gold" /> กำไร / ขาดทุนรายวัน (14 วัน)
+          <BarChart3 size={17} className="text-gold" /> กำไร / ขาดทุน{weekly ? 'รายสัปดาห์' : 'รายวัน'}
         </h3>
         {data.length > 0 && <span className={`badge ${total >= 0 ? 'badge-green' : 'badge-red'}`}>รวม {money(total)}</span>}
       </div>
-      <div className="card-body">{body}</div>
+      <div className="card-body">
+        <div className="row wrap" style={{ gap: 6, marginBottom: 12, alignItems: 'center' }}>
+          {PNL_RANGES.map(([v, label]) => (
+            <button key={v} type="button" className={`btn btn-sm ${range === v ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRange(v)}>
+              {label}
+            </button>
+          ))}
+          <button type="button" className={`btn btn-sm ${range === 'custom' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRange('custom')}>
+            กำหนดเอง
+          </button>
+          {range === 'custom' && (
+            <span className="row wrap small" style={{ gap: 6, alignItems: 'center' }}>
+              <input type="date" className="input" style={{ height: 32, width: 150 }} min={minDay} max={maxDay} value={custom.from || minDay}
+                onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+              <span className="muted">ถึง</span>
+              <input type="date" className="input" style={{ height: 32, width: 150 }} min={minDay} max={maxDay} value={custom.to || maxDay}
+                onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+            </span>
+          )}
+        </div>
+        {body}
+        {all.length > 0 && all.length < 30 && range !== 7 && range !== 14 && (
+          <div className="tiny faint" style={{ marginTop: 6 }}>โปรแกรมเวอร์ชันนี้ส่งข้อมูลมา {all.length} วัน — อัปเดตโปรแกรมเป็นเวอร์ชันล่าสุดเพื่อดูย้อนหลังได้ 90 วัน</div>
+        )}
+      </div>
     </div>
   );
 }

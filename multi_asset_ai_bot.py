@@ -282,7 +282,7 @@ _web_extra_cache = {"pnl_at": 0.0, "pnl": []}
 
 
 def _web_extras():
-    """ข้อมูลชุดเดียวกับที่โปรแกรมแสดง ส่งขึ้นเว็บ: AI คาดการณ์ · ผลวิเคราะห์ข่าว · แท่ง M15 16 แท่ง · กำไร/ขาดทุนรายวัน 14 วัน"""
+    """ข้อมูลชุดเดียวกับที่โปรแกรมแสดง ส่งขึ้นเว็บ: AI คาดการณ์ · ผลวิเคราะห์ข่าว · แท่ง M15 16 แท่ง · กำไร/ขาดทุนรายวัน 90 วัน"""
     extra = {}
     try:
         import ai_outlook
@@ -300,7 +300,7 @@ def _web_extras():
         if time.time() - _web_extra_cache["pnl_at"] > 60:
             today = thai_time.now().date()
             _web_extra_cache["pnl"] = [{"date": r["date"].isoformat(), "profit": round(r["profit"], 2), "closed": r["closed"]}
-                                       for r in bot_ctrl.get_daily_pnl(today - timedelta(days=13), today)]
+                                       for r in bot_ctrl.get_daily_pnl(today - timedelta(days=89), today)]   # 90 วัน — เว็บเลือกช่วงดูได้
             _web_extra_cache["pnl_at"] = time.time()
         extra["daily_pnl"] = _web_extra_cache["pnl"]
     except Exception:
