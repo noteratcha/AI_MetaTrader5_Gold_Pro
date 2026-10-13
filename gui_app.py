@@ -4469,7 +4469,7 @@ class MainTradingApp(ctk.CTk):
         ub.pack(fill="x", padx=14, pady=(0, 12))
         ctk.CTkButton(ub, text="อัปเดตเลย (1-Click)", height=34, corner_radius=8, font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
                       fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_PRIMARY, text_color="#1A1406",
-                      command=lambda: self._start_update_check(manual=True)).pack(side="left")
+                      command=self._login_update_now).pack(side="left")
         ctk.CTkButton(ub, text="ดาวน์โหลดจากเว็บ", height=34, corner_radius=8, font=ctk.CTkFont(family=app_fonts.UI, size=12),
                       fg_color="#1A1E27", hover_color="#262B36", text_color=COLOR_TEXT_PRIMARY,
                       command=lambda: webbrowser.open("https://goldbot24.vercel.app/download")).pack(side="left", padx=(8, 0))
@@ -4491,7 +4491,8 @@ class MainTradingApp(ctk.CTk):
         # ลิงก์ย่อ 1 แถว: เว็บไซต์ · คู่มือ · เปิดบัญชี MT5
         link_frame = ctk.CTkFrame(inner, fg_color="transparent")
         link_frame.pack()
-        links = (("เว็บไซต์ GoldBot24", "https://goldbot24.vercel.app", COLOR_CYAN_ACCENT),
+        links = (("ดาวน์โหลดเวอร์ชันล่าสุด", "https://goldbot24.vercel.app/download", COLOR_SUCCESS_GREEN),
+                 ("เว็บไซต์ GoldBot24", "https://goldbot24.vercel.app", COLOR_CYAN_ACCENT),
                  ("คู่มือการใช้งาน", "https://goldbot24.vercel.app/guide", COLOR_GOLD_PRIMARY),
                  ("ยังไม่มีบัญชี MT5? เปิดที่ XM", "https://www.xmglobal.com/referral?token=H6macbsWn_6B1_6ia0byuw", COLOR_GOLD_WARM))
         for k, (txt, url, col) in enumerate(links):
@@ -4501,9 +4502,55 @@ class MainTradingApp(ctk.CTk):
             lb.pack(side="left")
             lb.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
 
+        # แถบมีเวอร์ชันใหม่ (ตรวจอัตโนมัติเมื่อเปิดหน้าเข้าสู่ระบบ)
+        self.login_update_bar = ctk.CTkFrame(inner, fg_color="#0F2A20", corner_radius=10, border_width=1, border_color="#1F6B4A")
+        self.lbl_login_update = ctk.CTkLabel(self.login_update_bar, text="", font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
+                                             text_color=COLOR_SUCCESS_GREEN, anchor="w")
+        self.lbl_login_update.pack(side="left", padx=(12, 8), pady=8)
+        ctk.CTkButton(self.login_update_bar, text="ดาวน์โหลด", width=80, height=28, corner_radius=8, font=ctk.CTkFont(family=app_fonts.UI, size=11),
+                      fg_color="#1A1E27", hover_color="#262B36", text_color=COLOR_TEXT_PRIMARY,
+                      command=lambda: webbrowser.open("https://goldbot24.vercel.app/download")).pack(side="right", padx=(4, 10), pady=8)
+        ctk.CTkButton(self.login_update_bar, text="อัปเดต 1-Click", width=100, height=28, corner_radius=8, font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
+                      fg_color=COLOR_SUCCESS_GREEN, hover_color="#059669", text_color="#06140D",
+                      command=self._login_update_now).pack(side="right", pady=8)
+
         # เปิดโปรแกรมมาแล้วรู้อยู่ก่อนว่าต้องอัปเดต
         if getattr(license_mgr, "update_required", None):
             self._show_update_box(license_mgr.update_required.get("message", ""))
+        self._login_check_update()
+
+    def _login_check_update(self, open_dialog=False):
+        """ตรวจเวอร์ชันบนหน้าเข้าสู่ระบบ (ลูปหลักทำงานเฉพาะหลังล็อกอิน) — มีใหม่ → แถบเขียวพร้อมปุ่มอัปเดต"""
+        box = {}
+        threading.Thread(target=lambda: box.setdefault("info", license_mgr.check_app_version(APP_VERSION)), daemon=True).start()
+
+        def wait():
+            if "info" not in box:
+                self.after(200, wait)
+                return
+            info = box["info"] or {}
+            self._update_info = info
+            try:
+                if info.get("has_update") and self.login_update_bar.winfo_exists():
+                    self.lbl_login_update.configure(text=f"มีเวอร์ชันใหม่ v{info.get('latest_version')}")
+                    if not self.login_update_bar.winfo_ismapped():
+                        self.login_update_bar.pack(fill="x", pady=(0, 14), before=self.seg_auth)
+            except Exception:
+                pass
+            if open_dialog:
+                if info.get("has_update"):
+                    self._prompt_update(info)
+                else:
+                    messagebox.showinfo("ตรวจสอบเวอร์ชัน", f"ใช้เวอร์ชันล่าสุดแล้ว (v{APP_VERSION})\nหรือดาวน์โหลดตัวติดตั้งได้ที่ goldbot24.vercel.app/download")
+        wait()
+
+    def _login_update_now(self):
+        """ปุ่มอัปเดตบนหน้าเข้าสู่ระบบ: มีข้อมูลเวอร์ชันแล้วเปิดหน้าต่างอัปเดตเลย ไม่งั้นตรวจก่อน"""
+        info = getattr(self, "_update_info", None)
+        if info and info.get("has_update"):
+            self._prompt_update(info)
+        else:
+            self._login_check_update(open_dialog=True)
 
     def _show_update_box(self, msg):
         """แสดงกล่องต้องอัปเดตแทนข้อความ error ยาว ๆ"""
@@ -4602,7 +4649,7 @@ class MainTradingApp(ctk.CTk):
             sound_manager.play_sl_hit()
             if getattr(license_mgr, "update_required", None):   # ต้องอัปเดตโปรแกรมก่อน — กล่องอัปเดต + เปิดหน้าต่างอัปเดตให้เลย
                 self._show_update_box(msg)
-                self.after(300, lambda: self._start_update_check(manual=True))
+                self.after(300, self._login_update_now)
                 return
             self.lbl_login_status.configure(text=f"เข้าสู่ระบบไม่สำเร็จ: {msg}{self._password_hint(pwd)}", text_color=COLOR_DANGER_RED)
 
@@ -4882,6 +4929,7 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  ⏳  ประวัติการสะสมชั่วโมง / Lv.", command=lambda: HoursHistoryDialog(self))
         menu.add_command(label="  💬  ติดต่อแอดมิน (LINE)", command=lambda: ContactDialog(self))
         menu.add_command(label="  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
+        menu.add_command(label="  ดาวน์โหลดเวอร์ชันล่าสุด (เว็บ)", command=lambda: webbrowser.open(self.DOWNLOAD_URL))
         menu.add_separator()
         menu.add_command(label="  ⎋  ออกจากระบบ", foreground=COLOR_DANGER_RED, command=self._do_logout)
         x = self.btn_user_menu.winfo_rootx()
@@ -4970,6 +5018,10 @@ class MainTradingApp(ctk.CTk):
             return
 
         self._update_info = info
+        if not hasattr(self, "btn_update_status"):
+            if info.get("has_update") and (manual or info.get("mandatory")):
+                self._prompt_update(info)
+            return
         if info.get("has_update"):
             latest = info.get("latest_version")
             self.btn_update_status.configure(text=f"▲ มีเวอร์ชันใหม่ v{latest} · ดาวน์โหลด", fg_color=COLOR_GOLD_WARM, text_color="#1A1406")
