@@ -64,6 +64,7 @@ def create_quickstart_guide(out_dir):
    - Plan 6: PSAR-H1-Trend (Parabolic SAR H1 + เทรนด์ H4 MA10/30)
    - Plan 7: BB-H4-Reversion (เด้งขอบแบนด์ H4 2STD + Divergence + AI + เทรนด์ H4)
    - Plan 8: BB-H4-Free (เด้งขอบแบนด์ H4 2STD + Divergence + AI · ไม่กรองเทรนด์ H4)
+   - Plan 9: Fib-H1-Counter (Fibonacci 0.3 สวนเทรนด์ใหญ่ H1 · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได)
 
 5. คำแนะนำความปลอดภัย & คู่มือการใช้งาน:
    - ตรวจสอบให้แน่ใจว่าได้เปิดโปรแกรม MetaTrader 5 และล็อกอินบัญชีเรียบร้อยแล้ว
@@ -163,6 +164,7 @@ def build_gui_app(mode="pyinstaller"):
             "--hidden-import=instance_guard",
             "--hidden-import=news_feed",
             "--hidden-import=line_notify",
+            "--hidden-import=fib_plan",
             f"--name={APP_NAME}",
             "gui_app.py"
         ]

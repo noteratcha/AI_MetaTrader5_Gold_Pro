@@ -22,7 +22,7 @@ function fromAccount(list) {
     a.gp += p.gp || 0;
     a.gl += p.gl || 0;
   }
-  const plans = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => by[PLAN_NAMES[n]] || { name: PLAN_NAMES[n], trades: 0, win: 0, loss: 0, profit: 0 });
+  const plans = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => by[PLAN_NAMES[n]] || { name: PLAN_NAMES[n], trades: 0, win: 0, loss: 0, profit: 0 });
   if (by['เข้าไม้เอง']) plans.push(by['เข้าไม้เอง']);
   const rows = plans.map((p) => ({ ...p, winRate: p.win + p.loss ? (p.win / (p.win + p.loss)) * 100 : 0, pf: p.gl > 0 ? p.gp / p.gl : p.gp || 0 }));
   const t = rows.reduce((a, p) => ({ trades: a.trades + p.trades, win: a.win + p.win, loss: a.loss + p.loss, profit: a.profit + p.profit }), { trades: 0, win: 0, loss: 0, profit: 0 });

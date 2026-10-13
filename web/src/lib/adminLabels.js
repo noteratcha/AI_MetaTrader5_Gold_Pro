@@ -42,4 +42,5 @@ export const PLAN_SHORT = {
   'Plan 6: PSAR-H1-Trend': 'P6 · SAR H1',
   'Plan 7: BB-H4-Reversion': 'P7 · BB-H4',
   'Plan 8: BB-H4-Free': 'P8 · BB-H4 Free',
+  'Plan 9: Fib-H1-Counter': 'P9 · Fib H1',
 };

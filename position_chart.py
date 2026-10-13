@@ -37,6 +37,7 @@ PLANS = (  # (ขึ้นต้น comment, key, ชื่อสั้น) — 
     ("SR-Swing", "P4", "P4 · SR Bounce"),
     ("BB-H1", "P5", "P5 · BB-H1"),
     ("PSAR", "P6", "P6 · SAR H1"),
+    ("Fib-H1", "P9", "P9 · Fib H1"),
     ("BB-H4-Free", "P8", "P8 · BB-H4 Free"),   # ต้องมาก่อน BB-H4 (P7)
     ("BB-H4", "P7", "P7 · BB-H4"),
 )
@@ -237,6 +238,15 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                  {"label": "BB กลาง H1", "style": "mid", "values": ser("h1_bb_mid")},
                  {"label": "BB ล่าง H1", "style": "band", "values": ser("h1_bb_lo")}]
         pane = {"kind": "hist", "label": "MACD Histogram H1", "values": ser("h1_macd_hist")}
+    if plan_key == "P9" and pos and pos.get("tp"):
+        import fib_plan
+        s9 = 1 if side > 0 else -1
+        lg = fib_plan.leg_of(s9, float(pos["entry"]), float(pos["tp"]))
+        if lg:
+            names9 = {0.0: "0 (SL เริ่ม)", 0.3: "0.3 (เข้า)", 0.6: "0.6", 1.0: "1", 1.27: "1.27", 1.5: "1.5", 1.75: "1.75 (TP)"}
+            for x9, nm9 in names9.items():
+                levels.append({"label": f"Fib {nm9} · {fib_plan.level(lg[0], lg[1], x9):,.2f}", "price": fib_plan.level(lg[0], lg[1], x9),
+                               "style": "res" if x9 == 0.0 else ("sup" if x9 == 1.75 else "mid")})
     if plan_key in ("P3", "P4") and ctx:
         if ctx["res"]:
             levels.append({"label": f"แนวต้าน H1 {ctx['res']:,.2f}", "price": ctx["res"], "style": "res"})

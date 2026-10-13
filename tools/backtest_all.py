@@ -1,6 +1,6 @@
 """Backtest ทุกแผนตามกฎปัจจุบัน บนข้อมูล MT5 จริง (XAUUSD) แล้วบันทึกผลเป็น web/public/backtest.json ให้หน้า /backtest
 วิธีใช้: เปิด MT5 ค้างไว้ แล้วรัน  python tools/backtest_all.py  (ประมาณ 3–4 นาที) จากนั้น deploy เว็บ
-P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free
+P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free · P9 Fib H1
 - AI: Walk-forward (เทรน 5000 แท่ง M15 → ทายแท่งถัดไป 500 แท่ง แล้วเลื่อน) ด้วย build_ai_features / AI_FEATURES ของบอท
 - ข้อมูลที่ใช้ตัดสินใจ = แท่งที่ปิดแล้ว (เข้าไม้ที่ราคาเปิดแท่งถัดไป) · หักสเปรด 0.35 จุด/ไม้ · 1 ไม้ต่อแผนในเวลาเดียวกัน
 - ไม่จำลอง: Cooldown, Circuit Breaker, Loss Block, การแย่งเข้าไม้ระหว่างแผน
@@ -314,8 +314,66 @@ def sim_psar(fr):
 
 rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4, first_frac=0.5))))
 rows.append(stats("P6 SAR H1", keep(6, sim_psar(f))))
+def sim_fib(df):
+    """Plan 9: Fib-H1-Counter (กฎใน fib_plan.py) — คลื่น H1 ≥ 3 ATR · SELL บนคลื่นลงเมื่อ H1 MA100/150/200 เรียงขึ้น
+    (BUY กลับกัน) · เข้า 0.3 · SL 0 · TP 1.75 · ออเดอร์รอ 48 แท่ง · เลื่อน SL ขั้นบันไดหลวมตามราคาปิด H1 · แผนละ 1 ไม้"""
+    import fib_plan as fp
+    o_, h_, l_, c_ = (df[k].values for k in ("open", "high", "low", "close"))
+    t_ = df.time.values; n_ = len(df)
+    pc = np.r_[c_[0], c_[:-1]]
+    atr_ = pd.Series(np.maximum(h_ - l_, np.maximum(abs(h_ - pc), abs(l_ - pc)))).rolling(14).mean().values
+    cs = pd.Series(c_)
+    m1, m2, m3 = (cs.rolling(k).mean().values for k in (100, 150, 200))
+    stk = np.where((m1 > m2) & (m2 > m3), 1, np.where((m1 < m2) & (m2 < m3), -1, 0))
+    F = fp.FRACTAL
+    out, orders, pos = [], {}, None
+    last_lo = last_hi = None
+    for i in range(210, n_ - 1):
+        j = i - F; new = None
+        if l_[j] == l_[j - F:j + F + 1].min():
+            last_lo = (j, l_[j])
+            if last_hi and last_hi[0] < j and last_hi[1] - l_[j] >= fp.LEG_ATR * atr_[i]:
+                new = (-1, last_hi[1], l_[j])
+        if h_[j] == h_[j - F:j + F + 1].max():
+            last_hi = (j, h_[j])
+            if last_lo and last_lo[0] < j and h_[j] - last_lo[1] >= fp.LEG_ATR * atr_[i]:
+                new = (1, last_lo[1], h_[j])
+        if pos:
+            s_, e, sl, tp, ei, a, b = pos
+            rr = None
+            if (l_[i] <= sl) if s_ == 1 else (h_[i] >= sl): rr = (sl - e) * s_
+            elif (h_[i] >= tp) if s_ == 1 else (l_[i] <= tp): rr = (tp - e) * s_
+            elif i - ei >= 240: rr = (c_[i] - e) * s_
+            if rr is not None:
+                out.append(dict(time=t_[ei], pnl=rr - SPREAD)); pos = None
+            else:
+                nsl = fp.ladder_sl(s_, a, b, c_[i], sl)
+                if nsl is not None:
+                    pos = (s_, e, nsl, tp, ei, a, b)
+        if new:
+            dr, a, b = new
+            if stk[i] == -dr:
+                orders[dr] = dict(e=fp.level(a, b, fp.ENTRY), sl=fp.level(a, b, fp.SL0), tp=fp.level(a, b, fp.TP), exp=i + fp.WAIT_BARS, a=a, b=b)
+            else:
+                orders.pop(dr, None)
+        for s_ in list(orders):
+            od = orders[s_]
+            if i > od["exp"] or ((h_[i] > od["b"]) if s_ == 1 else (l_[i] < od["b"])):
+                del orders[s_]; continue
+            if pos:
+                continue
+            if l_[i] <= od["e"] <= h_[i]:
+                if (l_[i] <= od["sl"]) if s_ == 1 else (h_[i] >= od["sl"]):
+                    out.append(dict(time=t_[i], pnl=(od["sl"] - od["e"]) * s_ - SPREAD))
+                else:
+                    pos = (s_, od["e"], od["sl"], od["tp"], i, od["a"], od["b"])
+                del orders[s_]
+    return out
+
+
 rows.append(stats("P7 BB-H4", keep(7, sim_ai_plan(sig_bb4, step=5.0, frac=0.4, first_frac=0.5))))
 rows.append(stats("P8 BB-H4 Free", keep(8, sim_ai_plan(sig_bb4, step=5.0, frac=0.4, first_frac=0.5, use_h4=False))))
+rows.append(stats("P9 Fib H1", keep(9, sim_fib(h1))))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
 print(pd.DataFrame(rows).to_string(index=False))
@@ -330,9 +388,10 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · �
          5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เลื่อน SL ทุก 5 จุด (50%/40%)"),
          6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100"),
          7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),
-         8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด")}
+         8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด"),
+         9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)")}
 plans_out, events = [], []
-for k in (1, 2, 3, 4, 5, 6, 7, 8):
+for k in (1, 2, 3, 4, 5, 6, 7, 8, 9):
     tr = ALL[k]
     st = stats(NAMES[k][1], tr)
     df_t = pd.DataFrame(tr)
@@ -344,7 +403,7 @@ for k in (1, 2, 3, 4, 5, 6, 7, 8):
             events.append((pd.Timestamp(x["time"]), k, float(x["pnl"])))
     plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly))
 events.sort(key=lambda e: e[0])
-eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8)}
+eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9)}
 total = 0.0
 for t, k, pnl in events:
     cum[k] += pnl; total += pnl

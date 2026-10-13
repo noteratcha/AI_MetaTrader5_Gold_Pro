@@ -20,6 +20,7 @@ const PLAN_ROWS = [
   'Plan 6: PSAR-H1-Trend',
   'Plan 7: BB-H4-Reversion',
   'Plan 8: BB-H4-Free',
+  'Plan 9: Fib-H1-Counter',
 ];
 
 export default function AdminUserDetailPage() {

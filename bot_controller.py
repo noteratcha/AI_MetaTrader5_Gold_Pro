@@ -690,6 +690,25 @@ class BotController:
                         "h4_bb_lo": _clean(bb4_mid_s.iloc[i] - 2 * bb4_std_s.iloc[i]),
                     })
 
+            # Plan 9: คลื่น Fibonacci H1 — ออเดอร์รอ (pending) + คลื่นของไม้ P9 ที่ถืออยู่ (active) ให้กราฟวาดเส้นระดับ
+            fib = []
+            if tf_upper == "H1":
+                try:
+                    import fib_plan
+                    r9 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 700)
+                    if r9 is not None and len(r9) >= 300:
+                        for od in fib_plan.pending_orders(pd.DataFrame(r9)).values():
+                            fib.append({"side": int(od["side"]), "a": float(od["a"]), "b": float(od["b"]), "state": "pending",
+                                        "bars_left": int(od["bars_left"])})
+                    for p9 in (mt5.positions_get(symbol=symbol) or ()):
+                        if (p9.comment or "").startswith(fib_plan.NAME):
+                            s9 = 1 if p9.type == 0 else -1
+                            lg = fib_plan.leg_of(s9, float(p9.price_open), float(p9.tp or 0))
+                            if lg:
+                                fib.insert(0, {"side": s9, "a": float(lg[0]), "b": float(lg[1]), "state": "active"})
+                except Exception:
+                    fib = []
+
             info = mt5.symbol_info(symbol)
             point = float(info.point) if info and info.point else 0.01
             positions = [{
@@ -725,6 +744,7 @@ class BotController:
                 "res4_stars": ctx.get("res4_stars", 6.0) if ctx else 6.0,
                 "sup5_stars": ctx.get("sup5_stars", 6.0) if ctx else 6.0,
                 "res5_stars": ctx.get("res5_stars", 6.0) if ctx else 6.0,
+                "fib": fib,
             }
 
             # คำนวณแนวรับ–แนวต้าน 5 ระดับ (S1..S5, R1..R5) จากกราฟแท่ง 1,000 แท่ง พร้อม H1 + H4 Confluence
@@ -938,7 +958,7 @@ class BotController:
         if not s or "Manual" in s or s in ("เข้าเอง", "อื่นๆ"):
             return "เข้าเอง"
         for base in ("MA-Cross-H1-Trend", "MA-Cross-Trend", "SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "PSAR-H1-Trend",
-                     "BB-H4-Reversion", "BB-H4-Free"):
+                     "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter"):
             if base in s:
                 return base
         if "Plan 1" in s: return "MA-Cross-Trend"
@@ -949,6 +969,7 @@ class BotController:
         if "Plan 6" in s: return "PSAR-H1-Trend"
         if "Plan 7" in s: return "BB-H4-Reversion"
         if "Plan 8" in s: return "BB-H4-Free"
+        if "Plan 9" in s: return "Fib-H1-Counter"
         try:
             import plan_config
             return plan_config.base_plan(s) or "อื่นๆ"

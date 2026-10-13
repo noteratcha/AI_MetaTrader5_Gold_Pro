@@ -182,6 +182,10 @@ P6_NAME = "PSAR-H1-Trend"
 #   Backtest 2.5 ปี: P7 8 ไม้ ชนะ 87.5% +115 จุด PF 21 DD 6 · P8 40 ไม้ ชนะ 52.5% +106 จุด PF 1.95 DD 38 (ไม่ทับ P5)
 P7_NAME = "BB-H4-Reversion"
 P8_NAME = "BB-H4-Free"
+# Plan 9 (13 ต.ค. 2026): Fibonacci ย่อสวนเทรนด์ใหญ่ H1 — กฎทั้งหมดอยู่ใน fib_plan.py (ใช้ร่วมกับกราฟ/หน้าต่างไม้/Backtest)
+import fib_plan
+P9_NAME = fib_plan.NAME
+_p9_cache = {}   # {sym: (เวลาแท่ง H1 ปิดล่าสุด, ออเดอร์รอ)} — คำนวณใหม่เฉพาะเมื่อมีแท่ง H1 ใหม่
 MANUAL_SL_ATR = 1.0   # ไม้ที่เข้าเองไม่มี SL → บอทตั้ง SL 1.0 ATR M15 (เท่าค่าเริ่มต้นของหน้าต่างเข้าไม้เอง)
 P6_SAR = (0.01, 0.1)
 P6_SAR_FAST = (0.02, 0.2)
@@ -1614,7 +1618,7 @@ def log_signal_event(symbol, signal_type, plan, direction, price, ai_up, ai_down
 
 def evaluate_plans_condition_status(symbol: str = None) -> dict:
     """
-    ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 8 แผนเทรด (P1-P8) ณ ราคาปัจจุบัน
+    ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 9 แผนเทรด (P1-P9) ณ ราคาปัจจุบัน
     คืนค่า dict ข้อมูลแต่ละแผน: label, side, matched (เข้าแล้วกี่ข้อ), total, pct, items ([✓/✗ ข้อความ])
     """
     if symbol is None:
@@ -1973,6 +1977,38 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             p78_items.append({"name": "AI ทายลง ≥55%", "ok": c5, "desc": f"AI DOWN {ai_prob_down:.1%}" if c5 else f"AI DOWN {ai_prob_down:.1%} (<55%)"})
             c6 = abs(h4_diff_pct) < 0.20 or not is_uptrend_h4
             h4_item = {"name": "เทรนด์ H4 ไม่สวน", "ok": c6, "desc": (f"H4 ไซด์เวย์ ({h4_diff_pct:+.2f}%)" if abs(h4_diff_pct) < 0.20 else f"H4 ขาลง ({h4_diff_pct:.2f}%)") if c6 else f"H4 ขาขึ้น (+{h4_diff_pct:.2f}%) — ห้าม SELL"}
+        # ===== Plan 9: Fib-H1-Counter — ออเดอร์รอจากคลื่น H1 (ระดับ 0.3) =====
+        p9_orders = fib_plan.pending_orders(df_h1)
+        if p9_orders:
+            od9 = min(p9_orders.values(), key=lambda o: abs(cur_price - o["entry"]))
+            s9 = od9["side"]
+            reached = (cur_price - od9["entry"]) * s9 <= 0
+            p9_items = [
+                {"name": "คลื่น H1 ≥ 3 ATR", "ok": True,
+                 "desc": f"คลื่น{'ลง' if s9 == -1 else 'ขึ้น'} {od9['a']:,.2f} → {od9['b']:,.2f} (0 → 1)"},
+                {"name": "H1 MA100/150/200 สวนคลื่น", "ok": True,
+                 "desc": f"H1 เรียง{'ขึ้น' if s9 == -1 else 'ลง'} — {'SELL' if s9 == -1 else 'BUY'} ตอนราคาย้อนถึง 0.3"},
+                {"name": "ราคาถึงระดับ 0.3", "ok": reached,
+                 "desc": f"จุดเข้า {od9['entry']:,.2f} · SL {od9['sl']:,.2f} (0) · TP {od9['tp']:,.2f} (1.75) · "
+                         + ("ถึงแล้ว" if reached else f"อีก {abs(cur_price - od9['entry']):,.2f} จุด") + f" · ออเดอร์รออีก {od9['bars_left']} ชม."},
+            ]
+            p9_side = "BUY" if s9 == 1 else "SELL"
+        else:
+            p9_side = "SELL" if h1_stack_dir == 1 else "BUY"
+            p9_items = [
+                {"name": "คลื่น H1 ≥ 3 ATR", "ok": False, "desc": "ยังไม่มีคลื่นที่เข้าเงื่อนไข (หรือออเดอร์รอหมดอายุ/ถูกใช้แล้ว)"},
+                {"name": "H1 MA100/150/200 สวนคลื่น", "ok": h1_stack_dir != 0,
+                 "desc": "H1 เรียงขึ้น — รอคลื่นลง" if h1_stack_dir == 1 else ("H1 เรียงลง — รอคลื่นขึ้น" if h1_stack_dir == -1 else "H1 ไม่เรียงตัว — แผนนี้ไม่เข้า")},
+                {"name": "ราคาถึงระดับ 0.3", "ok": False, "desc": "ยังไม่มีจุดเข้า"},
+            ]
+        m9 = sum(1 for it in p9_items if it["ok"])
+        results["P9"] = {
+            "name": P9_NAME, "label": "P9 · H1 (Fib)", "side": p9_side,
+            "matched": m9, "total": 3, "pct": int(m9 / 3 * 100), "items": p9_items,
+            "enabled": plan_config.is_enabled(P9_NAME),
+            "disabled_reason": plan_config.disabled_reason(P9_NAME)
+        }
+
         for key, name, label, items in (("P7", P7_NAME, "P7 · H4 (BB)", p78_items + [h4_item]),
                                          ("P8", P8_NAME, "P8 · H4 (Free)", list(p78_items))):
             mk = sum(1 for it in items if it["ok"])
@@ -2003,7 +2039,7 @@ def print_plans_condition_status(symbol: str = None):
 
         print(f"\n{Colors.CYAN}{Colors.BOLD}[PLAN STATUS] ความพร้อมเงื่อนไขการเข้าไม้แต่ละแผน ({symbol} @ {price:,.2f}){Colors.RESET}")
 
-        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"]
+        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"]
         for pk in plan_order:
             info = status_map.get(pk)
             if not info:
@@ -2593,6 +2629,18 @@ def main():
                 p6_buy = bool(p6_flip and p6_dir[-2] == 1 and p6_trend == 1)
                 p6_sell = bool(p6_flip and p6_dir[-2] == -1 and p6_trend == -1)
                 p6_bar_time = df_h1['time'].iloc[-2]
+                # ===== Plan 9: Fib-H1-Counter — ออเดอร์รอจากคลื่น H1 ที่ปิดแล้ว · เข้าเมื่อราคาสดแตะระดับ 0.3 =====
+                _k9 = str(df_h1['time'].iloc[-2])
+                if _p9_cache.get(sym, (None,))[0] != _k9:
+                    _p9_cache[sym] = (_k9, fib_plan.pending_orders(df_h1))
+                p9_sig, p9_od = 0, None
+                _lo9, _hi9 = float(df_h1['low'].iloc[-1]), float(df_h1['high'].iloc[-1])   # แท่ง H1 ที่กำลังวิ่ง
+                for _s9, _od9 in _p9_cache[sym][1].items():
+                    _px9 = float(tick.bid) if _s9 == -1 else float(tick.ask)
+                    _broke9 = (_lo9 < _od9['b']) if _s9 == -1 else (_hi9 > _od9['b'])   # ทำจุดใหม่เลยปลายคลื่นก่อน = ยกเลิก
+                    if not _broke9 and (_px9 - _od9['entry']) * _s9 <= 0 and (_px9 - _od9['sl']) * _s9 > 0:
+                        p9_sig, p9_od = _s9, _od9
+                p9_bar_time = p9_od['conf_time'] if p9_od else None
                 # Plan 2 ออกไม้: MA5 ตัด MA20 H1 กลับขั้ว (แท่งที่ปิดแล้ว)
                 _ma_exit_h1 = df_h1['close'].rolling(P2_EXIT_MA).mean()
                 if len(df_h1) >= P2_EXIT_MA + 3:
@@ -2984,6 +3032,9 @@ def main():
                 elif bb4_sell_sig:
                     status_text = "[BB-H4 REVERSION SELL] Upper Band H4 + Div"
                     status_color = Colors.RED
+                elif p9_sig:
+                    status_text = f"[FIB-H1 {'BUY' if p9_sig == 1 else 'SELL'}] Fib 0.3 @ {p9_od['entry']:.2f} (counter H1 stack)"
+                    status_color = Colors.GREEN if p9_sig == 1 else Colors.RED
 
                 # แสดงผลแบบ Dashboard สวยงาม โดยปรับจุดทศนิยมอัตโนมัติ
                 info = mt5.symbol_info(sym)
@@ -3291,6 +3342,8 @@ def main():
                                 return ma_cross_h1_bar_time
                             if plan_name == P6_NAME:
                                 return p6_bar_time
+                            if plan_name == P9_NAME:
+                                return p9_bar_time       # 1 ไม้ต่อ 1 คลื่น
                             return None
 
                         def _record_plan(direction, plan_name):
@@ -3550,6 +3603,19 @@ def main():
                                     send_order(sym, mt5.ORDER_TYPE_BUY if d78 == 1 else mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                                     log_signal_event(sym, 'ENTRY_SIGNAL', p_label, side78, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({note})')
                                     _record_plan(side78, p_label)
+
+                        # แผน 9: Fib-H1-Counter — ราคาถึงระดับ 0.3 ของคลื่น H1 (สวนเทรนด์ใหญ่ H1) · SL ระดับ 0 · TP 1.75 · ไม่ใช้ AI
+                        elif p9_sig:
+                            side9 = 'BUY' if p9_sig == 1 else 'SELL'
+                            if not _is_plan_blocked(side9, P9_NAME):
+                                price = tick.ask if p9_sig == 1 else tick.bid
+                                sl = round(p9_od['sl'], digits)
+                                tp = round(p9_od['tp'], digits)
+                                print(f"{Colors.GREEN if p9_sig == 1 else Colors.RED}[SIGNAL] {sym} {P9_NAME}: Fib 0.3 of H1 leg {p9_od['a']:.2f} -> {p9_od['b']:.2f} (H1 stack opposite) -> SENDING {side9} ORDER (SL={sl:.{digits}f} lv0 / TP={tp:.{digits}f} lv1.75){Colors.RESET}")
+                                send_order(sym, mt5.ORDER_TYPE_BUY if p9_sig == 1 else mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=P9_NAME)
+                                fib_plan.remember(p9_sig, p9_od['a'], p9_od['b'], tp)
+                                log_signal_event(sym, 'ENTRY_SIGNAL', P9_NAME, side9, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} (Fib leg {p9_od["a"]:.2f}->{p9_od["b"]:.2f})')
+                                _record_plan(side9, P9_NAME)
                 if has_position:
                     # เช็คเงื่อนไขการจัดการ Position (Plan 1 MA Exit + Plan 2 H1 MA Exit + AI Reversal + Early BE Lock + Unlimited Dynamic TP)
                     open_tickets = {p.ticket for p in positions}
@@ -3682,6 +3748,22 @@ def main():
                             new6 = p6_trail_sl(pos, df_h1, p6_sar, p6_dir, p6_sar_fast, p6_dir_fast, atr_h1_series, tick, mt5.symbol_info(sym))
                             if new6 is not None:
                                 modify_position(pos, new6, pos.tp, reason=f"SAR Trail ({pos.comment})")
+                            continue
+
+                        # 0.35 Plan 9 (Fib-H1-Counter): เลื่อน SL ขั้นบันไดหลวมตามระดับ Fib ของคลื่น (ราคาปิด H1)
+                        #      1 → 0.15 · 1.27 → 0.6 · 1.5 → 1.0 — ไม่ใช้ AI Reversal / ล็อกกำไร 70% / Dynamic TP (ตรงกับ Backtest)
+                        if pos.comment.startswith(P9_NAME):
+                            d9 = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
+                            leg9 = fib_plan.leg_of(d9, float(pos.price_open), float(pos.tp or 0))
+                            if leg9 and len(df_h1) >= 2:
+                                new9 = fib_plan.ladder_sl(d9, leg9[0], leg9[1], float(df_h1['close'].iloc[-2]), float(pos.sl or 0))
+                                if new9 is not None:
+                                    si9 = mt5.symbol_info(sym)
+                                    gap9 = (max(float(si9.trade_stops_level or 0), float(si9.spread or 0)) * float(si9.point)) if si9 else 0.0
+                                    px9 = tick.bid if d9 == 1 else tick.ask
+                                    new9 = round(min(new9, px9 - gap9) if d9 == 1 else max(new9, px9 + gap9), 2)
+                                    if not pos.sl or (new9 - float(pos.sl)) * d9 > 0.005:
+                                        modify_position(pos, new9, pos.tp, reason=f"Fib Ladder ({pos.comment})")
                             continue
 
                         # 1. เช็คเงื่อนไขการตัดขาดทุนเมื่อทิศทางเปลี่ยน (AI Dynamic Exit พร้อม Whipsaw Protection)

@@ -12,6 +12,7 @@ const PLAN_STAT_NAMES = {
   'PSAR-H1-Trend': 'Plan 6: PSAR-H1-Trend',
   'BB-H4-Reversion': 'Plan 7: BB-H4-Reversion',
   'BB-H4-Free': 'Plan 8: BB-H4-Free',
+  'Fib-H1-Counter': 'Plan 9: Fib-H1-Counter',
 };
 
 // GET สถานะเปิด/ปิดแผนเทรด + ผลงานรวมรายแผน · PUT บันทึกการเปิด/ปิด (บอททุกเครื่องอ่านภายใน ~5 นาที)

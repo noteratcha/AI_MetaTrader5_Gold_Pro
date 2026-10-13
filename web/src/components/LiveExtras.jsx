@@ -1,7 +1,7 @@
 'use client';
 
 // การ์ดชุดเดียวกับโปรแกรม Gold Bot 24 (ข้อมูลจาก Telemetry radar_signals[0] — เว็บไม่คำนวณซ้ำ)
-// สภาวะตลาด H1/H4 · เงื่อนไขเข้าไม้รายแผน P1–P8 · AI วิเคราะห์ไม้ที่ถืออยู่
+// สภาวะตลาด H1/H4 · เงื่อนไขเข้าไม้รายแผน P1–P9 · AI วิเคราะห์ไม้ที่ถืออยู่
 import { useState } from 'react';
 import { Activity, Brain, ListChecks } from 'lucide-react';
 import { EmptyState } from './ui';
@@ -66,7 +66,7 @@ export function MarketCard({ market }) {
 
 /** เงื่อนไขเข้าไม้รายแผน (เรียลไทม์) — คลิกแผนเพื่อดูรายการเงื่อนไขพร้อมค่าจริง */
 export function PlanConditionsCard({ plans }) {
-  const keys = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'].filter((k) => plans?.[k]);
+  const keys = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'].filter((k) => plans?.[k]);
   const [open, setOpen] = useState(null);
   return (
     <div className="card">

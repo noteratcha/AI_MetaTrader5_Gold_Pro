@@ -1899,7 +1899,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
     REFRESH_MS = 1000
 
     PLAN_SPECS = [
-        ("ALL", "รวมทุกแผน", None, None),
+        ("ALL", "ทุกแผน", None, None),
         ("P1", "P1 · M15", "M15", ["ma5", "ma13", "ma50"]),
         ("P2", "P2 · H1", "H1", ["h1_ma5", "h1_ma10", "h1_ma20"]),
         ("P3", "P3 · SMC", "H1", ["resistance", "support"]),
@@ -1908,7 +1908,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
         ("P6", "P6 · SAR H1", "H1", ["h1_sar", "h1_ema100"]),
         ("P7", "P7 · BB H4", "H4", ["h4_bb", "h4_ma10", "h4_ma30"]),
         ("P8", "P8 · BB H4 Free", "H4", ["h4_bb"]),
-        ("H4", "เทรนด์ H4", "H4", ["h4_ma10", "h4_ma30", "h4_ma200", "resistance", "support"]),
+        ("P9", "P9 · Fib H1", "H1", ["fib"]),
+        ("H4", "H4", "H4", ["h4_ma10", "h4_ma30", "h4_ma200", "resistance", "support"]),
     ]
 
     INDICATOR_DEFS = {
@@ -1928,6 +1929,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             ("h1_bb", "P5 · ━ BB H1", "#C084FC"),
             ("h1_sar", "P6 · • SAR H1", "#FB7185"),
             ("h1_ema100", "P6 · ┅ EMA100", "#60A5FA"),
+            ("fib", "P9 · ┅ Fibonacci", "#F59E0B"),
             ("day_sep", "📅 เส้นแบ่งวัน", "#60A5FA"),
             ("orders", "┅ ไม้เปิด & TP/SL", COLOR_CYAN_ACCENT),
         ],
@@ -1964,6 +1966,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         p5 = plan_config.is_enabled("BB-H1-Reversion")
         p6 = plan_config.is_enabled("PSAR-H1-Trend")
         p78 = plan_config.is_enabled("BB-H4-Reversion") or plan_config.is_enabled("BB-H4-Free")
+        p9 = plan_config.is_enabled("Fib-H1-Counter")
 
         # เลือกแผนเริ่มต้นตามพารามิเตอร์ หรือตามแผนที่เปิดใช้งานจริง
         if default_plan:
@@ -2024,6 +2027,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             "h1_sar": p6, "h1_ema100": p6,
             "h4_ma10": True, "h4_ma30": True, "h4_ma200": True,
             "h4_bb": p78,
+            "fib": p9,
             "day_sep": True,
             "orders": True,
         }
@@ -2192,7 +2196,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
         self.canvas.bind("<Configure>", lambda e: self._draw())
         self.canvas.bind("<Motion>", self._hover)
         self.canvas.bind("<Leave>", lambda e: self.lbl_tip.configure(text=self.tip_default))
-        self.tip_default = "อัปเดตทุก 1 วินาที · เลือกดูตามแผน (P1-P8) หรือคลิกเปิด/ปิดแต่ละอินดิเคเตอร์ · ชี้ที่แท่งเพื่อดูราคาและค่า"
+        self.tip_default = "อัปเดตทุก 1 วินาที · เลือกดูตามแผน (P1-P9) หรือคลิกเปิด/ปิดแต่ละอินดิเคเตอร์ · ชี้ที่แท่งเพื่อดูราคาและค่า"
         self.lbl_tip = ctk.CTkLabel(self, text=self.tip_default, font=ctk.CTkFont(family=app_fonts.UI, size=12), text_color=COLOR_TEXT_MUTED)
         self.lbl_tip.pack(pady=(2, 8))
         self.protocol("WM_DELETE_WINDOW", self._close)
@@ -2219,7 +2223,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 text_color=COLOR_GOLD_PRIMARY if is_active else COLOR_TEXT_MUTED,
                 command=lambda pk=plan_key: self._select_plan(pk)
             )
-            btn.pack(side="left", padx=(0, 3))   # 10 ปุ่ม (P1–P8) ให้พอดีหน้าต่าง 1,100 px
+            btn.pack(side="left", padx=(0, 3))   # 10 ปุ่ม (P1–P9) ให้พอดีหน้าต่าง 1,100 px
             self.plan_buttons[plan_key] = btn
 
     def _refresh_plan_buttons(self, plans_status=None):
@@ -2294,8 +2298,8 @@ class GoldCandleDialog(ctk.CTkToplevel):
 
         # Signature ตรวจจับความเปลี่ยนแปลง ป้องกันการ Re-render ซ้ำซากที่ทำให้ข้อความกระพริบ
         if cur_plan == "ALL":
-            raw_sig = ("ALL", tuple((pk, (plans_status.get(pk) or {}).get("matched"), (plans_status.get(pk) or {}).get("total"), (plans_status.get(pk) or {}).get("side")) for pk in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8")))
-        elif cur_plan in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"):
+            raw_sig = ("ALL", tuple((pk, (plans_status.get(pk) or {}).get("matched"), (plans_status.get(pk) or {}).get("total"), (plans_status.get(pk) or {}).get("side")) for pk in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9")))
+        elif cur_plan in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"):
             pinfo = plans_status.get(cur_plan) or {}
             items_sig = tuple((it.get("ok"), it.get("name"), it.get("desc")) for it in pinfo.get("items", []))
             raw_sig = (cur_plan, pinfo.get("matched"), pinfo.get("total"), pinfo.get("side"), items_sig)
@@ -2317,7 +2321,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
             self.lbl_cond_title.configure(text="⚡ สถานะทุกแผน:", text_color=COLOR_GOLD_PRIMARY)
             self.lbl_cond_score.configure(text=" (คลิกดูรายละเอียด) ", fg_color="transparent", text_color=COLOR_TEXT_MUTED)
 
-            plan_keys = ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8")
+            plan_keys = ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9")
             if getattr(self, "_last_cond_mode", None) != "ALL" or len(self._cond_chip_widgets) != len(plan_keys):
                 for w in self.cond_chips_box.winfo_children():
                     w.destroy()
@@ -2373,7 +2377,7 @@ class GoldCandleDialog(ctk.CTkToplevel):
                     font=ctk.CTkFont(family=app_fonts.UI, size=10, weight="bold" if (is_ready or pct >= 50) else "normal")
                 )
 
-        elif cur_plan in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"):
+        elif cur_plan in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"):
             pinfo = plans_status.get(cur_plan)
             if not pinfo:
                 return
@@ -2770,6 +2774,9 @@ class GoldCandleDialog(ctk.CTkToplevel):
                 vals += [c["h1_sar"] for c in candles if c.get("h1_sar") is not None]
             if self.ind_toggles.get("h1_ema100", True):
                 vals += [c["h1_ema100"] for c in candles if c.get("h1_ema100") is not None]
+            if self.ind_toggles.get("fib", True) and self.data.get("fib"):
+                f0 = self.data["fib"][0]
+                vals += [f0["a"] + x * (f0["b"] - f0["a"]) for x in (0.0, 1.0, 1.75)]   # ให้เห็น SL · คลื่น · TP ครบ
         elif tf == "H4":
             if self.ind_toggles.get("h4_ma10", True):
                 vals += [c["h4_ma10"] for c in candles if c.get("h4_ma10") is not None]
@@ -2992,6 +2999,30 @@ class GoldCandleDialog(ctk.CTkToplevel):
             if self.ind_toggles.get("h4_ma10", True):
                 draw_series("h4_ma10", "#FBBF24", width=2, smooth=True)
 
+        # Plan 9: เส้นระดับ Fibonacci ของคลื่น H1 (ไม้ที่ถืออยู่ก่อน แล้วออเดอร์รอ) — ระดับที่อยู่นอกกรอบกราฟไม่วาด
+        if tf == "H1" and self.ind_toggles.get("fib", True) and self.data.get("fib"):
+            f0 = self.data["fib"][0]
+            a0, b0, s0 = f0["a"], f0["b"], f0["side"]
+            fib_lv = ((0.0, "0 · SL", COLOR_DANGER_RED), (0.3, "0.3 · เข้า", COLOR_GOLD_PRIMARY), (0.6, "0.6", "#64748B"),
+                      (1.0, "1", "#94A3B8"), (1.27, "1.27", "#64748B"), (1.5, "1.5", "#64748B"), (1.75, "1.75 · TP", COLOR_SUCCESS_GREEN))
+            for x, nm, col in fib_lv:
+                v = a0 + x * (b0 - a0)
+                if not (lo <= v <= hi):
+                    continue
+                y = y_of(v)
+                key = x in (0.0, 0.3, 1.75)
+                cv.create_line(left, y, W - right, y, fill=col, dash=() if key else (6, 4), width=2 if key else 1)
+                # ป้ายชิดขวา (ไม่ทับแท่งเทียนล่าสุดมากนัก) พร้อมพื้นทึบให้อ่านง่าย
+                tid = cv.create_text(W - right - 8, y - 9, anchor="e", fill=col, font=(app_fonts.UI, 9, "bold"), text=f"Fib {nm}  {v:,.2f}", tags=("fiblbl",))
+                bx = cv.bbox(tid)
+                if bx:
+                    rid = cv.create_rectangle(bx[0] - 4, bx[1] - 1, bx[2] + 4, bx[3] + 1, fill="#0E1117", outline=col, tags=("fiblbl",))
+                    cv.tag_raise(tid, rid)
+            self.after_idle(lambda: cv.tag_raise("fiblbl"))   # ป้ายอยู่เหนือแท่งเทียน (วาดหลังจบ _draw)
+            st_txt = ("ถือไม้อยู่" if f0.get("state") == "active" else f"รอเข้า {'BUY' if s0 == 1 else 'SELL'} · อีก {f0.get('bars_left', 0)} ชม.")
+            cv.create_text(left + 6, H - bottom - 6, anchor="sw", fill=COLOR_GOLD_PRIMARY, font=(app_fonts.UI, 10, "bold"),
+                           text=f"P9 · คลื่น{'ขึ้น' if s0 == 1 else 'ลง'} {a0:,.2f} → {b0:,.2f} · {st_txt}")
+
         # แท่งเทียน Candlesticks
         for i, c in enumerate(candles):
             cx = left + slot * (i + 0.5)
@@ -3141,6 +3172,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
         "P6": "Parabolic SAR H1 สลับข้างมาทางเทรนด์ H4 (MA10/30 + MA200) · SL = จุด SAR (ไม่เกิน 3 ATR H1) เลื่อนตาม SAR ทุกชั่วโมง · กำไรถึง 2 ATR เลื่อนเร็วขึ้น · ไม่ตั้ง TP · ออกเมื่อเทรนด์ H4 เปลี่ยนหรือราคาปิดผิดฝั่ง EMA100",
         "P7": "หลุดกรอบ Bollinger H4 แล้วกลับเข้า (แท่ง M15) + Divergence + H1 MA100/150/200 ไม่เรียงตามทิศ + AI ≥ 55% + เทรนด์ H4 MA10/30 ไม่สวน · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
         "P8": "หลุดกรอบ Bollinger H4 แล้วกลับเข้า (แท่ง M15) + Divergence + H1 MA100/150/200 ไม่เรียงตามทิศ + AI ≥ 55% · ไม่ใช้ตัวกรองเทรนด์ H4 · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
+        "P9": "Fibonacci คลื่น H1 (≥ 3 ATR) สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้าที่ระดับ 0.3 · SL ระดับ 0 · TP 1.75 · เลื่อน SL ขั้นบันได (ปิดผ่าน 1 → 0.15 · 1.27 → 0.6 · 1.5 → 1)",
         "M": "ไม้ที่เข้าเอง (ปุ่มในโปรแกรมหรือใน MT5) · ไม่มี SL บอทตั้งให้ 1.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (ขั้นแรก 50% / ถัดไป 40%) · ล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึงเป้า",
     }
 
@@ -3704,6 +3736,7 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         "PSAR-H1-Trend": {"label": "Plan 6 (PSAR H1)", "icon": "◆", "color": "#EC4899"},
         "BB-H4-Reversion": {"label": "Plan 7 (BB H4)", "icon": "●", "color": "#A855F7"},
         "BB-H4-Free": {"label": "Plan 8 (BB H4 Free)", "icon": "•", "color": "#14B8A6"},
+        "Fib-H1-Counter": {"label": "Plan 9 (Fib H1)", "icon": "›", "color": "#F59E0B"},
         "เข้าเอง": {"label": "เข้าเอง (Manual)", "icon": "✋", "color": "#F97316"},
         "Manual-Quick": {"label": "เข้าเอง (Manual)", "icon": "✋", "color": "#F97316"},
     }
@@ -5125,7 +5158,7 @@ class MainTradingApp(ctk.CTk):
         self.lbl_reward.pack(anchor="w")
         self.cv_reward = tk.Canvas(self.reward_box, width=118, height=6, bg=COLOR_GOLD_BG, highlightthickness=0, bd=0)
         self.cv_reward.pack(anchor="w", pady=(4, 0))
-        # สมาชิกรายเดือน (ปลดล็อก P6–P8): "● สมาชิก ถึง dd/mm" หรือ "สมัครสมาชิก ›" — คลิกเปิดหน้าสมัคร
+        # สมาชิกรายเดือน (ปลดล็อก P6–P9): "● สมาชิก ถึง dd/mm" หรือ "สมัครสมาชิก ›" — คลิกเปิดหน้าสมัคร
         self.lbl_member = ctk.CTkLabel(self.reward_box, text="", font=self._font(10, "bold"), text_color=COLOR_TEXT_MUTED, height=14)
         self.lbl_member.pack(anchor="w", pady=(2, 0))
         for w in (self.reward_box, self.lbl_reward, self.cv_reward):
@@ -5844,6 +5877,7 @@ class MainTradingApp(ctk.CTk):
         ("◆", "P6 · SAR H1", "Plan 6: PSAR-H1-Trend"),
         ("●", "P7 · BB-H4", "Plan 7: BB-H4-Reversion"),
         ("•", "P8 · BB-H4 Free", "Plan 8: BB-H4-Free"),
+        ("›", "P9 · Fib H1", "Plan 9: Fib-H1-Counter"),
     ]
 
     PLAN_CODE_MAP = {
@@ -5855,6 +5889,7 @@ class MainTradingApp(ctk.CTk):
         "Plan 6: PSAR-H1-Trend": "P6",
         "Plan 7: BB-H4-Reversion": "P7",
         "Plan 8: BB-H4-Free": "P8",
+        "Plan 9: Fib-H1-Counter": "P9",
     }
 
     def _open_plan_candle_dialog(self, plan_code):
@@ -6060,13 +6095,13 @@ class MainTradingApp(ctk.CTk):
                 base = plan_config.base_plan(p.comment)
                 open_by_plan.setdefault(base, []).append(("BUY" if p.type == 0 else "SELL", float(p.profit)))
 
-            # ดึงสถานะเงื่อนไขการเข้าไม้เรียลไทม์ครบทั้ง 8 แผน
+            # ดึงสถานะเงื่อนไขการเข้าไม้เรียลไทม์ครบทั้ง 9 แผน
             plans_status = bot_ctrl.get_plans_condition_status(sym) or {}
             self._last_card_plans_status = plans_status
 
             sig = (
                 tuple((k, tuple(v)) for k, v in sorted(open_by_plan.items())),
-                tuple((pk, (plans_status.get(pk) or {}).get("matched"), (plans_status.get(pk) or {}).get("total"), (plans_status.get(pk) or {}).get("side")) for pk in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"))
+                tuple((pk, (plans_status.get(pk) or {}).get("matched"), (plans_status.get(pk) or {}).get("total"), (plans_status.get(pk) or {}).get("side")) for pk in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"))
             )
             if sig == getattr(self, "_last_plan_live_sig", None):
                 self.after(2000, self._plan_live_tick)
@@ -7544,7 +7579,7 @@ class MainTradingApp(ctk.CTk):
             self.lbl_member.configure(text=f"● สมาชิก ถึง {until}" + (f" (อีก {mem['daysLeft']} วัน)" if mem["daysLeft"] <= 3 else ""),
                                       text_color=COLOR_DANGER_RED if mem["daysLeft"] <= 3 else COLOR_SUCCESS_GREEN)
         else:
-            self.lbl_member.configure(text="สมัครสมาชิก ปลดล็อก P6–P8 ›", text_color=COLOR_TEXT_MUTED)
+            self.lbl_member.configure(text="สมัครสมาชิก ปลดล็อก P6–P9 ›", text_color=COLOR_TEXT_MUTED)
         self._reward_shown = key
         if not o:
             self.reward_box.pack_forget()
@@ -7581,7 +7616,7 @@ class MainTradingApp(ctk.CTk):
         if not mem["active"]:
             return ""
         until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y") if mem["until"] else "-"
-        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P8\nใช้ได้ถึงวันที่ {until} (23:59 น.) · เหลือ {mem['daysLeft']} วัน (รวมวันนี้)\n"
+        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P9\nใช้ได้ถึงวันที่ {until} (23:59 น.) · เหลือ {mem['daysLeft']} วัน (รวมวันนี้)\n"
                 "คลิกเพื่อต่ออายุ — ต่อก่อนหมดนับต่อจากวันสุดท้ายเดิม")
 
     @staticmethod
@@ -7593,7 +7628,7 @@ class MainTradingApp(ctk.CTk):
             return time.time()
 
     def _check_member_expiry(self, mem):
-        """สมาชิกเหลือ ≤ 3 วัน → เตือน 1 ครั้งต่อวัน (หมดแล้วบอทเข้าไม้ด้วย P6–P8 ไม่ได้)"""
+        """สมาชิกเหลือ ≤ 3 วัน → เตือน 1 ครั้งต่อวัน (หมดแล้วบอทเข้าไม้ด้วย P6–P9 ไม่ได้)"""
         if not mem["active"] or mem["viaAdmin"] or mem["daysLeft"] > 3:
             return
         today = thai_time.fmt_now("%Y-%m-%d")
@@ -7604,7 +7639,7 @@ class MainTradingApp(ctk.CTk):
         left = "วันนี้เป็นวันสุดท้าย" if mem["daysLeft"] <= 1 else f"เหลืออีก {mem['daysLeft']} วัน (รวมวันนี้)"
         self.after(1500, lambda: messagebox.showwarning(
             "สมาชิกรายเดือนใกล้หมดอายุ",
-            f"สมาชิกใช้ได้ถึงวันที่ {until} (23:59 น.) · {left}\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P8 ต่อ — ต่อก่อนหมดจะนับต่อจากวันสุดท้ายเดิม"))
+            f"สมาชิกใช้ได้ถึงวันที่ {until} (23:59 น.) · {left}\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P9 ต่อ — ต่อก่อนหมดจะนับต่อจากวันสุดท้ายเดิม"))
 
     def _reward_tip(self):
         o = license_mgr.online_status()
