@@ -1,6 +1,6 @@
 // สถิติการดาวน์โหลดและการใช้งานโปรแกรม Gold Bot 24 (เก็บใน user_activity)
-export const USAGE_EVENTS = ['app_download', 'app_open', 'bot_start', 'bot_stop'];
-export const PUBLIC_USAGE_EVENTS = ['app_download']; // ไม่ต้องเข้าสู่ระบบ
+export const USAGE_EVENTS = ['app_download', 'app_open', 'bot_start', 'bot_stop', 'web_visit'];
+export const PUBLIC_USAGE_EVENTS = ['app_download', 'web_visit']; // ไม่ต้องเข้าสู่ระบบ
 
 const GITHUB_REPO = process.env.GITHUB_RELEASES_REPO || 'noteratcha/AI_MetaTrader5_Gold_Pro';
 let ghCache = { data: null, at: 0 };

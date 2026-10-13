@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Download } from 'lucide-react';
+import { Bot, Download, Eye } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PLAN_LIST } from '../lib/packages';
 import { LINE_ID, LINE_URL } from '../lib/contact';
@@ -10,6 +10,22 @@ import { LINE_ID, LINE_URL } from '../lib/contact';
 export default function Footer() {
   const { isAdminView } = useAuth();
   const [release, setRelease] = useState(null);
+
+  const [counts, setCounts] = useState(null);
+
+  // นับการเข้าชมเว็บ 1 ครั้งต่อการเปิดแท็บ (sessionStorage) + โหลดตัวเลขสะสม
+  useEffect(() => {
+    try {
+      if (!sessionStorage.getItem('gb24_visit')) {
+        sessionStorage.setItem('gb24_visit', '1');
+        fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'web_visit' }) }).catch(() => {});
+      }
+    } catch {}
+    fetch('/api/public-stats')
+      .then((r) => r.json())
+      .then((d) => d.success && setCounts(d))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch('/api/release')
@@ -81,6 +97,27 @@ export default function Footer() {
             </Link>
           </div>
         </div>
+
+        {counts && (counts.botRuns !== null || counts.webVisits !== null) && (
+          <div className="row wrap" style={{ gap: 24, justifyContent: 'center', padding: '14px 0', borderTop: '1px solid var(--border, #262B36)' }}>
+            {counts.botRuns !== null && (
+              <span className="row small" style={{ gap: 8 }}>
+                <Bot size={16} className="text-gold" />
+                <span className="muted">รันบอทแล้ว</span>
+                <strong className="mono text-gold">{counts.botRuns.toLocaleString('th-TH')}</strong>
+                <span className="muted">ครั้ง</span>
+              </span>
+            )}
+            {counts.webVisits !== null && (
+              <span className="row small" style={{ gap: 8 }}>
+                <Eye size={16} className="text-sky" />
+                <span className="muted">เข้าชมเว็บ</span>
+                <strong className="mono">{counts.webVisits.toLocaleString('th-TH')}</strong>
+                <span className="muted">ครั้ง</span>
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="footer-bottom">
           <span>© {new Date().getFullYear()} GoldBot24 · AI MetaTrader 5 Gold Pro</span>

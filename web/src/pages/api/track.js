@@ -4,7 +4,7 @@ import { logActivity } from '../../lib/server/activity';
 import { PUBLIC_USAGE_EVENTS, USAGE_EVENTS } from '../../lib/server/usage';
 
 const clean = (v, max = 40) => String(v || '').replace(/[^\w.\-· ]/g, '').slice(0, max);
-const DEDUPE_MS = 5 * 60 * 1000; // กดดาวน์โหลด/เปิดโปรแกรมซ้ำใน 5 นาทีนับครั้งเดียว
+const DEDUPE_MS = 5 * 60 * 1000; // กดดาวน์โหลด/เปิดโปรแกรม/เข้าเว็บซ้ำใน 5 นาทีนับครั้งเดียว (เข้าเว็บ: เบราว์เซอร์ส่ง 1 ครั้งต่อการเปิดแท็บ)
 
 /**
  * บันทึกสถิติการใช้งาน: app_download (หน้า /download, ไม่ต้องล็อกอิน) ·
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     .filter(Boolean)
     .join(' · ');
 
-  if (event === 'app_download' || event === 'app_open') {
+  if (event === 'app_download' || event === 'app_open' || event === 'web_visit') {
     try {
       let q = getAdminClient()
         .from('user_activity')
