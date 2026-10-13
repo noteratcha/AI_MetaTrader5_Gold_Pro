@@ -160,6 +160,7 @@ def build_gui_app(mode="pyinstaller"):
             "--hidden-import=profile_dialog",
             "--hidden-import=instance_guard",
             "--hidden-import=news_feed",
+            "--hidden-import=line_notify",
             f"--name={APP_NAME}",
             "gui_app.py"
         ]

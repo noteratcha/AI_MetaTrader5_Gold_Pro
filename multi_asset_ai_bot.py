@@ -2063,6 +2063,12 @@ def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
         side = 'BUY' if order_type == 0 else 'SELL'
         supabase_sync.log_trade(ticket, symbol, f'OPEN_{side}', plan_name, float(price), float(volume), float(sl), float(tp),
                                 profit=0, comment=f'เปิด {side} · {plan_name}', user_id=cur_user.get("user_id"), email=cur_user.get("email"))
+        try:   # แจ้ง LINE OA ของผู้ใช้ (ส่งในเธรดเบื้องหลัง)
+            import line_notify
+            _acc = mt5.account_info()
+            line_notify.notify_open(ticket, side, plan_name, volume, price, sl, tp, login=getattr(_acc, "login", None))
+        except Exception:
+            pass
         stats_manager.stats_mgr.record_entry(
             user_id=cur_user.get("user_id"),
             email=cur_user.get("email"),
@@ -2168,6 +2174,15 @@ def close_position(position, comment="AI Reversal Close"):
         supabase_sync.log_trade(position.ticket, sym, 'CLOSE', position.comment or 'Manual', float(request['price']), float(position.volume),
                                 0, 0, profit=final_profit, comment=f'{comment} | {"+" if final_profit >= 0 else ""}${final_profit:.2f}',
                                 user_id=cur_user.get("user_id"), email=cur_user.get("email"))
+        try:   # แจ้ง LINE OA ของผู้ใช้
+            import line_notify
+            _acc = mt5.account_info()
+            line_notify.notify_close(position.ticket, closed_dir, position.comment or "Manual", position.volume, position.price_open,
+                                     request['price'], final_profit + float(getattr(position, "swap", 0.0) or 0.0), reason_code=3,
+                                     reason_comment=comment, opened_at=thai_time.server_to_epoch(position.time), closed_at=time.time(),
+                                     login=getattr(_acc, "login", None))
+        except Exception:
+            pass
         stats_manager.stats_mgr.record_close(
             ticket=position.ticket,
             profit=final_profit,
@@ -2912,6 +2927,7 @@ def main():
                     closed_deal_profit = None
                     closed_deal_type = None
                     closed_deal_ticket = 0
+                    closed_deal_obj = None
                     closed_deal_price = 0.0
                     closed_deal_volume = 0.0
                     try:
@@ -2928,6 +2944,7 @@ def main():
                                 closed_deal_ticket = getattr(last_out, 'position_id', 0) or getattr(last_out, 'order', 0)
                                 closed_deal_price = float(last_out.price)
                                 closed_deal_volume = float(last_out.volume)
+                                closed_deal_obj = last_out
                     except Exception:
                         pass
 
@@ -2935,6 +2952,22 @@ def main():
                     handled_by_bot = bool(closed_deal_ticket) and closed_deal_ticket in _self_closed_tickets
                     if handled_by_bot:
                         _self_closed_tickets.discard(closed_deal_ticket)
+
+                    if not handled_by_bot and closed_deal_ticket and closed_deal_obj is not None:
+                        try:   # แจ้ง LINE OA ของผู้ใช้: ราคา/เวลา/แผนตอนเข้าไม้จาก Deal ขาเข้า
+                            import line_notify
+                            _in = [d for d in (mt5.history_deals_get(position=int(closed_deal_ticket)) or []) if d.entry == 0]
+                            _in = _in[0] if _in else None
+                            _acc = mt5.account_info()
+                            line_notify.notify_close(closed_deal_ticket, closed_deal_type, (_in.comment if _in else "") or "Manual",
+                                                     closed_deal_volume, float(_in.price) if _in else 0.0, closed_deal_price,
+                                                     float(closed_deal_profit or 0.0), reason_code=int(getattr(closed_deal_obj, "reason", -1)),
+                                                     reason_comment=closed_deal_obj.comment or "",
+                                                     opened_at=thai_time.server_to_epoch(_in.time) if _in else None,
+                                                     closed_at=thai_time.server_to_epoch(closed_deal_obj.time),
+                                                     login=getattr(_acc, "login", None))
+                        except Exception:
+                            pass
 
                     if not handled_by_bot:
                         # [Priority 4] Same-Plan Cooldown: block 60 นาที เฉพาะเมื่อขาดทุน (SL Hit)

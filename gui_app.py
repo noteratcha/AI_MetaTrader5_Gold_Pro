@@ -1333,6 +1333,183 @@ class HoursHistoryDialog(ctk.CTkToplevel):
             return
 
 
+class LineNotifyDialog(ctk.CTkToplevel):
+    """ตั้งค่าแจ้งเตือนเข้าไม้ / ปิดไม้ / สรุปรายวัน ไปที่ LINE OA ของผู้ใช้เอง (Token เก็บในเครื่อง เข้ารหัส DPAPI)"""
+    GUIDE = ("1. สร้าง LINE Official Account ฟรีที่ manager.line.biz\n"
+             "2. ไปที่ ตั้งค่า → Messaging API → กด \"ใช้ Messaging API\"\n"
+             "3. เปิด developers.line.biz → Channel ของ OA → แท็บ Messaging API → Channel access token (long-lived) → Issue แล้วคัดลอกมาวางด้านล่าง\n"
+             "4. แอดเพื่อน OA ของคุณด้วย LINE ที่ต้องการรับแจ้งเตือน (ข้อความส่งถึงทุกคนที่แอดเพื่อน OA นี้)")
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        import line_notify
+        self.ln = line_notify
+        self.title("แจ้งเตือน LINE OA")
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.geometry("620x640")
+        self.minsize(560, 560)
+        apply_dark_title_bar(self)
+        st = line_notify.load_settings()
+        self._result = None
+
+        def f(size, weight="normal"):
+            return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
+
+        head = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=0)
+        head.pack(fill="x")
+        ctk.CTkLabel(head, text="แจ้งเตือน LINE OA", font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(14, 0))
+        ctk.CTkLabel(head, text="ส่งข้อความเข้าไม้ / ปิดไม้ / สรุปกำไรรายวัน ไปที่ LINE OA ของคุณเอง · Token เก็บในเครื่องนี้เท่านั้น (เข้ารหัส)",
+                     font=f(11), text_color=COLOR_TEXT_MUTED, wraplength=560, justify="left").pack(anchor="w", padx=20, pady=(0, 12))
+
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=14, pady=10)
+
+        card = ctk.CTkFrame(body, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        card.pack(fill="x", pady=(0, 10))
+        top = ctk.CTkFrame(card, fg_color="transparent")
+        top.pack(fill="x", padx=16, pady=(14, 6))
+        self.var_on = tk.BooleanVar(value=bool(st.get("enabled")))
+        ctk.CTkSwitch(top, text="เปิดใช้การแจ้งเตือน", variable=self.var_on, font=f(13, "bold"), progress_color=COLOR_GOLD_WARM).pack(side="left")
+        self.lbl_state = ctk.CTkLabel(top, text="", font=f(11, "bold"))
+        self.lbl_state.pack(side="right")
+
+        ctk.CTkLabel(card, text="Channel access token (long-lived)", font=f(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=16, pady=(6, 2))
+        trow = ctk.CTkFrame(card, fg_color="transparent")
+        trow.pack(fill="x", padx=16)
+        self.ent_token = ctk.CTkEntry(trow, height=36, show="•", font=f(12), fg_color="#101218", border_color=COLOR_CARD_BORDER,
+                                      placeholder_text="วาง Token จาก LINE Developers")
+        self.ent_token.pack(side="left", fill="x", expand=True)
+        tok = line_notify.get_token()
+        if tok:
+            self.ent_token.insert(0, tok)
+        self._shown = False
+
+        def toggle():
+            self._shown = not self._shown
+            self.ent_token.configure(show="" if self._shown else "•")
+            btn_show.configure(text="ซ่อน" if self._shown else "แสดง")
+        btn_show = ctk.CTkButton(trow, text="แสดง", width=60, height=36, font=f(11), fg_color="#1F2430",
+                                 hover_color="#2A3040", command=toggle)
+        btn_show.pack(side="left", padx=(6, 0))
+
+        ctk.CTkLabel(card, text="แจ้งเตือนเมื่อ", font=f(12, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(anchor="w", padx=16, pady=(12, 2))
+        ev = st.get("events") or {}
+        self.var_open = tk.BooleanVar(value=ev.get("open", True))
+        self.var_close = tk.BooleanVar(value=ev.get("close", True))
+        self.var_daily = tk.BooleanVar(value=ev.get("daily", True))
+        erow = ctk.CTkFrame(card, fg_color="transparent")
+        erow.pack(fill="x", padx=16)
+        for text, var in (("เข้าไม้ (BUY / SELL)", self.var_open), ("ปิดไม้ (กำไร/ขาดทุน + ปิดโดย)", self.var_close)):
+            ctk.CTkCheckBox(erow, text=text, variable=var, font=f(12), fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK).pack(anchor="w", pady=2)
+        drow = ctk.CTkFrame(card, fg_color="transparent")
+        drow.pack(fill="x", padx=16, pady=(2, 0))
+        ctk.CTkCheckBox(drow, text="สรุปกำไรรายวัน (ของเมื่อวาน) ส่งเวลา", variable=self.var_daily, font=f(12),
+                        fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK).pack(side="left")
+        self.cmb_time = ctk.CTkComboBox(drow, values=["00:05", "06:00", "07:00", "08:00", "09:00", "12:00", "18:00", "21:00"], width=90, height=28, font=f(12))
+        self.cmb_time.set(st.get("daily_time") or "00:05")
+        self.cmb_time.pack(side="left", padx=8)
+        ctk.CTkLabel(drow, text="น. (เวลาไทย)", font=f(11), text_color=COLOR_TEXT_MUTED).pack(side="left")
+
+        brow = ctk.CTkFrame(card, fg_color="transparent")
+        brow.pack(fill="x", padx=16, pady=(14, 14))
+        ctk.CTkButton(brow, text="บันทึก", width=110, height=34, font=f(12, "bold"), fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_PRIMARY,
+                      text_color="#1A1406", command=self._save).pack(side="left")
+        ctk.CTkButton(brow, text="ส่งข้อความทดสอบ", width=140, height=34, font=f(12), fg_color="#0F2A20", hover_color="#143826",
+                      text_color=COLOR_SUCCESS_GREEN, border_width=1, border_color="#1F6B4A", command=self._test).pack(side="left", padx=8)
+        ctk.CTkButton(brow, text="ตรวจโควตา", width=100, height=34, font=f(12), fg_color="#1F2430", hover_color="#2A3040",
+                      text_color=COLOR_TEXT_PRIMARY, command=self._quota).pack(side="left")
+        self.lbl_info = ctk.CTkLabel(card, text="", font=f(11), text_color=COLOR_TEXT_MUTED, wraplength=540, justify="left", anchor="w")
+        self.lbl_info.pack(fill="x", padx=16, pady=(0, 12))
+
+        guide = ctk.CTkFrame(body, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        guide.pack(fill="x")
+        ctk.CTkLabel(guide, text="วิธีตั้งค่า (ครั้งแรก)", font=f(13, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=16, pady=(12, 4))
+        ctk.CTkLabel(guide, text=self.GUIDE, font=f(11), text_color=COLOR_TEXT_PRIMARY, wraplength=540, justify="left", anchor="w").pack(fill="x", padx=16)
+        links = ctk.CTkFrame(guide, fg_color="transparent")
+        links.pack(anchor="w", padx=16, pady=(6, 4))
+        for txt, url in (("เปิด LINE Official Account Manager", "https://manager.line.biz"), ("เปิด LINE Developers", "https://developers.line.biz/console/")):
+            lb = ctk.CTkLabel(links, text=txt, font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True), text_color=COLOR_CYAN_ACCENT, cursor="hand2")
+            lb.pack(side="left", padx=(0, 14))
+            lb.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
+        ctk.CTkLabel(guide, text="หมายเหตุ: LINE OA แพ็กเกจฟรีส่งได้จำกัดต่อเดือน และ 1 ข้อความนับตามจำนวนเพื่อนที่แอด OA "
+                                 "— ถ้าเทรดบ่อยให้ปิดการแจ้งบางเหตุการณ์ หรือกด \"ตรวจโควตา\" ดูยอดคงเหลือ",
+                     font=f(10), text_color=COLOR_TEXT_MUTED, wraplength=540, justify="left", anchor="w").pack(fill="x", padx=16, pady=(4, 12))
+        self._refresh_state()
+
+    def _refresh_state(self):
+        st = self.ln.load_settings()
+        if st.get("enabled") and st.get("token"):
+            self.lbl_state.configure(text="● เปิดใช้งานอยู่", text_color=COLOR_SUCCESS_GREEN)
+        else:
+            self.lbl_state.configure(text="ปิดอยู่", text_color=COLOR_TEXT_MUTED)
+        if self.ln.last_error:
+            self.lbl_info.configure(text=f"ส่งล่าสุดไม่สำเร็จ: {self.ln.last_error}", text_color=COLOR_DANGER_RED)
+
+    def _save(self):
+        token = self.ent_token.get().strip()
+        if self.var_on.get() and not token:
+            self.lbl_info.configure(text="กรุณาใส่ Channel access token ก่อนเปิดใช้งาน", text_color=COLOR_DANGER_RED)
+            return
+        self.ln.save_settings(enabled=self.var_on.get(), token=token,
+                              events={"open": self.var_open.get(), "close": self.var_close.get(), "daily": self.var_daily.get()},
+                              daily_time=self.cmb_time.get().strip() or "00:05")
+        self.ln.start_scheduler()
+        self.lbl_info.configure(text="บันทึกแล้ว — กด \"ส่งข้อความทดสอบ\" เพื่อตรวจว่าข้อความถึง LINE", text_color=COLOR_SUCCESS_GREEN)
+        self._refresh_state()
+
+    def _run_bg(self, fn, done):
+        box = {}
+        threading.Thread(target=lambda: box.setdefault("r", fn()), daemon=True).start()
+
+        def wait():
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+            if "r" not in box:
+                self.after(150, wait)
+                return
+            done(box["r"])
+        wait()
+
+    def _test(self):
+        token = self.ent_token.get().strip()
+        if not token:
+            self.lbl_info.configure(text="กรุณาใส่ Channel access token ก่อน", text_color=COLOR_DANGER_RED)
+            return
+        self.lbl_info.configure(text="กำลังส่งข้อความทดสอบ…", text_color=COLOR_GOLD_PRIMARY)
+        self._run_bg(lambda: self.ln.send_test(token),
+                     lambda r: self.lbl_info.configure(text=("ส่งสำเร็จ — ตรวจข้อความใน LINE ได้เลย" if r[0] else f"ส่งไม่สำเร็จ: {r[1]}"),
+                                                       text_color=COLOR_SUCCESS_GREEN if r[0] else COLOR_DANGER_RED))
+
+    def _quota(self):
+        token = self.ent_token.get().strip()
+        if not token:
+            self.lbl_info.configure(text="กรุณาใส่ Channel access token ก่อน", text_color=COLOR_DANGER_RED)
+            return
+
+        def get():
+            try:
+                return True, self.ln.get_quota(token)
+            except Exception as e:
+                return False, self.ln._explain(e)
+
+        def done(r):
+            ok, q = r
+            if not ok:
+                self.lbl_info.configure(text=f"ตรวจโควตาไม่ได้: {q}", text_color=COLOR_DANGER_RED)
+            elif q.get("type") == "none" or not q.get("limit"):
+                self.lbl_info.configure(text=f"โควตาเดือนนี้: ไม่จำกัด · ใช้ไป {q.get('used', 0):,} ข้อความ", text_color=COLOR_SUCCESS_GREEN)
+            else:
+                left = max(0, q["limit"] - q["used"])
+                low = left <= q["limit"] * 0.1
+                self.lbl_info.configure(text=f"โควตาเดือนนี้: ใช้ไป {q['used']:,} / {q['limit']:,} · เหลือ {left:,} ข้อความ" + (" — ใกล้หมด" if low else ""),
+                                        text_color=COLOR_DANGER_RED if low else COLOR_SUCCESS_GREEN)
+        self.lbl_info.configure(text="กำลังตรวจโควตา…", text_color=COLOR_GOLD_PRIMARY)
+        self._run_bg(get, done)
+
+
 class ContactDialog(ctk.CTkToplevel):
     """ติดต่อแอดมินทาง LINE OA — QR + ปุ่มเปิด LINE + คัดลอกไอดี"""
     LINE_ID = "@887aczyq"
@@ -4926,6 +5103,7 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  📊  สถิติรายแผนแบบละเอียด", command=self._open_user_stats_modal)
         menu.add_command(label="  ⚙️  จัดการ Profile & MT5 Terminal", command=self._open_profile_manager_modal)
         menu.add_command(label="  📢  ข่าวสารและโปรโมชัน", command=self._open_news)
+        menu.add_command(label="  🔔  แจ้งเตือน LINE OA (เข้าไม้ / ปิดไม้)", command=lambda: self._open_single(LineNotifyDialog, "_line_dialog"))
         menu.add_command(label="  ⏳  ประวัติการสะสมชั่วโมง / Lv.", command=lambda: HoursHistoryDialog(self))
         menu.add_command(label="  💬  ติดต่อแอดมิน (LINE)", command=lambda: ContactDialog(self))
         menu.add_command(label="  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
@@ -4938,6 +5116,19 @@ class MainTradingApp(ctk.CTk):
             menu.tk_popup(x, y)
         finally:
             menu.grab_release()
+
+    def _open_single(self, cls, attr):
+        """เปิดหน้าต่างได้หน้าต่างเดียว — คลิกซ้ำดึงหน้าต่างเดิมขึ้นมา"""
+        w = getattr(self, attr, None)
+        try:
+            if w is not None and w.winfo_exists():
+                w.deiconify()
+                w.lift()
+                w.focus_force()
+                return
+        except Exception:
+            pass
+        setattr(self, attr, cls(self))
 
     def _open_news(self):
         """รายการข่าวทั้งหมด (ดึงใหม่ในเธรดเบื้องหลัง)"""
@@ -5723,6 +5914,11 @@ class MainTradingApp(ctk.CTk):
         self.after(300, self._plan_checks_tick)
         self.after(1000, self._plan_live_tick)
         self.after(8000, self._news_tick)
+        try:
+            import line_notify
+            line_notify.start_scheduler()   # สรุปกำไรรายวันไป LINE OA (ถ้าผู้ใช้เปิดไว้)
+        except Exception:
+            pass
 
     def _plan_live_tick(self):
         """แสดงป้ายสถานะเงื่อนไขการเข้าไม้เรียลไทม์ และป้าย ● BUY / ● SELL ที่แผนที่มีไม้เปิดอยู่ตอนนี้"""
@@ -6383,38 +6579,11 @@ class MainTradingApp(ctk.CTk):
     HISTORY_MIN_ROWS, HISTORY_MAX_ROWS = 5, 40
     @staticmethod
     def _close_reason(r):
-        """ไม้ปิดด้วยอะไร → (ข้อความ, สี) จาก reason ของ Deal ปิดใน MT5 + คอมเมนต์ที่บอทใส่"""
-        code = r.get("close_code", -1)
-        cm = str(r.get("close_reason") or "")
-        profit = r.get("profit", 0.0)
-        if code == 5 or cm.startswith("[tp"):
-            return "🎯 ชน TP", COLOR_SUCCESS_GREEN
-        if code == 4 or cm.startswith("[sl"):
-            # SL ที่ถูกเลื่อนมาล็อกกำไรแล้ว = ปิดกำไร
-            return ("🔒 ชน SL (ล็อกกำไร)", COLOR_SUCCESS_GREEN) if profit > 0 else ("⛔ ชน SL", COLOR_DANGER_RED)
-        if code == 6 or cm.startswith("[so"):
-            return "⚠ Stop Out", COLOR_DANGER_RED
-        if code == 3 or cm:
-            low = cm.lower()
-            if "take profit $" in low:
-                return "💰 ถึงเป้ากำไร $", COLOR_SUCCESS_GREEN
-            if "manual tp" in low:
-                return "🎯 ถึงเป้าจุด (เข้าเอง)", COLOR_SUCCESS_GREEN
-            if "vol tp" in low or "volatility tp" in low:
-                return "⚡ ปิดช่วงผันผวนแรง", COLOR_SUCCESS_GREEN
-            if "cross" in low:
-                return "🤖 บอทปิด · MA ตัดกลับ", COLOR_GOLD_PRIMARY
-            if "reversal" in low:
-                return "🤖 บอทปิด · AI กลับทิศ", COLOR_GOLD_PRIMARY
-            if "manual" in low:
-                return "✋ ปิดเอง (ในโปรแกรม)", COLOR_CYAN_ACCENT
-            if "emergency" in low or "close all" in low:
-                return "✋ ปิดทุกออเดอร์", COLOR_CYAN_ACCENT
-            if code == 3:
-                return "🤖 บอทปิด", COLOR_GOLD_PRIMARY
-        if code in (0, 1, 2):
-            return "✋ ปิดเอง (MT5)", COLOR_CYAN_ACCENT
-        return "ปิดแล้ว", COLOR_TEXT_MUTED
+        """ไม้ปิดด้วยอะไร → (ข้อความ, สี) — ตรรกะกลางอยู่ที่ line_notify.close_reason (ใช้ร่วมกับแจ้งเตือน LINE OA)"""
+        import line_notify
+        text, tone = line_notify.close_reason(r.get("close_code", -1), r.get("close_reason"), r.get("profit", 0.0))
+        return text, {"green": COLOR_SUCCESS_GREEN, "red": COLOR_DANGER_RED, "gold": COLOR_GOLD_PRIMARY,
+                      "cyan": COLOR_CYAN_ACCENT}.get(tone, COLOR_TEXT_MUTED)
 
     HISTORY_COLUMNS = [
         ("เวลาเปิด (ไทย)", 96, "w"),

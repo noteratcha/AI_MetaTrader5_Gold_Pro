@@ -27,6 +27,7 @@ const SECTIONS = [
   ['web', 'เว็บไซต์ GoldBot24'],
   ['update', 'อัปเดตโปรแกรม'],
   ['profiles', 'ใช้หลายบัญชี MT5 พร้อมกัน'],
+  ['line', 'แจ้งเตือน LINE OA'],
   ['faq', 'ปัญหาที่พบบ่อย'],
   ['contact', 'ติดต่อแอดมิน'],
   ['risk', 'คำเตือนความเสี่ยง'],
@@ -298,7 +299,7 @@ export default function GuideContent() {
         <StatCard icon={Clock} label="ค่าบริการ" value="1 บาท/ชม." sub="คิดเฉพาะตอนบอททำงาน" tone="gold" />
         <StatCard icon={Gift} label="สมาชิกใหม่" value="ฟรี 48 ชม." sub="หลังยืนยันอีเมล" tone="green" />
         <StatCard icon={MonitorSmartphone} label="ใช้งานกับ" value="Windows + MT5" sub="Windows 10/11 หรือ VPS · บัญชี FBS" />
-        <StatCard icon={MessageCircle} label="ติดต่อแอดมิน" value={`LINE ${LINE_ID}`} sub="ดูข้อ 18" tone="green" />
+        <StatCard icon={MessageCircle} label="ติดต่อแอดมิน" value={`LINE ${LINE_ID}`} sub="ดูข้อ 19" tone="green" />
       </div>
 
       <div className="guide-layout">
@@ -682,6 +683,26 @@ export default function GuideContent() {
               <li><strong>กันเปิดซ้ำ</strong>: 1 โปรไฟล์เปิดได้ 1 หน้าต่าง (ในรายการจะขึ้น “เปิดอยู่” และกดเปิดซ้ำไม่ได้) และ 1 บัญชี MT5 ให้บอทเริ่มทำงานได้หน้าต่างเดียว — ถ้าอีกหน้าต่างใช้บัญชีนั้นอยู่ จะกดเริ่มบอทไม่ได้ หรือบอทจะหยุดชั่วคราวเมื่อ MT5 สลับไปบัญชีนั้น</li>
               <li>โปรไฟล์ที่ใช้ MT5 หรือ Magic Number ซ้ำกันจะแสดงเป็นสีแดงพร้อมคำเตือน ควรตั้งให้แต่ละโปรไฟล์ใช้ของตัวเอง</li>
               <li>ทุกหน้าต่างหักชั่วโมงใช้งานขณะบอททำงาน</li>
+            </ul>
+          </Section>
+
+          <Section id="line">
+            <p>ให้โปรแกรมส่งข้อความ <strong>เข้าไม้</strong> · <strong>ปิดไม้</strong> (กำไร/ขาดทุน + ปิดโดยอะไร) และ <strong>สรุปกำไรรายวัน</strong> ไปที่ LINE OA ของคุณเอง ตั้งค่าที่เมนูชื่อผู้ใช้ → <Ui>แจ้งเตือน LINE OA</Ui></p>
+            <Steps
+              compact
+              items={[
+                { body: <>สร้าง LINE Official Account ฟรีที่ <a href="https://manager.line.biz" target="_blank" rel="noopener noreferrer">manager.line.biz</a></> },
+                { body: 'ใน OA Manager ไปที่ ตั้งค่า → Messaging API → กด "ใช้ Messaging API"' },
+                { body: <>เปิด <a href="https://developers.line.biz/console/" target="_blank" rel="noopener noreferrer">LINE Developers</a> → Channel ของ OA → แท็บ Messaging API → Channel access token (long-lived) → Issue แล้วคัดลอก</> },
+                { body: 'แอดเพื่อน OA ของคุณด้วย LINE ที่ต้องการรับแจ้งเตือน' },
+                { body: <>ในโปรแกรม วาง Token เปิดใช้งาน เลือกเหตุการณ์ แล้วกด <Ui tone="gold">บันทึก</Ui> และ <Ui>ส่งข้อความทดสอบ</Ui></> },
+              ]}
+            />
+            <ul>
+              <li>Token เก็บในเครื่องนี้เท่านั้น (เข้ารหัส) ไม่ส่งขึ้นเว็บ — แต่ละโปรไฟล์ตั้งค่า LINE แยกกันได้</li>
+              <li>ข้อความส่งถึงทุกคนที่แอดเพื่อน OA นั้น (เหมาะกับใช้คนเดียวหรือทีม)</li>
+              <li>LINE OA แพ็กเกจฟรีส่งได้จำกัดต่อเดือน กด <Ui>ตรวจโควตา</Ui> เพื่อดูยอดคงเหลือ ถ้าเทรดบ่อยให้ปิดการแจ้งบางเหตุการณ์</li>
+              <li>ต้องเปิดโปรแกรมทิ้งไว้ (บอททำงาน) ข้อความจึงถูกส่ง · สรุปรายวันส่งตามเวลาที่ตั้ง (ค่าเริ่มต้น 00:05 น.)</li>
             </ul>
           </Section>
 
