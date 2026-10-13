@@ -37,6 +37,8 @@ PLANS = (  # (ขึ้นต้น comment, key, ชื่อสั้น) — 
     ("SR-Swing", "P4", "P4 · SR Bounce"),
     ("BB-H1", "P5", "P5 · BB-H1"),
     ("PSAR", "P6", "P6 · SAR H1"),
+    ("BB-H4-Free", "P8", "P8 · BB-H4 Free"),   # ต้องมาก่อน BB-H4 (P7)
+    ("BB-H4", "P7", "P7 · BB-H4"),
 )
 
 
@@ -93,7 +95,10 @@ def _context_from(h1, h4, price):
     h1s["sar_fast"], fdir = bot.psar_series(h1["high"].values, h1["low"].values, *bot.P6_SAR_FAST)
     h1s["ema100"] = c1.ewm(span=bot.P6_EXIT_EMA, adjust=False).mean()
     atr_h1, atr_h4 = bot._atr_series(h1), bot._atr_series(h4)
-    d = {"h1s": h1s.set_index("time"), "atr_h1": _f(atr_h1.iloc[-2])}
+    h4s = pd.DataFrame({"time": h4["time"]})
+    mid4, sd4 = c4.shift(1).rolling(20).mean(), c4.shift(1).rolling(20).std()   # Plan 7/8: เหมือนบอท (แท่ง H4 ที่ปิดแล้ว)
+    h4s["bb_mid"], h4s["bb_up"], h4s["bb_lo"] = mid4, mid4 + 2 * sd4, mid4 - 2 * sd4
+    d = {"h1s": h1s.set_index("time"), "h4s": h4s.set_index("time"), "atr_h1": _f(atr_h1.iloc[-2])}
     _, d["h1_diff"], d["h1_dir"] = bot.closed_trend(c1.rolling(10).mean(), c1.rolling(30).mean(), atr=atr_h1)
     d["h4_up"], d["h4_diff"], d["h4_dir"] = bot.closed_trend(c4.rolling(10).mean(), c4.rolling(30).mean(), atr=atr_h4)
     ma5_4 = c4.rolling(5).mean()
@@ -163,6 +168,10 @@ def _map_h1(m, ctx):
     hkey = pd.to_datetime(m["time"], unit="s").dt.floor("h")
     for col in ("ma5", "ma10", "ma20", "bb_up", "bb_mid", "bb_lo", "macd_hist", "sar", "ema100"):
         m["h1_" + col] = hkey.map(ctx["h1s"][col]).astype(float)
+    if "h4s" in ctx:
+        h4key = pd.to_datetime(m["time"], unit="s").dt.floor("4h")
+        for col in ("bb_up", "bb_mid", "bb_lo"):
+            m["h4_" + col] = h4key.map(ctx["h4s"][col]).astype(float)
 
 
 def _money_per_pt(lot):
@@ -218,6 +227,11 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
     elif plan_key == "P6":
         lines = [{"label": "SAR H1", "style": "fast", "values": ser("h1_sar")},
                  {"label": "EMA100 H1 (ออก)", "style": "ma50", "values": ser("h1_ema100")}]
+    elif plan_key in ("P7", "P8"):
+        lines = [{"label": "BB บน H4", "style": "band", "values": ser("h4_bb_up")},
+                 {"label": "BB กลาง H4", "style": "mid", "values": ser("h4_bb_mid")},
+                 {"label": "BB ล่าง H4", "style": "band", "values": ser("h4_bb_lo")}]
+        pane = {"kind": "rsi", "label": "RSI(14) M15 · ใช้หา Divergence", "values": ser("rsi"), "band": None}
     elif plan_key == "P5":
         lines = [{"label": "BB บน H1", "style": "band", "values": ser("h1_bb_up")},
                  {"label": "BB กลาง H1", "style": "mid", "values": ser("h1_bb_mid")},
@@ -356,6 +370,23 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                 ch = ctx["macd_now"] - ctx["macd_prev"]
                 inds.append(_ind("MACD Histogram H1", f"{ctx['macd_now']:+.2f} ({'ยกตัว' if ch > 0 else 'กดตัว'})", _agree(ch, side),
                                  "ข้อมูลประกอบ (ไม่ใช่เงื่อนไขเข้า) · ยกตัว = หนุน BUY · กดตัว = หนุน SELL"))
+        divergence()
+        ai_prob()
+        step_trail()
+        tp_progress()
+    elif plan_key in ("P7", "P8"):
+        if ctx:
+            hb = m.iloc[-1]
+            inds.append(_ind("Bollinger H4 บน / กลาง / ล่าง",
+                             f"{_fmt(_f(hb.get('h4_bb_up')))} / {_fmt(_f(hb.get('h4_bb_mid')))} / {_fmt(_f(hb.get('h4_bb_lo')))}", 0,
+                             "เป้าหมายแผน = ราคากลับเข้าหากรอบ · TP 1.5 เท่าของ SL"))
+            word = {1: "เรียงขึ้น", -1: "เรียงลง", 0: "ไม่เรียง"}[ctx["h1_stack_dir"]]
+            inds.append(_ind("H1 MA100 / 150 / 200", word, -1 if ctx["h1_stack_dir"] == side else 0,
+                             "ห้ามเรียงตามทิศไม้ตอนเข้า (หลุดขอบกลางเทรนด์แรงมักไม่เด้ง)"))
+            if plan_key == "P7":
+                side_ok = abs(ctx["h4_diff"]) < 0.20 or (ctx["h4_up"] == (side > 0))
+                inds.append(_ind("เทรนด์ H4 MA10/30", f"{ctx['h4_diff']:+.2f}%", 0 if abs(ctx["h4_diff"]) < 0.20 else (1 if side_ok else -1),
+                                 "P7 ห้ามสวนเทรนด์ H4 (ไซด์เวย์ ±0.20% เข้าได้ทั้งสองทาง)"))
         divergence()
         ai_prob()
         step_trail()

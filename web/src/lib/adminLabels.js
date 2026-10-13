@@ -40,4 +40,6 @@ export const PLAN_SHORT = {
   'Plan 4: SR-SwingBounce': 'P4 · SR Bounce',
   'Plan 5: BB-H1-Reversion': 'P5 · BB-H1',
   'Plan 6: PSAR-H1-Trend': 'P6 · SAR H1',
+  'Plan 7: BB-H4-Reversion': 'P7 · BB-H4',
+  'Plan 8: BB-H4-Free': 'P8 · BB-H4 Free',
 };

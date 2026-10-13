@@ -60,8 +60,10 @@ def create_quickstart_guide(out_dir):
    - Plan 2: MA-Cross-H1-Trend (MA5 x MA10 H1 + ตัวกรองเทรนด์ใหญ่ H4)
    - Plan 3: SMC-LiquidityHunt (กวาดสภาพคล่องแนวรับ/ต้าน H1 + เทรนด์ H1)
    - Plan 4: SR-SwingBounce (เด้งโซนแนวรับ/ต้าน H1 + RSI Divergence)
-   - Plan 5: BB-H1-Reversion (เด้งขอบแบนด์ H1 2STD + MACD Confluence)
+   - Plan 5: BB-H1-Reversion (เด้งขอบแบนด์ H1 2STD + Divergence + AI)
    - Plan 6: PSAR-H1-Trend (Parabolic SAR H1 + เทรนด์ H4 MA10/30)
+   - Plan 7: BB-H4-Reversion (เด้งขอบแบนด์ H4 2STD + Divergence + AI + เทรนด์ H4)
+   - Plan 8: BB-H4-Free (เด้งขอบแบนด์ H4 2STD + Divergence + AI · ไม่กรองเทรนด์ H4)
 
 5. คำแนะนำความปลอดภัย & คู่มือการใช้งาน:
    - ตรวจสอบให้แน่ใจว่าได้เปิดโปรแกรม MetaTrader 5 และล็อกอินบัญชีเรียบร้อยแล้ว

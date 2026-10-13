@@ -175,6 +175,13 @@ P5_AI_MIN = 0.55
 # เลื่อน SL: ตาม SAR ช้าทุกแท่ง H1 → กำไรสูงสุดถึง 2 ATR เปลี่ยนไปตาม SAR เร็ว (0.02/0.2)
 # ออก: เทรนด์ H4 เปลี่ยน หรือราคาปิด H1 ผิดฝั่ง EMA100 · Backtest 2.7 ปี: +2,568 จุด PF 2.08 DD 191 (ระหว่างถือ 239)
 P6_NAME = "PSAR-H1-Trend"
+# Plan 7 / 8 (13 ต.ค. 2026): หลักการเดียวกับ P5 แต่ใช้กรอบ Bollinger H4 (SMA 20, 2 STD, แท่ง H4 ที่ปิดแล้ว) · จุดเข้าดูแท่ง M15
+#   ราคาหลุดขอบ BB H4 แล้วกลับเข้ากรอบ + ไส้ ≥ 0.20 ATR + Divergence (ปกติ/ซ่อน) + H1 MA100/150/200 ไม่เรียงตามทิศ + AI ≥ 55%
+#   P7 = + ตัวกรองเทรนด์ H4 MA10/30 (Strict Pro-Trend เหมือน P5) · P8 = ไม่ใช้ตัวกรองเทรนด์ H4
+#   SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก 5 จุด (50%/40%) เหมือน P5
+#   Backtest 2.5 ปี: P7 8 ไม้ ชนะ 87.5% +115 จุด PF 21 DD 6 · P8 40 ไม้ ชนะ 52.5% +106 จุด PF 1.95 DD 38 (ไม่ทับ P5)
+P7_NAME = "BB-H4-Reversion"
+P8_NAME = "BB-H4-Free"
 MANUAL_SL_ATR = 1.0   # ไม้ที่เข้าเองไม่มี SL → บอทตั้ง SL 1.0 ATR M15 (เท่าค่าเริ่มต้นของหน้าต่างเข้าไม้เอง)
 P6_SAR = (0.01, 0.1)
 P6_SAR_FAST = (0.02, 0.2)
@@ -207,7 +214,7 @@ last_cross_entry_bar = {}         # {(sym, plan, direction): bar_time} กัน
 P4_TRAIL_STEP_POINTS = 5.0
 P4_TRAIL_FRACTION = 0.40
 TRAIL_FIRST_FRACTION = 0.50
-TRAIL_PLANS = ("MA-Cross-Trend", "SMC", "SR-Swing", "BB-H1")   # comment ขึ้นต้นด้วย → ใช้ Step Trailing
+TRAIL_PLANS = ("MA-Cross-Trend", "SMC", "SR-Swing", "BB-H1", "BB-H4")   # comment ขึ้นต้นด้วย → ใช้ Step Trailing
 P4_TRAIL_STATE_FILE = _data_path('p4_trail_state.json')
 
 
@@ -1607,7 +1614,7 @@ def log_signal_event(symbol, signal_type, plan, direction, price, ai_up, ai_down
 
 def evaluate_plans_condition_status(symbol: str = None) -> dict:
     """
-    ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 6 แผนเทรด (P1-P6) ณ ราคาปัจจุบัน
+    ประเมินสถานะเงื่อนไขการเข้าไม้เรียลไทม์ของทั้ง 8 แผนเทรด (P1-P8) ณ ราคาปัจจุบัน
     คืนค่า dict ข้อมูลแต่ละแผน: label, side, matched (เข้าแล้วกี่ข้อ), total, pct, items ([✓/✗ ข้อความ])
     """
     if symbol is None:
@@ -1671,6 +1678,12 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
         sr_h1 = find_sr_levels(df_h1, cur_price, df_h4=df_h4)
         support = float(sr_h1.get("support", 0.0))
         resistance = float(sr_h1.get("resistance", 0.0))
+
+        # Bollinger H4 (แท่งปิด) สำหรับ P7/P8
+        bb_mid_h4 = float(h4_c.rolling(20).mean().iloc[-2])
+        bb_std_h4 = float(h4_c.rolling(20).std().iloc[-2])
+        bb_upper_h4 = bb_mid_h4 + 2 * bb_std_h4
+        bb_lower_h4 = bb_mid_h4 - 2 * bb_std_h4
 
         bb_mid_h1 = float(h1_c.rolling(20).mean().iloc[-2])
         bb_std_h1 = float(h1_c.rolling(20).std().iloc[-2])
@@ -1931,6 +1944,45 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             "disabled_reason": plan_config.disabled_reason("PSAR-H1-Trend")
         }
 
+        # ===== Plan 7 / 8: BB-H4 — กฎเดียวกับ P5 แต่ขอบ Bollinger H4 · P7 เพิ่มตัวกรองเทรนด์ H4 MA10/30 =====
+        p78_side = "BUY" if abs(cur_price - bb_lower_h4) <= abs(bb_upper_h4 - cur_price) else "SELL"
+        p78_items = []
+        if p78_side == "BUY":
+            c1 = m15_low < bb_lower_h4 and m15_close >= bb_lower_h4
+            p78_items.append({"name": "หลุด BB H4 ล่างแล้วดีดกลับ", "ok": c1, "desc": f"Low หลุด {bb_lower_h4:,.2f} แล้วปิดกลับขึ้นมา" if c1 else f"ยังไม่หลุดกรอบ BB H4 ล่าง ({bb_lower_h4:,.2f})"})
+            c2 = lower_wick_ratio >= 0.20
+            p78_items.append({"name": "ไส้ล่างปฏิเสธ", "ok": c2, "desc": f"ไส้ล่างยาว {lower_wick_ratio:.2f} ATR (≥0.20)" if c2 else f"ไส้ล่าง {lower_wick_ratio:.2f} (<0.20)"})
+            c3 = bull_div or hid_bull
+            p78_items.append({"name": "Bullish Divergence", "ok": c3, "desc": ("พบ Bullish Divergence" if bull_div else "พบ Hidden Bullish Divergence") if c3 else "ไม่พบ Divergence"})
+            c4 = h1_stack_dir != 1
+            p78_items.append({"name": "H1 ไม่เรียงขาขึ้น", "ok": c4, "desc": f"H1 {stack_txt}" if c4 else "H1 MA100>150>200 เรียงขาขึ้น — หลุดขอบล่างกลางเทรนด์มักไม่เด้ง"})
+            c5 = ai_prob_up >= 0.55
+            p78_items.append({"name": "AI ทายขึ้น ≥55%", "ok": c5, "desc": f"AI UP {ai_prob_up:.1%}" if c5 else f"AI UP {ai_prob_up:.1%} (<55%)"})
+            c6 = abs(h4_diff_pct) < 0.20 or is_uptrend_h4
+            h4_item = {"name": "เทรนด์ H4 ไม่สวน", "ok": c6, "desc": (f"H4 ไซด์เวย์ ({h4_diff_pct:+.2f}%)" if abs(h4_diff_pct) < 0.20 else f"H4 ขาขึ้น (+{h4_diff_pct:.2f}%)") if c6 else f"H4 ขาลง ({h4_diff_pct:.2f}%) — ห้าม BUY"}
+        else:
+            c1 = m15_high > bb_upper_h4 and m15_close <= bb_upper_h4
+            p78_items.append({"name": "หลุด BB H4 บนแล้วดึงกลับ", "ok": c1, "desc": f"High ทะลุ {bb_upper_h4:,.2f} แล้วปิดกลับลงมา" if c1 else f"ยังไม่หลุดกรอบ BB H4 บน ({bb_upper_h4:,.2f})"})
+            c2 = upper_wick_ratio >= 0.20
+            p78_items.append({"name": "ไส้บนปฏิเสธ", "ok": c2, "desc": f"ไส้บนยาว {upper_wick_ratio:.2f} ATR (≥0.20)" if c2 else f"ไส้บน {upper_wick_ratio:.2f} (<0.20)"})
+            c3 = bear_div or hid_bear
+            p78_items.append({"name": "Bearish Divergence", "ok": c3, "desc": ("พบ Bearish Divergence" if bear_div else "พบ Hidden Bearish Divergence") if c3 else "ไม่พบ Divergence"})
+            c4 = h1_stack_dir != -1
+            p78_items.append({"name": "H1 ไม่เรียงขาลง", "ok": c4, "desc": f"H1 {stack_txt}" if c4 else "H1 MA100<150<200 เรียงขาลง — หลุดขอบบนกลางเทรนด์มักไม่เด้ง"})
+            c5 = ai_prob_down >= 0.55
+            p78_items.append({"name": "AI ทายลง ≥55%", "ok": c5, "desc": f"AI DOWN {ai_prob_down:.1%}" if c5 else f"AI DOWN {ai_prob_down:.1%} (<55%)"})
+            c6 = abs(h4_diff_pct) < 0.20 or not is_uptrend_h4
+            h4_item = {"name": "เทรนด์ H4 ไม่สวน", "ok": c6, "desc": (f"H4 ไซด์เวย์ ({h4_diff_pct:+.2f}%)" if abs(h4_diff_pct) < 0.20 else f"H4 ขาลง ({h4_diff_pct:.2f}%)") if c6 else f"H4 ขาขึ้น (+{h4_diff_pct:.2f}%) — ห้าม SELL"}
+        for key, name, label, items in (("P7", P7_NAME, "P7 · H4 (BB)", p78_items + [h4_item]),
+                                         ("P8", P8_NAME, "P8 · H4 (Free)", list(p78_items))):
+            mk = sum(1 for it in items if it["ok"])
+            results[key] = {
+                "name": name, "label": label, "side": p78_side,
+                "matched": mk, "total": len(items), "pct": int(mk / len(items) * 100), "items": items,
+                "enabled": plan_config.is_enabled(name),
+                "disabled_reason": plan_config.disabled_reason(name)
+            }
+
         return results
     except Exception as e:
         return {}
@@ -1951,7 +2003,7 @@ def print_plans_condition_status(symbol: str = None):
 
         print(f"\n{Colors.CYAN}{Colors.BOLD}[PLAN STATUS] ความพร้อมเงื่อนไขการเข้าไม้แต่ละแผน ({symbol} @ {price:,.2f}){Colors.RESET}")
 
-        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6"]
+        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"]
         for pk in plan_order:
             info = status_map.get(pk)
             if not info:
@@ -2623,8 +2675,14 @@ def main():
                         print(f"\n{Colors.BOLD}[NEW H4 BAR] {sym} New 4-Hour Candle | H4 Regime: {h4_ann}{Colors.RESET}")
                     last_h4_bar[sym] = current_h4_time
 
+                # Bollinger Bands บน H4 (SMA 20, 2 STD) สำหรับ Plan 7/8 — Shift 1 = แท่ง H4 ที่ปิดแล้ว ไม่ Repaint
+                df_h4['bb_mid_h4'] = df_h4['close'].shift(1).rolling(20).mean()
+                _bb_std_h4 = df_h4['close'].shift(1).rolling(20).std()
+                df_h4['bb_upper_h4'] = df_h4['bb_mid_h4'] + _bb_std_h4 * 2.0
+                df_h4['bb_lower_h4'] = df_h4['bb_mid_h4'] - _bb_std_h4 * 2.0
+
                 df_h4['time_h4'] = df_h4['time'].dt.floor('4h')
-                df_h4_features = df_h4[['time_h4', 'trend_h4']].dropna()
+                df_h4_features = df_h4[['time_h4', 'trend_h4', 'bb_mid_h4', 'bb_upper_h4', 'bb_lower_h4']].dropna()
                 
                 df = df_m15.copy()
                 df['time_h1'] = df['time'].dt.floor('h')
@@ -2642,6 +2700,8 @@ def main():
                 df['time_h4'] = df['time'].dt.floor('4h')
                 df = pd.merge(df, df_h4_features, on='time_h4', how='left')
                 df['trend_h4'] = df['trend_h4'].ffill()
+                for _col in ('bb_mid_h4', 'bb_upper_h4', 'bb_lower_h4'):
+                    df[_col] = df[_col].ffill()
                 
                 df['return'] = df['close'].pct_change()
                 df['ma_fast'] = df['close'].rolling(10).mean()
@@ -2784,6 +2844,13 @@ def main():
                     and h1_stack_dir != 1
                 bb_sell_confirm = (last_bar['high'] > bb_upper_h1) and (close_price <= bb_upper_h1) and (upper_wick_ratio >= 0.20) and has_div_bb_sell \
                     and h1_stack_dir != -1
+                # Plan 7 / 8 (BB-H4): กฎเดียวกับ P5 แต่ขอบเป็น Bollinger H4 · P7 ต้องผ่านตัวกรองเทรนด์ H4 เพิ่ม (ตรวจตอนเข้าไม้)
+                bb_lower_h4 = last_bar['bb_lower_h4']
+                bb_upper_h4 = last_bar['bb_upper_h4']
+                bb4_buy_sig = (last_bar['low'] < bb_lower_h4) and (close_price >= bb_lower_h4) and (lower_wick_ratio >= 0.20) and has_div_bb_buy \
+                    and h1_stack_dir != 1
+                bb4_sell_sig = (last_bar['high'] > bb_upper_h4) and (close_price <= bb_upper_h4) and (upper_wick_ratio >= 0.20) and has_div_bb_sell \
+                    and h1_stack_dir != -1
 
                 # Plan 1 (MA-Cross-Trend) Moving Average 5 ตัด 10 บนแท่ง M15 กรองด้วยเทรนด์ใหญ่ H1
                 ma5_val = float(last_bar['ma5'])
@@ -2910,6 +2977,12 @@ def main():
                     status_color = Colors.GREEN
                 elif p6_sell:
                     status_text = "[PSAR-H1 SELL] SAR flip down + H4 Down + MA200"
+                    status_color = Colors.RED
+                elif bb4_buy_sig:
+                    status_text = "[BB-H4 REVERSION BUY] Lower Band H4 + Div"
+                    status_color = Colors.GREEN
+                elif bb4_sell_sig:
+                    status_text = "[BB-H4 REVERSION SELL] Upper Band H4 + Div"
                     status_color = Colors.RED
 
                 # แสดงผลแบบ Dashboard สวยงาม โดยปรับจุดทศนิยมอัตโนมัติ
@@ -3447,6 +3520,35 @@ def main():
                                 send_order(sym, mt5.ORDER_TYPE_BUY if d6 == 1 else mt5.ORDER_TYPE_SELL, price, sl, 0.0, plan_name=P6_NAME)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', P6_NAME, side6, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (SAR trail)')
                                 _record_plan(side6, P6_NAME)
+
+                        # แผน 7 / 8: BB-H4 (หลุดขอบ Bollinger H4 แล้วกลับเข้า + Divergence + AI ≥ 55%)
+                        #   P7 = ต้องผ่านตัวกรองเทรนด์ H4 MA10/30 · P8 = ไม่ใช้ตัวกรองเทรนด์ H4
+                        elif bb4_buy_sig or bb4_sell_sig:
+                            d78 = 1 if bb4_buy_sig else -1
+                            side78 = 'BUY' if d78 == 1 else 'SELL'
+                            p_dir = prob[1] if d78 == 1 else prob[0]
+                            band_txt = 'Lower' if d78 == 1 else 'Upper'
+                            if p_dir < P5_AI_MIN:
+                                log_signal_event(sym, 'ZONE_ALERT', P8_NAME, side78, close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM',
+                                                 f'H4 BB {band_txt} Band Rejection | AI {"UP" if d78 == 1 else "DOWN"} {p_dir:.1%} < {P5_AI_MIN:.1%}')
+                            else:
+                                h4_ok, h4_msg = check_h4_confluence(side78, is_uptrend_h4, prob[1], prob[0], bull_div_active, bear_div_active, hidden_bull_active, hidden_bear_active, is_sideway_h4=is_sideway_h4, h4_diff_pct=h4_diff_pct)
+                                for p_label, need_h4 in ((P7_NAME, True), (P8_NAME, False)):
+                                    if need_h4 and not h4_ok:
+                                        print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} {side78} Skipped -> {h4_msg}{Colors.RESET}")
+                                        log_signal_event(sym, 'H4_FILTERED', p_label, side78, close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
+                                        continue
+                                    if _is_plan_blocked(side78, p_label):
+                                        continue
+                                    tick = mt5.symbol_info_tick(sym) or tick
+                                    price = tick.ask if d78 == 1 else tick.bid
+                                    sl = round(price - d78 * sl_dist, digits)
+                                    tp = round(price + d78 * sl_dist * symbol_rrr, digits)
+                                    note = h4_msg if need_h4 else "ไม่ใช้ตัวกรองเทรนด์ H4"
+                                    print(f"{Colors.GREEN if d78 == 1 else Colors.RED}[SIGNAL] {sym} {p_label}: H4 {band_txt} Band Rejection + Div + AI {p_dir:.2%} [{note}] -> SENDING {side78} ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                    send_order(sym, mt5.ORDER_TYPE_BUY if d78 == 1 else mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, side78, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({note})')
+                                    _record_plan(side78, p_label)
                 if has_position:
                     # เช็คเงื่อนไขการจัดการ Position (Plan 1 MA Exit + Plan 2 H1 MA Exit + AI Reversal + Early BE Lock + Unlimited Dynamic TP)
                     open_tickets = {p.ticket for p in positions}
@@ -3544,7 +3646,7 @@ def main():
 
                         # 0.15 Plan 3 / 4 / 5: เลื่อน SL ทุกกำไร 5 จุด (ขั้นแรก 50% / ถัดไป 40% ของระยะ SL → ราคา)
                         #      ยังใช้ล็อกกำไร 70% / Dynamic TP 80% ตามเดิม — SL ขยับเฉพาะทิศที่ดีขึ้นเท่านั้น
-                        if pos.comment.startswith(("BB-H1", "SMC", "SR-Swing")):   # P3 / P4 / P5 (7 ต.ค. 2026)
+                        if pos.comment.startswith(("BB-H1", "BB-H4", "SMC", "SR-Swing")):   # P3 / P4 / P5 (7 ต.ค. 2026) · P7 / P8 (13 ต.ค. 2026)
                             if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
                                 continue
 

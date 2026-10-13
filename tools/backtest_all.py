@@ -1,6 +1,6 @@
 """Backtest ทุกแผนตามกฎปัจจุบัน บนข้อมูล MT5 จริง (XAUUSD) แล้วบันทึกผลเป็น web/public/backtest.json ให้หน้า /backtest
 วิธีใช้: เปิด MT5 ค้างไว้ แล้วรัน  python tools/backtest_all.py  (ประมาณ 3–4 นาที) จากนั้น deploy เว็บ
-P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1
+P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free
 - AI: Walk-forward (เทรน 5000 แท่ง M15 → ทายแท่งถัดไป 500 แท่ง แล้วเลื่อน) ด้วย build_ai_features / AI_FEATURES ของบอท
 - ข้อมูลที่ใช้ตัดสินใจ = แท่งที่ปิดแล้ว (เข้าไม้ที่ราคาเปิดแท่งถัดไป) · หักสเปรด 0.35 จุด/ไม้ · 1 ไม้ต่อแผนในเวลาเดียวกัน
 - ไม่จำลอง: Cooldown, Circuit Breaker, Loss Block, การแย่งเข้าไม้ระหว่างแผน
@@ -97,6 +97,8 @@ t100, t150, t200 = (h4.close.rolling(k).mean() for k in (100, 150, 200))
 vx["h4_stack"] = np.where((t100 < t150) & (t150 < t200), -1, np.where((t100 > t150) & (t150 > t200), 1, 0))
 _m5 = h4.close.rolling(5).mean(); _a4 = A(h4); _sl5 = (_m5 - _m5.shift(2)) / _a4; _up = f10 > f30
 vx["p6_dir"] = np.where(_up == (h4.close > t200), np.where(_up, 1, -1), 0)   # Plan 6: H4 MA10/30 ตรงกับราคาเทียบ MA200
+_m4, _s4 = h4.close.rolling(20).mean(), h4.close.rolling(20).std()
+vx["bb4_up"], vx["bb4_lo"] = _m4 + 2 * _s4, _m4 - 2 * _s4   # Plan 7/8: Bollinger H4
 vx["p2_dir"] = np.where(_up & (_sl5 > 0) & (h4.close > t200), 1, np.where(~_up & (_sl5 < 0) & (h4.close < t200), -1, 0))
 
 b = pd.merge_asof(b.sort_values("close_time"), hx, left_on="close_time", right_on="avail", direction="backward").drop(columns="avail")
@@ -160,7 +162,7 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
     return out
 
 
-def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1.125):
+def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1.125, use_h4=True):
     """Plan 3–5: SL 0.75 ATR · TP 1.125 ATR · ล็อกกำไร +0.35 ATR ที่ 70% · ขยาย TP +1 ATR ที่ 80% เมื่อ AI ≥54% · AI กลับทิศ ≥60% และติดลบ → ปิด"""
     o, h, l, c, a, p = b.open.values, b.high.values, b.low.values, b.close.values, b.atr.values, b.p_up.values
     t = b.time.values
@@ -195,13 +197,13 @@ def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1
         if pos or np.isnan(a[i]) or np.isnan(p[i]):
             continue
         d = signal_fn(i)
-        if d and h4_ok(i, d):
+        if d and (h4_ok(i, d) if use_h4 else True):   # P8 ไม่ใช้ตัวกรองเทรนด์ H4
             e = o[i + 1]; at = a[i]
             pos = (d, e, e - d * slm * at, e + d * tpm * at, at, False, t[i + 1], 1)
     return out
 
 
-V = {k: b[k].values for k in ("h1_stack", "low", "high", "close", "open", "atr", "lw", "uw", "sup", "res", "h1_up", "p_up", "bb_lo", "bb_up",
+V = {k: b[k].values for k in ("h1_stack", "low", "high", "close", "open", "atr", "lw", "uw", "sup", "res", "h1_up", "p_up", "bb_lo", "bb_up", "bb4_lo", "bb4_up",
                               "macd_h", "macd_h_prev", "bull_div", "bear_div", "hidden_bull", "hidden_bear")}
 
 
@@ -237,6 +239,19 @@ def sig_bb(i):
         return 0
     pu = V["p_up"][i]
     # 13 ต.ค. 2026: ห้ามเข้าเมื่อ H1 MA100/150/200 เรียงตามทิศไม้ (สัญญาณหลอกกลางเทรนด์แรง)
+    if V["low"][i] < lo <= c and V["lw"][i] >= 0.20 and (V["bull_div"][i] or V["hidden_bull"][i]) and pu >= 0.55 and V["h1_stack"][i] != 1:
+        return 1
+    if V["high"][i] > upb >= c and V["uw"][i] >= 0.20 and (V["bear_div"][i] or V["hidden_bear"][i]) and (1 - pu) >= 0.55 and V["h1_stack"][i] != -1:
+        return -1
+    return 0
+
+
+def sig_bb4(i):
+    """Plan 7/8: กฎเดียวกับ P5 แต่ขอบเป็น Bollinger H4 (P7 ผ่าน h4_ok ใน sim_ai_plan · P8 ไม่ใช้)"""
+    lo, upb, c = V["bb4_lo"][i], V["bb4_up"][i], V["close"][i]
+    if np.isnan(lo):
+        return 0
+    pu = V["p_up"][i]
     if V["low"][i] < lo <= c and V["lw"][i] >= 0.20 and (V["bull_div"][i] or V["hidden_bull"][i]) and pu >= 0.55 and V["h1_stack"][i] != 1:
         return 1
     if V["high"][i] > upb >= c and V["uw"][i] >= 0.20 and (V["bear_div"][i] or V["hidden_bear"][i]) and (1 - pu) >= 0.55 and V["h1_stack"][i] != -1:
@@ -299,6 +314,8 @@ def sim_psar(fr):
 
 rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4, first_frac=0.5))))
 rows.append(stats("P6 SAR H1", keep(6, sim_psar(f))))
+rows.append(stats("P7 BB-H4", keep(7, sim_ai_plan(sig_bb4, step=5.0, frac=0.4, first_frac=0.5))))
+rows.append(stats("P8 BB-H4 Free", keep(8, sim_ai_plan(sig_bb4, step=5.0, frac=0.4, first_frac=0.5, use_h4=False))))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
 print(pd.DataFrame(rows).to_string(index=False))
@@ -311,9 +328,11 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · �
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
          4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 55% · SL 1.0 / TP 2.0 ATR"),
          5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เลื่อน SL ทุก 5 จุด (50%/40%)"),
-         6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100")}
+         6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100"),
+         7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),
+         8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด")}
 plans_out, events = [], []
-for k in (1, 2, 3, 4, 5, 6):
+for k in (1, 2, 3, 4, 5, 6, 7, 8):
     tr = ALL[k]
     st = stats(NAMES[k][1], tr)
     df_t = pd.DataFrame(tr)
@@ -325,7 +344,7 @@ for k in (1, 2, 3, 4, 5, 6):
             events.append((pd.Timestamp(x["time"]), k, float(x["pnl"])))
     plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly))
 events.sort(key=lambda e: e[0])
-eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6)}
+eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8)}
 total = 0.0
 for t, k, pnl in events:
     cum[k] += pnl; total += pnl
@@ -341,7 +360,7 @@ out = dict(generated_at=pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"), app_versi
            summary=summary, plans=plans_out, equity=curve,
            assumptions=["ข้อมูลราคา XAUUSD จริงจาก MT5 (M15/H1/H4) ใช้แท่งที่ปิดแล้ว เข้าไม้ที่ราคาเปิดแท่งถัดไป · Multi-Timeframe S&R 1,000 แท่ง H1 + H4 Confluence",
                         "หักสเปรด 0.35 จุดต่อไม้ · 1 จุด ≈ $1 ที่ 0.01 lot",
-                        "AI (Plan 3–5) จำลองแบบ Walk-forward: เทรนด้วยอดีต 5,000 แท่ง แล้วทายช่วงถัดไปที่ไม่เคยเห็น",
+                        "AI (Plan 3–5, 7–8) จำลองแบบ Walk-forward: เทรนด้วยอดีต 5,000 แท่ง แล้วทายช่วงถัดไปที่ไม่เคยเห็น",
                         "จำลองแยกทีละแผน 1 ไม้ต่อแผน · ไม่รวม Cooldown / Circuit Breaker / Loss Block",
                         "ผลในอดีตไม่ได้รับประกันผลในอนาคต"])
 dst = os.path.join(ROOT, "web", "public", "backtest.json")

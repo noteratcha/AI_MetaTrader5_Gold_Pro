@@ -10,6 +10,8 @@ const PLAN_STAT_NAMES = {
   'SR-SwingBounce': 'Plan 4: SR-SwingBounce',
   'BB-H1-Reversion': 'Plan 5: BB-H1-Reversion',
   'PSAR-H1-Trend': 'Plan 6: PSAR-H1-Trend',
+  'BB-H4-Reversion': 'Plan 7: BB-H4-Reversion',
+  'BB-H4-Free': 'Plan 8: BB-H4-Free',
 };
 
 // GET สถานะเปิด/ปิดแผนเทรด + ผลงานรวมรายแผน · PUT บันทึกการเปิด/ปิด (บอททุกเครื่องอ่านภายใน ~5 นาที)

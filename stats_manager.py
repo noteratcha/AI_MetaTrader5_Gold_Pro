@@ -24,6 +24,8 @@ STANDARD_PLANS = [
     "Plan 4: SR-SwingBounce",
     "Plan 5: BB-H1-Reversion",
     "Plan 6: PSAR-H1-Trend",
+    "Plan 7: BB-H4-Reversion",
+    "Plan 8: BB-H4-Free",
 ]
 
 def clean_plan_name(raw_plan: str) -> str:
@@ -33,6 +35,11 @@ def clean_plan_name(raw_plan: str) -> str:
     # ถ้าเช็คตัวเลขก่อนจะถูกจัดผิดแผน)
     if "PSAR" in p:
         return "Plan 6: PSAR-H1-Trend"
+    # BB-H4 ต้องเช็คก่อน "BB" (Plan 5) · Free ก่อน Reversion
+    if "BB-H4-Free" in p:
+        return "Plan 8: BB-H4-Free"
+    if "BB-H4" in p:
+        return "Plan 7: BB-H4-Reversion"
     if "SMC" in p or "Sweep" in p or "Hunt" in p:
         return "Plan 3: SMC-LiquidityHunt"
     if "Bounce" in p or "Swing" in p:

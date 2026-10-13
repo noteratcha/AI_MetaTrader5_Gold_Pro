@@ -670,6 +670,9 @@ class BotController:
                 ma10_s = df["close"].rolling(10).mean()
                 ma30_s = df["close"].rolling(30).mean()
                 ma200_s = df["close"].rolling(200).mean()
+                # Plan 7 / 8: Bollinger H4 (SMA 20, 2 STD)
+                bb4_mid_s = df["close"].rolling(20).mean()
+                bb4_std_s = df["close"].rolling(20).std()
                 for i in range(max(0, len(rates) - count), len(rates)):
                     r = rates[i]
                     c = closes[i]
@@ -682,6 +685,9 @@ class BotController:
                         "h4_ma10": _clean(ma10_s.iloc[i]),
                         "h4_ma30": _clean(ma30_s.iloc[i]),
                         "h4_ma200": _clean(ma200_s.iloc[i]),
+                        "h4_bb_mid": _clean(bb4_mid_s.iloc[i]),
+                        "h4_bb_up": _clean(bb4_mid_s.iloc[i] + 2 * bb4_std_s.iloc[i]),
+                        "h4_bb_lo": _clean(bb4_mid_s.iloc[i] - 2 * bb4_std_s.iloc[i]),
                     })
 
             info = mt5.symbol_info(symbol)
@@ -931,7 +937,8 @@ class BotController:
         s = str(raw_plan or "").strip()
         if not s or "Manual" in s or s in ("เข้าเอง", "อื่นๆ"):
             return "เข้าเอง"
-        for base in ("MA-Cross-H1-Trend", "MA-Cross-Trend", "SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "PSAR-H1-Trend"):
+        for base in ("MA-Cross-H1-Trend", "MA-Cross-Trend", "SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "PSAR-H1-Trend",
+                     "BB-H4-Reversion", "BB-H4-Free"):
             if base in s:
                 return base
         if "Plan 1" in s: return "MA-Cross-Trend"
@@ -940,6 +947,8 @@ class BotController:
         if "Plan 4" in s: return "SR-SwingBounce"
         if "Plan 5" in s: return "BB-H1-Reversion"
         if "Plan 6" in s: return "PSAR-H1-Trend"
+        if "Plan 7" in s: return "BB-H4-Reversion"
+        if "Plan 8" in s: return "BB-H4-Free"
         try:
             import plan_config
             return plan_config.base_plan(s) or "อื่นๆ"

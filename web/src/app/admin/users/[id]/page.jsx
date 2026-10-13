@@ -18,6 +18,8 @@ const PLAN_ROWS = [
   'Plan 4: SR-SwingBounce',
   'Plan 5: BB-H1-Reversion',
   'Plan 6: PSAR-H1-Trend',
+  'Plan 7: BB-H4-Reversion',
+  'Plan 8: BB-H4-Free',
 ];
 
 export default function AdminUserDetailPage() {

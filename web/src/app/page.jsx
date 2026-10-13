@@ -516,7 +516,7 @@ function Landing() {
             <span className="text-gold">ที่รู้ว่าเมื่อไหร่ไม่ควรเทรด</span>
           </h1>
           <p className="hero-sub">
-            6 แผนเทรดเฉพาะทาง ผสานการกรองเทรนด์ H4 แบบเข้มงวด และระบบบริหารความเสี่ยงอัตโนมัติ — คิดค่าบริการตามชั่วโมงที่ใช้งานจริง
+            8 แผนเทรดเฉพาะทาง ผสานการกรองเทรนด์ H4 แบบเข้มงวด และระบบบริหารความเสี่ยงอัตโนมัติ — คิดค่าบริการตามชั่วโมงที่ใช้งานจริง
           </p>
           <div className="row wrap" style={{ justifyContent: 'center', gap: 12 }}>
             <button className="btn btn-primary btn-lg" onClick={() => openAuthModal('register')}>

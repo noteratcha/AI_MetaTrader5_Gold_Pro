@@ -55,4 +55,6 @@ export const PLAN_LIST = [
   { key: 'SR-SwingBounce', label: 'P4 · SR Bounce', tag: 'Divergence' },
   { key: 'BB-H1-Reversion', label: 'P5 · BB-H1', tag: 'BB 2STD + Divergence' },
   { key: 'PSAR-H1-Trend', label: 'P6 · SAR H1', tag: 'Parabolic SAR · H4 Trend' },
+  { key: 'BB-H4-Reversion', label: 'P7 · BB-H4', tag: 'BB H4 + Divergence · H4 Trend' },
+  { key: 'BB-H4-Free', label: 'P8 · BB-H4 Free', tag: 'BB H4 + Divergence · ไม่กรอง H4' },
 ];
