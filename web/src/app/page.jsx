@@ -28,6 +28,7 @@ import { CandleCard, DailyPnlCard, NewsImpactCard, OutlookCard } from '../compon
 import TradeHistory from '../components/TradeHistory';
 import MyTradeStats from '../components/MyTradeStats';
 import { AdvisorCard, MarketCard, PlanConditionsCard } from '../components/LiveExtras';
+import { TrustCards } from '../components/TrustStats';
 import { NextNewsCard, useCalendar } from '../components/EconCalendar';
 
 export default function HomePage() {
@@ -515,7 +516,7 @@ function Landing() {
             <span className="text-gold">ที่รู้ว่าเมื่อไหร่ไม่ควรเทรด</span>
           </h1>
           <p className="hero-sub">
-            5 แผนเทรดเฉพาะทาง ผสานการกรองเทรนด์ H4 แบบเข้มงวด และระบบบริหารความเสี่ยงอัตโนมัติ — คิดค่าบริการตามชั่วโมงที่ใช้งานจริง
+            6 แผนเทรดเฉพาะทาง ผสานการกรองเทรนด์ H4 แบบเข้มงวด และระบบบริหารความเสี่ยงอัตโนมัติ — คิดค่าบริการตามชั่วโมงที่ใช้งานจริง
           </p>
           <div className="row wrap" style={{ justifyContent: 'center', gap: 12 }}>
             <button className="btn btn-primary btn-lg" onClick={() => openAuthModal('register')}>
@@ -531,7 +532,7 @@ function Landing() {
               <div className="faint small">ต่อชั่วโมงใช้งาน</div>
             </div>
             <div>
-              <div className="mono hero-stat-value">5</div>
+              <div className="mono hero-stat-value">6</div>
               <div className="faint small">แผนเทรดทองคำ</div>
             </div>
             <div>
@@ -541,6 +542,8 @@ function Landing() {
           </div>
         </div>
       </section>
+
+      <TrustCards />
 
       <section className="container section" style={{ marginTop: 0 }}>
         <div className="grid grid-4">
