@@ -2,7 +2,7 @@
 // - โปรแกรมรุ่นใหม่ส่ง header `X-App-Version` · รุ่นเก่าไม่ส่ง (ระบุจาก User-Agent ของโปรแกรม: GoldBot24-Desktop / Python-urllib)
 // - เว็บเบราว์เซอร์ไม่ถูกตรวจ
 // ตั้งค่าได้ด้วย env MIN_DESKTOP_VERSION บน Vercel (ไม่ต้อง deploy โค้ดใหม่) · ค่าว่าง/"0" = ไม่บังคับ
-export const MIN_DESKTOP_VERSION = process.env.MIN_DESKTOP_VERSION ?? '2026.1013.0720';
+export const MIN_DESKTOP_VERSION = process.env.MIN_DESKTOP_VERSION ?? '2026.1013.1339';   // 13 ต.ค. 2026: รุ่นที่มีล็อกแผนสมาชิก (P6–P8)
 export const DOWNLOAD_URL = 'https://goldbot24.vercel.app/download';
 
 const nums = (v) => String(v || '').split('.').map((x) => Number(x) || 0);
