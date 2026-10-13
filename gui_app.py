@@ -5074,12 +5074,29 @@ class MainTradingApp(ctk.CTk):
         # รูปย่อ + ชื่อ + ▾ รวมเป็นปุ่มเดียว (ทั้งก้อนคลิกเปิดเมนูได้)
         self.btn_user_menu = ctk.CTkFrame(h_inner, fg_color="transparent", corner_radius=21, height=42)
         self.btn_user_menu.pack(side="right")
+        # ป้าย MEMBER (สมาชิกรายเดือน) ซ้ายชื่อผู้ใช้ — มงกุฎวาดด้วย Canvas (Tk แสดงอีโมจีสีไม่ได้) · แสดงเมื่อเป็นสมาชิก
+        self.member_badge = ctk.CTkFrame(self.btn_user_menu, fg_color="#1A1406", corner_radius=13, border_width=1,
+                                         border_color=COLOR_GOLD_PRIMARY, height=26)
+        crown = tk.Canvas(self.member_badge, width=18, height=14, bg="#1A1406", highlightthickness=0, bd=0)
+        crown.create_polygon(2, 12, 2, 4, 6, 8, 9, 2, 12, 8, 16, 4, 16, 12, fill=COLOR_GOLD_PRIMARY, outline="")
+        crown.create_rectangle(2, 12, 16, 13, fill=COLOR_GOLD_WARM, outline="")
+        for cx, cy in ((2, 4), (9, 2), (16, 4)):
+            crown.create_oval(cx - 1.5, cy - 1.5, cx + 1.5, cy + 1.5, fill="#FDE68A", outline="")
+        crown.pack(side="left", padx=(9, 3), pady=6)
+        self.lbl_member_badge = ctk.CTkLabel(self.member_badge, text="MEMBER", font=self._font(10, "bold"),
+                                             text_color=COLOR_GOLD_PRIMARY, height=16)
+        self.lbl_member_badge.pack(side="left", padx=(0, 10))
+        for w in (self.member_badge, crown, self.lbl_member_badge):
+            w.bind("<Button-1>", lambda e: webbrowser.open(self.MEMBER_URL))
+            w.configure(cursor="hand2")
+        HoverTip(self.member_badge, self._member_tip)
         # ป้ายสีทองแสดงชื่อเต็ม (คลิกเปิดเมนู) — ไม่มีป้ายชื่อแยกอีกอัน
         avatar = ctk.CTkLabel(
             self.btn_user_menu, text=f"  {user_name}  ▾  ", font=self._font(13, "bold"), height=34,
             corner_radius=17, fg_color=COLOR_GOLD_WARM, text_color="#1A1406",
         )
         avatar.pack(side="left", padx=4, pady=4)
+        self._user_avatar = avatar
         for w in (self.btn_user_menu, avatar):
             w.bind("<Button-1>", lambda e: self._open_user_menu())
             w.configure(cursor="hand2")
@@ -7518,6 +7535,7 @@ class MainTradingApp(ctk.CTk):
                (mem["active"], mem["until"], mem["daysLeft"], mem["viaAdmin"]))
         if key == self._reward_shown:
             return
+        self._show_member_badge(mem["active"] and not mem["viaAdmin"])
         if mem["viaAdmin"]:
             self.lbl_member.configure(text="● แอดมิน · ใช้ได้ทุกแผน", text_color=COLOR_SUCCESS_GREEN)
         elif mem["active"]:
@@ -7547,6 +7565,23 @@ class MainTradingApp(ctk.CTk):
             self.lbl_reward.configure(text=f"{lv_txt}ส่วนลด {d['percent']}% พร้อมใช้ ›", text_color=COLOR_SUCCESS_GREEN)
         else:
             self.lbl_reward.configure(text=f"{lv_txt}ออนไลน์ {o['minutes'] / 60:.1f}/{goal // 60} ชม.", text_color=COLOR_GOLD_PRIMARY)
+
+    def _show_member_badge(self, on):
+        badge = getattr(self, "member_badge", None)
+        if badge is None:
+            return
+        if on and not badge.winfo_ismapped():
+            badge.pack(side="left", padx=(0, 2), pady=4, before=self._user_avatar)
+        elif not on and badge.winfo_ismapped():
+            badge.pack_forget()
+
+    def _member_tip(self):
+        mem = license_mgr.membership_status()
+        if not mem["active"]:
+            return ""
+        until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y %H:%M") if mem["until"] else "-"
+        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P8\nหมดอายุ {until} น. (อีก {mem['daysLeft']} วัน)\n"
+                "คลิกเพื่อต่ออายุ — ต่อก่อนหมดนับต่อจากวันเดิม")
 
     @staticmethod
     def _iso_epoch(iso):

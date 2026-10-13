@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, BarChart3, BookOpen, CalendarDays, Download, Eye, FlaskConical, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, CalendarDays, Crown, Download, Eye, FlaskConical, LogIn, LogOut, Menu, Shield, ShoppingBag, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatHHMM } from '../lib/format';
 import { LOW_HOURS } from '../lib/hours';
@@ -52,6 +52,7 @@ export default function Navbar() {
 
   const items = isAdminView ? [...NAV_ITEMS, { href: '/admin', label: 'Admin', icon: Shield }] : NAV_ITEMS;
   const hours = Number(user?.hoursRemaining) || 0;
+  const isMember = Boolean(user?.membership?.active && !user.membership.viaAdmin);   // สมาชิกรายเดือน (แอดมินมีป้าย Admin อยู่แล้ว)
 
   return (
     <header className="nav">
@@ -102,10 +103,20 @@ export default function Navbar() {
           {user ? (
             <>
               <Link href="/dashboard" className="nav-user" title="กระเป๋าเวลาของฉัน">
-                <span className="nav-avatar">{(user.displayName || user.email || '?').slice(0, 1).toUpperCase()}</span>
+                <span className={`nav-avatar ${isMember ? 'is-member' : ''}`}>
+                  {(user.displayName || user.email || '?').slice(0, 1).toUpperCase()}
+                  {isMember && (
+                    <span className="nav-member-crown" title="สมาชิกรายเดือน">
+                      <Crown size={11} strokeWidth={2.6} />
+                    </span>
+                  )}
+                </span>
                 <span className="nav-user-meta">
                   <span className="nav-user-name">{user.displayName || user.email}</span>
-                  <span className={`nav-user-hours mono ${hours <= LOW_HOURS ? 'text-red' : 'text-gold'}`}>{formatHHMM(hours)} ชม.</span>
+                  <span className="nav-user-sub">
+                    <span className={`nav-user-hours mono ${hours <= LOW_HOURS ? 'text-red' : 'text-gold'}`}>{formatHHMM(hours)} ชม.</span>
+                    {isMember && <span className="member-tag">MEMBER</span>}
+                  </span>
                 </span>
               </Link>
               <button className="btn btn-ghost btn-icon nav-desktop-only" onClick={logout} title="ออกจากระบบ" aria-label="ออกจากระบบ">
