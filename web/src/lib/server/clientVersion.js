@@ -30,7 +30,8 @@ export function desktopUpdateRequired(req) {
 }
 
 export function updateMessage(min) {
-  return `โปรแกรมเวอร์ชันนี้หยุดให้บริการแล้ว — กรุณาอัปเดตเป็นเวอร์ชัน ${min} ขึ้นไป (เมนูผู้ใช้ → ตรวจสอบเวอร์ชันใหม่ → อัปเดต 1-Click หรือดาวน์โหลดที่ ${DOWNLOAD_URL})`;
+  // สั้น — โปรแกรมรุ่นเก่าแสดงเป็นบรรทัดเดียวบนหน้าล็อกอิน (ข้อความยาวทำให้การ์ดยืดล้นจอ)
+  return `เวอร์ชันนี้หยุดให้บริการ — ดาวน์โหลด v${min} ที่ goldbot24.vercel.app/download`;
 }
 
 /**

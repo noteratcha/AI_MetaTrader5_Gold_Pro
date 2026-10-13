@@ -4262,7 +4262,7 @@ class MainTradingApp(ctk.CTk):
 
         ctk.CTkLabel(
             inner,
-            text="Next-Gen Autonomous Gold Specialist (XAUUSD) • GoldBot24",
+            text="บอทเทรดทองคำ XAUUSD ด้วย AI · เชื่อมต่อ MetaTrader 5",
             font=ctk.CTkFont(family=app_fonts.UI, size=12),
             text_color=COLOR_TEXT_MUTED
         ).pack(pady=(2, 4))
@@ -4271,7 +4271,7 @@ class MainTradingApp(ctk.CTk):
         version_badge.pack(pady=(0, 16))
         ctk.CTkLabel(
             version_badge,
-            text=f"v{APP_VERSION} • GoldBot24 Cloud Service (1.00 THB/hr)",
+            text=f"v{APP_VERSION}  ·  1 บาท/ชม.",
             font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
             text_color=COLOR_GOLD_WARM
         ).pack(padx=10, pady=4)
@@ -4280,7 +4280,8 @@ class MainTradingApp(ctk.CTk):
         self.auth_mode = "login"
         self.seg_auth = ctk.CTkSegmentedButton(
             inner,
-            values=["🔑 เข้าสู่ระบบ (Sign In)", "✨ สมัครสมาชิกใหม่ (รับฟรี 48 ชม.)"],
+            values=["เข้าสู่ระบบ", "สมัครสมาชิก · ฟรี 48 ชม."],
+            height=36,
             font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             selected_color=COLOR_GOLD_WARM,
             selected_hover_color=COLOR_GOLD_DARK,
@@ -4289,7 +4290,7 @@ class MainTradingApp(ctk.CTk):
             text_color="#FFFFFF",
             command=self._on_auth_tab_change
         )
-        self.seg_auth.set("🔑 เข้าสู่ระบบ (Sign In)")
+        self.seg_auth.set("เข้าสู่ระบบ")
         self.seg_auth.pack(fill="x", pady=(0, 16))
 
         # โซนฟอร์มกรอกข้อมูล
@@ -4299,7 +4300,7 @@ class MainTradingApp(ctk.CTk):
         # 1) ชื่อแสดงผล (สำหรับ Register)
         self.lbl_reg_name = ctk.CTkLabel(
             self.form_frame,
-            text="ชื่อแสดงผล (Display Name):",
+            text="ชื่อที่แสดง",
             font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
@@ -4317,7 +4318,7 @@ class MainTradingApp(ctk.CTk):
         # 2) อีเมล
         self.lbl_email = ctk.CTkLabel(
             self.form_frame,
-            text="อีเมลสำหรับใช้งาน (Email):",
+            text="อีเมล",
             font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
@@ -4341,13 +4342,15 @@ class MainTradingApp(ctk.CTk):
             self.entry_email.insert(0, saved_user)
 
         # 3) รหัสผ่าน
+        self.pwd_row = ctk.CTkFrame(self.form_frame, fg_color="transparent")
+        self.pwd_row.pack(fill="x", pady=(0, 4))
         self.lbl_pwd = ctk.CTkLabel(
-            self.form_frame,
-            text="รหัสผ่าน (Password):",
+            self.pwd_row,
+            text="รหัสผ่าน",
             font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
-        self.lbl_pwd.pack(anchor="w", pady=(0, 4))
+        self.lbl_pwd.pack(side="left")
 
         self.entry_pwd = ctk.CTkEntry(
             self.form_frame,
@@ -4365,8 +4368,10 @@ class MainTradingApp(ctk.CTk):
 
         # แสดง/ซ่อนรหัสผ่าน — ช่วยเช็คว่าพิมพ์ด้วยแป้นภาษาไทยหรือ Caps Lock อยู่หรือไม่
         self.show_pwd_var = tk.BooleanVar(value=False)
+        self.opt_row = ctk.CTkFrame(self.form_frame, fg_color="transparent")
+        self.opt_row.pack(fill="x", pady=(0, 12))
         self.chk_show_pwd = ctk.CTkCheckBox(
-            self.form_frame,
+            self.opt_row,
             text="แสดงรหัสผ่าน",
             variable=self.show_pwd_var,
             command=self._toggle_show_password,
@@ -4377,23 +4382,23 @@ class MainTradingApp(ctk.CTk):
             checkbox_width=16,
             checkbox_height=16
         )
-        self.chk_show_pwd.pack(anchor="w", pady=(0, 10))
+        self.chk_show_pwd.pack(side="left")
 
         # ลืมรหัสผ่าน → หน้าเว็บรีเซ็ตรหัสผ่าน (ส่งรหัสยืนยันทางอีเมล)
         self.lbl_forgot = ctk.CTkLabel(
-            self.form_frame,
+            self.pwd_row,
             text="ลืมรหัสผ่าน?",
             font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True),
             text_color=COLOR_CYAN_ACCENT,
             cursor="hand2",
         )
-        self.lbl_forgot.place(relx=1.0, y=0, anchor="ne")
+        self.lbl_forgot.pack(side="right")
         self.lbl_forgot.bind("<Button-1>", lambda e: self._open_forgot_password())
 
         # 4) ยืนยันรหัสผ่าน (สำหรับ Register)
         self.lbl_reg_confirm = ctk.CTkLabel(
             self.form_frame,
-            text="ยืนยันรหัสผ่านอีกครั้ง (Confirm Password):",
+            text="ยืนยันรหัสผ่าน",
             font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
@@ -4419,7 +4424,7 @@ class MainTradingApp(ctk.CTk):
         )
         ctk.CTkLabel(
             self.bonus_frame,
-            text="🎁 สิทธิพิเศษ: สมาชิกใหม่รับสิทธิ์ทดลองเทรดจริงฟรี 48 ชั่วโมงทันที!",
+            text="สมาชิกใหม่รับชั่วโมงใช้งานฟรี 48 ชม. ทันทีหลังยืนยันอีเมล",
             font=ctk.CTkFont(family=app_fonts.UI, size=11, weight="bold"),
             text_color="#FDE68A"
         ).pack(padx=10, pady=6)
@@ -4429,30 +4434,51 @@ class MainTradingApp(ctk.CTk):
             self.entry_pwd.insert(0, remembered_pwd)
         self.remember_var = tk.BooleanVar(value=bool(remembered_email) or license_mgr.session_data.get("remember_me", True))
         self.chk_remember = ctk.CTkCheckBox(
-            inner,
-            text="จดจำการเข้าสู่ระบบในเครื่องนี้",
+            self.opt_row,
+            text="จดจำการเข้าสู่ระบบ",
             variable=self.remember_var,
-            font=ctk.CTkFont(family=app_fonts.UI, size=12),
+            checkbox_width=16,
+            checkbox_height=16,
+            font=ctk.CTkFont(family=app_fonts.UI, size=11),
             text_color=COLOR_TEXT_MUTED,
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK
         )
-        self.chk_remember.pack(anchor="w", pady=(0, 12))
+        self.chk_remember.pack(side="right")
 
-        # ข้อความแสดงสถานะ
+        # ข้อความแสดงสถานะ (ตัดบรรทัดในความกว้างการ์ด — ข้อความยาวไม่ยืดการ์ด)
         self.lbl_login_status = ctk.CTkLabel(
             inner,
             text="",
             font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
-            text_color=COLOR_DANGER_RED
+            text_color=COLOR_DANGER_RED,
+            wraplength=400,
+            justify="left",
+            anchor="w",
         )
-        self.lbl_login_status.pack(pady=(0, 10))
+        self.lbl_login_status.pack(fill="x", pady=(0, 8))
+
+        # กล่อง "ต้องอัปเดตโปรแกรม" (แสดงเมื่อ Server แจ้งว่าเวอร์ชันนี้เก่าเกินไป)
+        self.update_box = ctk.CTkFrame(inner, fg_color="#2A1E0B", corner_radius=10, border_width=1, border_color=COLOR_GOLD_DARK)
+        ctk.CTkLabel(self.update_box, text="ต้องอัปเดตโปรแกรมก่อนใช้งาน", font=ctk.CTkFont(family=app_fonts.UI, size=14, weight="bold"),
+                     text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=14, pady=(10, 0))
+        self.lbl_update_box = ctk.CTkLabel(self.update_box, text="", font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=COLOR_TEXT_PRIMARY,
+                                           wraplength=380, justify="left", anchor="w")
+        self.lbl_update_box.pack(fill="x", padx=14, pady=(2, 8))
+        ub = ctk.CTkFrame(self.update_box, fg_color="transparent")
+        ub.pack(fill="x", padx=14, pady=(0, 12))
+        ctk.CTkButton(ub, text="อัปเดตเลย (1-Click)", height=34, corner_radius=8, font=ctk.CTkFont(family=app_fonts.UI, size=12, weight="bold"),
+                      fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_PRIMARY, text_color="#1A1406",
+                      command=lambda: self._start_update_check(manual=True)).pack(side="left")
+        ctk.CTkButton(ub, text="ดาวน์โหลดจากเว็บ", height=34, corner_radius=8, font=ctk.CTkFont(family=app_fonts.UI, size=12),
+                      fg_color="#1A1E27", hover_color="#262B36", text_color=COLOR_TEXT_PRIMARY,
+                      command=lambda: webbrowser.open("https://goldbot24.vercel.app/download")).pack(side="left", padx=(8, 0))
 
         # ปุ่มดำเนินการหลัก
         self.btn_auth_submit = ctk.CTkButton(
             inner,
-            text="🚀 เข้าสู่ระบบ (Sign In)",
-            font=ctk.CTkFont(family=app_fonts.UI, size=14, weight="bold"),
+            text="เข้าสู่ระบบ",
+            font=ctk.CTkFont(family=app_fonts.UI, size=15, weight="bold"),
             fg_color=COLOR_GOLD_WARM,
             hover_color=COLOR_GOLD_DARK,
             text_color="#1A1406",
@@ -4462,39 +4488,32 @@ class MainTradingApp(ctk.CTk):
         )
         self.btn_auth_submit.pack(fill="x", pady=(0, 14))
 
-        # ลิงก์ไปยังหน้าเว็บ
+        # ลิงก์ย่อ 1 แถว: เว็บไซต์ · คู่มือ · เปิดบัญชี MT5
         link_frame = ctk.CTkFrame(inner, fg_color="transparent")
-        link_frame.pack(fill="x")
-        
-        lbl_web = ctk.CTkLabel(
-            link_frame,
-            text="🌐 เติมชั่วโมงและดูเรดาร์สดผ่านเว็บ: GoldBot24 (goldbot24.vercel.app)",
-            font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True),
-            text_color=COLOR_CYAN_ACCENT,
-            cursor="hand2"
-        )
-        lbl_web.pack()
-        lbl_web.bind("<Button-1>", lambda e: webbrowser.open("https://goldbot24.vercel.app"))
+        link_frame.pack()
+        links = (("เว็บไซต์ GoldBot24", "https://goldbot24.vercel.app", COLOR_CYAN_ACCENT),
+                 ("คู่มือการใช้งาน", "https://goldbot24.vercel.app/guide", COLOR_GOLD_PRIMARY),
+                 ("ยังไม่มีบัญชี MT5? เปิดที่ XM", "https://www.xmglobal.com/referral?token=H6macbsWn_6B1_6ia0byuw", COLOR_GOLD_WARM))
+        for k, (txt, url, col) in enumerate(links):
+            if k:
+                ctk.CTkLabel(link_frame, text="·", font=ctk.CTkFont(family=app_fonts.UI, size=11), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=6)
+            lb = ctk.CTkLabel(link_frame, text=txt, font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True), text_color=col, cursor="hand2")
+            lb.pack(side="left")
+            lb.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
 
-        lbl_guide = ctk.CTkLabel(
-            link_frame,
-            text="📖 คู่มือการใช้งานโปรแกรมฉบับเต็ม",
-            font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True),
-            text_color=COLOR_GOLD_PRIMARY,
-            cursor="hand2"
-        )
-        lbl_guide.pack(pady=(2, 0))
-        lbl_guide.bind("<Button-1>", lambda e: webbrowser.open("https://goldbot24.vercel.app/guide"))
+        # เปิดโปรแกรมมาแล้วรู้อยู่ก่อนว่าต้องอัปเดต
+        if getattr(license_mgr, "update_required", None):
+            self._show_update_box(license_mgr.update_required.get("message", ""))
 
-        lbl_broker = ctk.CTkLabel(
-            link_frame,
-            text="🎯 ยังไม่มีโบรกเกอร์? ทดลองเปิดบัญชี MT5 ได้ที่ XM Global",
-            font=ctk.CTkFont(family=app_fonts.UI, size=11, underline=True),
-            text_color=COLOR_GOLD_WARM,
-            cursor="hand2"
-        )
-        lbl_broker.pack(pady=(2, 0))
-        lbl_broker.bind("<Button-1>", lambda e: webbrowser.open("https://www.xmglobal.com/referral?token=H6macbsWn_6B1_6ia0byuw"))
+    def _show_update_box(self, msg):
+        """แสดงกล่องต้องอัปเดตแทนข้อความ error ยาว ๆ"""
+        try:
+            self.lbl_login_status.configure(text="")
+            self.lbl_update_box.configure(text=msg)
+            if not self.update_box.winfo_ismapped():
+                self.update_box.pack(fill="x", pady=(0, 12), before=self.btn_auth_submit)
+        except Exception:
+            pass
 
     def _on_auth_tab_change(self, selected_value: str):
         """สลับหน้าระหว่างโหมดเข้าสู่ระบบ และ สมัครสมาชิกใหม่"""
@@ -4506,14 +4525,14 @@ class MainTradingApp(ctk.CTk):
             self.entry_reg_name.pack(before=self.lbl_email, fill="x", pady=(0, 10))
 
             # แสดงช่อง Confirm Password
-            self.lbl_reg_confirm.pack(before=self.chk_show_pwd, anchor="w", pady=(0, 4))
-            self.entry_reg_confirm.pack(before=self.chk_show_pwd, fill="x", pady=(0, 10))
+            self.lbl_reg_confirm.pack(before=self.opt_row, anchor="w", pady=(0, 4))
+            self.entry_reg_confirm.pack(before=self.opt_row, fill="x", pady=(0, 10))
 
             # แสดง Bonus frame และซ่อน Remember Me
             self.bonus_frame.pack(before=self.lbl_login_status, fill="x", pady=(0, 10))
             self.chk_remember.pack_forget()
 
-            self.btn_auth_submit.configure(text="✨ ยืนยันการสมัครสมาชิก (รับฟรี 48 ชม.)")
+            self.btn_auth_submit.configure(text="สมัครสมาชิก · รับฟรี 48 ชม.")
         else:
             self.auth_mode = "login"
             # ซ่อนช่อง Register
@@ -4524,9 +4543,9 @@ class MainTradingApp(ctk.CTk):
             self.bonus_frame.pack_forget()
 
             # แสดง Remember Me
-            self.chk_remember.pack(before=self.lbl_login_status, anchor="w", pady=(0, 12))
+            self.chk_remember.pack(side="right")
 
-            self.btn_auth_submit.configure(text="🚀 เข้าสู่ระบบ (Sign In)")
+            self.btn_auth_submit.configure(text="เข้าสู่ระบบ")
 
     def _open_forgot_password(self):
         email = self.entry_email.get().strip()
@@ -4581,8 +4600,8 @@ class MainTradingApp(ctk.CTk):
             self.after(350, self.show_dashboard_view)
         else:
             sound_manager.play_sl_hit()
-            if getattr(license_mgr, "update_required", None):   # ต้องอัปเดตโปรแกรมก่อน — เปิดหน้าต่างอัปเดตให้เลย
-                self.lbl_login_status.configure(text=msg, text_color=COLOR_GOLD_PRIMARY)
+            if getattr(license_mgr, "update_required", None):   # ต้องอัปเดตโปรแกรมก่อน — กล่องอัปเดต + เปิดหน้าต่างอัปเดตให้เลย
+                self._show_update_box(msg)
                 self.after(300, lambda: self._start_update_check(manual=True))
                 return
             self.lbl_login_status.configure(text=f"เข้าสู่ระบบไม่สำเร็จ: {msg}{self._password_hint(pwd)}", text_color=COLOR_DANGER_RED)
