@@ -1,7 +1,31 @@
 import { getAdminClient } from './supabaseAdmin';
 import { rowTags } from './auth';
 import { logActivity } from './activity';
-import { MEMBER_TAG, extendedUntil, memberInfo } from '../membership';
+import { MEMBERSHIP, MEMBER_TAG, extendedUntil, memberInfo } from '../membership';
+
+/**
+ * orders.package_id มี Foreign Key ไปตาราง packages → ต้องมีแถว id 900 ก่อนสร้างคำสั่งซื้อสมาชิก
+ * สร้างให้อัตโนมัติ (is_active = false → ไม่โผล่ในหน้าร้าน/หน้าจัดการแพ็กเกจ) · มีอยู่แล้วไม่แตะ
+ */
+export async function ensureMembershipPackageRow() {
+  const { error } = await getAdminClient()
+    .from('packages')
+    .upsert(
+      {
+        id: MEMBERSHIP.id,
+        name: `${MEMBERSHIP.name} (ระบบ)`,
+        hours: 0,
+        bonus_hours: 0,
+        price_thb: MEMBERSHIP.price,
+        description: 'แถวระบบสำหรับคำสั่งซื้อสมาชิกรายเดือน — ราคาจริงอ่านจากโค้ด (lib/membership.js)',
+        sort_order: 999,
+        is_active: false,
+      },
+      { onConflict: 'id', ignoreDuplicates: true }
+    );
+  if (error) console.error('[membership] ensure package row failed:', error.message);
+  return !error;
+}
 
 /**
  * ต่ออายุสมาชิก `days` วัน (ลบได้ = ลดวัน) หรือยกเลิก (days = null) ให้ผู้ใช้ — คืน memberInfo ใหม่ หรือ null ถ้าไม่สำเร็จ

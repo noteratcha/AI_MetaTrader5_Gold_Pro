@@ -5,6 +5,7 @@ import { getPackage } from '../../../lib/server/catalog';
 import { expireStaleOrders } from '../../../lib/server/orders';
 import { discountedPrice, levelDiscountPct, reserveDiscount } from '../../../lib/server/onlineReward';
 import { MEMBERSHIP, isMembershipPackage } from '../../../lib/membership';
+import { ensureMembershipPackageRow } from '../../../lib/server/membership';
 
 const PROMPTPAY_ID = process.env.PROMPTPAY_ID || '';
 
@@ -25,6 +26,8 @@ export default async function handler(req, res) {
   if (!PROMPTPAY_ID) {
     return res.status(503).json({ success: false, error: 'ร้านค้ายังไม่ได้ตั้งค่าบัญชีพร้อมเพย์ (PROMPTPAY_ID)' });
   }
+
+  if (isMembershipPackage(pkg.id)) await ensureMembershipPackageRow();   // FK orders.package_id → packages(id)
 
   const orderId = generateOrderId();
   // ส่วนลดรางวัลออนไลน์ (ครบ 100 ชม./สัปดาห์) — ผูกกับคำสั่งซื้อนี้ ใช้จริงเมื่อชำระสำเร็จ

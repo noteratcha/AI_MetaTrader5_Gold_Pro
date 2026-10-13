@@ -1,5 +1,6 @@
 import { getAdminClient } from './supabaseAdmin';
 import { PACKAGES as DEFAULT_PACKAGES, PLAN_LIST } from '../packages';
+import { MEMBERSHIP } from '../membership';
 
 // =============================================================================
 // แพ็กเกจชั่วโมง + ตั้งค่าระบบ (อ่านจากฐานข้อมูล, fallback ค่าเริ่มต้นในโค้ดถ้าตารางยังไม่ถูกสร้าง)
@@ -52,7 +53,8 @@ export async function listPackages({ includeInactive = false } = {}) {
     if (!includeInactive) q = q.eq('is_active', true);
     const { data, error } = await q;
     if (error) throw error;
-    return { packages: (data || []).map(rowToPackage), source: 'db' };
+    // แถวระบบของสมาชิกรายเดือน (id 900) ไม่ใช่แพ็กเกจชั่วโมง — ซ่อนจากหน้าร้าน/หน้าจัดการแพ็กเกจ
+    return { packages: (data || []).filter((r) => Number(r.id) !== MEMBERSHIP.id).map(rowToPackage), source: 'db' };
   } catch {
     return { packages: DEFAULT_PACKAGES.map((p) => ({ ...p, isActive: true, sortOrder: p.id })), source: 'default' };
   }
