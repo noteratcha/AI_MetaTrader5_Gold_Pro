@@ -93,7 +93,8 @@ export default function TopTicker() {
     return out;
   }, [user, latest, mine, calendar.events, now]);
 
-  if (!items.length || pathname?.startsWith('/admin')) return null;
+  // ไม่แสดงในหน้าแอดมิน และหน้าใบเสร็จ (ใบเสร็จต้องสะอาด ไม่มีข้อความวิ่ง)
+  if (!items.length || pathname?.startsWith('/admin') || pathname?.startsWith('/receipts')) return null;
   const COLORS = { red: '#f87171', gold: '#f2c14e', news: '#e5e7eb' };
   const DOT = { red: '#f87171', gold: '#f2c14e', news: '#60a5fa' };
   const row = items.map((it) => (

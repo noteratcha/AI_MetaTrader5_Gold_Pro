@@ -1534,7 +1534,9 @@ select.input {
 @media print {
   .nav,
   .footer,
-  .no-print {
+  .no-print,
+  .ticker,
+  .low-hours-banner {
     display: none !important;
   }
   body {

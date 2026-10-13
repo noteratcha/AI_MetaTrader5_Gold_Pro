@@ -11,7 +11,7 @@ import { LOW_HOURS } from '../lib/hours';
 export default function LowHoursBanner() {
   const { user } = useAuth();
   const pathname = usePathname();
-  if (!user) return null;
+  if (!user || pathname?.startsWith('/receipts')) return null;   // ไม่แสดงในหน้าใบเสร็จ
   const hours = Number(user.hoursRemaining) || 0;
   if (hours > LOW_HOURS) return null;
   const out = hours <= 0;
