@@ -78,7 +78,7 @@ export default function StorePage() {
         description={`${rateRange(packages)}ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ · สมาชิกรายเดือนปลดล็อกแผน P6–P8`}
       />
 
-      <MembershipCard membership={user?.membership} showHistory={Boolean(user)} discountPct={user ? discountPct : 0} onBuy={() => buy(MEMBERSHIP)} />
+      <MembershipCard membership={user?.membership} showHistory={Boolean(user)} onBuy={() => buy(MEMBERSHIP)} />
 
       {user && <OnlineRewardCard online={user.online} />}
 
@@ -199,11 +199,12 @@ async function compressSlip(file) {
 }
 
 const STEPS = ['สแกนจ่าย', 'แนบสลิป', 'รับชั่วโมง'];
+const MEMBER_STEPS = ['สแกนจ่าย', 'แนบสลิป', 'เปิดสิทธิ์สมาชิก'];
 
-function CheckoutSteps({ step }) {
+function CheckoutSteps({ step, member = false }) {
   return (
     <ol className="checkout-steps" aria-label="ขั้นตอนการชำระเงิน">
-      {STEPS.map((label, i) => (
+      {(member ? MEMBER_STEPS : STEPS).map((label, i) => (
         <li key={label} className={i < step ? 'is-done' : i === step ? 'is-active' : ''}>
           <span className="checkout-step-dot">{i < step ? <Check size={12} /> : i + 1}</span>
           {label}
@@ -416,7 +417,7 @@ function CheckoutModal({ pkg, onClose }) {
               {isMember ? `${pkg.name} · ${pkg.days} วัน` : `${pkg.name} · ${Number(pkg.hours + pkg.bonus).toLocaleString('en-US')} ชั่วโมง`}
             </h2>
           </div>
-          <CheckoutSteps step={step} />
+          <CheckoutSteps step={step} member={isMember} />
 
           {productKey && isMember ? (
             <div className="center" style={{ marginTop: 18 }}>

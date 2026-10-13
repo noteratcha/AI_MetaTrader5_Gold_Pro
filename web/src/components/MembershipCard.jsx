@@ -14,10 +14,9 @@ const fmtDate = (iso) =>
  * สมาชิกรายเดือน: สถานะปัจจุบัน + ปุ่มสมัคร/ต่ออายุ (onBuy เปิดหน้าต่างชำระเงินเดิม)
  * compact = แสดงแค่สถานะ (หน้ากระเป๋าเวลา)
  */
-export default function MembershipCard({ membership, discountPct = 0, onBuy, compact = false, showHistory = false }) {
+export default function MembershipCard({ membership, onBuy, compact = false, showHistory = false }) {
   const m = membership || { active: false };
   const warn = m.active && !m.viaAdmin && m.daysLeft <= MEMBER_WARN_DAYS;
-  const price = discountPct > 0 ? Math.round(MEMBERSHIP.price * (100 - discountPct)) / 100 : MEMBERSHIP.price;
   return (
     <div className={`card card-pad ${m.active ? 'card-gold' : ''}`} style={{ marginBottom: 18 }}>
       <div className="row-between wrap" style={{ gap: 14 }}>
@@ -53,14 +52,12 @@ export default function MembershipCard({ membership, discountPct = 0, onBuy, com
         {onBuy && !m.viaAdmin && (
           <div className="stack" style={{ alignItems: 'flex-end', gap: 6 }}>
             <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
-              {discountPct > 0 && (
-                <span className="mono faint" style={{ textDecoration: 'line-through' }}>{formatThb(MEMBERSHIP.price)}</span>
-              )}
-              <span className={`mono ${discountPct > 0 ? 'text-green' : 'text-gold'}`} style={{ fontSize: '1.35rem', fontWeight: 700 }}>
-                {formatThb(price)}
+              <span className="mono text-gold" style={{ fontSize: '1.35rem', fontWeight: 700 }}>
+                {formatThb(MEMBERSHIP.price)}
               </span>
               <span className="small muted">/ {MEMBERSHIP.days} วัน</span>
             </div>
+            <span className="tiny faint">ราคาเต็ม · ส่วนลด Lv./ออนไลน์ใช้กับการเติมชั่วโมงเท่านั้น</span>
             <button className="btn btn-primary" onClick={onBuy}>
               <Crown size={16} /> {m.active ? 'ต่ออายุอีก 30 วัน' : 'สมัครสมาชิก'}
             </button>

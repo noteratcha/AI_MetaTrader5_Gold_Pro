@@ -30,10 +30,12 @@ export default async function handler(req, res) {
   if (isMembershipPackage(pkg.id)) await ensureMembershipPackageRow();   // FK orders.package_id → packages(id)
 
   const orderId = generateOrderId();
+  // ค่าสมาชิกรายเดือนราคาเต็มเสมอ — ส่วนลด Lv./ออนไลน์ใช้กับการเติมชั่วโมงเท่านั้น (ผู้ใช้กำหนด 13 ต.ค. 2026)
+  const isMember = isMembershipPackage(pkg.id);
   // ส่วนลดรางวัลออนไลน์ (ครบ 100 ชม./สัปดาห์) — ผูกกับคำสั่งซื้อนี้ ใช้จริงเมื่อชำระสำเร็จ
-  const discount = await reserveDiscount(auth.user.id, orderId);
+  const discount = isMember ? null : await reserveDiscount(auth.user.id, orderId);
   // + ส่วนลดถาวรจากระดับสมาชิก (ทุก 10 Lv. = 1%) — บวกกับสิทธิ์ออนไลน์ได้
-  const levelPct = await levelDiscountPct(auth.user.id);
+  const levelPct = isMember ? 0 : await levelDiscountPct(auth.user.id);
   const totalPct = (discount ? discount.percent : 0) + levelPct;
   const price = totalPct > 0 ? discountedPrice(pkg.price, totalPct) : pkg.price;
   const amount = price.toFixed(2);
