@@ -1866,33 +1866,36 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             "disabled_reason": plan_config.disabled_reason("SR-SwingBounce")
         }
 
-        # ===== Plan 5: BB-H1-Reversion (H1) =====
+        # ===== Plan 5: BB-H1-Reversion (H1) — ตรงกับเงื่อนไขจริงของบอท (13 ต.ค. 2026) =====
         dist_bb_low = abs(cur_price - bb_lower_h1)
         dist_bb_up = abs(bb_upper_h1 - cur_price)
         p5_side = "BUY" if dist_bb_low <= dist_bb_up else "SELL"
+        hid_bull = bool(df_div['hidden_bull'].iloc[-2] > 0.5) if 'hidden_bull' in df_div else False
+        hid_bear = bool(df_div['hidden_bear'].iloc[-2] > 0.5) if 'hidden_bear' in df_div else False
+        stack_txt = {1: "MA100>150>200 (ขาขึ้น)", -1: "MA100<150<200 (ขาลง)", 0: "ไม่เรียงตัว (ไซด์เวย์)"}.get(h1_stack_dir, "-")
         p5_items = []
         if p5_side == "BUY":
             c1 = m15_low < bb_lower_h1 and m15_close >= bb_lower_h1
             p5_items.append({"name": "หลุด BB ล่างแล้วดีดกลับ", "ok": c1, "desc": f"Low หลุด {bb_lower_h1:,.2f} แล้วปิดกลับขึ้นมา" if c1 else f"ยังไม่หลุดกรอบ BB ล่าง ({bb_lower_h1:,.2f})"})
             c2 = lower_wick_ratio >= 0.20
             p5_items.append({"name": "ไส้ล่างปฏิเสธ", "ok": c2, "desc": f"ไส้ล่างยาว {lower_wick_ratio:.2f} ATR (≥0.20)" if c2 else f"ไส้ล่าง {lower_wick_ratio:.2f} (<0.20)"})
-            c3 = macd_hist_h1 >= prev_macd_hist_h1
-            p5_items.append({"name": "MACD H1 หมดแรง", "ok": c3, "desc": "MACD Histogram เริ่มยกตัวขึ้น" if c3 else "MACD Histogram ยังทำ New Low"})
-            c4 = bull_div
-            p5_items.append({"name": "Bullish Divergence", "ok": c4, "desc": "พบ Bullish Divergence" if c4 else "ไม่พบ Divergence"})
-            c5 = ai_prob_up >= 0.50
-            p5_items.append({"name": "AI ทายขึ้น ≥50%", "ok": c5, "desc": f"AI UP {ai_prob_up:.1%}" if c5 else f"AI UP {ai_prob_up:.1%} (<50%)"})
+            c3 = bull_div or hid_bull
+            p5_items.append({"name": "Bullish Divergence", "ok": c3, "desc": ("พบ Bullish Divergence" if bull_div else "พบ Hidden Bullish Divergence") if c3 else "ไม่พบ Divergence"})
+            c4 = h1_stack_dir != 1
+            p5_items.append({"name": "H1 ไม่เรียงขาขึ้น", "ok": c4, "desc": f"H1 {stack_txt}" if c4 else "H1 MA100>150>200 เรียงขาขึ้น — หลุดขอบล่างกลางเทรนด์มักไม่เด้ง"})
+            c5 = ai_prob_up >= 0.55
+            p5_items.append({"name": "AI ทายขึ้น ≥55%", "ok": c5, "desc": f"AI UP {ai_prob_up:.1%}" if c5 else f"AI UP {ai_prob_up:.1%} (<55%)"})
         else:
             c1 = m15_high > bb_upper_h1 and m15_close <= bb_upper_h1
             p5_items.append({"name": "หลุด BB บนแล้วดึงกลับ", "ok": c1, "desc": f"High ทะลุ {bb_upper_h1:,.2f} แล้วปิดกลับลงมา" if c1 else f"ยังไม่หลุดกรอบ BB บน ({bb_upper_h1:,.2f})"})
             c2 = upper_wick_ratio >= 0.20
             p5_items.append({"name": "ไส้บนปฏิเสธ", "ok": c2, "desc": f"ไส้บนยาว {upper_wick_ratio:.2f} ATR (≥0.20)" if c2 else f"ไส้บน {upper_wick_ratio:.2f} (<0.20)"})
-            c3 = macd_hist_h1 <= prev_macd_hist_h1
-            p5_items.append({"name": "MACD H1 หมดแรง", "ok": c3, "desc": "MACD Histogram เริ่มชะลอลง" if c3 else "MACD Histogram ยังทำ New High"})
-            c4 = bear_div
-            p5_items.append({"name": "Bearish Divergence", "ok": c4, "desc": "พบ Bearish Divergence" if c4 else "ไม่พบ Divergence"})
-            c5 = ai_prob_down >= 0.50
-            p5_items.append({"name": "AI ทายลง ≥50%", "ok": c5, "desc": f"AI DOWN {ai_prob_down:.1%}" if c5 else f"AI DOWN {ai_prob_down:.1%} (<50%)"})
+            c3 = bear_div or hid_bear
+            p5_items.append({"name": "Bearish Divergence", "ok": c3, "desc": ("พบ Bearish Divergence" if bear_div else "พบ Hidden Bearish Divergence") if c3 else "ไม่พบ Divergence"})
+            c4 = h1_stack_dir != -1
+            p5_items.append({"name": "H1 ไม่เรียงขาลง", "ok": c4, "desc": f"H1 {stack_txt}" if c4 else "H1 MA100<150<200 เรียงขาลง — หลุดขอบบนกลางเทรนด์มักไม่เด้ง"})
+            c5 = ai_prob_down >= 0.55
+            p5_items.append({"name": "AI ทายลง ≥55%", "ok": c5, "desc": f"AI DOWN {ai_prob_down:.1%}" if c5 else f"AI DOWN {ai_prob_down:.1%} (<55%)"})
 
         m5 = sum(1 for it in p5_items if it["ok"])
         results["P5"] = {
@@ -2775,8 +2778,12 @@ def main():
                 bounce_sell_confirm = near_resistance and has_div_bounce_sell and (upper_wick_ratio >= 0.20 or close_price < last_bar['open']) \
                     and (resistance - close_price) <= atr_val * P4_ZONE_ATR and h1_stack_dir != 1
                 # Plan 5 (BB-H1-Reversion) โฟกัสกรอบ H1 + ไส้เทียน + Divergence + AI ≥ 55% (ตัด MACD ออก 7 ต.ค. 2026)
-                bb_buy_confirm = (last_bar['low'] < bb_lower_h1) and (close_price >= bb_lower_h1) and (lower_wick_ratio >= 0.20) and has_div_bb_buy
-                bb_sell_confirm = (last_bar['high'] > bb_upper_h1) and (close_price <= bb_upper_h1) and (upper_wick_ratio >= 0.20) and has_div_bb_sell
+                # ตัวกรองสัญญาณหลอก (13 ต.ค. 2026): ห้ามเข้าเมื่อ H1 MA100/150/200 เรียงตัว "ตามทิศไม้" — หลุดขอบ BB กลางเทรนด์แรงมักเป็นจุดเปลี่ยนเทรนด์จริง ไม่เด้งกลับ
+                # Backtest 2.5 ปี: 101 ไม้ −53 จุด PF 0.84 → 39 ไม้ +43 จุด PF 1.44 · DD 73 → 18 (ไม้ที่ H1 เรียงตามทิศ: 62 ไม้ −96 จุด ชนะ 24%)
+                bb_buy_confirm = (last_bar['low'] < bb_lower_h1) and (close_price >= bb_lower_h1) and (lower_wick_ratio >= 0.20) and has_div_bb_buy \
+                    and h1_stack_dir != 1
+                bb_sell_confirm = (last_bar['high'] > bb_upper_h1) and (close_price <= bb_upper_h1) and (upper_wick_ratio >= 0.20) and has_div_bb_sell \
+                    and h1_stack_dir != -1
 
                 # Plan 1 (MA-Cross-Trend) Moving Average 5 ตัด 10 บนแท่ง M15 กรองด้วยเทรนด์ใหญ่ H1
                 ma5_val = float(last_bar['ma5'])
