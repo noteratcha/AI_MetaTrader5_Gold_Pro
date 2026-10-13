@@ -1,10 +1,13 @@
 """
 แจ้งเตือนเข้าไม้ / ปิดไม้ / สรุปกำไรรายวัน ไปที่ LINE OA ของผู้ใช้เอง (Messaging API · Broadcast)
 - ผู้ใช้สร้าง LINE OA ฟรีของตัวเอง → เปิด Messaging API → ใส่ Channel access token ในโปรแกรม → แอดเพื่อน OA นั้น
-- Token เก็บในเครื่องเท่านั้น เข้ารหัส Windows DPAPI (secure_store) · ไม่ส่งขึ้น Server · แยกตาม Profile (data_path)
+- Token เก็บในเครื่องเท่านั้น เข้ารหัส Windows DPAPI (secure_store) · ไม่ส่งขึ้น Server
+- ตั้งค่าครั้งเดียวใช้ร่วมกันทุก Profile (ไฟล์อยู่ที่โฟลเดอร์หลัก %APPDATA%\GoldBot24) — ข้อความบอกเลขบัญชี MT5 อยู่แล้ว
+  (เดิมแยกตาม Profile ทำให้หน้าต่าง Profile อื่นไม่เห็น Token · 13 ต.ค. 2026) · สรุปรายวันจำวันที่ส่งแยกตาม Profile
 - ส่งผ่านคิว + เธรดเบื้องหลัง (ไม่ทำให้ลูปเทรดหน่วง) · ลองซ้ำ 3 ครั้ง · กันส่งซ้ำด้วย (เหตุการณ์, ticket)
 """
 import json
+import os
 import queue
 import threading
 import time
@@ -13,10 +16,11 @@ import urllib.request
 
 import secure_store
 import thai_time
-from app_paths import data_path
+from app_paths import DATA_DIR, get_active_profile, get_active_profile_dir
 
 API = "https://api.line.me/v2/bot"
-SETTINGS_FILE = data_path("line_oa.json")
+SETTINGS_FILE = os.path.join(DATA_DIR, "line_oa.json")                 # ใช้ร่วมกันทุก Profile
+_LEGACY_FILE = os.path.join(get_active_profile_dir(), "line_oa.json")   # ไฟล์เดิมแบบแยก Profile (ย้ายมารวมอัตโนมัติ)
 DEFAULTS = {"enabled": False, "token": "", "events": {"open": True, "close": True, "daily": True}, "daily_time": "00:05", "last_daily": ""}
 
 _q = queue.Queue(maxsize=200)
@@ -30,12 +34,26 @@ QUOTA_WARN_RATIO = 0.9
 
 
 # ------------------------------------------------------------------ ตั้งค่า
-def load_settings() -> dict:
+def _read(path) -> dict:
     try:
-        with open(SETTINGS_FILE, encoding="utf-8") as f:
-            d = json.load(f) or {}
+        with open(path, encoding="utf-8") as f:
+            return json.load(f) or {}
     except Exception:
-        d = {}
+        return {}
+
+
+def load_settings() -> dict:
+    d = _read(SETTINGS_FILE)
+    # ย้ายค่าจากไฟล์เดิมของ Profile นี้ (ถ้าไฟล์รวมยังไม่มี Token)
+    if not d.get("token") and os.path.normcase(_LEGACY_FILE) != os.path.normcase(SETTINGS_FILE):
+        old = _read(_LEGACY_FILE)
+        if old.get("token"):
+            d = {**old, **{k: v for k, v in d.items() if v}}
+            try:
+                with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(d, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
     out = {**DEFAULTS, **d, "events": {**DEFAULTS["events"], **(d.get("events") or {})}}
     return out
 
@@ -52,7 +70,7 @@ def save_settings(enabled=None, token=None, events=None, daily_time=None, last_d
     if daily_time is not None:
         d["daily_time"] = daily_time
     if last_daily is not None:
-        d["last_daily"] = last_daily
+        d.setdefault("last_daily_by", {})[get_active_profile()] = last_daily
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, indent=2)
     return d
@@ -416,7 +434,7 @@ def _scheduler():
                     pass
             now = thai_time.now()
             today = now.strftime("%Y-%m-%d")
-            if s.get("enabled") and s.get("token") and s["events"].get("daily") and s.get("last_daily") != today \
+            if s.get("enabled") and s.get("token") and s["events"].get("daily") and (s.get("last_daily_by") or {}).get(get_active_profile()) != today \
                     and now.strftime("%H:%M") >= (s.get("daily_time") or "00:05"):
                 msgs = build_daily_summary((now - timedelta(days=1)).date())
                 if msgs:

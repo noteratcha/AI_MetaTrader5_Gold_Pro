@@ -1358,7 +1358,7 @@ class LineNotifyDialog(ctk.CTkToplevel):
         head = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=0)
         head.pack(fill="x")
         ctk.CTkLabel(head, text="แจ้งเตือน LINE OA", font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(14, 0))
-        ctk.CTkLabel(head, text="ส่งข้อความเข้าไม้ / ปิดไม้ / สรุปกำไรรายวัน ไปที่ LINE OA ของคุณเอง · Token เก็บในเครื่องนี้เท่านั้น (เข้ารหัส)",
+        ctk.CTkLabel(head, text="ส่งข้อความเข้าไม้ / ปิดไม้ / สรุปกำไรรายวัน ไปที่ LINE OA ของคุณเอง · Token เก็บในเครื่องนี้เท่านั้น (เข้ารหัส) · ตั้งครั้งเดียวใช้ได้ทุกโปรไฟล์",
                      font=f(11), text_color=COLOR_TEXT_MUTED, wraplength=560, justify="left").pack(anchor="w", padx=20, pady=(0, 12))
 
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -1483,9 +1483,18 @@ class LineNotifyDialog(ctk.CTkToplevel):
             self.lbl_info.configure(text="กรุณาใส่ Channel access token ก่อน", text_color=COLOR_DANGER_RED)
             return
         self.lbl_info.configure(text="กำลังส่งข้อความทดสอบ…", text_color=COLOR_GOLD_PRIMARY)
-        self._run_bg(lambda: self.ln.send_test(token),
-                     lambda r: self.lbl_info.configure(text=("ส่งสำเร็จ — ตรวจข้อความใน LINE ได้เลย" if r[0] else f"ส่งไม่สำเร็จ: {r[1]}"),
-                                                       text_color=COLOR_SUCCESS_GREEN if r[0] else COLOR_DANGER_RED))
+        def done(r):
+            if r[0]:   # ทดสอบผ่าน → บันทึก Token + เปิดใช้งานให้เลย (ไม่ต้องกดบันทึกแยก)
+                self.var_on.set(True)
+                self.ln.save_settings(enabled=True, token=token,
+                                      events={"open": self.var_open.get(), "close": self.var_close.get(), "daily": self.var_daily.get()},
+                                      daily_time=self.cmb_time.get().strip() or "00:05")
+                self.ln.start_scheduler()
+                self._refresh_state()
+                self.lbl_info.configure(text="ส่งสำเร็จ และบันทึก Token แล้ว — ใช้ได้กับทุกโปรไฟล์ในเครื่องนี้", text_color=COLOR_SUCCESS_GREEN)
+            else:
+                self.lbl_info.configure(text=f"ส่งไม่สำเร็จ: {r[1]}", text_color=COLOR_DANGER_RED)
+        self._run_bg(lambda: self.ln.send_test(token), done)
 
     def _quota(self):
         token = self.ent_token.get().strip()
