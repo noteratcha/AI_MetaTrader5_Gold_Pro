@@ -1,3 +1,4 @@
+import { MIN_DESKTOP_VERSION, versionLess } from './clientVersion';
 import { getAdminClient } from './supabaseAdmin';
 import { isAdminRow, rowTags, toUserPayload } from './auth';
 import { getLoginLockStatus } from './activity';
@@ -33,6 +34,14 @@ export async function enrichUsers(rows) {
     supabase.from('bot_telemetry').select('id, status, last_heartbeat, balance, equity, open_positions').in('id', ids.map(Number)),
     getLoginLockStatus(emails),
   ]);
+  // บอทแต่ละหน้าต่าง/บัญชี MT5 (Patch 08) — ใช้ดูเวอร์ชันโปรแกรมที่รันล่าสุดของแต่ละบัญชี
+  const { data: accRows } = await supabase
+    .from('bot_telemetry_accounts')
+    .select('user_id, login, profile, status, last_heartbeat')
+    .in('user_id', ids.map(Number))
+    .then((r) => r, () => ({ data: [] }));
+  const accBy = {};
+  for (const a of accRows || []) (accBy[String(a.user_id)] ||= []).push(a);
 
   const summaryBy = Object.fromEntries((summaryRes.data || []).map((s) => [s.email, s]));
   const statsBy = {};
@@ -74,10 +83,27 @@ export async function enrichUsers(rows) {
             balance: Number(t.balance) || 0,
             equity: Number(t.equity) || 0,
             openPositions: Array.isArray(t.open_positions) ? t.open_positions.length : 0,
+            ...versionInfo(t.status),
+            instances: (accBy[String(u.id)] || [])
+              .map((a) => ({
+                login: Number(a.login),
+                profile: a.profile || 'default',
+                lastHeartbeat: a.last_heartbeat,
+                online: Date.now() - new Date(a.last_heartbeat).getTime() < ONLINE_SECONDS * 1000,
+                ...versionInfo(a.status),
+              }))
+              .sort((a, b) => new Date(b.lastHeartbeat) - new Date(a.lastHeartbeat)),
           }
         : null,
     };
   });
+}
+
+/** เวอร์ชันโปรแกรมจากสถานะ Telemetry ("ONLINE v2026.1013.0720") + ต่ำกว่าเวอร์ชันขั้นต่ำที่บังคับหรือไม่ */
+function versionInfo(status) {
+  const m = /v(\d{4}\.\d{4}\.\d{4})/.exec(String(status || ''));
+  const version = m ? m[1] : null;
+  return { version, outdated: version ? versionLess(version, MIN_DESKTOP_VERSION) : false };
 }
 
 export async function loadUserRow(id) {

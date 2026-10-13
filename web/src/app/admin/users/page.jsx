@@ -138,6 +138,7 @@ export default function AdminUsersPage() {
                       ) : (
                         <span className="tiny faint">{u.bot?.lastHeartbeat ? timeAgo(u.bot.lastHeartbeat) : 'ยังไม่เคยเชื่อมต่อ'}</span>
                       )}
+                      <BotVersions bot={u.bot} />
                     </td>
                     <td className={`num ${u.hoursRemaining <= 5 ? 'text-red' : 'text-gold'}`} style={{ fontWeight: 600 }}>
                       {formatHHMM(u.hoursRemaining)}
@@ -231,5 +232,25 @@ function CreateUserModal({ onClose, onCreated }) {
         </button>
       </form>
     </Modal>
+  );
+}
+
+/** เวอร์ชันโปรแกรมที่ผู้ใช้รันล่าสุด — แยกตามบัญชี MT5 เมื่อมีหลายหน้าต่าง · แดง = ต่ำกว่าเวอร์ชันที่บังคับ (ต้องอัปเดต) */
+function BotVersions({ bot }) {
+  if (!bot) return null;
+  const list = bot.instances?.length ? bot.instances : bot.version ? [{ login: null, version: bot.version, outdated: bot.outdated, online: bot.online }] : [];
+  if (!list.length) return null;
+  return (
+    <div className="stack" style={{ gap: 2, marginTop: 4 }}>
+      {list.map((i, k) => (
+        <div key={i.login || k} className="tiny mono nowrap" title={i.lastHeartbeat ? `อัปเดตล่าสุด ${new Date(i.lastHeartbeat).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}` : undefined}>
+          {i.login ? <span className="faint">#{i.login} </span> : null}
+          <span style={{ color: i.outdated ? 'var(--red, #f87171)' : i.online ? 'var(--green, #34d399)' : 'var(--text-3, #94a3b8)' }}>
+            v{i.version || '?'}
+          </span>
+          {i.outdated && <span className="text-red"> · ต้องอัปเดต</span>}
+        </div>
+      ))}
+    </div>
   );
 }
