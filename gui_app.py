@@ -1812,7 +1812,7 @@ class MarketExplainDialog(ctk.CTkToplevel):
         self.title("สภาวะตลาด — ทำไมถึงเป็นแบบนี้")
         w, h = 640, 600
         self.configure(fg_color=COLOR_BG_DARK)
-        self.transient(parent)
+        # ไม่ใช้ transient() เพื่อให้มีปุ่มขยาย/ย่อของ Windows (เหมือนหน้าต่างกราฟ)
         self.update_idletasks()
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
@@ -1822,7 +1822,18 @@ class MarketExplainDialog(ctk.CTkToplevel):
         def f(size, weight="normal", family=app_fonts.UI):
             return ctk.CTkFont(family=family, size=size, weight=weight)
 
-        ctk.CTkLabel(self, text="สภาวะตลาด — ทำไมถึงเป็นแบบนี้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=20, pady=(16, 0))
+        self._wrap_labels = []   # (label, ระยะที่หักจากความกว้างหน้าต่าง) — ปรับ wraplength ตามขนาดหน้าต่าง
+        head = ctk.CTkFrame(self, fg_color="transparent")
+        head.pack(fill="x", padx=20, pady=(16, 0))
+        ctk.CTkLabel(head, text="สภาวะตลาด — ทำไมถึงเป็นแบบนี้", font=f(17, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(side="left")
+        self.btn_full = ctk.CTkButton(head, text="ขยายเต็มจอ", width=92, height=26, font=f(11, "bold"),
+                                      fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER, border_width=1,
+                                      border_color=COLOR_CARD_BORDER, text_color=COLOR_GOLD_PRIMARY,
+                                      command=self._toggle_full)
+        self.btn_full.pack(side="right")
+        self.bind("<F11>", lambda e: self._toggle_full())
+        self.bind("<Escape>", lambda e: self.state() == "zoomed" and self._toggle_full())
+        self.bind("<Configure>", self._on_resize, add="+")
         ctk.CTkLabel(self, text="คำนวณจากแท่งที่ปิดแล้ว · ตัวเลขเป็นค่าเฉลี่ยเคลื่อนที่ (MA) ของราคาปิด", font=f(11),
                      text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=20, pady=(0, 8))
         box = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -1840,8 +1851,10 @@ class MarketExplainDialog(ctk.CTkToplevel):
             return c
 
         def line(parent, text, color=COLOR_TEXT_PRIMARY, size=12, mono=False):
-            ctk.CTkLabel(parent, text=text, font=f(size, "normal", app_fonts.MONO if mono else app_fonts.UI), text_color=color,
-                         anchor="w", justify="left", wraplength=570).pack(anchor="w", padx=14)
+            lb = ctk.CTkLabel(parent, text=text, font=f(size, "normal", app_fonts.MONO if mono else app_fonts.UI), text_color=color,
+                              anchor="w", justify="left", wraplength=570)
+            lb.pack(anchor="w", padx=14)
+            self._wrap_labels.append((lb, 70))
 
         # 1) ป้ายบนการ์ด: MA50 / MA100 / MA150
         for tf in ("H1", "H4"):
@@ -1887,8 +1900,32 @@ class MarketExplainDialog(ctk.CTkToplevel):
             line(c, f"Plan 2 (MA H1) / ป้าย MA200 — ราคาปิด H4 {h4['close']:,.2f} {'เหนือ' if above else 'ใต้'} MA200 {m[200]:,.2f}", COLOR_TEXT_PRIMARY, 12)
             line(c, "→ Plan 2 BUY ได้เมื่อราคาอยู่เหนือ MA200 และ SELL ได้เมื่ออยู่ใต้ MA200 (ร่วมกับ MA10/30 และความชัน MA5 H4)", muted, 11)
         ctk.CTkFrame(c, height=8, fg_color="transparent").pack()
-        ctk.CTkLabel(box, text="ป้าย Uptrend / Downtrend / Sideway บนการ์ดใช้แสดงภาพรวมเท่านั้น — การเข้าไม้ใช้กฎของแต่ละแผนด้านบน",
-                     font=f(10), text_color=muted, wraplength=580, justify="left").pack(anchor="w", padx=8, pady=(6, 0))
+        note = ctk.CTkLabel(box, text="ป้าย Uptrend / Downtrend / Sideway บนการ์ดใช้แสดงภาพรวมเท่านั้น — การเข้าไม้ใช้กฎของแต่ละแผนด้านบน",
+                            font=f(10), text_color=muted, wraplength=580, justify="left")
+        note.pack(anchor="w", padx=8, pady=(6, 0))
+        self._wrap_labels.append((note, 60))
+
+    def _toggle_full(self):
+        """ขยายเต็มจอ ↔ ขนาดปกติ (F11 / Esc)"""
+        if self.state() == "zoomed":
+            self.state("normal")
+            self.btn_full.configure(text="ขยายเต็มจอ")
+        else:
+            self.state("zoomed")
+            self.btn_full.configure(text="ย่อหน้าต่าง")
+
+    def _on_resize(self, event):
+        if event.widget is not self:
+            return
+        w = event.width
+        if getattr(self, "_last_w", None) == w:
+            return
+        self._last_w = w
+        for lb, pad in self._wrap_labels:
+            try:
+                lb.configure(wraplength=max(300, w - pad))
+            except Exception:
+                pass
 
 
 class GoldCandleDialog(ctk.CTkToplevel):
