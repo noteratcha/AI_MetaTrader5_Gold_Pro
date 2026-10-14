@@ -126,7 +126,7 @@ export default async function handler(req, res) {
 
   if (req.query.probe === 'fred') {   // ชั่วคราว: ทดสอบ FRED
     const key = String(process.env.FRED_API_KEY || '').trim();
-    const out = { keyLen: key.length };
+    const out = { keyLen: key.length, has: 'FRED_API_KEY' in process.env, rawLen: String(process.env.FRED_API_KEY ?? '').length, fmpLen: String(process.env.FMP_API_KEY ?? '').length };
     for (const id of ['CPIAUCSL', 'CPILFESL', 'CPIAUCNS', 'CPILFENS', 'PPIFIS', 'RSAFS', 'ICSA', 'PAYEMS']) {
       try {
         const r = await fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${encodeURIComponent(key)}&file_type=json&sort_order=desc&limit=14`);
