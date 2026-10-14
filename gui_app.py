@@ -5861,6 +5861,9 @@ class MainTradingApp(ctk.CTk):
         )
         self._style_sound_button()
         self.btn_sound_toggle.grid(row=0, column=3)
+        self._siren_blink_on = False
+        self._siren_was_active = False
+        self.after(500, self._siren_blink_tick)
         self._bot_started_at = None
 
     NEWS_PILL_BG = "#191D26"
@@ -7793,6 +7796,25 @@ class MainTradingApp(ctk.CTk):
             sound_manager.play_tp_hit()
         else:
             sound_manager.stop_volatility_siren()
+
+    def _siren_blink_tick(self):
+        """ไซเรนผันผวนแรงดังอยู่ → ปุ่มเสียงกระพริบแดง (กดเพื่อปิดเสียง) · ทุก 0.5 วิ บนเธรดหลัก"""
+        try:
+            active = sound_manager.is_volatility_siren_active() and bot_ctrl.sound_enabled
+            if active:
+                self._siren_blink_on = not self._siren_blink_on
+                if self._siren_blink_on:
+                    self.btn_sound_toggle.configure(text="■ ปิดไซเรน", fg_color=COLOR_DANGER_RED, hover_color="#B91C1C",
+                                                    border_color="#FCA5A5", text_color="#FFFFFF")
+                else:
+                    self.btn_sound_toggle.configure(text="■ ปิดไซเรน", fg_color="#2A1215", hover_color="#38181C",
+                                                    border_color=COLOR_DANGER_RED, text_color=COLOR_DANGER_RED)
+            elif self._siren_was_active:
+                self._style_sound_button()
+            self._siren_was_active = active
+        except Exception:
+            pass
+        self.after(500, self._siren_blink_tick)
 
     def _style_sound_button(self):
         if bot_ctrl.sound_enabled:
