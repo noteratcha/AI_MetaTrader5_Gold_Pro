@@ -58,6 +58,7 @@ def _normalize(raw: dict):
         "impact": str(raw.get("impact") or "Low"),
         "forecast": str(raw.get("forecast") or ""),
         "previous": str(raw.get("previous") or ""),
+        "actual": str(raw.get("actual") or ""),   # ค่าจริงจาก FRED ผ่าน /api/calendar (feed สำรองไม่มี)
         "time": when,
     }
 

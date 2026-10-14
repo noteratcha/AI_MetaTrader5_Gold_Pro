@@ -322,6 +322,11 @@ export function newsImpactText(n) {
   if (n.actual !== null && n.actual !== undefined)
     return { text: `ผลจริง ${n.actual > 0 ? '▲' : '▼'} ${n.actual > 0 ? '+' : ''}${n.actual.toFixed(2)}%`, color: n.actual > 0 ? GREEN : RED };
   const size = n.move ? `±${n.move.toFixed(2)}%` : '';
+  if (n.actual_value) {   // ตัวเลขจริงออกแล้ว (ยังไม่ครบ 60 นาทีให้วัดราคา) → ทิศจากตัวเลขจริงเทียบคาด (โปรแกรมคำนวณ)
+    if (n.surprise > 0) return { text: `▲ ทองขึ้น ${size}`.trim(), color: GREEN };
+    if (n.surprise < 0) return { text: `▼ ทองลง ${size}`.trim(), color: RED };
+    return { text: `ตามคาด ${size}`.trim(), color: MUTED };
+  }
   if (n.lean > 0) return { text: `▲ ทองขึ้น ${size}`.trim(), color: GREEN };
   if (n.lean < 0) return { text: `▼ ทองลง ${size}`.trim(), color: RED };
   return { text: size ? `ขยับ ${size}` : '—', color: MUTED };
@@ -329,7 +334,13 @@ export function newsImpactText(n) {
 
 export function newsImpactDetail(n) {
   const parts = [n.rule];
-  if (n.lean)
+  if (n.actual_value)
+    parts.push(
+      `ตัวเลขจริง ${n.actual_value} เทียบ${n.forecast ? `คาด ${n.forecast}` : `ครั้งก่อน ${n.previous || '—'}`} → ${
+        n.surprise > 0 ? 'ดอลลาร์มีแนวโน้มอ่อนลง ทองมักขึ้น' : n.surprise < 0 ? 'ดอลลาร์มีแนวโน้มแข็งขึ้น ทองมักลง' : 'ออกตามคาด'
+      } (ข้อมูลทางการจาก FRED)`
+    );
+  else if (n.lean)
     parts.push(
       `ตลาดคาด ${n.forecast} เทียบครั้งก่อน ${n.previous} → ${n.lean > 0 ? 'ดอลลาร์มีแนวโน้มอ่อนลง ทองมักขึ้น' : 'ดอลลาร์มีแนวโน้มแข็งขึ้น ทองมักลง'} (ถ้าออกตามคาด)`
     );

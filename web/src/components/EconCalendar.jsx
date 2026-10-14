@@ -195,6 +195,17 @@ export function EconCalendarList({ events, error, updatedAt, onReload, impacts =
                     <span className="cal-num">
                       <span className="faint">ก่อน</span> {e.previous || '—'}
                     </span>
+                    <span
+                      className="cal-num cal-actual"
+                      title={e.actual ? 'ตัวเลขจริงจาก FRED (ธนาคารกลางสหรัฐ สาขาเซนต์หลุยส์) · สีตามผลต่อทองที่โปรแกรมวิเคราะห์' : undefined}
+                      style={e.actual ? { color: n?.surprise > 0 ? 'var(--green)' : n?.surprise < 0 ? 'var(--red)' : 'var(--text)', fontWeight: 700 } : undefined}
+                    >
+                      {e.actual ? (
+                        <>
+                          <span className="faint">จริง</span> {e.actual}
+                        </>
+                      ) : ''}
+                    </span>
                     {impacts && (
                       <span className="cal-impact" style={{ color: t?.color }}>
                         {t ? `${t.text} ›` : ''}

@@ -72,6 +72,19 @@ def parse_num(text: str):
     return v * {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}.get(suffix, 1)
 
 
+def value_surprise(ev: dict) -> int:
+    """ตัวเลขจริงเทียบคาด (ไม่มีคาด = เทียบครั้งก่อน) → +1 ทองมักขึ้น / -1 ทองมักลง / 0 ตามคาดหรือไม่มีกฎ"""
+    kind = classify(ev.get("title"))
+    a = parse_num(ev.get("actual"))
+    ref = parse_num(ev.get("forecast"))
+    if ref is None:
+        ref = parse_num(ev.get("previous"))
+    if kind not in ("usd_up", "usd_down") or a is None or ref is None or abs(a - ref) < 1e-12:
+        return 0
+    usd_stronger = (a > ref) if kind == "usd_up" else (a < ref)
+    return -1 if usd_stronger else 1
+
+
 def pre_release_lean(ev: dict) -> int:
     """แนวโน้มก่อนข่าวออก (+1 ทองขึ้น / -1 ทองลง / 0 ไม่ชัด) จากคาดการณ์เทียบครั้งก่อน"""
     kind = classify(ev.get("title"))
@@ -221,7 +234,8 @@ def analyze(ev: dict) -> dict:
     actual = actual_move(ev["time"]) if usd else None
     if actual is not None:
         _record(ev, actual)
-    return {"kind": kind, "rule": TH_TYPES[kind], "lean": lean, "stats": stats, "actual": actual}
+    return {"kind": kind, "rule": TH_TYPES[kind], "lean": lean, "stats": stats, "actual": actual,
+            "value": ev.get("actual") or "", "surprise": value_surprise(ev)}
 
 
 _published = {"items": []}
@@ -246,6 +260,7 @@ def publish(events: list, analyses: dict):
         items.append({
             "title": ev["title"], "title_th": _th(ev["title"]), "time": ev["time"].isoformat(), "impact": ev["impact"],
             "forecast": ev.get("forecast", ""), "previous": ev.get("previous", ""),
+            "actual_value": a.get("value", ""), "surprise": a.get("surprise", 0),
             "kind": a["kind"], "rule": a["rule"], "lean": a["lean"],
             "actual": round(a["actual"], 3) if a.get("actual") is not None else None,
             "move": round(st["median_abs"], 3) if st else None, "move_big": round(st["p80_abs"], 3) if st else None,
@@ -264,6 +279,13 @@ def short_text(a: dict) -> tuple[str, str]:
         v = a["actual"]
         return (f"ผลจริง {'▲' if v > 0 else '▼'} {v:+.2f}%", "up" if v > 0 else "down")
     size = f"±{a['stats']['median_abs']:.2f}%" if a["stats"] else ""
+    if a.get("value"):   # ตัวเลขจริงออกแล้ว แต่ยังไม่ครบ 60 นาทีให้วัดราคา → ทิศจากตัวเลขจริงเทียบคาด
+        s = a.get("surprise", 0)
+        if s > 0:
+            return (f"▲ ทองขึ้น {size}".strip(), "up")
+        if s < 0:
+            return (f"▼ ทองลง {size}".strip(), "down")
+        return ((f"ตามคาด {size}" if size else "ตามคาด"), "muted")
     if a["lean"] > 0:
         return (f"▲ ทองขึ้น {size}".strip(), "up")
     if a["lean"] < 0:

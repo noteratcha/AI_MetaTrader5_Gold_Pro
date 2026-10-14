@@ -864,7 +864,8 @@ class NewsImpactDialog(ctk.CTkToplevel):
                          wraplength=500, justify="left").pack(anchor="w")
         ctk.CTkLabel(head, text=f"{econ_calendar.format_day(ev['time'])} · {ev['time'].strftime('%H:%M')} น. · {ev['currency']} · "
                                 f"ผลกระทบ{'สูง' if ev['impact'] == 'High' else 'กลาง' if ev['impact'] == 'Medium' else 'ต่ำ'}"
-                                f" · คาด {ev['forecast'] or '—'} · ครั้งก่อน {ev['previous'] or '—'}",
+                                f" · คาด {ev['forecast'] or '—'} · ครั้งก่อน {ev['previous'] or '—'}"
+                                + (f" · จริง {ev['actual']}" if ev.get("actual") else ""),
                      font=f(12), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
 
         def card(title, value, sub, color, size=16):
@@ -879,11 +880,19 @@ class NewsImpactDialog(ctk.CTkToplevel):
 
         actual = a.get("actual")
         lean = a.get("lean", 0)
+        if ev.get("actual"):
+            sp = a.get("surprise", 0)
+            ref = ev["forecast"] or ev["previous"]
+            cmp_word = "ตามคาด" if not sp else ("ดีกว่าคาดสำหรับทอง" if sp > 0 else "แย่กว่าคาดสำหรับทอง")
+            card("ตัวเลขจริง (FRED)", f"{ev['actual']}  เทียบ{'คาด' if ev['forecast'] else 'ครั้งก่อน'} {ref or '—'} → {cmp_word}",
+                 ("ดอลลาร์มีแนวโน้มอ่อนลง → ทองมักขึ้น" if sp > 0 else "ดอลลาร์มีแนวโน้มแข็งขึ้น → ทองมักลง" if sp < 0
+                  else "ตัวเลขออกตามที่ตลาดคาด — ทองมักไม่ขยับแรงจากข่าวนี้") + " · ข้อมูลทางการจาก FRED (ธนาคารกลางสหรัฐ สาขาเซนต์หลุยส์)",
+                 COLOR_SUCCESS_GREEN if sp > 0 else COLOR_DANGER_RED if sp < 0 else COLOR_TEXT_PRIMARY)
         if actual is not None:
             pts = abs(actual) / 100 * gold_price if gold_price else 0
             card("ผลจริงหลังข่าวออก (60 นาที)", f"ทอง{'ขึ้น' if actual > 0 else 'ลง'} {actual:+.2f}%" + (f" (~{pts:.1f} จุด)" if pts else ""),
                  "วัดจากราคาทองจริงใน MT5 ตั้งแต่เวลาประกาศถึง 60 นาทีหลังจากนั้น", COLOR_SUCCESS_GREEN if actual > 0 else COLOR_DANGER_RED)
-        else:
+        elif not ev.get("actual"):   # ยังไม่มีตัวเลขจริง → แสดงแนวโน้มจากตัวเลขคาด
             if lean > 0:
                 val, col = "▲ แนวโน้มทองขึ้น", COLOR_SUCCESS_GREEN
             elif lean < 0:
@@ -7361,7 +7370,7 @@ class MainTradingApp(ctk.CTk):
 
         ctk.CTkLabel(
             parent,
-            text="เวลาไทย (UTC+7) · อัปเดตทุก 30 นาที · คอลัมน์ขวา = ผลต่อทอง (แนวโน้มจากตัวเลขคาด · ±% ที่ทองมักขยับใน 1 ชม.) — คลิกข่าวเพื่อดูรายละเอียด",
+            text="เวลาไทย (UTC+7) · อัปเดตทุก 30 นาที · จริง = ตัวเลขจริงข่าว USD จาก FRED (เขียว = ทองมักขึ้น · แดง = ทองมักลง) · คอลัมน์ขวา = ผลต่อทอง — คลิกข่าวเพื่อดูรายละเอียด",
             font=self._font(10),
             text_color=COLOR_TEXT_MUTED,
         ).pack(anchor="w", padx=8)
@@ -7398,7 +7407,7 @@ class MainTradingApp(ctk.CTk):
 
         if not events:
             msg = econ_calendar.last_error() and "โหลดปฏิทินข่าวไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วกด 🔄" or "ไม่มีข่าวตามตัวกรองในสัปดาห์นี้"
-            ctk.CTkLabel(self.cal_list, text=msg, font=self._font(12), text_color=COLOR_TEXT_MUTED).grid(row=0, column=0, columnspan=6, pady=30)
+            ctk.CTkLabel(self.cal_list, text=msg, font=self._font(12), text_color=COLOR_TEXT_MUTED).grid(row=0, column=0, columnspan=8, pady=30)
             return
 
         now = econ_calendar.datetime.now(econ_calendar.BANGKOK)
@@ -7415,7 +7424,7 @@ class MainTradingApp(ctk.CTk):
                     font=self._font(12, "bold"),
                     text_color=COLOR_GOLD_PRIMARY if is_today else COLOR_TEXT_PRIMARY,
                     anchor="w",
-                ).grid(row=row, column=0, columnspan=6, sticky="ew", padx=10, pady=(10, 2))
+                ).grid(row=row, column=0, columnspan=8, sticky="ew", padx=10, pady=(10, 2))
                 row += 1
 
             past = ev["time"] < now
@@ -7423,7 +7432,7 @@ class MainTradingApp(ctk.CTk):
             # พื้นสลับสีอ่อน/เข้มทีละรายการ (แถบเต็มแถวอยู่หลังช่องข้อความ)
             bg = "#1A1F29" if idx % 2 == 0 else "transparent"
             if idx % 2 == 0:
-                ctk.CTkFrame(self.cal_list, fg_color=bg, corner_radius=6, height=28).grid(row=row, column=0, columnspan=7, sticky="nsew", padx=4)
+                ctk.CTkFrame(self.cal_list, fg_color=bg, corner_radius=6, height=28).grid(row=row, column=0, columnspan=8, sticky="nsew", padx=4)
             ctk.CTkLabel(self.cal_list, text=ev["time"].strftime("%H:%M"), font=self._font(12, "bold"), text_color=fg, fg_color=bg, width=48, anchor="w").grid(row=row, column=0, padx=(12, 4), sticky="w")
             ctk.CTkLabel(self.cal_list, text=ev["currency"], font=self._font(11, "bold"), text_color=fg, fg_color=bg, width=36).grid(row=row, column=1, padx=4)
             ctk.CTkLabel(
@@ -7446,13 +7455,24 @@ class MainTradingApp(ctk.CTk):
                 txt, tone = news_impact.short_text(a)
                 col = {"up": COLOR_SUCCESS_GREEN, "down": COLOR_DANGER_RED}.get(tone, COLOR_TEXT_MUTED)
                 imp_lbl = ctk.CTkLabel(self.cal_list, text=txt + "  ›", font=self._font(11, "bold"), text_color=col, fg_color=bg, width=128, anchor="e")
-                imp_lbl.grid(row=row, column=6, padx=(4, 12))
+                imp_lbl.grid(row=row, column=7, padx=(4, 12))
                 open_detail = lambda e, ev=ev, a=a: NewsImpactDialog(self, ev, a, self._last_gold_price())
                 for w in (title_lbl, imp_lbl):
                     w.configure(cursor="hand2")
                     w.bind("<Button-1>", open_detail)
             ctk.CTkLabel(self.cal_list, text=f"คาด {ev['forecast'] or '—'}", font=self._font(11), text_color=COLOR_TEXT_MUTED, fg_color=bg, width=80, anchor="e").grid(row=row, column=4, padx=4)
             ctk.CTkLabel(self.cal_list, text=f"ก่อน {ev['previous'] or '—'}", font=self._font(11), text_color=COLOR_TEXT_MUTED, fg_color=bg, width=84, anchor="e").grid(row=row, column=5, padx=4)
+            # ค่าจริง (FRED) — สีตามผลต่อทอง: เขียว = ทองมักขึ้น · แดง = ทองมักลง · ขาว = ตามคาด
+            if ev.get("actual"):
+                sp = news_impact.value_surprise(ev)
+                act_col = COLOR_SUCCESS_GREEN if sp > 0 else COLOR_DANGER_RED if sp < 0 else COLOR_TEXT_PRIMARY
+                act_lbl = ctk.CTkLabel(self.cal_list, text=f"จริง {ev['actual']}", font=self._font(11, "bold"), text_color=act_col, fg_color=bg, width=84, anchor="e")
+                act_lbl.grid(row=row, column=6, padx=4)
+                HoverTip(act_lbl, "ตัวเลขจริงจาก FRED (ธนาคารกลางสหรัฐ สาขาเซนต์หลุยส์) เทียบตัวเลขคาด · "
+                                  + ("สูง/ต่ำกว่าคาดในทางที่ดอลลาร์อ่อน → ทองมักขึ้น" if sp > 0 else
+                                     "สูง/ต่ำกว่าคาดในทางที่ดอลลาร์แข็ง → ทองมักลง" if sp < 0 else "ออกตามคาด หรือข่าวประเภทนี้ไม่มีกฎ"))
+            elif ev["currency"] == "USD" and past and news_impact.classify(ev["title"]) in ("usd_up", "usd_down"):
+                ctk.CTkLabel(self.cal_list, text="จริง —", font=self._font(11), text_color=COLOR_TEXT_MUTED, fg_color=bg, width=84, anchor="e").grid(row=row, column=6, padx=4)
             row += 1
 
     def _last_gold_price(self) -> float:
