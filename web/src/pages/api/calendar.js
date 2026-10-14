@@ -157,6 +157,20 @@ function waitingActual(events) {
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
+  if (req.query.hist === 'bt1014') {   // ชั่วคราว: ข้อมูลข่าวย้อนหลัง (ประกาศครั้งแรก) สำหรับ Backtest — ลบหลังใช้
+    const key = String(process.env.FRED_API_KEY || '').trim();
+    const out = {};
+    for (const id of ['CPIAUCSL', 'CPILFESL', 'PAYEMS', 'UNRATE', 'PPIFIS', 'RSAFS', 'ICSA', 'PCEPILFE', 'A191RL1Q225SBEA']) {
+      try {
+        const r = await fetch(`${FRED_URL}?series_id=${id}&api_key=${encodeURIComponent(key)}&file_type=json&output_type=4&observation_start=2023-06-01&realtime_start=2023-06-01`);
+        const j = await r.json();
+        out[id] = (j.observations || []).map((o) => [o.date, o.realtime_start, o.value]);
+      } catch (e) { out[id] = e.message; }
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json(out);
+  }
+
   const fresh = cache.events && Date.now() - cache.fetchedAt < CACHE_MS;
   if (!fresh) {
     try {
