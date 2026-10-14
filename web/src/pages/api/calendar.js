@@ -124,6 +124,27 @@ export default async function handler(req, res) {
   if (Date.now() - jb.fetchedAt >= (hot ? FAST_MS : CACHE_MS)) await refreshActuals();
   const events = mergeActuals(cache.events);
 
+  if (req.query.probe === 'fmp') {   // ชั่วคราว: ทดสอบ FMP economic-calendar
+    const key = String(process.env.FMP_API_KEY || '').trim();
+    const out = { keyLen: key.length };
+    for (const u of ['https://financialmodelingprep.com/stable/economic-calendar?from=2026-10-13&to=2026-10-15',
+                     'https://financialmodelingprep.com/api/v3/economic_calendar?from=2026-10-13&to=2026-10-15']) {
+      try {
+        const r = await fetch(`${u}&apikey=${encodeURIComponent(key)}`);
+        const t = await r.text();
+        let info;
+        try {
+          const j = JSON.parse(t);
+          info = Array.isArray(j)
+            ? { n: j.length, us: j.filter((x) => /US|USD/.test(`${x.country} ${x.currency}`) && /CPI|Inflation|Retail|PPI/i.test(x.event || '')).slice(0, 8) }
+            : j;
+        } catch { info = t.slice(0, 200); }
+        out[u.split('.com/')[1].split('?')[0]] = { status: r.status, info };
+      } catch (e) { out[u] = { error: e.message }; }
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json(out);
+  }
   if (req.query.debug === '1') {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
