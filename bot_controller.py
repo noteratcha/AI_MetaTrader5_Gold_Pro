@@ -126,6 +126,7 @@ class BotController:
         bot_core.BOT_PAUSED_FLAG = True
         self.is_paused = True
         sound_manager.stop_volatility_siren()
+        sound_manager.set_volatility_alert(False)
 
         if self.status_callback:
             self.status_callback("PAUSED")
@@ -173,6 +174,7 @@ class BotController:
         self.is_active = False
         self.is_paused = False
         sound_manager.stop_volatility_siren()
+        sound_manager.set_volatility_alert(False)
 
         # คืนค่า stdout เดิม
         sys.stdout = self.orig_stdout

@@ -7798,16 +7798,18 @@ class MainTradingApp(ctk.CTk):
             sound_manager.stop_volatility_siren()
 
     def _siren_blink_tick(self):
-        """ไซเรนผันผวนแรงดังอยู่ → ปุ่มเสียงกระพริบแดง (กดเพื่อปิดเสียง) · ทุก 0.5 วิ บนเธรดหลัก"""
+        """ตลาดผันผวนแรงอยู่ → ปุ่มเสียงกระพริบแดง ทุก 0.5 วิ บนเธรดหลัก
+        เสียงเปิด = "■ ปิดไซเรน" (กดเพื่อปิดเสียง) · ปิดเสียงไว้ = "● เสียง: ปิด" ยังกระพริบเตือน (ผู้ใช้สั่ง 14 ต.ค. 2026)"""
         try:
-            active = sound_manager.is_volatility_siren_active() and bot_ctrl.sound_enabled
+            active = sound_manager.is_volatility_alert() or sound_manager.is_volatility_siren_active()
             if active:
                 self._siren_blink_on = not self._siren_blink_on
+                label = "■ ปิดไซเรน" if bot_ctrl.sound_enabled else "● เสียง: ปิด"
                 if self._siren_blink_on:
-                    self.btn_sound_toggle.configure(text="■ ปิดไซเรน", fg_color=COLOR_DANGER_RED, hover_color="#B91C1C",
+                    self.btn_sound_toggle.configure(text=label, fg_color=COLOR_DANGER_RED, hover_color="#B91C1C",
                                                     border_color="#FCA5A5", text_color="#FFFFFF")
                 else:
-                    self.btn_sound_toggle.configure(text="■ ปิดไซเรน", fg_color="#2A1215", hover_color="#38181C",
+                    self.btn_sound_toggle.configure(text=label, fg_color="#2A1215", hover_color="#38181C",
                                                     border_color=COLOR_DANGER_RED, text_color=COLOR_DANGER_RED)
             elif self._siren_was_active:
                 self._style_sound_button()

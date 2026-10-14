@@ -3299,6 +3299,7 @@ def main():
                 
                 # ตรวจจับสภาวะราคาผันผวนแรงผิดปกติ (ทุกรอบสแกน ไม่ว่าจะถือไม้อยู่หรือไม่) -> เล่นเสียงไซเลนเตือนต่อเนื่อง
                 is_volatile, vol_reason = check_abnormal_volatility(df, df_h1, tick, mt5.symbol_info(sym), atr_val, sym=sym)
+                sound_manager.set_volatility_alert(is_volatile)
                 if is_volatile:
                     if not sound_manager.is_volatility_siren_active():
                         sound_manager.start_volatility_siren(vol_reason)
@@ -3953,11 +3954,13 @@ def main():
             
         except KeyboardInterrupt:
             sound_manager.stop_volatility_siren()
+            sound_manager.set_volatility_alert(False)
             print("\n[STOP] Bot stopped by user (Ctrl+C). Shutting down cleanly.")
             break
         except Exception as e:
             scan_errors += 1
             sound_manager.stop_volatility_siren()
+            sound_manager.set_volatility_alert(False)
             import traceback
             where = traceback.extract_tb(e.__traceback__)[-1]
             print(f"{Colors.RED}[BOT ENGINE ERROR] {e} (บรรทัด {where.lineno}) — ครั้งที่ {scan_errors}/3{Colors.RESET}")
@@ -3970,6 +3973,7 @@ def main():
                 time.sleep(1)
             
     sound_manager.stop_volatility_siren()
+    sound_manager.set_volatility_alert(False)
     mt5.shutdown()
 
 if __name__ == "__main__":

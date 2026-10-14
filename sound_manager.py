@@ -416,6 +416,19 @@ def stop_volatility_siren():
         print(f"\033[92m\033[1m[SIREN CLEARED] ✅ สภาวะผันผวนกลับสู่ปกติ — ปิดเสียงไซเลนเตือนภัยแล้ว\033[0m")
 
 
+_vol_alert = False
+
+
+def set_volatility_alert(active: bool):
+    """สถานะ "ตลาดผันผวนแรงอยู่" — แยกจากเสียง (ปิดเสียงแล้วหน้าจอยังกระพริบเตือนได้)"""
+    global _vol_alert
+    _vol_alert = bool(active)
+
+
+def is_volatility_alert() -> bool:
+    return bool(_vol_alert)
+
+
 def is_volatility_siren_active() -> bool:
     """ตรวจสอบว่าเสียงไซเลนกำลังทำงานอยู่หรือไม่"""
     return bool(_siren_active)
