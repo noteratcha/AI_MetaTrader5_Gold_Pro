@@ -137,6 +137,14 @@ async function fillActuals(events) {
   });
 }
 
+/** อายุ cache ที่ CDN (วินาที): ไม่เกินเวลาข่าว FRED ถัดไป — กันโปรแกรมได้ข้อมูลก่อนข่าวออกค้างไว้ 30 นาที */
+function cdnSeconds(events) {
+  if (waitingActual(events)) return 60;
+  const now = Date.now();
+  const next = events.filter((e) => fredSpec(e)).map((e) => new Date(e.date).getTime()).filter((t) => t > now).sort((a, b) => a - b)[0];
+  return next ? Math.max(60, Math.min(1800, Math.floor((next - now) / 1000))) : 1800;
+}
+
 /** ข่าวที่ออกแล้วใน 3 ชม. แต่ยังไม่มีค่าจริง → ให้ CDN เก็บแค่ 1 นาที */
 function waitingActual(events) {
   const now = Date.now();
@@ -167,7 +175,8 @@ export default async function handler(req, res) {
   }
 
   const events = await fillActuals(cache.events);
-  res.setHeader('Cache-Control', waitingActual(events) ? 'public, s-maxage=60' : 'public, s-maxage=1800, stale-while-revalidate=86400');
+  const ttl = cdnSeconds(events);
+  res.setHeader('Cache-Control', ttl < 1800 ? `public, s-maxage=${ttl}` : 'public, s-maxage=1800, stale-while-revalidate=86400');
   return res.status(200).json({
     success: true,
     updatedAt: new Date(cache.fetchedAt).toISOString(),
