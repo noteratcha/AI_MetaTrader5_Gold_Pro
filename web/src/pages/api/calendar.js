@@ -124,6 +124,22 @@ export default async function handler(req, res) {
   if (Date.now() - jb.fetchedAt >= (hot ? FAST_MS : CACHE_MS)) await refreshActuals();
   const events = mergeActuals(cache.events);
 
+  if (req.query.probe === '1') {   // ชั่วคราว: ตรวจว่า endpoint ไหนของ JBlanked ใช้ฟรีได้
+    const key = String(process.env.JBLANKED_API_KEY || '').trim();
+    const out = {};
+    for (const ep of ['mql5/calendar/week/', 'fxstreet/calendar/week/', 'forex-factory/calendar/today/', 'mql5/calendar/today/']) {
+      try {
+        const r = await fetch(`https://www.jblanked.com/news/api/${ep}`, { headers: { 'Content-Type': 'application/json', Authorization: `Api-Key ${key}` } });
+        const t = await r.text();
+        let first = null;
+        try { const j = JSON.parse(t); const l = Array.isArray(j) ? j : j.data || j.results || []; first = Array.isArray(l) ? { n: l.length, x: l.find((q) => /CPI/i.test(q.Name || q.name || '')) || l[0] } : j; } catch { first = t.slice(0, 160); }
+        out[ep] = { status: r.status, first };
+      } catch (e) { out[ep] = { error: e.message }; }
+      await new Promise((ok) => setTimeout(ok, 1200));
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json(out);
+  }
   if (req.query.debug === '1') {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
