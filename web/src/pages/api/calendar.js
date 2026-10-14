@@ -124,6 +124,19 @@ export default async function handler(req, res) {
   if (Date.now() - jb.fetchedAt >= (hot ? FAST_MS : CACHE_MS)) await refreshActuals();
   const events = mergeActuals(cache.events);
 
+  if (req.query.probe === 'fred') {   // ชั่วคราว: ทดสอบ FRED
+    const key = String(process.env.FRED_API_KEY || '').trim();
+    const out = { keyLen: key.length };
+    for (const id of ['CPIAUCSL', 'CPILFESL', 'CPIAUCNS', 'CPILFENS', 'PPIFIS', 'RSAFS', 'ICSA', 'PAYEMS']) {
+      try {
+        const r = await fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${encodeURIComponent(key)}&file_type=json&sort_order=desc&limit=14`);
+        const j = await r.json();
+        out[id] = r.ok ? (j.observations || []).map((o) => `${o.date}=${o.value} (rt ${o.realtime_start})`) : j;
+      } catch (e) { out[id] = e.message; }
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json(out);
+  }
   if (req.query.debug === '1') {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
