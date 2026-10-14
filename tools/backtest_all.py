@@ -226,9 +226,9 @@ def sig_bounce(i):
     pu = V["p_up"][i]
     bdiv = V["bull_div"][i] or V["hidden_bull"][i]
     sdiv = V["bear_div"][i] or V["hidden_bear"][i]
-    if c >= s and c - s <= 0.75 * a and bdiv and (V["lw"][i] >= 0.20 or c > V["open"][i]) and V["h1_stack"][i] != -1 and pu >= 0.55:
+    if c >= s and c - s <= 0.75 * a and bdiv and (V["lw"][i] >= 0.20 or c > V["open"][i]) and V["h1_stack"][i] != -1 and pu >= bot.P4_AI_MIN:
         return 1
-    if c <= r and r - c <= 0.75 * a and sdiv and (V["uw"][i] >= 0.20 or c < V["open"][i]) and V["h1_stack"][i] != 1 and (1 - pu) >= 0.55:
+    if c <= r and r - c <= 0.75 * a and sdiv and (V["uw"][i] >= 0.20 or c < V["open"][i]) and V["h1_stack"][i] != 1 and (1 - pu) >= bot.P4_AI_MIN:
         return -1
     return 0
 
@@ -415,7 +415,7 @@ from version import APP_VERSION  # noqa: E402
 NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200 · SL 1.25 ATR · ออกเมื่อ MA5 ตัด MA20"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
-         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 55% · SL 1.0 / TP 2.0 ATR"),
+         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 58% · SL 1.0 / TP 2.0 ATR"),
          5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เลื่อน SL ทุก 5 จุด (50%/40%)"),
          6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100"),
          7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),

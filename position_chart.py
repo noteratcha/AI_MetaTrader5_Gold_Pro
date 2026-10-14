@@ -364,7 +364,7 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         else:
             word = {1: "เรียงขึ้น", -1: "เรียงลง", 0: "ไม่เรียง"}[ctx["h1_stack_dir"]]
             inds.append(_ind("H1 MA100 / 150 / 200", word, -1 if ctx["h1_stack_dir"] == -side else (1 if ctx["h1_stack_dir"] == side else 0),
-                             "ห้ามเรียงสวนทิศตอนเข้า · ห่างแนว ≤ 0.75 ATR · AI ≥ 55% · SL 1.0 / TP 2.0 ATR"))
+                             "ห้ามเรียงสวนทิศตอนเข้า · ห่างแนว ≤ 0.75 ATR · AI ≥ 58% · SL 1.0 / TP 2.0 ATR"))
             if rsic is not None:
                 inds.append(_ind("RSI(14) M15", f"{rsic:.1f}", _agree(rsic - 50, side), ""))
             divergence()

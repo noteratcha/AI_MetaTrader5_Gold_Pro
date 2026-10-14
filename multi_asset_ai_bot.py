@@ -162,9 +162,10 @@ P3_SL_ATR_MULT = 1.0
 P3_TP_ATR_MULT = 2.0
 # ไส้เทียนฝั่งที่กวาด 0.4–1.0 ATR (ไส้ยาวเกิน 1 ATR มักเป็นแท่งทะลุจริง) · AI ≥ 50% เสมอ (Divergence ไม่ช่วย)
 P3_WICK_MIN, P3_WICK_MAX = 0.40, 1.00
-# Plan 4 (7 ต.ค. 2026): AI ≥ 55% · ห่างแนวรับ/ต้าน ≤ 0.75 ATR · ห้ามเข้าเมื่อ H1 MA100/150/200 เรียงสวนทิศ · SL 1.0 / TP 2.0 ATR
+# Plan 4 (7 ต.ค. 2026): AI ≥ 58% (14 ต.ค.) · ห่างแนวรับ/ต้าน ≤ 0.75 ATR · ห้ามเข้าเมื่อ H1 MA100/150/200 เรียงสวนทิศ · SL 1.0 / TP 2.0 ATR
 # Backtest 2.5 ปี: กำไร 65 → 436 จุด, PF 1.02 → 1.56, Max DD 170 → 68
-P4_AI_MIN = 0.55
+# 14 ต.ค. 2026 (ผู้ใช้เลือก): AI 55% → 58% · Backtest 2.5 ปี: ไม้ 141 → 63, ชนะ 40% → 51%, กำไร +57 → +175, PF 1.11 → 1.89, DD 108 → 50 · บวกทุกปี
+P4_AI_MIN = 0.58
 P4_ZONE_ATR = 0.75
 P4_SL_ATR_MULT = 1.0
 P4_TP_ATR_MULT = 2.0
@@ -1866,8 +1867,8 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             p4_items.append({"name": "แท่งเด้งกลับ / ไส้ล่าง", "ok": c2, "desc": "แท่งเขียวหรือมีไส้ล่างปฏิเสธราคา" if c2 else "ยังไม่มีแท่งปฏิเสธราคา"})
             c3 = bull_div
             p4_items.append({"name": "Bullish Divergence", "ok": c3, "desc": "พบ RSI Bullish Divergence" if c3 else "ไม่พบ Bullish Divergence"})
-            c4 = ai_prob_up >= 0.51 and h1_stack_dir != -1
-            p4_items.append({"name": "AI ยืนยัน ≥51%", "ok": c4, "desc": f"AI UP {ai_prob_up:.1%} และ H1 ไม่ใช่ขาลง" if c4 else f"AI UP {ai_prob_up:.1%} หรือ H1 ขาลง"})
+            c4 = ai_prob_up >= P4_AI_MIN and h1_stack_dir != -1
+            p4_items.append({"name": f"AI ยืนยัน ≥{P4_AI_MIN:.0%}", "ok": c4, "desc": f"AI UP {ai_prob_up:.1%} และ H1 ไม่ใช่ขาลง" if c4 else f"AI UP {ai_prob_up:.1%} (ต้อง ≥{P4_AI_MIN:.0%}) หรือ H1 ขาลง"})
         else:
             c1 = (abs(resistance - cur_price) <= (atr_m15 * 1.0)) and (cur_price <= resistance)
             p4_items.append({"name": "ประชิดแนวต้าน (≤1 ATR)", "ok": c1, "desc": f"ห่างแนวต้าน {dist_res:,.2f} (≤{atr_m15:,.2f})" if c1 else f"ห่างแนวต้าน {dist_res:,.2f} (>1 ATR)"})
@@ -1875,8 +1876,8 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             p4_items.append({"name": "แท่งเด้งกลับ / ไส้บน", "ok": c2, "desc": "แท่งแดงหรือมีไส้บนปฏิเสธราคา" if c2 else "ยังไม่มีแท่งปฏิเสธราคา"})
             c3 = bear_div
             p4_items.append({"name": "Bearish Divergence", "ok": c3, "desc": "พบ RSI Bearish Divergence" if c3 else "ไม่พบ Bearish Divergence"})
-            c4 = ai_prob_down >= 0.51 and h1_stack_dir != 1
-            p4_items.append({"name": "AI ยืนยัน ≥51%", "ok": c4, "desc": f"AI DOWN {ai_prob_down:.1%} และ H1 ไม่ใช่ขาขึ้น" if c4 else f"AI DOWN {ai_prob_down:.1%} หรือ H1 ขาขึ้น"})
+            c4 = ai_prob_down >= P4_AI_MIN and h1_stack_dir != 1
+            p4_items.append({"name": f"AI ยืนยัน ≥{P4_AI_MIN:.0%}", "ok": c4, "desc": f"AI DOWN {ai_prob_down:.1%} และ H1 ไม่ใช่ขาขึ้น" if c4 else f"AI DOWN {ai_prob_down:.1%} (ต้อง ≥{P4_AI_MIN:.0%}) หรือ H1 ขาขึ้น"})
 
         m4 = sum(1 for it in p4_items if it["ok"])
         results["P4"] = {
