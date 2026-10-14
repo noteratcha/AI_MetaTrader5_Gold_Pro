@@ -298,6 +298,7 @@ class ProfileManagerDialog(ctk.CTkToplevel):
     def _unique_magic(self):
         """Magic ที่ไม่ซ้ำกับ Profile อื่น — เริ่มจากค่าคำนวณตามชื่อ Profile"""
         used = {inf["magic"] for n, (_s, _b, inf) in self._rows.items() if n != self._active_prof}
+        used |= getattr(self, "_hidden_magics", set())
         m = 888000 + sum(ord(c) for c in self._active_prof) % 900
         while m in used or m == 0:
             m += 1
@@ -328,6 +329,16 @@ class ProfileManagerDialog(ctk.CTkToplevel):
         self._rows = {}
         names = list_profiles()
         infos = {n: _profile_info(n) for n in names}
+        # Profile ที่ใช้ Magic เดียวกับ default = ซ้ำกับ default → ซ่อนจากรายการ (ผู้ใช้สั่ง 14 ต.ค. 2026)
+        # ยกเว้นตอนที่ Profile นั้นเปิดอยู่ / เป็นหน้าต่างนี้ (ต้องเห็นสถานะจริง)
+        hidden = []
+        if "default" in infos:
+            dm = infos["default"]["magic"]
+            hidden = [n for n in names if n != "default" and infos[n]["magic"] == dm
+                      and n != self._active_prof and not instance_guard.is_profile_running(n)]
+        self._hidden_magics = {infos[n]["magic"] for n in hidden}
+        names = [n for n in names if n not in hidden]
+        infos = {n: infos[n] for n in names}
         by_magic, by_term = {}, {}
         for n, inf in infos.items():
             by_magic.setdefault(inf["magic"], []).append(n)
