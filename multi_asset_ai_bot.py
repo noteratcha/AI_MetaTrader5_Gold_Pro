@@ -190,6 +190,11 @@ _p9_cache = {}   # {sym: (เวลาแท่ง H1 ปิดล่าสุ�
 # Plan 10 (13 ต.ค. 2026): RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 · SL 2 / TP 3 ATR H1 · ถือไม่เกิน 48 ชม. — กฎใน rsi_plan.py
 import rsi_plan
 P10_NAME = rsi_plan.NAME
+# Plan 11 (15 ต.ค. 2026): เข้าไม้ทันทีเมื่อค่าจริงข่าว USD ออก (แนวโน้มคาด/ก่อน + ค่าจริงยืนยัน · หักกลบหลายข่าว)
+# SL 3 ATR M15 · ไม่ตั้ง TP · ถือ 8 ชม. — กฎใน news_plan.py · ข่าวสดจาก EA GoldBot24_NewsBridge ใน MT5
+import news_plan
+P11_NAME = news_plan.NAME
+_p11_done = set()        # เวลาข่าว (UTC) ที่ตัดสินไปแล้ว — กันเข้าซ้ำ
 MANUAL_SL_ATR = 1.0   # ไม้ที่เข้าเองไม่มี SL → บอทตั้ง SL 1.0 ATR M15 (เท่าค่าเริ่มต้นของหน้าต่างเข้าไม้เอง)
 P6_SAR = (0.01, 0.1)
 P6_SAR_FAST = (0.02, 0.2)
@@ -2064,6 +2069,30 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             "disabled_reason": plan_config.disabled_reason(P10_NAME)
         }
 
+        # ===== Plan 11: News-USD =====
+        now_u = datetime.now(timezone.utc)
+        live = news_plan.read_live()
+        age = news_plan.bridge_age()
+        ng = news_plan.next_group(live, now_u) if live else None
+        net11 = ng[1] if ng else 0
+        p11_side = "BUY" if net11 > 0 else "SELL"
+        p11_items = [
+            {"name": "EA สะพานข่าวใน MT5", "ok": news_plan.bridge_ok(),
+             "desc": (f"เชื่อมต่อ · อัปเดต {age:.0f} วิที่แล้ว" if news_plan.bridge_ok() else
+                      "ยังไม่ทำงาน — ใน MT5 ลาก Expert Advisors › GoldBot24 › GoldBot24_NewsBridge ไปวางบนกราฟ (EA ไม่ส่งออเดอร์)")},
+            {"name": "ข่าว USD ถัดไปที่แผนใช้", "ok": ng is not None,
+             "desc": (f"{thai_time.from_epoch(ng[0].timestamp(), '%d/%m %H:%M')} น. · " + " · ".join(f"{news_plan.TH.get(c, c)} {'▲' if l > 0 else '▼'}" for c, l in ng[2])) if ng else "ไม่มีข่าวที่ใช้ได้ในปฏิทินช่วงนี้"},
+            {"name": "แนวโน้มก่อนข่าว (คาด เทียบ ก่อน)", "ok": net11 != 0,
+             "desc": (f"รวม {'+' if net11 > 0 else ''}{net11} → รอค่าจริงยืนยัน {p11_side} แล้วเข้าทันที · SL 3 ATR · ไม่ตั้ง TP · ถือ 8 ชม." if net11 else "แนวโน้มหักกลบเป็น 0 — ถ้าค่าจริงไม่ยืนยันฝั่งใดจะไม่เข้า")},
+        ]
+        m11 = sum(1 for it in p11_items if it["ok"])
+        results["P11"] = {
+            "name": P11_NAME, "label": "P11 · News", "side": p11_side,
+            "matched": m11, "total": 3, "pct": int(m11 / 3 * 100), "items": p11_items,
+            "enabled": plan_config.is_enabled(P11_NAME),
+            "disabled_reason": plan_config.disabled_reason(P11_NAME)
+        }
+
         for key, name, label, items in (("P7", P7_NAME, "P7 · H4 (BB)", p78_items + [h4_item]),
                                          ("P8", P8_NAME, "P8 · H4 (Free)", list(p78_items))):
             mk = sum(1 for it in items if it["ok"])
@@ -2094,7 +2123,7 @@ def print_plans_condition_status(symbol: str = None):
 
         print(f"\n{Colors.CYAN}{Colors.BOLD}[PLAN STATUS] ความพร้อมเงื่อนไขการเข้าไม้แต่ละแผน ({symbol} @ {price:,.2f}){Colors.RESET}")
 
-        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"]
+        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11"]
         for pk in plan_order:
             info = status_map.get(pk)
             if not info:
@@ -2133,10 +2162,10 @@ def print_plans_condition_status(symbol: str = None):
         print(f"[WARN] ไม่สามารถแสดงสถานะเงื่อนไขแผน: {e}")
 
 
-def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
+def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce", lot_mult=1):
     info = mt5.symbol_info(symbol)
     filling_type = get_filling_type(info)
-    volume = get_valid_lot(info)
+    volume = get_valid_lot(info, current_lot() * max(1, int(lot_mult)))
     # ตรวจสอบ Margin ก่อนส่งคำสั่งซื้อขาย (Margin Pre-check Guard)
     try:
         acc = mt5.account_info()
@@ -2232,6 +2261,60 @@ def send_order(symbol, order_type, price, sl, tp, plan_name="SR-SwingBounce"):
         err_msg = res.comment if res is not None else "No response from MT5"
         err_code = res.retcode if res is not None else -1
         print(f"{Colors.RED}[FAILED - AUTO TRADE {symbol}] {err_msg} (Code: {err_code}){Colors.RESET}")
+
+def p11_fast_check():
+    """Plan 11: เรียกจากลูปนับถอยหลังทุก ~1 วินาที — ค่าจริงข่าว USD ออกแล้วยืนยันแนวโน้ม → เข้าไม้ทันที"""
+    try:
+        data = news_plan.read_live()
+        if not data:
+            return
+        sig = news_plan.pending_signal(data, datetime.now(timezone.utc), _p11_done)
+        if not sig:
+            return
+        _p11_done.add(sig["time"])
+        sym = TRADE_SYMBOLS[0]
+        detail = news_plan.describe(sig["detail"])
+        th_time = thai_time.from_epoch(sig["time"].timestamp(), "%H:%M")
+        if not sig["dir"]:
+            print(f"{Colors.YELLOW}[PLAN 11] ข่าว {th_time} น. ไม่ยืนยัน / หักกลบเป็น 0 — ไม่เข้าไม้ · {detail}{Colors.RESET}")
+            log_signal_event(sym, 'ZONE_ALERT', P11_NAME, 'N/A', 0.0, 0.5, 0.5, 'N/A', 'None', 'NO_SIGNAL', detail, throttle_secs=0)
+            return
+        side = 'BUY' if sig["dir"] > 0 else 'SELL'
+        if not plan_config.is_enabled(P11_NAME):
+            why = plan_config.disabled_reason(P11_NAME)
+            who = {"admin": "ผู้ดูแลระบบ", "member": "ระบบ — แผนนี้ใช้ได้เฉพาะสมาชิกรายเดือน"}.get(why, "คุณ (ยังไม่ได้เลือกใช้แผนนี้)")
+            print(f"{Colors.YELLOW}[PLAN DISABLED] {sym} {P11_NAME} ถูกปิดโดย{who} — ข้ามสัญญาณข่าว {side} ×{sig['mult']} · {detail}{Colors.RESET}")
+            return
+        if last_exit_time.get(sym, 0) > time.time():      # Circuit Breaker (เก็บเป็นเวลาในอนาคต)
+            print(f"{Colors.YELLOW}[PLAN 11] {sym} อยู่ในช่วง Circuit Breaker — ข้ามสัญญาณข่าว {side}{Colors.RESET}")
+            return
+        acc = mt5.account_info()
+        if acc is not None and plan_config.account_usd(acc) < plan_config.MIN_BALANCE_USD:
+            print(f"{Colors.YELLOW}[MIN BALANCE] ยอดเงินต่ำกว่าขั้นต่ำ — ข้ามสัญญาณข่าว {side}{Colors.RESET}")
+            return
+        all_pos = mt5.positions_get() or ()
+        if acc is not None and len(all_pos) >= plan_config.max_positions(float(acc.balance), current_lot()):
+            print(f"{Colors.YELLOW}[MAX POSITIONS] {sym} ไม้เต็มเพดาน — ข้ามสัญญาณข่าว {side}{Colors.RESET}")
+            return
+        if any(plan_config.base_plan(getattr(op, 'comment', '')) == P11_NAME for op in all_pos):
+            print(f"{Colors.YELLOW}[PLAN 11] {sym} มีไม้ข่าวเปิดอยู่แล้ว (แผนละ 1 ไม้) — ข้ามสัญญาณข่าว {side}{Colors.RESET}")
+            return
+        tick = mt5.symbol_info_tick(sym)
+        info = mt5.symbol_info(sym)
+        df = get_data(sym, TIMEFRAME, 40)
+        if tick is None or info is None or df is None or len(df) < 20:
+            return
+        atr = float(_atr_series(df).iloc[-2])           # ATR M15 ของแท่งที่ปิดก่อนข่าว
+        price = tick.ask if sig["dir"] > 0 else tick.bid
+        sl = round(price - sig["dir"] * news_plan.SL_ATR * atr, info.digits)
+        print(f"{Colors.GREEN if sig['dir'] > 0 else Colors.RED}[SIGNAL] {sym} {P11_NAME}: ข่าว {th_time} น. ยืนยัน {side} ×{sig['mult']} "
+              f"(ค่าจริงมาถึง {sig['age']:.0f} วิหลังข่าวออก) -> SENDING {side} ORDER (SL 3 ATR={sl:.{info.digits}f} · NO TP · max {news_plan.HOLD_HOURS}h) · {detail}{Colors.RESET}")
+        ok = send_order(sym, mt5.ORDER_TYPE_BUY if sig["dir"] > 0 else mt5.ORDER_TYPE_SELL, price, sl, 0.0, plan_name=P11_NAME, lot_mult=sig["mult"])
+        log_signal_event(sym, 'ENTRY_SIGNAL', P11_NAME, side, price, 0.5, 0.5, 'N/A', 'None', 'ORDER_SENT' if ok else 'ORDER_FAILED',
+                         f"x{sig['mult']} | SL: {sl:.{info.digits}f} | delay {sig['age']:.0f}s | {detail}", throttle_secs=0)
+    except Exception as e:
+        print(f"{Colors.RED}[PLAN 11 ERROR] {e}{Colors.RESET}")
+
 
 def close_position(position, comment="AI Reversal Close"):
     global consecutive_loss, last_loss_plan
@@ -2481,6 +2564,14 @@ def main():
 
     # ตรวจสอบและลบประวัติที่เก่าเกิน 1 ปี (Data Retention Policy: 365 Days)
     prune_old_csv_records(days=365)
+
+    # Plan 11: คัดลอก EA สะพานข่าวไปที่ MT5 (ผู้ใช้ลากไปวางบนกราฟเอง 1 ครั้ง)
+    try:
+        _ti = mt5.terminal_info()
+        if news_plan.install_bridge(getattr(_ti, "data_path", "")) and not news_plan.bridge_ok() and plan_config.is_enabled(P11_NAME):
+            print(f"{Colors.YELLOW}[PLAN 11] EA สะพานข่าวยังไม่ทำงาน — ใน MT5 เปิด Navigator › Expert Advisors › GoldBot24 แล้วลาก GoldBot24_NewsBridge ไปวางบนกราฟ (EA ไม่ส่งออเดอร์){Colors.RESET}")
+    except Exception:
+        pass
         
     # เริ่มต้นเธรดสตรีมข้อมูลขึ้น Supabase แบบ Real-time ทุก 5 วินาที (เริ่มครั้งเดียวต่อโปรเซส)
     global _telemetry_thread
@@ -3867,6 +3958,15 @@ def main():
                                 close_position(pos, comment=f"P10 Time Exit {rsi_plan.HOLD_HOURS}h")
                             continue
 
+                        # 0.37 Plan 11 (News-USD): ถือไม่เกิน 8 ชม. · ไม่ตั้ง TP · ไม่เลื่อน SL / AI Reversal / ล็อกกำไร (ตรงกับ Backtest)
+                        if pos.comment.startswith(P11_NAME):
+                            if tick is not None and int(tick.time) - int(pos.time) >= news_plan.HOLD_HOURS * 3600:
+                                p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
+                                print(f"{Colors.YELLOW}[PLAN 11 EXIT] {sym} ถือครบ {news_plan.HOLD_HOURS} ชม. — ปิดไม้ Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                log_signal_event(sym, 'POSITION_MGMT', P11_NAME, 'SELL' if pos.type == mt5.ORDER_TYPE_BUY else 'BUY', tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'TIME_EXIT', f'Held {news_plan.HOLD_HOURS}h (Profit: ${pos.profit:.2f})')
+                                close_position(pos, comment=f"P11 Time Exit {news_plan.HOLD_HOURS}h")
+                            continue
+
                         # 1. เช็คเงื่อนไขการตัดขาดทุนเมื่อทิศทางเปลี่ยน (AI Dynamic Exit พร้อม Whipsaw Protection)
                         if pos.type == mt5.ORDER_TYPE_BUY and prob[0] >= 0.60 and (tick.bid < pos.price_open):
                             print(f"{Colors.YELLOW}[AI REVERSAL] {sym} Reversal detected! AI DOWN ({prob[0]:.2%}). Closing BUY position.{Colors.RESET}")
@@ -3969,6 +4069,7 @@ def main():
                 if not BOT_RUNNING_FLAG or BOT_PAUSED_FLAG:
                     break
                 print(f"\r[AI SCANNER] Next market scan in {sec:02d}s... (Press Ctrl+C to stop)  ", end="", flush=True)
+                p11_fast_check()   # Plan 11: ค่าจริงข่าวออก → เข้าไม้ทันที (ไม่รอรอบสแกน 20 วิ)
                 time.sleep(1)
             print("\r" + " " * 85 + "\r", end="", flush=True)
             

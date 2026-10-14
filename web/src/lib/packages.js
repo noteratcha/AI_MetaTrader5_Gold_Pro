@@ -59,4 +59,5 @@ export const PLAN_LIST = [
   { key: 'BB-H4-Free', label: 'P8 · BB-H4 Free', tag: 'BB H4 + Divergence · ไม่กรอง H4' },
   { key: 'Fib-H1-Counter', label: 'P9 · Fib H1', tag: 'Fibonacci 0.3 · สวนเทรนด์ใหญ่ H1' },
   { key: 'RSI-H1-Trend', label: 'P10 · RSI H1', tag: 'RSI 30/70 · ตามเทรนด์ MA200' },
+  { key: 'News-USD', label: 'P11 · News', tag: 'ข่าว USD · เข้าทันทีเมื่อค่าจริงยืนยัน' },
 ];

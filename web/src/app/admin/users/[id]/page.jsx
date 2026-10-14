@@ -22,6 +22,7 @@ const PLAN_ROWS = [
   'Plan 8: BB-H4-Free',
   'Plan 9: Fib-H1-Counter',
   'Plan 10: RSI-H1-Trend',
+  'Plan 11: News-USD',
 ];
 
 export default function AdminUserDetailPage() {

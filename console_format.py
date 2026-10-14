@@ -172,7 +172,7 @@ class ConsoleFormatter:
             return [(f"📡 {t}  {price} · AI ↑{up} ↓{down} · {h4_clean} · {status}\n", "scan", "detail")]
 
         # แสดงรายการสถานะความสำเร็จเงื่อนไขแต่ละแผน
-        if re.match(r"^[•*]?\s*P(?:10|[1-9])\b", line):
+        if re.match(r"^[•*]?\s*P(?:1[01]|[1-9])\b", line):
             if "100%" in line:
                 tag = "profit"
             elif "▲ BUY" in line or "[BUY]" in line or "BUY" in line:

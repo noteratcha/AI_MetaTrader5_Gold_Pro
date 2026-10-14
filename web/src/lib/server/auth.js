@@ -139,7 +139,7 @@ export function toUserPayload(row) {
     isAdmin,
     disabled: isDisabledRow(row),
     registeredAt: registeredTag ? registeredTag.slice('registered:'.length) : null,
-    // สมาชิกรายเดือน (ปลดล็อก P6–P10) · แอดมินใช้ได้ทุกแผนเสมอ (viaAdmin)
+    // สมาชิกรายเดือน (ปลดล็อก P6–P11) · แอดมินใช้ได้ทุกแผนเสมอ (viaAdmin)
     membership: (() => {
       const m = memberInfo(rowTags(row));
       return !m.active && isAdmin ? { ...m, active: true, viaAdmin: true } : m;

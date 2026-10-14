@@ -44,4 +44,5 @@ export const PLAN_SHORT = {
   'Plan 8: BB-H4-Free': 'P8 · BB-H4 Free',
   'Plan 9: Fib-H1-Counter': 'P9 · Fib H1',
   'Plan 10: RSI-H1-Trend': 'P10 · RSI H1',
+  'Plan 11: News-USD': 'P11 · News',
 };

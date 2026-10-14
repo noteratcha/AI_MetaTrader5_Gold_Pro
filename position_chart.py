@@ -39,6 +39,7 @@ PLANS = (  # (ขึ้นต้น comment, key, ชื่อสั้น) — 
     ("PSAR", "P6", "P6 · SAR H1"),
     ("Fib-H1", "P9", "P9 · Fib H1"),
     ("RSI-H1", "P10", "P10 · RSI H1"),
+    ("News-USD", "P11", "P11 · News"),
     ("BB-H4-Free", "P8", "P8 · BB-H4 Free"),   # ต้องมาก่อน BB-H4 (P7)
     ("BB-H4", "P7", "P7 · BB-H4"),
 )

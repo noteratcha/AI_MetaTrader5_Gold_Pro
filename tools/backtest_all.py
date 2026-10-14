@@ -1,6 +1,6 @@
 """Backtest ทุกแผนตามกฎปัจจุบัน บนข้อมูล MT5 จริง (XAUUSD) แล้วบันทึกผลเป็น web/public/backtest.json ให้หน้า /backtest
 วิธีใช้: เปิด MT5 ค้างไว้ แล้วรัน  python tools/backtest_all.py  (ประมาณ 3–4 นาที) จากนั้น deploy เว็บ
-P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free · P9 Fib H1 · P10 RSI H1
+P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free · P9 Fib H1 · P10 RSI H1 · P11 News
 - AI: Walk-forward (เทรน 5000 แท่ง M15 → ทายแท่งถัดไป 500 แท่ง แล้วเลื่อน) ด้วย build_ai_features / AI_FEATURES ของบอท
 - ข้อมูลที่ใช้ตัดสินใจ = แท่งที่ปิดแล้ว (เข้าไม้ที่ราคาเปิดแท่งถัดไป) · หักสเปรด 0.35 จุด/ไม้ · 1 ไม้ต่อแผนในเวลาเดียวกัน
 - ไม่จำลอง: Cooldown, Circuit Breaker, Loss Block, การแย่งเข้าไม้ระหว่างแผน
@@ -405,6 +405,67 @@ def sim_rsi(df):
 
 
 rows.append(stats("P10 RSI H1", keep(10, sim_rsi(h1))))
+
+
+# ---------------------------------------------------------------- Plan 11: News-USD (Tick จริง · ปฏิทิน MetaQuotes)
+import news_plan  # noqa: E402
+import thai_time  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+P11_LATENCY = 10   # วินาทีหลังข่าวออก (ค่าจริงมาถึง + ส่งออเดอร์) — ใช้ค่ากลางที่สมจริง ไม่ใช่ 2 วิ
+
+
+def sim_news():
+    """กฎจาก news_plan.decide (ตัวเดียวกับบอท) · เข้า Tick แรกหลังข่าว P11_LATENCY วิ (BUY=Ask / SELL=Bid)
+    15 นาทีแรกตรวจ SL ทุก Tick แล้วต่อด้วยแท่ง M15 · SL 3 ATR M15 ก่อนข่าว · ไม่ตั้ง TP · ถือ 8 ชม. · ผลคูณจำนวน Lot"""
+    mt5.initialize()
+    ti = mt5.terminal_info()
+    path = os.path.join(ti.data_path, "MQL5", "Files", "goldbot24_calendar_usd.csv") if ti else ""
+    if not os.path.isfile(path):
+        print("P11: ไม่พบ goldbot24_calendar_usd.csv — รันสคริปต์ GoldBot24_CalendarExport ใน MT5 ก่อน (ข้าม P11)")
+        mt5.shutdown()
+        return []
+    cal = pd.read_csv(path, sep="	", encoding="cp874", encoding_errors="replace")
+    cal = cal[cal.code.isin(news_plan.CODES) & cal.actual.notna() & cal.forecast.notna() & cal.prev.notna()]
+    t15 = m15.time.values.astype("datetime64[s]").astype("int64")   # เวลาเซิร์ฟเวอร์ (วินาที)
+    o_, h_, l_, c_ = m15.open.values, m15.high.values, m15.low.values, m15.close.values
+    a_ = A(m15).values
+    out = []
+    for ts, g in cal.groupby("time_server"):
+        d, mult, _ = news_plan.decide([(r.code, r.actual, r.forecast, r.prev) for r in g.itertuples()])
+        if not d:
+            continue
+        utc = pd.Timestamp(ts.replace(".", "-")).tz_localize("UTC").timestamp()
+        srv = int(utc) + int(thai_time.eu_offset(utc))
+        i = int(np.searchsorted(t15, srv))
+        if i >= len(t15) - 40 or t15[i] != srv or i < 20:
+            continue
+        tk = mt5.copy_ticks_range("XAUUSD", datetime.fromtimestamp(srv - 5, timezone.utc), datetime.fromtimestamp(srv + 15 * 60, timezone.utc), mt5.COPY_TICKS_ALL)
+        if tk is None or not len(tk):
+            continue
+        tk = pd.DataFrame(tk)
+        tk = tk[tk.time_msc >= (srv + P11_LATENCY) * 1000]
+        if not len(tk):
+            continue
+        e = float(tk.ask.iloc[0] if d > 0 else tk.bid.iloc[0])
+        sl = e - d * news_plan.SL_ATR * a_[i - 1]
+        pnl = None
+        for px in (tk.bid.values if d > 0 else tk.ask.values):
+            if (px - sl) * d <= 0:
+                pnl = (sl - e) * d
+                break
+        end = i + 1 + news_plan.HOLD_HOURS * 4
+        if pnl is None:
+            for j in range(i + 1, end):
+                if (l_[j] <= sl) if d > 0 else (h_[j] >= sl):
+                    pnl = (sl - e) * d
+                    break
+        if pnl is None:
+            pnl = (c_[end - 1] - e) * d - 0.25
+        out.append(dict(time=pd.Timestamp(srv, unit="s"), pnl=pnl * mult))
+    mt5.shutdown()
+    return out
+
+rows.append(stats("P11 News", keep(11, sim_news())))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
 print(pd.DataFrame(rows).to_string(index=False))
@@ -421,9 +482,10 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · �
          7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),
          8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด"),
          9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · ADX > 20 + MACD ยังไม่หันตามทิศไม้ · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)"),
-         10: ("Plan 10", "RSI-H1-Trend", "RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 (ซื้อ Oversold ในขาขึ้น / ขาย Overbought ในขาลง) · SL 2 ATR · TP 3 ATR · ถือไม่เกิน 48 ชม.")}
+         10: ("Plan 10", "RSI-H1-Trend", "RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 (ซื้อ Oversold ในขาขึ้น / ขาย Overbought ในขาลง) · SL 2 ATR · TP 3 ATR · ถือไม่เกิน 48 ชม."),
+         11: ("Plan 11", "News-USD", "ข่าว USD: คาดเทียบครั้งก่อนบอกแนวโน้มทอง → ค่าจริงไม่สวน = ยืนยัน → เข้าทันที (Tick จริง เข้า 10 วิหลังข่าว) · ข่าวพร้อมกันหักกลบ Lot ≤ 3 เท่า · SL 3 ATR M15 · ไม่ตั้ง TP · ถือ 8 ชม.")}
 plans_out, events = [], []
-for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
+for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
     tr = ALL[k]
     st = stats(NAMES[k][1], tr)
     df_t = pd.DataFrame(tr)
@@ -435,7 +497,7 @@ for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
             events.append((pd.Timestamp(x["time"]), k, float(x["pnl"])))
     plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly))
 events.sort(key=lambda e: e[0])
-eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)}
+eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)}
 total = 0.0
 for t, k, pnl in events:
     cum[k] += pnl; total += pnl
