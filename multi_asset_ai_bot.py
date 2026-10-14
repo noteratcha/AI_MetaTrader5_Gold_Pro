@@ -1231,11 +1231,10 @@ def _extract_sr_zones(df, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=SR_Z
         subsequent_bars = d.loc[last_idx + 1:] if last_idx in d.index else None
         used_hits = 0
         if subsequent_bars is not None and len(subsequent_bars) > 0:
-            is_res = z['high_cnt'] >= z['low_cnt']
-            if is_res:
-                used_hits = int((subsequent_bars['high'] >= z['price'] - 0.25 * atr).sum())
-            else:
-                used_hits = int((subsequent_bars['low'] <= z['price'] + 0.25 * atr).sum())
+            # 14 ต.ค. 2026: นับเฉพาะแท่งที่วิ่งผ่านโซนจริง (ช่วงแท่งคร่อมแนว ±0.25 ATR)
+            # เดิมนับทุกแท่งที่อยู่ฝั่งเดียวกับแนว → แนวรับที่หลุดแล้ว (ราคาอยู่ใต้ตลอด) ถูกนับเป็น "พาดผ่าน" หลายร้อยครั้ง
+            zp = z['price']
+            used_hits = int(((subsequent_bars['low'] <= zp + 0.25 * atr) & (subsequent_bars['high'] >= zp - 0.25 * atr)).sum())
 
         z['used_hits'] = used_hits
         z['mitigated'] = bool(used_hits > 0 or n >= 2)
@@ -1367,29 +1366,50 @@ def find_sr_levels(df, price, lookback=SR_LOOKBACK_BARS, k=SR_PIVOT_K, zone_atr=
     #   4. Role Purity: แนวรับต้องมี Low touches และแนวต้านต้องมี High touches
     #   5. Minimum Quality: คัดกรองโซนขยะที่มีคะแนนต่ำเรี่ยดิน (stars < 2.2) ออก
     # =========================================================================
+    def _flip_start(sub, p, down):
+        """ตำแหน่งแท่งที่ 2 ที่ปิดทะลุแนวชัดเจน (> 0.35 ATR) — แนวรับหลุดลง (down) / แนวต้านทะลุขึ้น · ไม่มี = None"""
+        if sub is None or len(sub) == 0:
+            return None
+        hit = (sub['close'] < p - 0.35 * atr) if down else (sub['close'] > p + 0.35 * atr)
+        idx = hit[hit].index
+        return idx[1] if len(idx) >= 2 else None
+
     def _filter_clean_sr(zones_pool, side):
         clean = []
         for z in zones_pool:
             p = z['price']
             u = z.get('used_hits', 0)
             s = z.get('stars', 0.0)
-            if s < 2.2:
+            # แนวที่ถูกทดสอบตั้งแต่ 3 ครั้งขึ้นไปเป็นระดับที่เห็นชัดบนกราฟ — ไม่ตัดทิ้งเพราะดาวต่ำ (14 ต.ค. 2026)
+            if s < 2.2 and z.get('touches', 1) < 3:
                 continue
             if u >= 15:
                 continue
             last_idx = z.get('last_idx', 0)
             sub = df.loc[last_idx + 1:] if last_idx in df.index else None
             if side == 'SUP':
-                if (price - p) < 0.15 * atr or z.get('low_cnt', 0) == 0:
+                if (price - p) < 0.15 * atr:
                     continue
-                if sub is not None and len(sub) > 0:
+                if z.get('low_cnt', 0) == 0:
+                    # แนวต้านเดิมที่ถูกทะลุขึ้น → กลายเป็นแนวรับ (Polarity Flip) · ต้องไม่ถูกปิดหลุดลงอีกหลังทะลุ
+                    f = _flip_start(sub, p, down=False)
+                    if f is None or int((df.loc[f + 1:]['close'] < p - 0.35 * atr).sum()) >= 2:
+                        continue
+                    z['flip'] = True
+                elif sub is not None and len(sub) > 0:
                     breaches = int((sub['close'] < p - 0.35 * atr).sum())
                     if breaches >= 2 and z.get('min_age', 0) > 8:
                         continue
             else:
-                if (p - price) < 0.15 * atr or z.get('high_cnt', 0) == 0:
+                if (p - price) < 0.15 * atr:
                     continue
-                if sub is not None and len(sub) > 0:
+                if z.get('high_cnt', 0) == 0:
+                    # แนวรับเดิมที่ถูกปิดหลุดลง → กลายเป็นแนวต้าน (Polarity Flip) · ต้องไม่ถูกปิดทะลุขึ้นอีกหลังหลุด
+                    f = _flip_start(sub, p, down=True)
+                    if f is None or int((df.loc[f + 1:]['close'] > p + 0.35 * atr).sum()) >= 2:
+                        continue
+                    z['flip'] = True
+                elif sub is not None and len(sub) > 0:
                     breaches = int((sub['close'] > p + 0.35 * atr).sum())
                     if breaches >= 2 and z.get('min_age', 0) > 8:
                         continue
