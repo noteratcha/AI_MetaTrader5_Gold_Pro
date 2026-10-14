@@ -7471,7 +7471,7 @@ class MainTradingApp(ctk.CTk):
                 HoverTip(act_lbl, "ตัวเลขจริงจาก FRED (ธนาคารกลางสหรัฐ สาขาเซนต์หลุยส์) เทียบตัวเลขคาด · "
                                   + ("สูง/ต่ำกว่าคาดในทางที่ดอลลาร์อ่อน → ทองมักขึ้น" if sp > 0 else
                                      "สูง/ต่ำกว่าคาดในทางที่ดอลลาร์แข็ง → ทองมักลง" if sp < 0 else "ออกตามคาด หรือข่าวประเภทนี้ไม่มีกฎ"))
-            elif ev["currency"] == "USD" and past and news_impact.classify(ev["title"]) in ("usd_up", "usd_down"):
+            elif ev.get("fred") and past:   # ข่าวที่ FRED ให้ค่าจริงได้ แต่ยังไม่อัปเดต
                 ctk.CTkLabel(self.cal_list, text="จริง —", font=self._font(11), text_color=COLOR_TEXT_MUTED, fg_color=bg, width=84, anchor="e").grid(row=row, column=6, padx=4)
             row += 1
 
@@ -8202,6 +8202,9 @@ class MainTradingApp(ctk.CTk):
                 if self._ui_tick % 30 == 0:      # ~15 วินาที (ตัวนับถอยหลังข่าว)
                     self._render_next_news()
                 if self._ui_tick % 3600 == 0:    # ~30 นาที
+                    self._refresh_calendar_async(force=True)
+                elif self._ui_tick % 120 == 0 and econ_calendar.awaiting_actual(self._calendar_events):
+                    # ข่าว USD เพิ่งออกแต่ยังไม่มีตัวเลขจริง → โหลดใหม่ทุก ~1 นาที (สูงสุด 3 ชม. · ผู้ใช้สั่ง 14 ต.ค. 2026)
                     self._refresh_calendar_async(force=True)
 
         except Exception as e:

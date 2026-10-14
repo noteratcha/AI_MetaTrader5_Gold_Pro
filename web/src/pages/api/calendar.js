@@ -3,11 +3,11 @@
 // ค่าจริง (actual): feed ForexFactory ไม่มี → คำนวณจากข้อมูลทางการสหรัฐบน FRED (ฟรี · env FRED_API_KEY)
 //   เฉพาะข่าว USD ที่มีซีรีส์ตรงกัน (CPI · PPI · ยอดค้าปลีก · การจ้างงาน · Claims · PCE · GDP · ฯลฯ)
 //   ใช้ค่าล่าสุดเมื่อ FRED อัปเดตตั้งแต่วันที่ข่าวออก (realtime_start) — ยังไม่อัปเดต = ยังไม่แสดง
-//   ช่วง 3 ชม. หลังข่าวออกที่ยังไม่มีค่าจริง ดึงใหม่ทุก 5 นาที
+//   ช่วง 3 ชม. หลังข่าวออกที่ยังไม่มีค่าจริง ดึงใหม่ทุก 1 นาที (โปรแกรมโหลดปฏิทินทุก 1 นาทีช่วงนี้ · ผู้ใช้สั่ง 14 ต.ค. 2026)
 const FEED_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 const FRED_URL = 'https://api.stlouisfed.org/fred/series/observations';
 const CACHE_MS = 30 * 60 * 1000;
-const FAST_MS = 5 * 60 * 1000;
+const FAST_MS = 60 * 1000;
 const SERIES_MS = 6 * 60 * 60 * 1000;
 
 let cache = { events: null, fetchedAt: 0 };
@@ -130,12 +130,14 @@ async function fillActuals(events) {
   await Promise.all([...need].map(async ([id, force]) => got.set(id, await fredSeries(id, force))));
   return events.map((e) => {
     const spec = fredSpec(e);
-    if (!spec || new Date(e.date).getTime() > now) return e;
-    return { ...e, actual: computeActual(e, spec, got.get(spec[1])) };
+    if (!spec) return e;
+    // fred: true = ข่าวนี้จะมีค่าจริงจาก FRED (โปรแกรมโหลดถี่เฉพาะข่าวเหล่านี้)
+    if (new Date(e.date).getTime() > now) return { ...e, fred: true };
+    return { ...e, fred: true, actual: computeActual(e, spec, got.get(spec[1])) };
   });
 }
 
-/** ข่าวที่ออกแล้วใน 3 ชม. แต่ยังไม่มีค่าจริง → ให้ CDN เก็บแค่ 5 นาที */
+/** ข่าวที่ออกแล้วใน 3 ชม. แต่ยังไม่มีค่าจริง → ให้ CDN เก็บแค่ 1 นาที */
 function waitingActual(events) {
   const now = Date.now();
   return events.some((e) => {
@@ -165,7 +167,7 @@ export default async function handler(req, res) {
   }
 
   const events = await fillActuals(cache.events);
-  res.setHeader('Cache-Control', `public, s-maxage=${waitingActual(events) ? 300 : 1800}, stale-while-revalidate=86400`);
+  res.setHeader('Cache-Control', waitingActual(events) ? 'public, s-maxage=60' : 'public, s-maxage=1800, stale-while-revalidate=86400');
   return res.status(200).json({
     success: true,
     updatedAt: new Date(cache.fetchedAt).toISOString(),

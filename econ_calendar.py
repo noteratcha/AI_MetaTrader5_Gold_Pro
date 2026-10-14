@@ -59,6 +59,7 @@ def _normalize(raw: dict):
         "forecast": str(raw.get("forecast") or ""),
         "previous": str(raw.get("previous") or ""),
         "actual": str(raw.get("actual") or ""),   # ค่าจริงจาก FRED ผ่าน /api/calendar (feed สำรองไม่มี)
+        "fred": bool(raw.get("fred")),               # ข่าวนี้มีค่าจริงจาก FRED
         "time": when,
     }
 
@@ -95,6 +96,16 @@ def fetch_events(force: bool = False) -> list:
         else:
             _cache["error"] = error or "ไม่พบข้อมูลข่าว"
         return _cache["events"]
+
+
+def awaiting_actual(events: list, hours: float = 3.0) -> bool:
+    """มีข่าวที่ FRED ให้ค่าจริงได้ ออกแล้วไม่เกิน `hours` ชม. แต่ยังไม่มีค่าจริง → ควรโหลดใหม่ถี่ ๆ"""
+    now = datetime.now(BANGKOK)
+    for ev in events or []:
+        if (ev.get("fred") and ev.get("impact") in ("High", "Medium") and not ev.get("actual")
+                and ev["time"] <= now and (now - ev["time"]).total_seconds() <= hours * 3600):
+            return True
+    return False
 
 
 def last_error() -> str:
