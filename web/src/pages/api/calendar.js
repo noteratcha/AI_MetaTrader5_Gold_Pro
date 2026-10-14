@@ -48,14 +48,14 @@ function formatActual(v, ref) {
 }
 
 async function refreshActuals() {
-  const key = process.env.JBLANKED_API_KEY;
+  const key = String(process.env.JBLANKED_API_KEY || '').trim();
   if (!key) {
     jb.error = 'no key';
     return;
   }
   try {
     const r = await fetch(JB_URL, { headers: { 'Content-Type': 'application/json', Authorization: `Api-Key ${key}` } });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text().catch(() => '')).slice(0, 160)}`);
     const j = await r.json();
     const list = Array.isArray(j) ? j : j?.data || j?.results || j?.events || [];
     if (!Array.isArray(list)) throw new Error('unexpected format');
@@ -127,7 +127,7 @@ export default async function handler(req, res) {
   if (req.query.debug === '1') {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
-      success: true, jbError: jb.error, jbCount: Array.isArray(jb.list) ? jb.list.length : 0, jbSample: jb.sample,
+      success: true, jbError: jb.error, keyLen: String(process.env.JBLANKED_API_KEY || '').trim().length, jbCount: Array.isArray(jb.list) ? jb.list.length : 0, jbSample: jb.sample,
       withActual: events.filter((e) => e.actual).length,
     });
   }
