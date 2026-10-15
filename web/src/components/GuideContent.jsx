@@ -10,7 +10,7 @@ import { LINE_ID, LINE_URL } from '../lib/contact';
 import { formatThb } from '../lib/format';
 import { MEMBERSHIP, MEMBERSHIP_PLANS, MEMBER_PLAN_NUMBERS } from '../lib/membership';
 
-// คู่มือการใช้งานโปรแกรม Gold Bot 24 (หน้า /guide) — อ้างอิงพฤติกรรมของโปรแกรมเวอร์ชัน 2026.1014.0608
+// คู่มือการใช้งานโปรแกรม Gold Bot 24 (หน้า /guide) — อ้างอิงพฤติกรรมของโปรแกรมเวอร์ชัน 2026.1015.2201
 const SECTIONS = [
   ['prepare', 'สิ่งที่ต้องเตรียม'],
   ['start', 'เริ่มต้นใช้งาน 6 ขั้นตอน'],
@@ -18,6 +18,7 @@ const SECTIONS = [
   ['control', 'แผงควบคุมบอท'],
   ['plans', 'เลือกแผนเทรด'],
   ['margin', 'หลักประกันและจำนวนไม้'],
+  ['capital', 'ทุนที่แนะนำ'],
   ['manual', 'เข้าไม้เอง (BUY / SELL)'],
   ['positions', 'ติดตามไม้ที่เปิดอยู่'],
   ['history', 'ประวัติการเทรด'],
@@ -140,6 +141,51 @@ function MarginCalc() {
         <output htmlFor="calc-free calc-lot" className="text-green">{n} ไม้</output>
         <span className="small faint">
           {fmt(f)} ÷ {fmt(perTrade)} ต่อไม้ (ปัดขึ้น)
+        </span>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * ทุนแนะนำ (USD ที่ Lot 0.01) จากการจำลองทุกแผนตามกฎปัจจุบันทุกแท่ง M15 เม.ย. 2024 – ต.ค. 2026 (วิเคราะห์ 15 ต.ค. 2026)
+ * ร่วงลึกสุด = ยอดเงิน (Balance) สูงสุด → Equity ต่ำสุด รวมขาดทุนลอยของไม้ที่ถือพร้อมกัน · ขั้นต่ำ ≈ ร่วง 50% · แนะนำ ≈ ร่วง 30%
+ */
+const CAPITAL_ROWS = [
+  // [แผนที่เปิดใช้, ไม้พร้อมกันสูงสุด, ร่วงลึกสุด, ทุนขั้นต่ำ, ทุนแนะนำ]
+  ['P1–P5 (ผู้ใช้ทั่วไป)', 3, 158, 350, 550],
+  ['P1–P10 (สมาชิก · ค่าเริ่มต้น)', 5, 342, 700, 1150],
+  ['ทุกแผน P1–P12', 8, 450, 900, 1500],
+];
+const usdAt = (v, lot) => `$${Math.round(v * (Math.max(parseFloat(lot) || 0.01, 0.01) / 0.01)).toLocaleString('en-US')}`;
+
+function CapitalCalc() {
+  const [pick, setPick] = useState('1');
+  const [lot, setLot] = useState('0.01');
+  const [, , dd, min, rec] = CAPITAL_ROWS[Number(pick)] || CAPITAL_ROWS[0];
+  return (
+    <form className="guide-calc" onSubmit={(e) => e.preventDefault()} autoComplete="off">
+      <div className="guide-calc-inputs">
+        <label className="field" htmlFor="cap-plans" style={{ gridColumn: 'span 2' }}>
+          <span className="label">แผนที่เปิดใช้</span>
+          <select id="cap-plans" className="input" value={pick} onChange={(e) => setPick(e.target.value)}>
+            {CAPITAL_ROWS.map(([name], i) => (
+              <option key={name} value={i}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field" htmlFor="cap-lot">
+          <span className="label">Lot</span>
+          <input id="cap-lot" className="input mono" type="number" inputMode="decimal" min="0.01" step="0.01" value={lot} onChange={(e) => setLot(e.target.value)} />
+        </label>
+      </div>
+      <div className="guide-calc-result">
+        <span className="muted">ทุนแนะนำ</span>
+        <output htmlFor="cap-plans cap-lot" className="text-green">{usdAt(rec, lot)}</output>
+        <span className="small faint">
+          ขั้นต่ำ {usdAt(min, lot)} · ร่วงลึกสุดในอดีต {usdAt(dd, lot)}
         </span>
       </div>
     </form>
@@ -557,6 +603,47 @@ export default function GuideContent() {
             <p className="muted">เพดานคิดจากยอดเงิน จึงไม่ลดลงเมื่อเปิดไม้ — นับรวมทุกไม้ในบัญชี ทั้งไม้ของบอทและไม้ที่กด BUY/SELL เอง (ปุ่มเข้าไม้จะไม่ให้เปิดเกินเพดาน)</p>
           </Section>
 
+          <Section id="capital">
+            <p>ทุกแผนมี SL ไม้เดียวจึงขาดทุนได้จำกัด ความเสี่ยงจริงคือ<strong>แพ้ติดกันหลายไม้</strong> และ<strong>หลายแผนติดลบพร้อมกัน</strong> ตารางนี้มาจากการจำลองทุกแผนตามกฎปัจจุบันทุกแท่ง 15 นาที (เม.ย. 2024 – ต.ค. 2026) ว่าเงินในบัญชีเคยร่วงจากยอดเงินสูงสุดลงไปถึง Equity ต่ำสุดเท่าไร โดยนับขาดทุนลอยของไม้ที่ถืออยู่พร้อมกันด้วย (หน่วย USD ที่ Lot 0.01)</p>
+            <div className="table-wrap guide-table-wrap">
+              <table className="table guide-table">
+                <thead>
+                  <tr>
+                    <th>แผนที่เปิดใช้</th>
+                    <th className="num">ไม้พร้อมกันสูงสุด</th>
+                    <th className="num">ร่วงลึกสุดในอดีต</th>
+                    <th className="num">ทุนขั้นต่ำ</th>
+                    <th className="num">ทุนแนะนำ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CAPITAL_ROWS.map(([name, n, dd, min, rec]) => (
+                    <tr key={name}>
+                      <td>{name}</td>
+                      <td className="num">{n} ไม้</td>
+                      <td className="num">{usdAt(dd, 0.01)}</td>
+                      <td className="num">{usdAt(min, 0.01)}</td>
+                      <td className="num">
+                        <strong className="text-green">{usdAt(rec, 0.01)}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul>
+              <li><strong>ทุนแนะนำ</strong> = ช่วงที่แย่ที่สุดในอดีตร่วงไม่เกินราว 30% ของทุน · <strong>ทุนขั้นต่ำ</strong> = ร่วงราว 50% (รอดในอดีตแต่แทบไม่เหลือที่เผื่อ)</li>
+              <li>ใช้ Lot ใหญ่ขึ้นให้คูณตาม เช่น Lot 0.02 คูณ 2 · ตัวเลขทั้งหมดเป็นบัญชี USD ปกติ (ไม่ใช่บัญชีเซ็นต์)</li>
+              <li><strong>{PLAN_NAMES[12]}</strong> ร่วงลึกที่สุดเมื่อใช้แผนเดียว ($495 ที่ Lot 0.01 เพราะถือได้ 3 ไม้ที่ใช้ SL เดียวกัน) ถ้าเปิดแผนนี้ควรมีทุนระดับ “ทุกแผน” · <strong>{PLAN_NAMES[11]}</strong> เพิ่ม Lot ได้ถึง 3 เท่าเมื่อหลายข่าวชี้ทางเดียวกัน</li>
+              <li>หลักประกันที่ MT5 กันไว้จริงต่อไม้มีไม่มาก (เช่น Leverage 1:200 ใช้ราว $8 ต่อ Lot 0.01 ที่ราคาทอง 4,150) ทุนที่ต้องมีจึงขึ้นกับยอดร่วงเป็นหลัก และทุนแนะนำทุกระดับผ่านเพดาน <a href="#margin">100 ต่อไม้</a> ของบอทแล้ว</li>
+            </ul>
+            <h3>ลองคำนวณ</h3>
+            <CapitalCalc />
+            <Note tone="red" label="ข้อควรรู้">
+              ตัวเลขมาจากอดีต (ช่วงที่ทองเป็นขาขึ้นแรง) ไม่รับประกันอนาคต · SL ของทุกแผนคิดจาก ATR ถ้าทองผันผวนหนักแบบ ก.พ. 2026 (แกว่งแรงกว่าตอนนี้ราว 2 เท่า) ขาดทุนต่อไม้ก็ใหญ่ขึ้นตาม · ไม้รันเทรนด์ (เช่น P2) อาจคืนกำไรลอยก้อนใหญ่ได้ในวันเดียว Equity จึงแกว่งมากกว่านี้ได้ แม้ไม่ได้กินทุนเดิม
+            </Note>
+          </Section>
+
           <Section id="manual">
             <Steps
               compact
@@ -923,11 +1010,12 @@ export default function GuideContent() {
               <li>การเทรดทองคำมีความเสี่ยงสูง และอาจขาดทุนมากกว่าที่คาดไว้</li>
               <li>ผลทดสอบย้อนหลังและความแม่นของ AI เป็นสถิติในอดีต ไม่รับประกันผลในอนาคต</li>
               <li>เริ่มจากบัญชี Demo และ Lot เล็ก และใช้เฉพาะเงินที่ยอมเสียได้</li>
+              <li>มีทุนให้พอทนช่วงขาดทุนติดกัน — ดูหัวข้อ <a href="#capital">ทุนที่แนะนำ</a></li>
               <li>โปรแกรมเป็นเครื่องมือช่วยเทรด ผู้ใช้เป็นผู้ตัดสินใจและรับผิดชอบผลการเทรดเอง</li>
             </ul>
           </Section>
 
-          <p className="tiny faint">คู่มือฉบับวันที่ 15 ต.ค. 2569 · อ้างอิงโปรแกรมเวอร์ชัน 2026.1015.2201</p>
+          <p className="tiny faint">คู่มือฉบับวันที่ 16 ต.ค. 2569 · อ้างอิงโปรแกรมเวอร์ชัน 2026.1015.2201</p>
         </div>
       </div>
     </div>
