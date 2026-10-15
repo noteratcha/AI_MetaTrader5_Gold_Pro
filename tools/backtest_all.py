@@ -1,6 +1,6 @@
 """Backtest ทุกแผนตามกฎปัจจุบัน บนข้อมูล MT5 จริง (XAUUSD) แล้วบันทึกผลเป็น web/public/backtest.json ให้หน้า /backtest
 วิธีใช้: เปิด MT5 ค้างไว้ แล้วรัน  python tools/backtest_all.py  (ประมาณ 3–4 นาที) จากนั้น deploy เว็บ
-P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free · P9 Fib H1 · P10 RSI H1 · P11 News
+P1 MA M15 · P2 MA H1 · P3 SMC · P4 SR-Bounce · P5 BB-H1 · P6 SAR H1 · P7 BB-H4 · P8 BB-H4 Free · P9 Fib H1 · P10 RSI H1 · P11 News · P12 BB DoubleTop
 - AI: Walk-forward (เทรน 5000 แท่ง M15 → ทายแท่งถัดไป 500 แท่ง แล้วเลื่อน) ด้วย build_ai_features / AI_FEATURES ของบอท
 - ข้อมูลที่ใช้ตัดสินใจ = แท่งที่ปิดแล้ว (เข้าไม้ที่ราคาเปิดแท่งถัดไป) · หักสเปรด 0.35 จุด/ไม้ · 1 ไม้ต่อแผนในเวลาเดียวกัน
 - ไม่จำลอง: Cooldown, Circuit Breaker, Loss Block, การแย่งเข้าไม้ระหว่างแผน
@@ -119,24 +119,28 @@ def stats(name, trades):
     eq = np.r_[0.0, np.cumsum(t)]; dd = float(np.max(np.maximum.accumulate(eq) - eq))   # DD นับจากจุดเริ่ม (0)
     w, ls = t[t > 0].sum(), -t[t < 0].sum()
     last = t[-100:]
+    h1_, h2_ = t[:len(t) // 2], t[len(t) // 2:]
+    wr = lambda a: round((a > 0).mean() * 100, 1) if len(a) else None   # noqa: E731
     return dict(plan=name, n=len(t), win=round((t > 0).mean() * 100, 1), net=round(t.sum(), 1), pf=round(w / ls, 2) if ls else 0,
-                maxdd=round(dd, 1), avg=round(t.mean(), 2), half1=round(t[:len(t) // 2].sum(), 1), half2=round(t[len(t) // 2:].sum(), 1),
-                last100_net=round(last.sum(), 1), last100_win=round((last > 0).mean() * 100, 1))
+                maxdd=round(dd, 1), avg=round(t.mean(), 2), half1=round(h1_.sum(), 1), half2=round(h2_.sum(), 1),
+                half1_n=len(h1_), half1_win=wr(h1_), half2_n=len(h2_), half2_win=wr(h2_),   # จำนวนไม้ / % ชนะ แต่ละครึ่ง (หน้าเว็บ)
+                last100_net=round(last.sum(), 1), last100_win=round((last > 0).mean() * 100, 1), last100_n=len(last))
 
 
-def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entry_ok=None, sl_mult=0.75, trail="sl", first_frac=None, exit_slow=None):
+def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entry_ok=None, sl_mult=0.75, trail="sl", first_frac=None, exit_slow=None, confirm=False):
     """step=None → ไม่เลื่อน SL · entry_ok(i, d) = ตัวกรองเพิ่มเติมก่อนเข้าไม้
     trail="sl": เลื่อน frac ของระยะ SL → ราคาของขั้น · trail="entry": เลื่อน (first_frac ขั้นแรก / frac ขั้นถัดไป) ของระยะ ราคาเข้า → ราคาของขั้น"""
     o, h, l, a, t = frame.open.values, frame.high.values, frame.low.values, frame[atr_col].values, frame.time.values
+    c = frame.close.values
     mf, ms, td = frame[fast].values, frame[slow].values, frame[trend_col].values
     mx = frame[exit_slow].values if exit_slow else ms   # เส้นที่ใช้ออกไม้ (ค่าเริ่มต้น = เส้นเดียวกับตอนเข้า)
-    out, pos = [], None
-    for i in range(3, len(frame) - 1):
+    out, pos, start = [], None, 0
+    for i in range(3, len(frame) - 2):
         up = mf[i - 1] <= ms[i - 1] and mf[i] > ms[i]
         dn = mf[i - 1] >= ms[i - 1] and mf[i] < ms[i]
         xup = mf[i - 1] <= mx[i - 1] and mf[i] > mx[i]
         xdn = mf[i - 1] >= mx[i - 1] and mf[i] < mx[i]
-        if pos:
+        if pos and i >= start:
             d, e, sl, k, te = pos
             if (d == 1 and l[i] <= sl) or (d == -1 and h[i] >= sl):
                 out.append(dict(time=te, pnl=(sl - e) * d - SPREAD)); pos = None
@@ -157,8 +161,12 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
         if not pos and (up or dn) and not np.isnan(a[i]):
             d = 1 if up else -1
             if td[i] == d and (entry_ok is None or entry_ok(i, d)):
-                e = o[i + 1]
-                pos = (d, e, e - d * sl_mult * a[i], 1, t[i + 1])
+                # confirm: แท่งถัดไป (i+1) ต้องปิดไปทางเดียวกับไม้ และตัวแท่งทั้งตัวอยู่ฝั่งเดียวกับเส้น slow (MA13) → เข้า open[i+2] (P1 · 15 ต.ค. 2026)
+                ok_c = (c[i + 1] - o[i + 1]) * d > 0 and ((min(o[i + 1], c[i + 1]) > ms[i + 1]) if d == 1 else (max(o[i + 1], c[i + 1]) < ms[i + 1]))
+                k0 = i + 1 if not confirm else (i + 2 if ok_c else None)
+                if k0 is not None:
+                    e = o[k0]
+                    pos = (d, e, e - d * sl_mult * a[i], 1, t[k0]); start = k0
     return out
 
 
@@ -268,7 +276,7 @@ _rsi, _c, _m50 = b.rsi.values, b.close.values, b.ma50.values
 def p1_filter(i, d):  # ตัวกรองสัญญาณหลอก: RSI 50–70 (BUY) / 30–50 (SELL) + ราคาปิดฝั่งเดียวกับ MA50 M15
     return ((50 < _rsi[i] < 70) if d == 1 else (30 < _rsi[i] < 50)) and (_c[i] - _m50[i]) * d > 0
 rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "h1_stack", entry_ok=p1_filter, sl_mult=1.0,
-                                                trail="sl", first_frac=0.50, frac=0.40))))
+                                                trail="sl", first_frac=0.50, frac=0.40, confirm=True))))
 f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
 f["atr"] = A(f); f["ma5"], f["ma10"], f["ma20"] = f.close.rolling(5).mean(), f.close.rolling(10).mean(), f.close.rolling(20).mean()
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir", "p6_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
@@ -466,6 +474,42 @@ def sim_news():
     return out
 
 rows.append(stats("P11 News", keep(11, sim_news())))
+
+
+# ---------------------------------------------------------------- Plan 12: DoubleTop-H1 (กฎใน dtop_plan.py · ตัวเดียวกับบอท)
+import dtop_plan  # noqa: E402
+
+
+def sim_dtop(df, df4):
+    """BB H1 ทำยอดซ้ำตามเทรนด์ H4 MA10/30 · SL ยอดใหม่ ± 0.1 ATR · ปิดทุกไม้เมื่อแตะ BB อีกฝั่ง · ไม้เพิ่ม ≤ 2 (ยอดไม่เลยยอดเดิม · อยู่ฝั่งนอกเส้นกลาง)"""
+    o, h, l, c, up, lo, atr, mid = dtop_plan.indicators(df)
+    tsec = dtop_plan.to_sec(df.time)
+    tr = dtop_plan.h4_trend_at(tsec + 3600, df4)
+    setups, grp, out = dtop_plan.new_setups(), None, []
+    for i in range(30, len(df) - 1):
+        if grp:
+            d = grp["d"]
+            if (h[i] >= grp["sl"]) if d == -1 else (l[i] <= grp["sl"]):
+                xp = grp["sl"]
+            else:
+                hit, px = dtop_plan.tp_hit(d, i, h, l, up, lo)
+                xp = px if hit else None
+            if xp is not None:
+                for e, ei in grp["entries"]:
+                    out.append(dict(time=df.time.values[ei], pnl=(xp - e) * d - SPREAD))
+                grp = None
+            elif len(grp["entries"]) - 1 < dtop_plan.MAX_ADD and dtop_plan.addon_ok(i, d, grp["top"], grp["entries"][-1][1], o, h, l, c, mid):
+                grp["entries"].append((o[i + 1], i + 1))
+        sig = dtop_plan.step(setups, i, o, h, l, c, up, lo, tr[i])
+        if sig and grp is None:
+            d, top = sig
+            e = o[i + 1]; sl = dtop_plan.sl_price(d, top, atr[i])
+            if (e - sl) * d > 0:
+                grp = {"d": d, "top": top, "sl": sl, "entries": [(e, i + 1)]}
+    return out
+
+
+rows.append(stats("P12 BB DoubleTop", keep(12, sim_dtop(h1, h4))))
 pd.set_option("display.width", 220)
 print(f"ช่วงข้อมูล {b.time.iloc[0]} → {b.time.iloc[-1]} · ใช้เวลา {time.time() - t0:.0f}s")
 print(pd.DataFrame(rows).to_string(index=False))
@@ -473,7 +517,7 @@ print(pd.DataFrame(rows).to_string(index=False))
 
 # ---------------------------------------------------------------- JSON สำหรับหน้าเว็บ /backtest
 from version import APP_VERSION  # noqa: E402
-NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
+NAMES = {1: ("Plan 1", "MA-Cross-Trend", "แท่งยืนยัน (ปิดตามทิศ + ทั้งตัวพ้น MA13) · MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200 · SL 1.25 ATR · ออกเมื่อ MA5 ตัด MA20"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
          4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 58% · SL 1.0 / TP 2.0 ATR"),
@@ -483,21 +527,25 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "MA5×MA13 M15 · H1 MA100/150/200 · �
          8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด"),
          9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · ADX > 20 + MACD ยังไม่หันตามทิศไม้ · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)"),
          10: ("Plan 10", "RSI-H1-Trend", "RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 (ซื้อ Oversold ในขาขึ้น / ขาย Overbought ในขาลง) · SL 2 ATR · TP 3 ATR · ถือไม่เกิน 48 ชม."),
+         12: ("Plan 12", "DoubleTop-H1", "BB H1 ทำยอดซ้ำนอกกรอบตามเทรนด์ H4 MA10/30: ทะลุ BB → ย่อ → ทำยอดใหม่ → แท่งถัดไปปิดสวน = เข้า · SL ยอดใหม่ ± 0.1 ATR · ปิดทุกไม้เมื่อแตะ BB อีกฝั่ง · ไม้เพิ่มสูงสุด 2 ไม้ (ยอดต่ำกว่าเดิมแต่อยู่นอกเส้นกลาง)"),
          11: ("Plan 11", "News-USD", "ข่าว USD: คาดเทียบครั้งก่อนบอกแนวโน้มทอง → ค่าจริงไม่สวน = ยืนยัน → เข้าทันที (Tick จริง เข้า 10 วิหลังข่าว) · ข่าวพร้อมกันหักกลบ Lot ≤ 3 เท่า · SL 3 ATR M15 · ไม่ตั้ง TP · ถือ 8 ชม.")}
 plans_out, events = [], []
-for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
+for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     tr = ALL[k]
     st = stats(NAMES[k][1], tr)
     df_t = pd.DataFrame(tr)
-    monthly = {}
+    monthly, monthly_n, monthly_w = {}, {}, {}
     if len(df_t):
         df_t["month"] = pd.to_datetime(df_t.time).dt.strftime("%Y-%m")
-        monthly = {m: round(float(v), 1) for m, v in df_t.groupby("month").pnl.sum().items()}
+        gm = df_t.groupby("month").pnl
+        monthly = {m: round(float(v), 1) for m, v in gm.sum().items()}
+        monthly_n = {m: int(v) for m, v in gm.size().items()}                     # จำนวนไม้รายเดือน
+        monthly_w = {m: int(v) for m, v in gm.apply(lambda x: int((x > 0).sum())).items()}   # ไม้ชนะรายเดือน (หน้าเว็บคิด % ชนะ)
         for x in tr:
             events.append((pd.Timestamp(x["time"]), k, float(x["pnl"])))
-    plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly))
+    plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly, monthly_n=monthly_n, monthly_w=monthly_w))
 events.sort(key=lambda e: e[0])
-eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)}
+eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)}
 total = 0.0
 for t, k, pnl in events:
     cum[k] += pnl; total += pnl

@@ -168,6 +168,7 @@ def build_gui_app(mode="pyinstaller"):
             "--hidden-import=fib_plan",
             "--hidden-import=rsi_plan",
             "--hidden-import=news_plan",
+            "--hidden-import=dtop_plan",
             f"--name={APP_NAME}",
             "gui_app.py"
         ]

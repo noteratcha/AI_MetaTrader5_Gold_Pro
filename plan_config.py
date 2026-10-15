@@ -16,11 +16,11 @@ from license_manager import API_BASE_URL
 REFRESH_SECONDS = 300
 CACHE_FILE = data_path("plan_config.json")
 BASE_PLANS = ("SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "MA-Cross-Trend", "MA-Cross-H1-Trend", "PSAR-H1-Trend",
-              "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend", "News-USD")
+              "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend", "News-USD", "DoubleTop-H1")
 # แผนเฉพาะสมาชิกรายเดือน (ผู้ใช้ทั่วไปใช้ได้ P1–P5) — ตรงกับ MEMBER_PLANS ใน web/src/lib/membership.js
-MEMBER_PLANS = ("PSAR-H1-Trend", "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend", "News-USD")
+MEMBER_PLANS = ("PSAR-H1-Trend", "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend", "News-USD", "DoubleTop-H1")
 # แผนที่ผู้ใช้ต้องติ๊กเปิดเอง (ค่าเริ่มต้นปิด) — P11 ข่าว: แนะนำทดลองบนบัญชี Demo ก่อน (15 ต.ค. 2026)
-USER_DEFAULT_OFF = ("News-USD",)
+USER_DEFAULT_OFF = ("News-USD", "DoubleTop-H1")   # P12 (15 ต.ค. 2026) ช่วงก่อนปี 2024 ยังไม่ชัด
 
 _state = {"plans": {}, "fetched_at": 0.0}
 _lock = threading.Lock()

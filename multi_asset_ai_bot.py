@@ -195,6 +195,24 @@ P10_NAME = rsi_plan.NAME
 import news_plan
 P11_NAME = news_plan.NAME
 _p11_done = set()        # เวลาข่าว (UTC) ที่ตัดสินไปแล้ว — กันเข้าซ้ำ
+# Plan 12 (15 ต.ค. 2026): ทำยอดซ้ำนอกกรอบ BB H1 ตามเทรนด์ H4 MA10/30 · ไม้เพิ่มสูงสุด 2 · ปิดทุกไม้เมื่อแตะ BB อีกฝั่ง — กฎใน dtop_plan.py
+import dtop_plan
+P12_NAME = dtop_plan.NAME
+_p12_bar_done = {}       # {sym: เวลาแท่ง H1 ที่ตัดสินแล้ว} — ตรวจสัญญาณครั้งเดียวต่อแท่ง
+
+
+def p12_replay(df_h1_closed, df_h4, bars=150):
+    """เล่นรูปแบบย้อนหลังบนแท่ง H1 ที่ปิดแล้ว → (สัญญาณของแท่งล่าสุด (ทิศ, ยอด) หรือ None, setups, indicators, ทิศเทรนด์ H4 ล่าสุด)"""
+    ind = dtop_plan.indicators(df_h1_closed)
+    o, h, l, c, up, lo, atr, mid = ind
+    tr = dtop_plan.h4_trend_at(dtop_plan.to_sec(df_h1_closed['time']) + 3600, df_h4)
+    setups, sig = dtop_plan.new_setups(), None
+    n = len(df_h1_closed)
+    for k in range(max(30, n - bars), n):
+        res = dtop_plan.step(setups, k, o, h, l, c, up, lo, tr[k])
+        if k == n - 1:
+            sig = res
+    return sig, setups, ind, int(tr[-1]) if n else 0
 MANUAL_SL_ATR = 1.0   # ไม้ที่เข้าเองไม่มี SL → บอทตั้ง SL 1.0 ATR M15 (เท่าค่าเริ่มต้นของหน้าต่างเข้าไม้เอง)
 P6_SAR = (0.01, 0.1)
 P6_SAR_FAST = (0.02, 0.2)
@@ -1746,6 +1764,12 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
         gain = (delta.where(delta > 0, 0)).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
         rsi_m15 = float((100 - (100 / (1 + (gain / (loss + 1e-9))))).iloc[-2])
+        # Plan 1: Cross บนแท่งก่อนหน้า (-3) + แท่งยืนยัน (-2) · ตรวจด้วยว่าเพิ่งตัดบนแท่งล่าสุดหรือไม่ (รอแท่งยืนยัน)
+        _m5s, _m13s = m15_c.rolling(5).mean().values, m15_c.rolling(13).mean().values
+        _rsis = (100 - (100 / (1 + (gain / (loss + 1e-9))))).values
+        _m50s = m15_c.rolling(50).mean().values
+        p1_x3 = 1 if (_m5s[-4] <= _m13s[-4] and _m5s[-3] > _m13s[-3]) else (-1 if (_m5s[-4] >= _m13s[-4] and _m5s[-3] < _m13s[-3]) else 0)
+        p1_x2 = 1 if (prev_m15_ma5 <= prev_m15_ma13 and m15_ma5 > m15_ma13) else (-1 if (prev_m15_ma5 >= prev_m15_ma13 and m15_ma5 < m15_ma13) else 0)
 
         tr_m15 = pd.concat([
             df_m15['high'] - df_m15['low'],
@@ -1790,32 +1814,39 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             }
         }
 
-        # ===== Plan 1: MA-Cross-Trend (M15) =====
+        # ===== Plan 1: MA-Cross-Trend (M15) — 15 ต.ค. 2026: MA5 ตัด MA13 + แท่งยืนยันปิดตามทิศ =====
         p1_side = "BUY" if h1_stack_dir == 1 else ("SELL" if h1_stack_dir == -1 else ("BUY" if m15_ma5 >= m15_ma13 else "SELL"))
-        p1_items = []
-        if p1_side == "BUY":
-            c1 = h1_stack_dir == 1
-            p1_items.append({"name": "เทรนด์ H1", "ok": c1, "desc": "MA100>150>200 เรียงตัวขาขึ้น" if c1 else "ยังไม่เรียงตัวขาขึ้น (MA100>150>200)"})
-            c2 = (prev_m15_ma5 <= prev_m15_ma13 and m15_ma5 > m15_ma13) or (m15_ma5 > m15_ma13)
-            p1_items.append({"name": "MA5/13 M15", "ok": c2, "desc": f"MA5 ({m15_ma5:,.2f}) > MA13 ({m15_ma13:,.2f})" if c2 else f"MA5 ({m15_ma5:,.2f}) < MA13 ({m15_ma13:,.2f})"})
-            c3 = 50 < rsi_m15 < 70
-            p1_items.append({"name": "RSI M15", "ok": c3, "desc": f"RSI อยู่ช่วง 50–70 ({rsi_m15:.1f})" if c3 else f"RSI ({rsi_m15:.1f}) ไม่อยู่ใน 50–70"})
-            c4 = m15_close > m15_ma50
-            p1_items.append({"name": "MA50 M15", "ok": c4, "desc": f"ราคา {m15_close:,.2f} > MA50 {m15_ma50:,.2f}" if c4 else f"ราคา {m15_close:,.2f} < MA50 {m15_ma50:,.2f}"})
+        d1 = 1 if p1_side == "BUY" else -1
+        k1 = -3 if p1_x3 == d1 else -2                      # แท่งที่วัด RSI/MA50 = แท่งที่เกิด Cross
+        word_up = "ขึ้น" if d1 == 1 else "ลง"
+        c1 = h1_stack_dir == d1
+        c2 = p1_x3 == d1
+        c3 = (50 < _rsis[k1] < 70) if d1 == 1 else (30 < _rsis[k1] < 50)
+        c4 = (m15_c.values[k1] - _m50s[k1]) * d1 > 0
+        c5_dir = (m15_close - m15_open) * d1 > 0
+        c5_body = (min(m15_open, m15_close) > _m13s[-2]) if d1 == 1 else (max(m15_open, m15_close) < _m13s[-2])
+        c5 = c2 and c5_dir and c5_body
+        if c2:
+            d2 = f"MA5 ตัด{word_up} MA13 บนแท่งก่อนหน้า"
+        elif p1_x2 == d1:
+            d2 = f"เพิ่งตัด{word_up}บนแท่งล่าสุด — รอแท่งยืนยันปิด (15 นาที)"
         else:
-            c1 = h1_stack_dir == -1
-            p1_items.append({"name": "เทรนด์ H1", "ok": c1, "desc": "MA100<150<200 เรียงตัวขาลง" if c1 else "ยังไม่เรียงตัวขาลง (MA100<150<200)"})
-            c2 = (prev_m15_ma5 >= prev_m15_ma13 and m15_ma5 < m15_ma13) or (m15_ma5 < m15_ma13)
-            p1_items.append({"name": "MA5/13 M15", "ok": c2, "desc": f"MA5 ({m15_ma5:,.2f}) < MA13 ({m15_ma13:,.2f})" if c2 else f"MA5 ({m15_ma5:,.2f}) > MA13 ({m15_ma13:,.2f})"})
-            c3 = 30 < rsi_m15 < 50
-            p1_items.append({"name": "RSI M15", "ok": c3, "desc": f"RSI อยู่ช่วง 30–50 ({rsi_m15:.1f})" if c3 else f"RSI ({rsi_m15:.1f}) ไม่อยู่ใน 30–50"})
-            c4 = m15_close < m15_ma50
-            p1_items.append({"name": "MA50 M15", "ok": c4, "desc": f"ราคา {m15_close:,.2f} < MA50 {m15_ma50:,.2f}" if c4 else f"ราคา {m15_close:,.2f} > MA50 {m15_ma50:,.2f}"})
+            d2 = f"ยังไม่มีจังหวะตัด{word_up} (MA5 {m15_ma5:,.2f} · MA13 {m15_ma13:,.2f})"
+        p1_items = [
+            {"name": "เทรนด์ H1", "ok": c1, "desc": ("MA100>150>200 เรียงตัวขาขึ้น" if d1 == 1 else "MA100<150<200 เรียงตัวขาลง") if c1 else f"ยังไม่เรียงตัวขา{word_up} (MA100/150/200)"},
+            {"name": "MA5 ตัด MA13 M15", "ok": c2, "desc": d2},
+            {"name": "RSI M15", "ok": bool(c3), "desc": f"RSI {_rsis[k1]:.1f} (ต้อง {'50–70' if d1 == 1 else '30–50'})"},
+            {"name": "MA50 M15", "ok": bool(c4), "desc": f"ราคา {m15_c.values[k1]:,.2f} {'>' if c4 == (d1 == 1) else '<'} MA50 {_m50s[k1]:,.2f}"},
+            {"name": "แท่งยืนยัน", "ok": bool(c5), "desc": (f"แท่งล่าสุดปิด{'เขียว' if d1 == 1 else 'แดง'} และทั้งตัวอยู่{'เหนือ' if d1 == 1 else 'ใต้'} MA13 — เข้าไม้" if c5 else
+                                                       ("แท่งล่าสุดปิดสวนทิศ — ข้ามสัญญาณนี้" if c2 and not c5_dir else
+                                                        (f"ตัวแท่งยังแตะ MA13 ({_m13s[-2]:,.2f}) — ข้ามสัญญาณนี้" if c2 else
+                                                         f"รอ Cross ก่อน แล้วแท่งถัดไปต้องปิดตามทิศและทั้งตัวอยู่{'เหนือ' if d1 == 1 else 'ใต้'} MA13")))},
+        ]
 
         m1 = sum(1 for it in p1_items if it["ok"])
         results["P1"] = {
             "name": "MA-Cross-Trend", "label": "P1 · M15", "side": p1_side,
-            "matched": m1, "total": 4, "pct": int(m1 / 4 * 100), "items": p1_items,
+            "matched": m1, "total": 5, "pct": int(m1 / 5 * 100), "items": p1_items,
             "enabled": plan_config.is_enabled("MA-Cross-Trend"),
             "disabled_reason": plan_config.disabled_reason("MA-Cross-Trend")
         }
@@ -2069,6 +2100,35 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             "disabled_reason": plan_config.disabled_reason(P10_NAME)
         }
 
+        # ===== Plan 12: DoubleTop-H1 =====
+        try:
+            h1c12 = df_h1.iloc[:-1].reset_index(drop=True)
+            sig12s, st12s, ind12s, tr12s = p12_replay(h1c12, df_h4)
+            d12s = tr12s if tr12s else -1
+            s12 = st12s.get(d12s)
+            pos12s = [p_ for p_ in (mt5.positions_get(symbol=symbol) or ()) if getattr(p_, 'comment', '').startswith(P12_NAME)]
+            w_hi = "High" if d12s == -1 else "Low"
+            p12_items = [
+                {"name": "เทรนด์ H4 MA10/30", "ok": tr12s != 0,
+                 "desc": ("ขาลง → รอ SELL ที่ขอบ BB บน" if tr12s == -1 else "ขาขึ้น → รอ BUY ที่ขอบ BB ล่าง") if tr12s else "ยังไม่มีข้อมูลเทรนด์"},
+                {"name": f"ทะลุ BB {'บน' if d12s == -1 else 'ล่าง'} แล้วย่อ", "ok": bool(s12 and s12.get("pull")),
+                 "desc": (f"{w_hi} แรก {s12['x1']:,.2f} · ย่อแล้ว" if s12 and s12.get("pull") else (f"ทะลุแล้ว {w_hi} {s12['x1']:,.2f} · รอแท่งย่อ" if s12 else "รอแท่ง H1 ทะลุเส้น BB"))},
+                {"name": f"ทำ {w_hi} ใหม่เลย {w_hi} แรก", "ok": bool(s12 and s12.get("x2") is not None) or bool(sig12s),
+                 "desc": (f"{w_hi} ใหม่ {s12['x2']:,.2f} · รอแท่งถัดไปปิด{'แดง' if d12s == -1 else 'เขียว'}" if s12 and s12.get("x2") is not None
+                          else ("แท่งล่าสุดยืนยันแล้ว — เข้าไม้" if sig12s else "รอราคาทำยอดใหม่"))},
+            ]
+            if pos12s:
+                p12_items.append({"name": "ถือไม้อยู่", "ok": True, "desc": f"{len(pos12s)} ไม้ · เพิ่มได้อีก {max(0, dtop_plan.MAX_ADD + 1 - len(pos12s))} ไม้ (ยอดใหม่ต่ำกว่ายอดเดิมและเหนือเส้นกลาง BB) · ปิดเมื่อแตะ BB อีกฝั่ง"})
+            m12 = sum(1 for it in p12_items if it["ok"])
+            results["P12"] = {
+                "name": P12_NAME, "label": "P12 · H1 (BB ยอดซ้ำ)", "side": "BUY" if d12s == 1 else "SELL",
+                "matched": m12, "total": len(p12_items), "pct": int(m12 / len(p12_items) * 100), "items": p12_items,
+                "enabled": plan_config.is_enabled(P12_NAME),
+                "disabled_reason": plan_config.disabled_reason(P12_NAME)
+            }
+        except Exception:
+            pass
+
         # ===== Plan 11: News-USD =====
         now_u = datetime.now(timezone.utc)
         live = news_plan.read_live()
@@ -2123,7 +2183,7 @@ def print_plans_condition_status(symbol: str = None):
 
         print(f"\n{Colors.CYAN}{Colors.BOLD}[PLAN STATUS] ความพร้อมเงื่อนไขการเข้าไม้แต่ละแผน ({symbol} @ {price:,.2f}){Colors.RESET}")
 
-        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11"]
+        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
         for pk in plan_order:
             info = status_map.get(pk)
             if not info:
@@ -3085,24 +3145,35 @@ def main():
                     h1_stack_dir = 0
                 closed_ma13 = float(df.iloc[-2]['ma13']) if len(df) >= 2 else float('nan')
                 prev_closed_ma13 = float(df.iloc[-3]['ma13']) if len(df) >= 3 else closed_ma13
-                p4_cross_up = bool((prev_closed_ma5 <= prev_closed_ma13) and (closed_ma5 > closed_ma13))
+                p4_cross_up = bool((prev_closed_ma5 <= prev_closed_ma13) and (closed_ma5 > closed_ma13))     # ใช้ออกไม้ (ตัดกลับ)
                 p4_cross_down = bool((prev_closed_ma5 >= prev_closed_ma13) and (closed_ma5 < closed_ma13))
-                ma_cross_buy_confirm = p4_cross_up and h1_stack_dir == 1
-                ma_cross_sell_confirm = p4_cross_down and h1_stack_dir == -1
+                # แท่งยืนยัน (ผู้ใช้สั่ง 15 ต.ค. 2026): MA5 ตัด MA13 บนแท่งก่อนหน้า (-3) แล้วแท่งปิดล่าสุด (-2) ต้องปิดไปทางเดียวกับไม้
+                # และตัวแท่ง (เปิด–ปิด) ทั้งตัวอยู่เหนือ MA13 (BUY) / ใต้ MA13 (SELL) → เข้าทันทีหลังแท่งยืนยันปิด
+                # Backtest 2.5 ปี: ไม้ 731 → 341 · กำไร +879 → +656 · PF 1.44 → 1.75 · DD 115 → 72
+                p1_x_ma5, p1_x_ma13 = df['ma5'].values, df['ma13'].values
+                p1_cross_up = len(df) >= 5 and bool(p1_x_ma5[-4] <= p1_x_ma13[-4] and p1_x_ma5[-3] > p1_x_ma13[-3])
+                p1_cross_down = len(df) >= 5 and bool(p1_x_ma5[-4] >= p1_x_ma13[-4] and p1_x_ma5[-3] < p1_x_ma13[-3])
+                p1_conf_body = float(df['close'].iloc[-2] - df['open'].iloc[-2])
+                p1_conf_lo = float(min(df['open'].iloc[-2], df['close'].iloc[-2]))
+                p1_conf_hi = float(max(df['open'].iloc[-2], df['close'].iloc[-2]))
+                p1_cross_bar_time = df.iloc[-3]['time'] if len(df) >= 3 else df.iloc[-1]['time']   # กันเข้าซ้ำบนสัญญาณเดิม
+                ma_cross_buy_confirm = p1_cross_up and h1_stack_dir == 1 and p1_conf_body > 0 and p1_conf_lo > p1_x_ma13[-2]
+                ma_cross_sell_confirm = p1_cross_down and h1_stack_dir == -1 and p1_conf_body < 0 and p1_conf_hi < p1_x_ma13[-2]
 
                 # ตัวกรองสัญญาณหลอก Plan 1 (แท่ง M15 ที่ปิดแล้ว): โมเมนตัม RSI ต้องหนุนทิศ แต่ยังไม่ Overbought/Oversold
                 # และราคาปิดต้องอยู่ฝั่งเดียวกับ MA50 M15 — Backtest 2.5 ปี: ไม้ 2027 → 739, PF 1.16 → 1.37,
                 # Max DD 245 → 92 จุด, กำไร 850 → 690 จุด (กำไรทุกไตรมาส จากเดิมกระจุกช่วงท้าย)
                 if ma_cross_buy_confirm or ma_cross_sell_confirm:
                     p1_dir = 1 if ma_cross_buy_confirm else -1
-                    p1_rsi = float(df['rsi'].iloc[-2]) if len(df) >= 2 else float('nan')
-                    p1_ma50 = float(df['close'].rolling(50).mean().iloc[-2]) if len(df) >= 51 else float('nan')
-                    p1_close = float(df['close'].iloc[-2])
+                    # ตัวกรองวัดที่แท่งที่เกิด Cross (-3) — ตรงกับ Backtest
+                    p1_rsi = float(df['rsi'].iloc[-3]) if len(df) >= 3 else float('nan')
+                    p1_ma50 = float(df['close'].rolling(50).mean().iloc[-3]) if len(df) >= 52 else float('nan')
+                    p1_close = float(df['close'].iloc[-3])
                     rsi_ok = (50 < p1_rsi < 70) if p1_dir == 1 else (30 < p1_rsi < 50)
                     ma50_ok = pd.notna(p1_ma50) and (p1_close - p1_ma50) * p1_dir > 0
                     if not (rsi_ok and ma50_ok):
                         ma_cross_buy_confirm = ma_cross_sell_confirm = False
-                        bar_key = (sym, str(df['time'].iloc[-2]) if 'time' in df else p1_close)
+                        bar_key = (sym, str(df['time'].iloc[-3]) if 'time' in df else p1_close)
                         if _p1_filter_logged.get(sym) != bar_key:
                             _p1_filter_logged[sym] = bar_key
                             why = []
@@ -3494,7 +3565,7 @@ def main():
 
                         def _cross_bar_for(plan_name):
                             if plan_name == "MA-Cross-Trend":
-                                return ma_cross_bar_time
+                                return p1_cross_bar_time
                             if plan_name == "MA-Cross-H1-Trend":
                                 return ma_cross_h1_bar_time
                             if plan_name == P6_NAME:
@@ -3663,7 +3734,7 @@ def main():
                                 price = tick.ask
                                 sl = round(price - sl_dist_p4, digits)
                                 tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดลง MA10)
-                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
+                                print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: MA5 Crossed Above MA13 + Confirm Candle + [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Below MA13){Colors.RESET}")
                                 send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                                 _record_plan('BUY', p_label)
@@ -3679,7 +3750,7 @@ def main():
                                 price = tick.bid
                                 sl = round(price + sl_dist_p4, digits)
                                 tp = 0.0  # Plan 1: ไม่ต้องตั้ง TP (รันตามเทรนด์ ปิดทันทีเมื่อ MA5 ตัดขึ้น MA10)
-                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
+                                print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: MA5 Crossed Below MA13 + Confirm Candle + [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist_p4:.{digits}f} / 1.0ATR, NO TP - Exit on MA5 Cross Above MA13){Colors.RESET}")
                                 send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (Exit on Cross) ({h4_msg})')
                                 _record_plan('SELL', p_label)
@@ -3799,6 +3870,41 @@ def main():
                                 send_order(sym, mt5.ORDER_TYPE_BUY if p10_sig == 1 else mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=P10_NAME)
                                 log_signal_event(sym, 'ENTRY_SIGNAL', P10_NAME, side10, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} (RSI {p10_rsi:.1f})')
                                 _record_plan(side10, P10_NAME)
+
+                        # แผน 12: DoubleTop-H1 — ตรวจเมื่อแท่ง H1 ปิด (ครั้งเดียวต่อแท่ง) · ไม้แรก + ไม้เพิ่มสูงสุด 2 ไม้ (SL เดียวกัน)
+                        df12 = df_h1.iloc[:-1].reset_index(drop=True)
+                        bar12 = df12['time'].iloc[-1] if len(df12) else None
+                        if bar12 is not None and _p12_bar_done.get(sym) != bar12 and len(df12) >= 200:
+                            _p12_bar_done[sym] = bar12
+                            sig12, _st12, ind12, _tr12 = p12_replay(df12, df_h4)
+                            o12, h12, l12, c12, up12, lo12, atr12, mid12 = ind12
+                            pos12 = [op for op in (positions or ()) if getattr(op, 'comment', '').startswith(P12_NAME)]
+                            grp12 = dtop_plan.load_group()
+                            if pos12 and grp12 and plan_config.is_enabled(P12_NAME):
+                                d12 = int(grp12['d'])
+                                last_t = pd.Timestamp(grp12.get('last_bar'))
+                                last_i = int(np.searchsorted(df12['time'].values, np.datetime64(last_t))) if grp12.get('last_bar') else -1
+                                if len(pos12) - 1 < dtop_plan.MAX_ADD and dtop_plan.addon_ok(len(df12) - 1, d12, grp12['top'], last_i, o12, h12, l12, c12, mid12):
+                                    side12 = 'BUY' if d12 == 1 else 'SELL'
+                                    price = tick.ask if d12 == 1 else tick.bid
+                                    sl = round(float(grp12['sl']), digits)
+                                    if (price - sl) * d12 > 0:
+                                        print(f"{Colors.GREEN if d12 == 1 else Colors.RED}[SIGNAL] {sym} {P12_NAME}: ยอดซ้ำ{'ต่ำ' if d12 == -1 else 'สูง'}กว่ายอดเดิม + แท่งยืนยัน -> ADD {side12} #{len(pos12) + 1} (SL เดิม {sl:.{digits}f} · ปิดเมื่อแตะ BB {'ล่าง' if d12 == -1 else 'บน'}){Colors.RESET}")
+                                        send_order(sym, mt5.ORDER_TYPE_BUY if d12 == 1 else mt5.ORDER_TYPE_SELL, price, sl, 0.0, plan_name=P12_NAME)
+                                        log_signal_event(sym, 'ENTRY_SIGNAL', P12_NAME, side12, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'ADD #{len(pos12) + 1} | SL: {sl:.{digits}f} | top {grp12["top"]:.2f}')
+                                        grp12['last_bar'] = str(df_h1['time'].iloc[-1])
+                                        dtop_plan.save_group(grp12)
+                            elif sig12 and not pos12:
+                                d12, top12 = sig12
+                                side12 = 'BUY' if d12 == 1 else 'SELL'
+                                if not _is_plan_blocked(side12, P12_NAME):
+                                    price = tick.ask if d12 == 1 else tick.bid
+                                    sl = round(dtop_plan.sl_price(d12, top12, atr12[-1]), digits)
+                                    if (price - sl) * d12 > 0:
+                                        print(f"{Colors.GREEN if d12 == 1 else Colors.RED}[SIGNAL] {sym} {P12_NAME}: BB H1 ทำยอดซ้ำ {'High' if d12 == -1 else 'Low'} {top12:.2f} + แท่งยืนยัน + เทรนด์ H4 MA10/30 -> SENDING {side12} ORDER (SL {sl:.{digits}f} · NO TP · ปิดเมื่อแตะ BB {'ล่าง' if d12 == -1 else 'บน'}){Colors.RESET}")
+                                        send_order(sym, mt5.ORDER_TYPE_BUY if d12 == 1 else mt5.ORDER_TYPE_SELL, price, sl, 0.0, plan_name=P12_NAME)
+                                        log_signal_event(sym, 'ENTRY_SIGNAL', P12_NAME, side12, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | top {top12:.2f}')
+                                        dtop_plan.save_group({"d": d12, "top": float(top12), "sl": float(sl), "last_bar": str(df_h1['time'].iloc[-1])})
                 if has_position:
                     # เช็คเงื่อนไขการจัดการ Position (Plan 1 MA Exit + Plan 2 H1 MA Exit + AI Reversal + Early BE Lock + Unlimited Dynamic TP)
                     open_tickets = {p.ticket for p in positions}
@@ -3956,6 +4062,19 @@ def main():
                                 print(f"{Colors.YELLOW}[PLAN 10 EXIT] {sym} ถือครบ {rsi_plan.HOLD_HOURS} ชม. — ปิดไม้ Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
                                 log_signal_event(sym, 'POSITION_MGMT', P10_NAME, 'SELL' if pos.type == mt5.ORDER_TYPE_BUY else 'BUY', tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'TIME_EXIT', f'Held {rsi_plan.HOLD_HOURS}h (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment=f"P10 Time Exit {rsi_plan.HOLD_HOURS}h")
+                            continue
+
+                        # 0.38 Plan 12 (DoubleTop-H1): ปิดทุกไม้เมื่อราคาแตะ BB H1 อีกฝั่ง (SELL = เส้นล่าง · BUY = เส้นบน) · SL เดิม · ไม่ใช้กฎอื่น
+                        if pos.comment.startswith(P12_NAME):
+                            if tick is not None and len(df_h1) >= 25:
+                                _bb = dtop_plan.indicators(df_h1)
+                                _d12 = 1 if pos.type == mt5.ORDER_TYPE_BUY else -1
+                                _hit = (tick.bid <= _bb[5][-1]) if _d12 == -1 else (tick.bid >= _bb[4][-1])
+                                if _hit:
+                                    p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
+                                    print(f"{Colors.YELLOW}[PLAN 12 EXIT] {sym} ราคาแตะ BB H1 {'ล่าง' if _d12 == -1 else 'บน'} ({(_bb[5] if _d12 == -1 else _bb[4])[-1]:.2f}) — ปิดไม้ Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                    log_signal_event(sym, 'POSITION_MGMT', P12_NAME, 'BUY' if _d12 == -1 else 'SELL', tick.bid, prob[1], prob[0], h4_cloud_status, div_name, 'BB_TP', f'Touch BB (Profit: ${pos.profit:.2f})')
+                                    close_position(pos, comment="P12 BB Band TP")
                             continue
 
                         # 0.37 Plan 11 (News-USD): ถือไม่เกิน 8 ชม. · ไม่ตั้ง TP · ไม่เลื่อน SL / AI Reversal / ล็อกกำไร (ตรงกับ Backtest)

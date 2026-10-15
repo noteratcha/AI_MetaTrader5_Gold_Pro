@@ -3220,7 +3220,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
     STYLE_COLORS = {"fast": COLOR_CYAN_ACCENT, "slow": COLOR_GOLD_WARM, "ma50": "#A78BFA", "band": "#A78BFA",
                     "mid": "#8A93A6", "sup": COLOR_SUCCESS_GREEN, "res": COLOR_DANGER_RED}
     PLAN_RULES = {
-        "P1": "MA5 ตัด MA13 (M15) + H1 MA100/150/200 เรียงตัว · กรอง RSI + MA50 · SL 1.0 ATR · ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ · เลื่อน SL ทุก +5 จุด",
+        "P1": "MA5 ตัด MA13 (M15) + H1 MA100/150/200 เรียงตัว · กรอง RSI + MA50 · แท่งถัดไปต้องปิดตามทิศและทั้งตัวพ้น MA13 (แท่งยืนยัน) · SL 1.0 ATR · ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ · เลื่อน SL ทุก +5 จุด",
         "P2": "MA5 ตัด MA10 (H1) + H4 MA10/30 + ความชัน MA5 H4 + MA200 H4 · SL 1.25 ATR H1 · ไม่ตั้ง TP · ออกเมื่อ MA5 ตัด MA20 กลับ",
         "P3": "ราคากวาดแนวรับ/ต้าน H1 แล้วดึงกลับ + ไส้เทียน 0.4–1.0 ATR + เทรนด์ H1 + MA100/150/200 H1 เรียงตามทิศ + AI · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
         "P4": "เด้งโซนแนวรับ/ต้าน H1 (≤ 0.75 ATR) + RSI Divergence + H1 MA100/150/200 ไม่สวนทิศ + AI ≥ 58% · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
@@ -3231,6 +3231,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
         "P9": "Fibonacci คลื่น H1 (≥ 3 ATR) สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้าที่ระดับ 0.3 · SL ระดับ 0 · TP 1.75 · เลื่อน SL ขั้นบันได (ปิดผ่าน 1 → 0.15 · 1.27 → 0.6 · 1.5 → 1)",
         "P10": "RSI(14) H1 ลงต่ำกว่า 30 ตอนราคาเหนือ MA200 (BUY) / ขึ้นเกิน 70 ตอนราคาใต้ MA200 (SELL) · SL 2 ATR H1 · TP 3 ATR · ถือไม่เกิน 48 ชม. · ไม่เลื่อน SL",
         "P11": "ข่าว USD: ตัวเลขคาดเทียบครั้งก่อนบอกแนวโน้มทอง → ค่าจริงออกไม่สวนแนวโน้ม = ยืนยัน → เข้าไม้ทันที (ข่าวออกพร้อมกันหักกลบ · Lot สูงสุด 3 เท่า) · SL 3 ATR M15 · ไม่ตั้ง TP · ถือ 8 ชม. · ต้องเปิด EA GoldBot24_NewsBridge ใน MT5 · ค่าเริ่มต้นปิด (แนะนำทดลองบน Demo)",
+        "P12": "เทรนด์ H4 MA10/30 กำหนดทิศ · แท่ง H1 ทะลุ BB → ย่อ → ทำยอดใหม่เลยยอดแรก → แท่งถัดไปปิดสวน (ยืนยัน) = เข้า · SL เหนือยอดใหม่ 0.1 ATR · ไม่ตั้ง TP ปิดทุกไม้เมื่อแตะ BB อีกฝั่ง · ไม้เพิ่มสูงสุด 2 ไม้ เมื่อทำยอดต่ำกว่าเดิม (เหนือเส้นกลาง BB) แล้วแท่งยืนยัน · ค่าเริ่มต้นปิด",
         "M": "ไม้ที่เข้าเอง (ปุ่มในโปรแกรมหรือใน MT5) · ไม่มี SL บอทตั้งให้ 1.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (ขั้นแรก 50% / ถัดไป 40%) · ล็อกกำไร / AI กลับทิศ / ปิดเมื่อกำไรถึงเป้า",
     }
 
@@ -3797,6 +3798,7 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         "Fib-H1-Counter": {"label": "Plan 9 (Fib H1)", "icon": "›", "color": "#F59E0B"},
         "RSI-H1-Trend": {"label": "Plan 10 (RSI H1)", "icon": "•", "color": "#F472B6"},
         "News-USD": {"label": "Plan 11 (News)", "icon": "›", "color": "#FB923C"},
+        "DoubleTop-H1": {"label": "Plan 12 (BB ยอดซ้ำ)", "icon": "◆", "color": "#38BDF8"},
         "เข้าเอง": {"label": "เข้าเอง (Manual)", "icon": "✋", "color": "#F97316"},
         "Manual-Quick": {"label": "เข้าเอง (Manual)", "icon": "✋", "color": "#F97316"},
     }
@@ -5943,6 +5945,7 @@ class MainTradingApp(ctk.CTk):
         ("›", "P9 · Fib H1", "Plan 9: Fib-H1-Counter"),
         ("•", "P10 · RSI H1", "Plan 10: RSI-H1-Trend"),
         ("›", "P11 · News", "Plan 11: News-USD"),
+        ("◆", "P12 · BB ยอดซ้ำ", "Plan 12: DoubleTop-H1"),
     ]
 
     PLAN_CODE_MAP = {
@@ -5957,10 +5960,13 @@ class MainTradingApp(ctk.CTk):
         "Plan 9: Fib-H1-Counter": "P9",
         "Plan 10: RSI-H1-Trend": "P10",
         "Plan 11: News-USD": "P11",
+        "Plan 12: DoubleTop-H1": "P12",
     }
 
     def _open_plan_candle_dialog(self, plan_code):
         """เปิดหน้าต่างกราฟแท่งเทียนสด และสลับไปยังแผนที่คลิกทันที"""
+        if plan_code == "P12":   # P12 ใช้ BB H1 → เปิดกราฟแท็บ P5 (BB H1)
+            plan_code = "P5"
         if plan_code == "P11":   # แผนข่าวไม่มีกราฟเฉพาะ → เปิดแท็บปฏิทินเศรษฐกิจ
             try:
                 self.main_tabs.set(self.TAB_CALENDAR)
@@ -6174,7 +6180,7 @@ class MainTradingApp(ctk.CTk):
 
             sig = (
                 tuple((k, tuple(v)) for k, v in sorted(open_by_plan.items())),
-                tuple((pk, (plans_status.get(pk) or {}).get("matched"), (plans_status.get(pk) or {}).get("total"), (plans_status.get(pk) or {}).get("side")) for pk in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11"))
+                tuple((pk, (plans_status.get(pk) or {}).get("matched"), (plans_status.get(pk) or {}).get("total"), (plans_status.get(pk) or {}).get("side")) for pk in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"))
             )
             if sig == getattr(self, "_last_plan_live_sig", None):
                 self.after(2000, self._plan_live_tick)
@@ -7663,7 +7669,7 @@ class MainTradingApp(ctk.CTk):
             self.lbl_member.configure(text=f"● สมาชิก ถึง {until}" + (f" (อีก {mem['daysLeft']} วัน)" if mem["daysLeft"] <= 3 else ""),
                                       text_color=COLOR_DANGER_RED if mem["daysLeft"] <= 3 else COLOR_SUCCESS_GREEN)
         else:
-            self.lbl_member.configure(text="สมัครสมาชิก ปลดล็อก P6–P11 ›", text_color=COLOR_TEXT_MUTED)
+            self.lbl_member.configure(text="สมัครสมาชิก ปลดล็อก P6–P12 ›", text_color=COLOR_TEXT_MUTED)
         self._reward_shown = key
         if not o:
             self.reward_box.pack_forget()
@@ -7700,7 +7706,7 @@ class MainTradingApp(ctk.CTk):
         if not mem["active"]:
             return ""
         until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y") if mem["until"] else "-"
-        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P11\nใช้ได้ถึงวันที่ {until} (23:59 น.) · เหลือ {mem['daysLeft']} วัน (รวมวันนี้)\n"
+        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P12\nใช้ได้ถึงวันที่ {until} (23:59 น.) · เหลือ {mem['daysLeft']} วัน (รวมวันนี้)\n"
                 "คลิกเพื่อต่ออายุ — ต่อก่อนหมดนับต่อจากวันสุดท้ายเดิม")
 
     @staticmethod
@@ -7712,7 +7718,7 @@ class MainTradingApp(ctk.CTk):
             return time.time()
 
     def _check_member_expiry(self, mem):
-        """สมาชิกเหลือ ≤ 3 วัน → เตือน 1 ครั้งต่อวัน (หมดแล้วบอทเข้าไม้ด้วย P6–P11 ไม่ได้)"""
+        """สมาชิกเหลือ ≤ 3 วัน → เตือน 1 ครั้งต่อวัน (หมดแล้วบอทเข้าไม้ด้วย P6–P12 ไม่ได้)"""
         if not mem["active"] or mem["viaAdmin"] or mem["daysLeft"] > 3:
             return
         today = thai_time.fmt_now("%Y-%m-%d")
@@ -7723,7 +7729,7 @@ class MainTradingApp(ctk.CTk):
         left = "วันนี้เป็นวันสุดท้าย" if mem["daysLeft"] <= 1 else f"เหลืออีก {mem['daysLeft']} วัน (รวมวันนี้)"
         self.after(1500, lambda: messagebox.showwarning(
             "สมาชิกรายเดือนใกล้หมดอายุ",
-            f"สมาชิกใช้ได้ถึงวันที่ {until} (23:59 น.) · {left}\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P11 ต่อ — ต่อก่อนหมดจะนับต่อจากวันสุดท้ายเดิม"))
+            f"สมาชิกใช้ได้ถึงวันที่ {until} (23:59 น.) · {left}\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P12 ต่อ — ต่อก่อนหมดจะนับต่อจากวันสุดท้ายเดิม"))
 
     def _reward_tip(self):
         o = license_mgr.online_status()

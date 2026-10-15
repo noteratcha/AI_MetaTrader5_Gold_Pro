@@ -11,11 +11,13 @@ export const PLAN_NAMES = {
   9: 'P9 · Fib H1',
   10: 'P10 · RSI H1',
   11: 'P11 · News',
+  12: 'P12 · BB ยอดซ้ำ',
 };
 
 /** เลขแผนจากชื่อใด ๆ เช่น "MA-Cross-Trend", "Plan 3: SMC-LiquidityHunt", "BB-H1-Reversion+Div" — ไม่รู้จักคืน 0 */
 export function planNumber(raw) {
   const p = String(raw || '').toLowerCase();
+  if (p.includes('doubletop') || p.includes('p12')) return 12;
   if (p.includes('news-usd') || p.includes('p11')) return 11;
   if (p.includes('rsi-h1') || p.includes('rsi h1')) return 10;
   if (p.includes('psar') || p.includes('sar h1')) return 6;

@@ -75,7 +75,7 @@ export default function StorePage() {
         eyebrow="Store"
         icon={ShoppingBag}
         title="เติมชั่วโมงใช้งาน"
-        description={`${rateRange(packages)}ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ · สมาชิกรายเดือนปลดล็อกแผน P6–P11`}
+        description={`${rateRange(packages)}ชั่วโมงไม่มีวันหมดอายุ และบวกสะสมจากยอดเดิมเสมอ · สมาชิกรายเดือนปลดล็อกแผน P6–P12`}
       />
 
       <MembershipCard membership={user?.membership} showHistory={Boolean(user)} onBuy={(p) => buy(p || MEMBERSHIP)} />
@@ -426,7 +426,7 @@ function CheckoutModal({ pkg, onClose }) {
               </div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>สมัครสมาชิกสำเร็จ</h3>
               <p className="small muted" style={{ marginBottom: 16 }}>
-                ปลดล็อกแผน P6–P11 แล้ว{memberUntil ? <> · ใช้ได้ถึง <strong className="text-gold">{new Date(memberUntil).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric' })}</strong></> : ''}
+                ปลดล็อกแผน P6–P12 แล้ว{memberUntil ? <> · ใช้ได้ถึง <strong className="text-gold">{new Date(memberUntil).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric' })}</strong></> : ''}
                 <br />
                 โปรแกรมรับสิทธิ์ภายใน ~1 นาที (ติ๊กเลือกแผนในการ์ดแผนเทรดได้เลย) · ส่งใบเสร็จไปที่อีเมลแล้ว
               </p>

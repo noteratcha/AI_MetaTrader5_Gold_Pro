@@ -45,4 +45,5 @@ export const PLAN_SHORT = {
   'Plan 9: Fib-H1-Counter': 'P9 · Fib H1',
   'Plan 10: RSI-H1-Trend': 'P10 · RSI H1',
   'Plan 11: News-USD': 'P11 · News',
+  'Plan 12: DoubleTop-H1': 'P12 · BB ยอดซ้ำ',
 };

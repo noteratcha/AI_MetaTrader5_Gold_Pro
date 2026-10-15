@@ -60,4 +60,5 @@ export const PLAN_LIST = [
   { key: 'Fib-H1-Counter', label: 'P9 · Fib H1', tag: 'Fibonacci 0.3 · สวนเทรนด์ใหญ่ H1' },
   { key: 'RSI-H1-Trend', label: 'P10 · RSI H1', tag: 'RSI 30/70 · ตามเทรนด์ MA200' },
   { key: 'News-USD', label: 'P11 · News', tag: 'ข่าว USD · เข้าทันทีเมื่อค่าจริงยืนยัน' },
+  { key: 'DoubleTop-H1', label: 'P12 · BB ยอดซ้ำ', tag: 'BB H1 ทำยอดซ้ำ · ตามเทรนด์ H4 · ไม้เพิ่ม ≤ 2' },
 ];
