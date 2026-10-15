@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { FlaskConical, LineChart, ShieldAlert, Target, TrendingDown, TrendingUp, Users } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { FlaskConical, Info, LineChart, ShieldAlert, Target, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { Alert, EmptyState, PageHeader, PageLoading, StatCard } from '../../components/ui';
 import { PLAN_NAMES, planDisplay } from '../../lib/plans';
 import { MEMBER_PLAN_NUMBERS } from '../../lib/membership';
@@ -121,6 +122,54 @@ const PLAN_INFO = {
 };
 const pts = (v) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${Number(v).toLocaleString('th-TH', { maximumFractionDigits: 1 })}`);
 const tone = (v) => (v > 0 ? 'text-green' : v < 0 ? 'text-red' : 'muted');
+
+/** ชื่อแผน + กฎของแผนเป็น tooltip (ชี้เมาส์ / แตะ / โฟกัสด้วยคีย์บอร์ด) · วาดลง body เพื่อไม่ถูกตัดโดยกรอบตารางที่เลื่อนได้ */
+function RuleTip({ text, children }) {
+  const ref = useRef(null);
+  const id = useId();
+  const [pos, setPos] = useState(null);
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = Math.min(440, window.innerWidth - 32);
+    const left = Math.max(16, Math.min(r.left, window.innerWidth - 16 - width));
+    setPos(r.bottom + 160 < window.innerHeight ? { left, width, top: r.bottom + 8 } : { left, width, bottom: window.innerHeight - r.top + 8 });
+  };
+  const hide = () => setPos(null);
+  useEffect(() => {
+    if (!pos) return undefined;
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => {
+      window.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+    };
+  }, [pos]);
+  if (!text) return children;
+  return (
+    <span
+      ref={ref}
+      className="rule-tip-anchor"
+      tabIndex={0}
+      aria-describedby={pos ? id : undefined}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+      onClick={show}
+    >
+      {children}
+      <Info size={13} className="rule-tip-icon" aria-hidden="true" />
+      {pos &&
+        createPortal(
+          <div id={id} role="tooltip" className="rule-tip" style={pos}>
+            {text}
+          </div>,
+          document.body,
+        )}
+    </span>
+  );
+}
 
 /** กราฟกำไรสะสม (SVG) — รวมทุกแผน + แยกรายแผน */
 function EquityChart({ equity, plans, visible }) {
@@ -411,12 +460,9 @@ export default function BacktestPage() {
                   <td>
                     <div className="row" style={{ gap: 8 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 3, background: PLAN_COLORS[p.key], flexShrink: 0 }} />
-                      <div>
-                        <strong>
-                          {planDisplay(p.name)}
-                        </strong>
-                        <div className="tiny faint">{p.rule}</div>
-                      </div>
+                      <RuleTip text={p.rule}>
+                        <strong style={{ whiteSpace: 'nowrap' }}>{planDisplay(p.name)}</strong>
+                      </RuleTip>
                     </div>
                   </td>
                   <td className="num">{p.n ?? 0}</td>

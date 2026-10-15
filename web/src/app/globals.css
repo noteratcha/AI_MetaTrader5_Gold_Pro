@@ -2481,3 +2481,39 @@ select.input {
   font-weight: 700;
   color: var(--green);
 }
+
+/* ----------------------------------------------------------------------------
+   Tooltip กฎของแผน (หน้าแผนเทรด · ตารางผลแยกตามแผน)
+   ---------------------------------------------------------------------------- */
+.rule-tip-anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: help;
+  border-radius: 4px;
+}
+.rule-tip-anchor:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.rule-tip-icon {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.rule-tip-anchor:hover .rule-tip-icon,
+.rule-tip-anchor:focus-visible .rule-tip-icon {
+  color: var(--gold);
+}
+.rule-tip {
+  position: fixed;
+  z-index: 1000;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  color: var(--text-2);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  pointer-events: none;
+}
