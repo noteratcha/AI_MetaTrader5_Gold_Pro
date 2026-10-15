@@ -3798,7 +3798,7 @@ class PnlHistoryDialog(ctk.CTkToplevel):
         "Fib-H1-Counter": {"label": "Plan 9 (Fib H1)", "icon": "›", "color": "#F59E0B"},
         "RSI-H1-Trend": {"label": "Plan 10 (RSI H1)", "icon": "•", "color": "#F472B6"},
         "News-USD": {"label": "Plan 11 (News)", "icon": "›", "color": "#FB923C"},
-        "DoubleTop-H1": {"label": "Plan 12 (BB ยอดซ้ำ)", "icon": "◆", "color": "#38BDF8"},
+        "DoubleTop-H1": {"label": "Plan 12 (BB High Low)", "icon": "◆", "color": "#38BDF8"},
         "เข้าเอง": {"label": "เข้าเอง (Manual)", "icon": "✋", "color": "#F97316"},
         "Manual-Quick": {"label": "เข้าเอง (Manual)", "icon": "✋", "color": "#F97316"},
     }
@@ -5945,7 +5945,7 @@ class MainTradingApp(ctk.CTk):
         ("›", "P9 · Fib H1", "Plan 9: Fib-H1-Counter"),
         ("•", "P10 · RSI H1", "Plan 10: RSI-H1-Trend"),
         ("›", "P11 · News", "Plan 11: News-USD"),
-        ("◆", "P12 · BB ยอดซ้ำ", "Plan 12: DoubleTop-H1"),
+        ("◆", "P12 · BB High Low", "Plan 12: DoubleTop-H1"),
     ]
 
     PLAN_CODE_MAP = {

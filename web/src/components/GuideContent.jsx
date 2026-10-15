@@ -927,7 +927,7 @@ export default function GuideContent() {
             </ul>
           </Section>
 
-          <p className="tiny faint">คู่มือฉบับวันที่ 15 ต.ค. 2569 · อ้างอิงโปรแกรมเวอร์ชัน 2026.1015.2144</p>
+          <p className="tiny faint">คู่มือฉบับวันที่ 15 ต.ค. 2569 · อ้างอิงโปรแกรมเวอร์ชัน 2026.1015.2201</p>
         </div>
       </div>
     </div>

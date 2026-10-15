@@ -2121,7 +2121,7 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
                 p12_items.append({"name": "ถือไม้อยู่", "ok": True, "desc": f"{len(pos12s)} ไม้ · เพิ่มได้อีก {max(0, dtop_plan.MAX_ADD + 1 - len(pos12s))} ไม้ (ยอดใหม่ต่ำกว่ายอดเดิมและเหนือเส้นกลาง BB) · ปิดเมื่อแตะ BB อีกฝั่ง"})
             m12 = sum(1 for it in p12_items if it["ok"])
             results["P12"] = {
-                "name": P12_NAME, "label": "P12 · H1 (BB ยอดซ้ำ)", "side": "BUY" if d12s == 1 else "SELL",
+                "name": P12_NAME, "label": "P12 · H1 (BB High Low)", "side": "BUY" if d12s == 1 else "SELL",
                 "matched": m12, "total": len(p12_items), "pct": int(m12 / len(p12_items) * 100), "items": p12_items,
                 "enabled": plan_config.is_enabled(P12_NAME),
                 "disabled_reason": plan_config.disabled_reason(P12_NAME)
