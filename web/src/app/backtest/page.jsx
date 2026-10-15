@@ -7,7 +7,7 @@ import { PLAN_NAMES, planDisplay } from '../../lib/plans';
 import { MEMBER_PLAN_NUMBERS } from '../../lib/membership';
 import Link from 'next/link';
 
-const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa', 6: '#fb923c', 7: '#c084fc', 8: '#2dd4bf', 9: '#f59e0b', 10: '#f472b6', 11: '#38bdf8' };
+const PLAN_COLORS = { 1: '#f2c14e', 2: '#60a5fa', 3: '#34d399', 4: '#f472b6', 5: '#a78bfa', 6: '#fb923c', 7: '#c084fc', 8: '#2dd4bf', 9: '#f59e0b', 10: '#f472b6', 11: '#38bdf8', 12: '#a3e635' };
 
 // หลักการของแต่ละแผน (ตรงกับกฎในโปรแกรมเวอร์ชันล่าสุด)
 const PLAN_INFO = {
@@ -15,7 +15,7 @@ const PLAN_INFO = {
     type: 'ตามเทรนด์ · M15',
     rules: [
       'เทรนด์ H1: MA100 < MA150 < MA200 = ขาลง (SELL) · MA100 > MA150 > MA200 = ขาขึ้น (BUY)',
-      'จุดเข้า: MA5 ตัด MA13 บนแท่ง M15 ที่ปิดแล้ว ตามทิศเทรนด์',
+      'จุดเข้า: MA5 ตัด MA13 บนแท่ง M15 ที่ปิดแล้ว ตามทิศเทรนด์ → แท่งถัดไปต้องปิดตามทิศและทั้งตัวพ้น MA13 (แท่งยืนยัน) จึงเข้า',
       'กรองสัญญาณหลอก: RSI 50–70 (BUY) / 30–50 (SELL) และราคาปิดอยู่ฝั่งเดียวกับ MA50 M15',
       'SL 1.0 ATR · เลื่อน SL ทุกกำไร 5 จุด (ขั้นแรก 50% / ถัดไป 40%) · ปิดเมื่อ MA5 ตัด MA13 กลับ (ไม่ตั้ง TP)',
     ],
@@ -106,6 +106,16 @@ const PLAN_INFO = {
       'ค่าจริงออกไม่สวนแนวโน้ม = ยืนยัน · ข่าวที่ออกพร้อมกันหักกลบเป็นไม้เดียว Lot = ปกติ × จำนวนสุทธิ (สูงสุด 3 เท่า)',
       'เข้าไม้ทันที (EA ใน MT5 อ่านปฏิทินทุก 0.5 วินาที) · SL 3 ATR M15 · ไม่ตั้ง TP · ถือ 8 ชม.',
       'Backtest ใช้ Tick จริง เข้า 10 วินาทีหลังข่าวออก (ราคา Ask/Bid รวมสเปรดช่วงข่าว) · ตัวเลขคาดจากปฏิทิน MetaQuotes · กำไรส่วนใหญ่ปี 2026',
+    ],
+  },
+  12: {
+    type: 'BB ทำยอดซ้ำ ตามเทรนด์ H4 · H1',
+    rules: [
+      'ทิศจากเทรนด์ H4: MA10 < MA30 = SELL เท่านั้น · MA10 > MA30 = BUY เท่านั้น',
+      'SELL: แท่ง H1 ทะลุเส้น BB บน → ราคาย่อ → ขึ้นไปทำ High ใหม่สูงกว่า High แรก → แท่งถัดไปปิดแดง = เข้า (BUY กลับด้าน)',
+      'SL เหนือ High ใหม่ 0.1 ATR · ไม่ตั้ง TP ปิดทุกไม้เมื่อราคาแตะเส้น BB อีกฝั่ง',
+      'ไม้เพิ่มสูงสุด 2 ไม้: ทำยอดใหม่ที่ไม่สูงกว่ายอดเดิมและอยู่เหนือเส้นกลาง BB แล้วแท่งถัดไปปิดแดง (ใช้ SL เดียวกัน)',
+      'ช่วงก่อนปี 2024 ยังไม่ชัด — ค่าเริ่มต้นปิด แนะนำทดลองบนบัญชี Demo ก่อน',
     ],
   },
 };
@@ -222,7 +232,7 @@ function LiveResults() {
                 <tr key={p.key}>
                   <td className="nowrap">
                     <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, marginRight: 8, background: PLAN_COLORS[p.key] || '#6b7385' }} />
-                    {p.key === 'manual' ? 'เข้าไม้เอง' : PLAN_NAMES[p.key]}
+                    {PLAN_NAMES[p.key]}
                   </td>
                   <td className="num">{p.users}</td>
                   <td className="num">{p.trades.toLocaleString()}</td>
@@ -285,6 +295,15 @@ export default function BacktestPage() {
   const monthTotal = (m) => data.plans.reduce((a, p) => a + (Number(p.monthly?.[m]) || 0), 0);
   const planYear = (p) => months.reduce((a, m) => a + (Number(p.monthly?.[m]) || 0), 0);
   const grandYear = months.reduce((a, m) => a + monthTotal(m), 0);
+  // จำนวนไม้ / % ชนะ ใต้ตัวเลขกำไร (ไฟล์ Backtest รุ่นเก่าไม่มีข้อมูลนี้ → ไม่แสดง)
+  const nw = (n, w) => (n ? `${n.toLocaleString()} ไม้ · ชนะ ${Math.round((w / n) * 100)}%` : null);
+  const mN = (p, m) => Number(p.monthly_n?.[m]) || 0;
+  const mW = (p, m) => Number(p.monthly_w?.[m]) || 0;
+  const planYearNW = (p) => months.reduce((a, m) => [a[0] + mN(p, m), a[1] + mW(p, m)], [0, 0]);
+  const monthNW = (m) => data.plans.reduce((a, p) => [a[0] + mN(p, m), a[1] + mW(p, m)], [0, 0]);
+  const grandNW = months.reduce((a, m) => { const x = monthNW(m); return [a[0] + x[0], a[1] + x[1]]; }, [0, 0]);
+  const halfW = (k) => data.plans.reduce((a, p) => a + (Number(p[`${k}_n`]) || 0) * (Number(p[`${k}_win`]) || 0) / 100, 0);
+  const Sub = ({ children }) => (children ? <div className="tiny faint" style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>{children}</div> : null);
 
   return (
     <div className="container container-wide page">
@@ -407,11 +426,17 @@ export default function BacktestPage() {
                   </td>
                   <td className="num">{p.pf ?? '—'}</td>
                   <td className="num text-red">{p.maxdd ? pts(-p.maxdd) : '—'}</td>
-                  <td className={`num ${tone(p.half1)}`}>{pts(p.half1)}</td>
-                  <td className={`num ${tone(p.half2)}`}>{pts(p.half2)}</td>
+                  <td className={`num ${tone(p.half1)}`}>
+                    {pts(p.half1)}
+                    <Sub>{p.half1_n ? `${p.half1_n} ไม้ · ชนะ ${p.half1_win}%` : null}</Sub>
+                  </td>
+                  <td className={`num ${tone(p.half2)}`}>
+                    {pts(p.half2)}
+                    <Sub>{p.half2_n ? `${p.half2_n} ไม้ · ชนะ ${p.half2_win}%` : null}</Sub>
+                  </td>
                   <td className={`num ${tone(p.last100_net)}`}>
                     {pts(p.last100_net)}
-                    {p.last100_win !== undefined && p.n ? <div className="tiny faint">ชนะ {p.last100_win}%</div> : null}
+                    {p.last100_win !== undefined && p.n ? <Sub>{p.last100_n ? `${p.last100_n} ไม้ · ` : ''}ชนะ {p.last100_win}%</Sub> : null}
                   </td>
                 </tr>
               ))}
@@ -429,8 +454,14 @@ export default function BacktestPage() {
                 </td>
                 <td className="num">{s.pf ?? '—'}</td>
                 <td className="num text-red">{s.maxdd ? pts(-s.maxdd) : '—'}</td>
-                <td className={`num ${tone(sum('half1'))}`}>{pts(Math.round(sum('half1') * 10) / 10)}</td>
-                <td className={`num ${tone(sum('half2'))}`}>{pts(Math.round(sum('half2') * 10) / 10)}</td>
+                <td className={`num ${tone(sum('half1'))}`}>
+                  {pts(Math.round(sum('half1') * 10) / 10)}
+                  <Sub>{nw(sum('half1_n'), halfW('half1'))}</Sub>
+                </td>
+                <td className={`num ${tone(sum('half2'))}`}>
+                  {pts(Math.round(sum('half2') * 10) / 10)}
+                  <Sub>{nw(sum('half2_n'), halfW('half2'))}</Sub>
+                </td>
                 <td className={`num ${tone(sum('last100_net'))}`}>{pts(Math.round(sum('last100_net') * 10) / 10)}</td>
               </tr>
             </tfoot>
@@ -441,6 +472,7 @@ export default function BacktestPage() {
       <div className="card section">
         <div className="card-header">
           <h3>กำไรรายเดือน (12 เดือนล่าสุด · จุด)</h3>
+          <span className="tiny faint">ใต้ตัวเลข = จำนวนไม้ · % ชนะ</span>
         </div>
         <div className="table-wrap">
           <table className="table">
@@ -464,11 +496,13 @@ export default function BacktestPage() {
                     return (
                       <td key={m} className={`num tiny ${tone(v || 0)}`}>
                         {v === undefined ? '·' : pts(v)}
+                        <Sub>{mN(p, m) ? `${mN(p, m)} · ${Math.round((mW(p, m) / mN(p, m)) * 100)}%` : null}</Sub>
                       </td>
                     );
                   })}
                   <td className={`num small ${tone(planYear(p))}`}>
                     <strong>{pts(Math.round(planYear(p) * 10) / 10)}</strong>
+                    <Sub>{nw(...planYearNW(p))}</Sub>
                   </td>
                 </tr>
               ))}
@@ -481,10 +515,12 @@ export default function BacktestPage() {
                 {months.map((m) => (
                   <td key={m} className={`num tiny ${tone(monthTotal(m))}`}>
                     <strong>{pts(Math.round(monthTotal(m) * 10) / 10)}</strong>
+                    <Sub>{monthNW(m)[0] ? `${monthNW(m)[0]} · ${Math.round((monthNW(m)[1] / monthNW(m)[0]) * 100)}%` : null}</Sub>
                   </td>
                 ))}
                 <td className={`num small ${tone(grandYear)}`}>
                   <strong>{pts(Math.round(grandYear * 10) / 10)}</strong>
+                  <Sub>{nw(...grandNW)}</Sub>
                 </td>
               </tr>
             </tfoot>

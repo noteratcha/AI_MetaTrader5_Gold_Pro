@@ -25,8 +25,8 @@ export default async function handler(req, res) {
     if (!trades) continue;
     if (usage && !realUsers.has(String(r.user_id))) continue;
     if (trades > 20000 || Math.abs(Number(r.total_profit_usd) || 0) / trades > 5000) continue;
-    const n = planNumber(r.plan_name);
-    const key = n || (/manual/i.test(r.plan_name || '') ? 'manual' : null);
+    // นับเฉพาะไม้ของแผนบอท (P1–P12) — ไม้ที่ผู้ใช้เข้าเองไม่แสดง (ผู้ใช้สั่ง 15 ต.ค. 2026)
+    const key = planNumber(r.plan_name);
     if (!key) continue;
     const p = (plans[key] ||= { key, users: new Set(), trades: 0, win: 0, loss: 0, net: 0, gp: 0, gl: 0, last: null });
     p.users.add(r.user_id);
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
       lastTradeAt: p.last,
     };
   });
-  out.sort((a, b) => (a.key === 'manual') - (b.key === 'manual') || a.key - b.key);
+  out.sort((a, b) => a.key - b.key);
 
   const t = out.reduce((a, p) => ({ trades: a.trades + p.trades, win: a.win + p.win, loss: a.loss + p.loss, net: a.net + p.net }), { trades: 0, win: 0, loss: 0, net: 0 });
   const gp = Object.values(plans).reduce((a, p) => a + p.gp, 0);
