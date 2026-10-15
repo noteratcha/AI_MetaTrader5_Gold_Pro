@@ -223,12 +223,21 @@ textarea {
 .grid-4 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
+.grid-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
 .grid-main-side {
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
 }
 
+@media (max-width: 1280px) {
+  .grid-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 @media (max-width: 1024px) {
-  .grid-4 {
+  .grid-4,
+  .grid-5 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .grid-3,
@@ -238,7 +247,8 @@ textarea {
 }
 @media (max-width: 640px) {
   .grid-2,
-  .grid-4 {
+  .grid-4,
+  .grid-5 {
     grid-template-columns: minmax(0, 1fr);
   }
   .page {

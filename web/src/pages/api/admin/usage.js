@@ -1,5 +1,6 @@
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
-import { allowMethods, requireAdmin } from '../../../lib/server/auth';
+import { allowMethods, requireAdmin, rowTags } from '../../../lib/server/auth';
+import { memberInfo } from '../../../lib/membership';
 import { githubDownloadStats, USAGE_EVENTS } from '../../../lib/server/usage';
 
 const DAY_MS = 86400000;
@@ -15,7 +16,7 @@ export default async function handler(req, res) {
   const since = new Date(now - 30 * DAY_MS).toISOString();
   const supabase = getAdminClient();
   const head = { count: 'exact', head: true };
-  const [rows, allDownloads, allOpens, github] = await Promise.all([
+  const [rows, allDownloads, allOpens, github, accounts] = await Promise.all([
     supabase
       .from('user_activity')
       .select('user_id, email, event, detail, created_at')
@@ -26,6 +27,7 @@ export default async function handler(req, res) {
     supabase.from('user_activity').select('id', head).eq('event', 'app_download'),
     supabase.from('user_activity').select('id', head).eq('event', 'app_open'),
     githubDownloadStats(),
+    supabase.from('bot_config').select('symbols_trading', { count: 'exact' }).gt('id', 1).limit(20000),
   ]);
   if (rows.error) return res.status(500).json({ success: false, error: 'อ่านข้อมูลกิจกรรมไม่สำเร็จ' });
 
@@ -37,6 +39,19 @@ export default async function handler(req, res) {
   const opens = of('app_open');
   const downloads = of('app_download');
   const starts = of('bot_start');
+
+  // สมาชิกสะสม = บัญชีผู้ใช้ทั้งหมด (สมัครเอง + แอดมินสร้าง) · สมัครใหม่นับจาก tag registered: · สมาชิกรายเดือนที่ยังไม่หมดอายุ
+  const accountRows = accounts.data || [];
+  const registered = accountRows
+    .map((row) => Date.parse(rowTags(row).find((t) => t.startsWith('registered:'))?.slice('registered:'.length) || ''))
+    .filter((ms) => Number.isFinite(ms));
+  const members = {
+    total: accounts.count ?? accountRows.length,
+    today: registered.filter((ms) => bkkDay(new Date(ms).toISOString()) === todayKey).length,
+    last7: registered.filter((ms) => ms >= now - 7 * DAY_MS).length,
+    last30: registered.filter((ms) => ms >= now - 30 * DAY_MS).length,
+    monthly: accountRows.filter((row) => memberInfo(rowTags(row), now).active).length,
+  };
 
   // กราฟรายวัน 14 วัน (เวลาไทย)
   const daily = [];
@@ -82,7 +97,8 @@ export default async function handler(req, res) {
         .map(([version, users]) => ({ version, users }))
         .sort((a, b) => (a.version < b.version ? 1 : -1)),
     },
+    members,
     daily,
-    recent: data.slice(0, 15),
+    recent: data.slice(0, 100), // หน้าเว็บแบ่งหน้าละ 10 รายการ
   });
 }

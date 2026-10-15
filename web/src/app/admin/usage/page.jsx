@@ -1,14 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Download, Globe, MonitorPlay, RefreshCw, Users } from 'lucide-react';
+import { Download, Globe, MonitorPlay, RefreshCw, UserPlus, Users } from 'lucide-react';
 import AdminShell from '../../../components/admin/AdminShell';
-import { Alert, StatCard } from '../../../components/ui';
+import { Alert, Pager, StatCard } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
 import { cleanText, formatThaiDateTime } from '../../../lib/format';
 import { ACTIVITY_LABELS } from '../../../lib/adminLabels';
 
 const n = (v) => Number(v || 0).toLocaleString();
+const PER_PAGE = 10;
+/** ตัดรายการเป็นหน้า (หน้าละ 10) · หน้าที่เลือกเกินจำนวนหน้า (ข้อมูลลดลงหลังรีเฟรช) → หน้าสุดท้าย */
+function pageOf(list, page) {
+  const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
+  const p = Math.min(Math.max(1, page), pages);
+  return { items: list.slice((p - 1) * PER_PAGE, p * PER_PAGE), page: p, pages, total: list.length };
+}
 const dot = (color) => ({ display: 'inline-block', width: 9, height: 9, background: color, borderRadius: 2, marginRight: 4 });
 
 function DailyBars({ daily }) {
@@ -50,6 +57,8 @@ export default function AdminUsagePage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verPage, setVerPage] = useState(1);
+  const [recentPage, setRecentPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,7 +79,10 @@ export default function AdminUsagePage() {
   const d = data?.downloads;
   const u = data?.usage;
   const gh = d?.github;
+  const m = data?.members;
   const busy = !data && !error;
+  const verList = pageOf(gh?.perVersion || [], verPage);
+  const recentList = pageOf(data?.recent || [], recentPage);
 
   return (
     <AdminShell
@@ -88,7 +100,15 @@ export default function AdminUsagePage() {
         </div>
       )}
 
-      <div className="grid grid-4">
+      <div className="grid grid-5">
+        <StatCard
+          icon={UserPlus}
+          label="สมาชิกสะสม"
+          value={m ? `${n(m.total)} คน` : '—'}
+          tone="gold"
+          sub={m ? `สมัครใหม่วันนี้ ${n(m.today)} · 7 วัน ${n(m.last7)} · 30 วัน ${n(m.last30)} คน · สมาชิกรายเดือน ${n(m.monthly)} คน` : undefined}
+          loading={busy}
+        />
         <StatCard
           icon={Download}
           label="ดาวน์โหลดจากเว็บ"
@@ -149,7 +169,7 @@ export default function AdminUsagePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {gh.perVersion.map((v) => (
+                    {verList.items.map((v) => (
                       <tr key={v.version}>
                         <td className="mono">{v.version}</td>
                         <td className="small muted">{v.publishedAt ? formatThaiDateTime(v.publishedAt) : '—'}</td>
@@ -165,6 +185,7 @@ export default function AdminUsagePage() {
                 </table>
               </div>
             )}
+            {gh && <Pager page={verList.page} totalPages={verList.pages} total={verList.total} onChange={setVerPage} />}
           </div>
         </div>
 
@@ -199,10 +220,10 @@ export default function AdminUsagePage() {
             <div className="card-body stack" style={{ gap: 12 }}>
               {!data ? (
                 <div className="skeleton" style={{ height: 160 }} />
-              ) : data.recent.length === 0 ? (
+              ) : recentList.total === 0 ? (
                 <p className="small muted">ยังไม่มีข้อมูล</p>
               ) : (
-                data.recent.map((a, i) => (
+                recentList.items.map((a, i) => (
                   <div key={`${a.created_at}-${i}`} className="small" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
                     <div className="row-between">
                       <span className={`badge ${ACTIVITY_LABELS[a.event]?.badge || 'badge-muted'}`}>{ACTIVITY_LABELS[a.event]?.label || a.event}</span>
@@ -214,6 +235,7 @@ export default function AdminUsagePage() {
                 ))
               )}
             </div>
+            {data && <Pager page={recentList.page} totalPages={recentList.pages} total={recentList.total} onChange={setRecentPage} />}
           </div>
         </div>
       </div>

@@ -28,7 +28,7 @@ export async function githubDownloadStats() {
       total: perVersion.reduce((t, v) => t + v.setup + v.zip, 0),
       setup: perVersion.reduce((t, v) => t + v.setup, 0),
       zip: perVersion.reduce((t, v) => t + v.zip, 0),
-      perVersion: perVersion.slice(0, 15),
+      perVersion, // ทุกเวอร์ชัน (สูงสุด 100) · หน้าเว็บแบ่งหน้าละ 10 รายการ
     };
     ghCache = { data, at: Date.now() };
     return data;
