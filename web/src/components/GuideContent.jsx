@@ -10,7 +10,7 @@ import { LINE_ID, LINE_URL } from '../lib/contact';
 import { formatThb } from '../lib/format';
 import { MEMBERSHIP, MEMBERSHIP_PLANS, MEMBER_PLAN_NUMBERS } from '../lib/membership';
 
-// คู่มือการใช้งานโปรแกรม Gold Bot 24 (หน้า /guide) — อ้างอิงพฤติกรรมของโปรแกรมเวอร์ชัน 2026.1016.0717
+// คู่มือการใช้งานโปรแกรม Gold Bot 24 (หน้า /guide) — อ้างอิงพฤติกรรมของโปรแกรมเวอร์ชัน 2026.1016.0810
 const SECTIONS = [
   ['prepare', 'สิ่งที่ต้องเตรียม'],
   ['start', 'เริ่มต้นใช้งาน 6 ขั้นตอน'],
@@ -1032,7 +1032,7 @@ export default function GuideContent() {
             </ul>
           </Section>
 
-          <p className="tiny faint">คู่มือฉบับวันที่ 16 ต.ค. 2569 · อ้างอิงโปรแกรมเวอร์ชัน 2026.1016.0717</p>
+          <p className="tiny faint">คู่มือฉบับวันที่ 16 ต.ค. 2569 · อ้างอิงโปรแกรมเวอร์ชัน 2026.1016.0810</p>
         </div>
       </div>
     </div>
