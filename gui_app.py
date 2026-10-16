@@ -3261,7 +3261,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
     def _f(size, weight="normal", family=app_fonts.UI):
         return ctk.CTkFont(family=family, size=size, weight=weight)
 
-    _TF_PREF = {}   # ไทม์เฟรมกราฟที่ผู้ใช้เลือกล่าสุดต่อแผน (M15 / H1) — จำระหว่างเปิดหน้าต่างใหม่
+    _TF_PREF = {"P12": "H1"}   # ไทม์เฟรมกราฟที่ผู้ใช้เลือกล่าสุดต่อแผน (M15 / H1) · P12 เริ่มที่ H1 (ผู้ใช้สั่ง 16 ต.ค. 2026)
 
     def __init__(self, parent, pos, trade=None):
         super().__init__(parent)
@@ -3731,7 +3731,13 @@ class PositionDetailDialog(ctk.CTkToplevel):
                 cv.create_line(*seg, fill=col, width=2)
         # เส้นเชื่อมยอดตามแผน (P12: ยอดแรก → ยอดใหม่ → ไม้เพิ่ม) — จุดที่อยู่นอกกราฟตัดเส้นที่ขอบซ้าย
         def x_at(t):
-            return xs(0) + (t - candles[0]["time"]) / float(bar) * slot
+            """วางตามแท่งที่มีเวลา t (กราฟมีช่องว่างช่วงตลาดพัก/เสาร์–อาทิตย์ — คิดจากเวลาตรง ๆ จะเลื่อนไปขวา)"""
+            for i, c in enumerate(candles):
+                if c["time"] <= t < c["time"] + bar:
+                    return xs(i)
+            if t < candles[0]["time"]:
+                return xs(0) + (t - candles[0]["time"]) / float(bar) * slot
+            return xs(n - 1)
         for mk in d.get("marks") or []:
             col = self.STYLE_COLORS.get(mk["style"], COLOR_GOLD_PRIMARY)
             pts = [(x_at(t), y_of(v), lbl, v) for t, v, lbl in mk["points"]]
