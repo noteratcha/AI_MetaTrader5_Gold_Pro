@@ -2168,6 +2168,28 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
                 "disabled_reason": plan_config.disabled_reason(name)
             }
 
+        # ตัวกรองทุกไม้ (16 ต.ค. 2026): ห้ามสวนเสียงข้างมากของเทรนด์ D1/H4/H1 (ยกเว้น P9 · P11) — เพิ่มเป็นข้อสุดท้ายของแต่ละแผน
+        try:
+            rates_d1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_D1, 0, trend_engine.BARS_NEEDED)
+            ts_d1 = trend_engine.tf_snapshot(pd.DataFrame(rates_d1)) if rates_d1 is not None else None
+            if ts_d1:
+                maj = trend_engine.majority(ts_d1["state"], ts_h4["state"], ts_h1["state"])
+                lab = lambda t: {1: "▲", -1: "▼"}.get(int(t["state"]), "•")
+                tf_txt = f"D1 {lab(ts_d1)} · H4 {lab(ts_h4)} · H1 {lab(ts_h1)}"
+                for res in results.values():
+                    if not isinstance(res, dict) or "items" not in res or trend_engine.mtf_exempt(res.get("name")):
+                        continue
+                    dd = {"BUY": 1, "SELL": -1}.get(res.get("side"), 0)
+                    ok = not (maj and dd == -maj)
+                    desc = (f"{tf_txt} → ข้างมาก {trend_engine.majority_label(maj)} · " +
+                            ("ไม่สวน — เข้าได้" if ok else f"{res.get('side')} สวนเทรนด์ข้างมาก — ห้ามเข้า"))
+                    res["items"].append({"name": "เทรนด์ D1/H4/H1 (ข้างมาก)", "ok": ok, "desc": desc})
+                    res["matched"] = sum(1 for it in res["items"] if it["ok"])
+                    res["total"] = len(res["items"])
+                    res["pct"] = int(res["matched"] / res["total"] * 100)
+        except Exception:
+            pass
+
         return results
     except Exception as e:
         return {}
@@ -2792,6 +2814,11 @@ def main():
                 #   P1 ใช้ H1 (เดิม H1 MA100/150/200) · P6 ใช้ H4 (เดิม H4 MA10/30 + ราคาเทียบ MA200)
                 tsys_h1 = trend_engine.tf_snapshot(df_h1) or {"state": 0, "score": 0}
                 tsys_h4 = trend_engine.tf_snapshot(df_h4) or {"state": 0, "score": 0}
+                # ตัวกรองทุกไม้ (ผู้ใช้สั่ง 16 ต.ค. 2026): เสียงข้างมาก D1/H4/H1 — ≥ 2 ไทม์เฟรมขาลง ห้าม BUY · ≥ 2 ขาขึ้น ห้าม SELL
+                #   ยกเว้น P9 (สวนเทรนด์โดยตั้งใจ) · P11 (ข่าว) — Backtest รวม +10,337 → +10,389 · ดึง D1 ไม่ได้ = ไม่กรอง
+                df_d1 = get_data(sym, mt5.TIMEFRAME_D1, trend_engine.BARS_NEEDED)
+                tsys_d1 = trend_engine.tf_snapshot(df_d1) if df_d1 is not None else None
+                mtf_dir = trend_engine.majority(tsys_d1["state"], tsys_h4["state"], tsys_h1["state"]) if tsys_d1 else 0
                 
                 df_h1['ma_fast_h1'] = df_h1['close'].rolling(10).mean()
                 df_h1['ma_slow_h1'] = df_h1['close'].rolling(30).mean()
@@ -3239,10 +3266,10 @@ def main():
                     status_text = "[BB-H1 REVERSION SELL] + Div + MACD" if has_div_bb_sell else "[BB-H1 REVERSION SELL] Upper Band"
                     status_color = Colors.RED
                 elif ma_cross_buy_confirm:
-                    status_text = "[MA-CROSS BUY] MA5 > MA13 (M15) + H1 MA100>150>200"
+                    status_text = "[MA-CROSS BUY] MA5 > MA13 (M15) + เทรนด์ H1 ขาขึ้น (ระบบดูเทรนด์)"
                     status_color = Colors.GREEN
                 elif ma_cross_sell_confirm:
-                    status_text = "[MA-CROSS SELL] MA5 < MA13 (M15) + H1 MA100<150<200"
+                    status_text = "[MA-CROSS SELL] MA5 < MA13 (M15) + เทรนด์ H1 ขาลง (ระบบดูเทรนด์)"
                     status_color = Colors.RED
                 elif ma_cross_h1_up and plan5_buy_ok:
                     status_text = "[MA-CROSS-H1 BUY] MA5 > MA10 (H1) + H4 Bullish + MA200"
@@ -3549,6 +3576,16 @@ def main():
                                     who = {"admin": "ผู้ดูแลระบบ", "member": "ระบบ — แผนนี้ใช้ได้เฉพาะสมาชิกรายเดือน (สมัครที่หน้าเติมชั่วโมง)"}.get(why, "คุณ (เลือกไม่ใช้แผนนี้)")
                                     print(f"{Colors.YELLOW}[PLAN DISABLED] {sym} {plan_config.base_plan(plan_name)} ถูกปิดโดย{who} — ข้ามสัญญาณ {direction}{Colors.RESET}")
                                 return True
+                            if trend_engine.mtf_blocks(plan_name, direction, mtf_dir):
+                                key = (sym, plan_config.base_plan(plan_name), direction, "mtf")
+                                if time.time() - _plan_disabled_logged.get(key, 0) > 600:
+                                    _plan_disabled_logged[key] = time.time()
+                                    lab = lambda t: {1: "▲", -1: "▼"}.get(int((t or {}).get("state", 0)), "•")
+                                    print(f"{Colors.YELLOW}[MTF TREND BLOCK] {sym} {plan_config.base_plan(plan_name)} {direction} สวนเทรนด์ข้างมาก "
+                                          f"(D1 {lab(tsys_d1)} · H4 {lab(tsys_h4)} · H1 {lab(tsys_h1)}) — ข้ามสัญญาณ{Colors.RESET}")
+                                    log_signal_event(sym, 'RISK_BLOCKED', plan_name, direction, close_price, prob[1], prob[0], h4_cloud_status, div_name, 'MTF_TREND_BLOCKED',
+                                                     f'D1 {lab(tsys_d1)} H4 {lab(tsys_h4)} H1 {lab(tsys_h1)} majority {mtf_dir:+d}')
+                                return True
                             sym_plans = last_loss_plan.get(sym, {})
                             if direction in sym_plans:
                                 last_plan, last_ts = sym_plans[direction]
@@ -3732,7 +3769,7 @@ def main():
                         # แผน 1: BUY MA-Cross-Trend (MA 5 ตัดขึ้น MA 10 บนแท่ง M15 + เทรนด์ H1 Uptrend)
                         elif ma_cross_buy_confirm:
                             p_label = "MA-Cross-Trend"
-                            h4_ok, h4_msg = True, "H1 MA100/150/200 ขาขึ้น"  # Plan 1 ใช้เฉพาะ 2 กฎที่กำหนด
+                            h4_ok, h4_msg = True, f"เทรนด์ H1 ขาขึ้น {tsys_h1.get('score', 0):+d}/5"  # Plan 1 ใช้ระบบดูเทรนด์ H1
                             if not h4_ok:
                                 print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} BUY Skipped -> {h4_msg}{Colors.RESET}")
                                 log_signal_event(sym, 'H4_FILTERED', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
@@ -3748,7 +3785,7 @@ def main():
                         # แผน 1: SELL MA-Cross-Trend (MA 5 ตัดลง MA 10 บนแท่ง M15 + เทรนด์ H1 Downtrend)
                         elif ma_cross_sell_confirm:
                             p_label = "MA-Cross-Trend"
-                            h4_ok, h4_msg = True, "H1 MA100/150/200 ขาลง"  # Plan 1 ใช้เฉพาะ 2 กฎที่กำหนด
+                            h4_ok, h4_msg = True, f"เทรนด์ H1 ขาลง {tsys_h1.get('score', 0):+d}/5"  # Plan 1 ใช้ระบบดูเทรนด์ H1
                             if not h4_ok:
                                 print(f"{Colors.YELLOW}[H4 CONFLUENCE FILTER] {sym} {p_label} SELL Skipped -> {h4_msg}{Colors.RESET}")
                                 log_signal_event(sym, 'H4_FILTERED', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'H4_BLOCKED', h4_msg)
@@ -3890,7 +3927,8 @@ def main():
                                 d12 = int(grp12['d'])
                                 last_t = pd.Timestamp(grp12.get('last_bar'))
                                 last_i = int(np.searchsorted(df12['time'].values, np.datetime64(last_t))) if grp12.get('last_bar') else -1
-                                if len(pos12) - 1 < dtop_plan.MAX_ADD and dtop_plan.addon_ok(len(df12) - 1, d12, grp12['top'], last_i, o12, h12, l12, c12, mid12):
+                                if (len(pos12) - 1 < dtop_plan.MAX_ADD and not trend_engine.mtf_blocks(P12_NAME, d12, mtf_dir)
+                                        and dtop_plan.addon_ok(len(df12) - 1, d12, grp12['top'], last_i, o12, h12, l12, c12, mid12)):
                                     side12 = 'BUY' if d12 == 1 else 'SELL'
                                     price = tick.ask if d12 == 1 else tick.bid
                                     sl = round(float(grp12['sl']), digits)

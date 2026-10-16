@@ -1897,6 +1897,13 @@ class MarketExplainDialog(ctk.CTkToplevel):
         # 2) สิ่งที่แต่ละแผนใช้จริง
         c = card("แต่ละแผนใช้เทรนด์อะไรตัดสินใจ")
         h1, h4 = data.get("H1"), data.get("H4")
+        mj = tr.get("majority")
+        if mj:
+            sym_ = lambda k: {1: "▲", -1: "▼"}.get(int((tr.get(k) or {}).get("state", 0)), "•")
+            line(c, f"ทุกไม้ (ยกเว้น P9 · P11) — เทรนด์ข้างมาก D1 {sym_('D1')} · H4 {sym_('H4')} · H1 {sym_('H1')} = {mj['label']}",
+                 COLOR_TEXT_PRIMARY, 12)
+            line(c, ("→ ข้างมากขาขึ้น: ห้ามเข้า SELL ทุกแผน" if mj["state"] > 0 else "→ ข้างมากขาลง: ห้ามเข้า BUY ทุกแผน" if mj["state"] < 0
+                     else "→ ไม่มีทิศที่ 2 ใน 3 ไทม์เฟรมเห็นตรงกัน: ไม่บล็อกฝั่งใด"), col_of(mj["state"]) if mj["state"] else muted, 11)
         for tf, plan in (("H1", "Plan 1 (MA M15)"), ("H4", "Plan 6 (SAR H1)")):
             s_ = tr.get(tf)
             if s_:
@@ -1923,8 +1930,8 @@ class MarketExplainDialog(ctk.CTkToplevel):
             line(c, f"Plan 2 (MA H1) — ราคาปิด H4 {h4['close']:,.2f} {'เหนือ' if above else 'ใต้'} MA200 {m[200]:,.2f}", COLOR_TEXT_PRIMARY, 12)
             line(c, "→ Plan 2 BUY ได้เมื่อราคาอยู่เหนือ MA200 และ SELL ได้เมื่ออยู่ใต้ MA200 (ร่วมกับ MA10/30 และความชัน MA5 H4)", muted, 11)
         ctk.CTkFrame(c, height=8, fg_color="transparent").pack()
-        note = ctk.CTkLabel(box, text="การ์ดสภาวะตลาด = ระบบดูเทรนด์ · Plan 1 และ Plan 6 ใช้ระบบนี้เข้าไม้ (Backtest ดีขึ้น) · "
-                                      "แผนอื่นยังใช้กฎของตัวเอง เพราะทดสอบแล้วระบบนี้ทำให้ผลแย่ลง",
+        note = ctk.CTkLabel(box, text="การ์ดสภาวะตลาด = ระบบดูเทรนด์ · ทุกไม้ห้ามสวนเทรนด์ข้างมาก D1/H4/H1 (ยกเว้น P9 สวนเทรนด์โดยตั้งใจ · P11 ข่าว) · "
+                                      "Plan 1 และ Plan 6 ใช้ระบบนี้เข้าไม้ด้วย · แผนอื่นยังใช้กฎเทรนด์ของตัวเองร่วมด้วย",
                             font=f(10), text_color=muted, wraplength=580, justify="left")
         note.pack(anchor="w", padx=8, pady=(6, 0))
         self._wrap_labels.append((note, 60))
@@ -3254,14 +3261,18 @@ class PositionDetailDialog(ctk.CTkToplevel):
     def _f(size, weight="normal", family=app_fonts.UI):
         return ctk.CTkFont(family=family, size=size, weight=weight)
 
+    _TF_PREF = {}   # ไทม์เฟรมกราฟที่ผู้ใช้เลือกล่าสุดต่อแผน (M15 / H1) — จำระหว่างเปิดหน้าต่างใหม่
+
     def __init__(self, parent, pos, trade=None):
         super().__init__(parent)
         self.ticket = int(pos["ticket"])
         self.trade, self.closed = trade, trade is not None
+        self._plan_key = position_chart.plan_of((trade or {}).get("plan") or pos.get("comment"))[0]
+        self.tf = self._TF_PREF.get(self._plan_key, "M15")
         self.fallback = {"type": pos.get("type"), "comment": pos.get("comment")}
         self.data, self.last_pos, self.slots, self._job, self.offset = None, None, [], None, 0
         self._ind_names, self._ind_rows, self._legend_sig, self._adv_sig = None, [], None, None
-        self.title(f"ประวัติไม้ #{self.ticket} · ภาพตอนปิดไม้ (M15)" if self.closed else f"ไม้ #{self.ticket} · XAUUSD M15 เรียลไทม์")
+        self.title(f"ประวัติไม้ #{self.ticket} · ภาพตอนปิดไม้" if self.closed else f"ไม้ #{self.ticket} · XAUUSD เรียลไทม์")
         self.configure(fg_color=COLOR_BG_DARK)
         # ไม่ใช้ transient เพื่อให้มีปุ่มขยาย/ย่อ บนแถบหัวหน้าต่าง
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
@@ -3282,8 +3293,15 @@ class PositionDetailDialog(ctk.CTkToplevel):
         ctk.CTkLabel(top, text=f"#{self.ticket}", font=f(16, "bold"), text_color=COLOR_TEXT_PRIMARY).pack(side="left", padx=10)
         self.lbl_plan = ctk.CTkLabel(top, text="", font=f(15, "bold"), text_color=COLOR_GOLD_PRIMARY)
         self.lbl_plan.pack(side="left")
-        ctk.CTkLabel(top, text="   XAUUSD · M15 · 80 แท่ง · " + ("ภาพ ณ ตอนปิดไม้" if self.closed else "อัปเดตทุก 1 วินาที"),
-                     font=f(11), text_color=COLOR_TEXT_MUTED).pack(side="left")
+        # เลือกไทม์เฟรมกราฟ (ผู้ใช้สั่ง 16 ต.ค. 2026): M15 = จุดเข้าของแผน M15 · H1 = แท่งที่แผน H1 (P2 · P5 · P6 · P9 · P10 · P12) ใช้ตัดสินจริง
+        self.seg_tf = ctk.CTkSegmentedButton(top, values=["M15", "H1"], command=self._set_tf, width=96, height=26,
+                                             font=f(11, "bold"), selected_color=COLOR_GOLD_PRIMARY, selected_hover_color=COLOR_GOLD_WARM,
+                                             unselected_color=COLOR_CARD_BG, unselected_hover_color=COLOR_CARD_HOVER, text_color=COLOR_TEXT_PRIMARY)
+        self.seg_tf.set(self.tf)
+        self.seg_tf.pack(side="left", padx=(14, 0))
+        self.lbl_tf = ctk.CTkLabel(top, text="", font=f(11), text_color=COLOR_TEXT_MUTED)
+        self.lbl_tf.pack(side="left")
+        self._set_tf_label()
         self.btn_full = ctk.CTkButton(top, text="ขยายเต็มจอ", width=96, height=28, font=f(12, "bold"), fg_color=COLOR_CARD_BG,
                                       hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
                                       text_color=COLOR_GOLD_PRIMARY, command=self._toggle_full)
@@ -3368,6 +3386,20 @@ class PositionDetailDialog(ctk.CTkToplevel):
         from datetime import datetime, timedelta, timezone
         return datetime.fromtimestamp(server_ts - self.offset, timezone(timedelta(hours=7))).strftime("%d/%m %H:%M")
 
+    def _set_tf_label(self):
+        self.lbl_tf.configure(text=f"   XAUUSD · {self.tf} · 80 แท่ง · " + ("ภาพ ณ ตอนปิดไม้" if self.closed else "อัปเดตทุก 1 วินาที"))
+
+    def _set_tf(self, tf):
+        if tf == self.tf:
+            return
+        self.tf = tf
+        self._TF_PREF[self._plan_key] = tf
+        self._set_tf_label()
+        try:
+            self._tick_once()   # ไม้ที่ปิดแล้วไม่มีรอบอัปเดต — ดึงใหม่ทันที
+        except Exception:
+            pass
+
     def _tick(self):
         try:
             self._tick_once()
@@ -3382,9 +3414,9 @@ class PositionDetailDialog(ctk.CTkToplevel):
     def _tick_once(self):
         try:
             if self.closed:
-                d = position_chart.get_closed(self.trade, self.BARS)
+                d = position_chart.get_closed(self.trade, self.BARS, tf=self.tf)
             else:
-                d = position_chart.get(self.ticket, self.BARS, fallback=self.fallback)
+                d = position_chart.get(self.ticket, self.BARS, fallback=self.fallback, tf=self.tf)
         except Exception:
             d = None
         if d:
@@ -3415,7 +3447,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
             reason, rcol = MainTradingApp._close_reason(self.trade)
             self.lbl_clock.configure(text=f"ปิด {self._dt(self.trade['close_time'])} น. · {reason}", text_color=rcol)
         else:
-            remain = max(0, d["candles"][-1]["time"] + 900 - d["server_time"])
+            remain = max(0, d["candles"][-1]["time"] + d.get("bar_sec", 900) - d["server_time"])
             self.lbl_clock.configure(text=f"แท่งปัจจุบันปิดในอีก {remain // 60:02d}:{remain % 60:02d}")
         lp = d["position"] or self.last_pos
         if not lp:
@@ -3607,6 +3639,10 @@ class PositionDetailDialog(ctk.CTkToplevel):
             vals += [v for v in (lp["entry"], lp["sl"], lp["tp"]) if v and v > 0]
         for pth in d.get("paths") or []:
             vals += [v for _, v in pth["points"]]
+        bar = d.get("bar_sec", 900)   # 900 = M15 · 3600 = H1
+        t_first, t_last = candles[0]["time"], candles[-1]["time"] + bar - 1
+        for mk in d.get("marks") or []:
+            vals += [v for t, v, _ in mk["points"] if t_first <= t <= t_last]
         hi, lo = max(vals), min(vals)
         pad = max((hi - lo) * 0.06, 0.5)
         hi, lo = hi + pad, lo - pad
@@ -3686,13 +3722,40 @@ class PositionDetailDialog(ctk.CTkToplevel):
             pts = pth["points"]
             seg = []
             for i, c in enumerate(candles):
-                t_end = c["time"] + 899
+                t_end = c["time"] + bar - 1
                 if t_end < pts[0][0] or c["time"] > pts[-1][0]:
                     continue
                 v = next((vv for tt, vv in reversed(pts) if tt <= t_end), pts[0][1])
                 seg += [xs(i) - slot / 2, y_of(v), xs(i) + slot / 2, y_of(v)]
             if len(seg) >= 4:
                 cv.create_line(*seg, fill=col, width=2)
+        # เส้นเชื่อมยอดตามแผน (P12: ยอดแรก → ยอดใหม่ → ไม้เพิ่ม) — จุดที่อยู่นอกกราฟตัดเส้นที่ขอบซ้าย
+        def x_at(t):
+            return xs(0) + (t - candles[0]["time"]) / float(bar) * slot
+        for mk in d.get("marks") or []:
+            col = self.STYLE_COLORS.get(mk["style"], COLOR_GOLD_PRIMARY)
+            pts = [(x_at(t), y_of(v), lbl, v) for t, v, lbl in mk["points"]]
+            for (x1, y1, _, _), (x2, y2, _, _) in zip(pts, pts[1:]):
+                if x2 < left:
+                    continue
+                if x1 < left and x2 > x1:
+                    y1 = y1 + (y2 - y1) * (left - x1) / (x2 - x1)
+                    x1 = left
+                cv.create_line(x1, y1, x2, y2, fill=col, width=2, dash=(7, 3))
+            above = d["side"] < 0   # SELL = ยอดอยู่บน → ป้ายเหนือจุด
+            for k, (x, y, lbl, _) in enumerate(pts):
+                if x < left:
+                    continue
+                cv.create_oval(x - 5, y - 5, x + 5, y + 5, fill=col, outline="#0B0D12", width=2)
+                if not lbl:
+                    continue
+                off = 14 + 20 * (k % 2)   # ยอดใกล้กัน → ป้ายสลับระดับไม่ทับกัน
+                ty = y - off if above else y + off
+                tid = cv.create_text(x, ty, text=lbl, fill=col, font=(app_fonts.UI, 9, "bold"))
+                bb = cv.bbox(tid)
+                if bb:
+                    rid = cv.create_rectangle(bb[0] - 3, bb[1] - 1, bb[2] + 3, bb[3] + 1, fill="#0B0D12", outline=col)
+                    cv.tag_lower(rid, tid)
         # ไม้: ราคาเข้า / SL / TP + จุดเข้าไม้บนแท่งที่เปิด
         if lp:
             side = d["side"]
@@ -3705,7 +3768,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
                 cv.create_line(left, yy, W - right, yy, fill=col, dash=(6, 3), width=2 if col == COLOR_CYAN_ACCENT else 1)
                 left_labels.append((yy, txt, col))
             for i, c in enumerate(candles):
-                if c["time"] <= lp["time"] < c["time"] + 900:
+                if c["time"] <= lp["time"] < c["time"] + bar:
                     cx, ye = xs(i), y_of(lp["entry"])
                     s = 9
                     if side > 0:
@@ -6266,7 +6329,7 @@ class MainTradingApp(ctk.CTk):
         return COLOR_SUCCESS_GREEN if v > 0 else COLOR_DANGER_RED if v < 0 else COLOR_SIDEWAY
 
     def _apply_ma_order(self, data):
-        """การ์ดสภาวะตลาด = ระบบดูเทรนด์ (trend_engine): แถว D1 / H4 / H1 (ป้าย + คะแนน −5..+5 + จุด 5 ข้อ) · ป้ายมุมขวา = ภาพรวม Top-down"""
+        """การ์ดสภาวะตลาด = ระบบดูเทรนด์ (trend_engine): แถว D1 / H4 / H1 (ป้าย + คะแนน −5..+5 + จุด 5 ข้อ) · ป้ายมุมขวา = เทรนด์ข้างมากที่ทุกไม้ใช้"""
         card = getattr(self, "card_trend", None)
         if not card:
             return
@@ -6284,14 +6347,15 @@ class MainTradingApp(ctk.CTk):
             row["pct"].configure(text=f"{s['score']:+d}", text_color=col)
             for d, it in zip(row["dots"], s["items"]):
                 d.configure(text_color=COLOR_SUCCESS_GREEN if it["v"] > 0 else COLOR_DANGER_RED if it["v"] < 0 else "#5B6372")
-        ov = tr.get("overall")
-        if not ov:
+        # ป้ายมุมขวา = เทรนด์ข้างมาก D1/H4/H1 ที่ทุกไม้ใช้ (16 ต.ค. 2026 · ยกเว้น P9/P11) — ภาพรวม Top-down ดูในหน้าต่างอธิบาย
+        mj = tr.get("majority")
+        if not mj:
             self._set_badge(card["badge"], "")
         else:
-            st = ov["state"]
+            st = mj["state"]
             bg = "#0F2A20" if st > 0 else "#2A1414" if st < 0 else "#2A2108"
-            arrow = "▲" if st > 0 else "▼" if st < 0 else "◆"
-            self._set_badge(card["badge"], f"ภาพรวม {arrow} {ov['score']:+d}", bg, self._trend_color(st))
+            txt = "ทุกไม้ ▲ BUY เท่านั้น" if st > 0 else "ทุกไม้ ▼ SELL เท่านั้น" if st < 0 else "◆ BUY / SELL"
+            self._set_badge(card["badge"], txt, bg, self._trend_color(st))
 
     def _plan_checks_tick(self):
         """อัปเดตสถานะช่องติ๊กแผน (แอดมินอาจเปิด/ปิดแผนจากเว็บ · สมาชิกรายเดือนเปลี่ยน) ทุก 30 วินาที"""
@@ -6584,6 +6648,15 @@ class MainTradingApp(ctk.CTk):
                      font=self._font(10), text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=12, pady=(0, 6))
         self._advice_sig = None
         position_advisor.start_background()
+        # จอ 768 แผง AI สูงคงที่ 230 เบียดตารางไม้จนมองไม่เห็นแถว → ย่อแผง AI ตามความสูงแท็บ ให้ตารางเหลือ ≥ ~3 แถวเสมอ
+        self._advice_h = 230
+
+        def _fit_advice(e):
+            h = max(80, min(230, int(e.height / getattr(parent, "_get_widget_scaling", lambda: 1.0)()) - 290))
+            if h != self._advice_h:
+                self._advice_h = h
+                self.advice_body.configure(height=h)
+        parent.bind("<Configure>", _fit_advice, add="+")
 
         table = ctk.CTkFrame(parent, fg_color="#101218", corner_radius=10, border_width=1, border_color=COLOR_CARD_BORDER)
         table.pack(fill="both", expand=True, padx=6, pady=(0, 4))

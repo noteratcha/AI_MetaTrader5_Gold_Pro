@@ -25,6 +25,7 @@ const SHORT = { structure: 'โครงสร้าง', ma200: 'MA200', ema: '
 /** สภาวะตลาด = ระบบดูเทรนด์ของโปรแกรม (D1 / H4 / H1 · 5 ข้อต่อไทม์เฟรม + ภาพรวม Top-down + ดอลลาร์) — ค่าจากโปรแกรมทั้งหมด */
 function TrendSystemCard({ trend }) {
   const ov = trend.overall;
+  const mj = trend.majority;
   return (
     <div className="card">
       <div className="card-header">
@@ -34,6 +35,24 @@ function TrendSystemCard({ trend }) {
         <span className="tiny faint">ระบบดูเทรนด์ · โครงสร้างราคา · MA200 · EMA · ความชัน · ADX</span>
       </div>
       <div className="card-body stack" style={{ gap: 10 }}>
+        {mj && (
+          <div style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${tColor(mj.state)}`, background: 'var(--surface-2, #171b23)' }}>
+            <div className="row-between" style={{ gap: 8 }}>
+              <span className="row" style={{ gap: 10 }}>
+                <span className="badge badge-muted">ทุกไม้</span>
+                <strong style={{ color: tColor(mj.state) }}>
+                  {mj.state > 0 ? '▲ BUY เท่านั้น' : mj.state < 0 ? '▼ SELL เท่านั้น' : '◆ BUY / SELL'}
+                </strong>
+              </span>
+              <span className="mono small" style={{ color: tColor(mj.state) }}>
+                D1 {tMark(trend.D1?.state)} · H4 {tMark(trend.H4?.state)} · H1 {tMark(trend.H1?.state)}
+              </span>
+            </div>
+            <div className="tiny muted" style={{ marginTop: 6 }}>
+              เทรนด์ข้างมาก (2 ใน 3 ไทม์เฟรม) — บอทห้ามเข้าไม้สวนทิศนี้ทุกแผน ยกเว้น P9 (สวนเทรนด์โดยตั้งใจ) และ P11 (ข่าว)
+            </div>
+          </div>
+        )}
         {ov && (
           <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2, #171b23)' }}>
             <div className="row-between" style={{ gap: 8 }}>
@@ -81,7 +100,7 @@ function TrendSystemCard({ trend }) {
             </div>
           );
         })}
-        <div className="tiny faint">ชี้ที่แต่ละข้อเพื่อดูค่าจริง · คะแนนไทม์เฟรม: ตั้งแต่ +3 ขาขึ้น · ตั้งแต่ −3 ขาลง · P1 ใช้เทรนด์ H1 และ P6 ใช้เทรนด์ H4 จากระบบนี้</div>
+        <div className="tiny faint">ชี้ที่แต่ละข้อเพื่อดูค่าจริง · คะแนนไทม์เฟรม: ตั้งแต่ +3 ขาขึ้น · ตั้งแต่ −3 ขาลง · P1 ใช้เทรนด์ H1 และ P6 ใช้เทรนด์ H4 จากระบบนี้ · ทุกไม้ห้ามสวนเทรนด์ข้างมาก</div>
       </div>
     </div>
   );

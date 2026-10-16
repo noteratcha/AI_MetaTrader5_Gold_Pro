@@ -67,28 +67,30 @@ def step(setups, i, o, h, l, c, up, lo, trend_i):
         ext = h[i] if d == -1 else l[i]
         if st is None:
             if out_now:
-                setups[d] = {"x1": ext, "i1": i, "pull": False, "x2": None}
+                setups[d] = {"x1": ext, "i1": i, "j1": i, "pull": False, "x2": None, "j2": None}
             continue
         if i - st["i1"] > WINDOW:
-            setups[d] = {"x1": ext, "i1": i, "pull": False, "x2": None} if out_now else None
+            setups[d] = {"x1": ext, "i1": i, "j1": i, "pull": False, "x2": None, "j2": None} if out_now else None
             continue
         if st["x2"] is None:
             beyond = (ext > st["x1"]) if d == -1 else (ext < st["x1"])
             if not st["pull"]:
                 if beyond:
-                    st["x1"] = ext
+                    st["x1"], st["j1"] = ext, i
                 else:
                     st["pull"] = True
             elif beyond:
-                st["x2"] = ext
+                st["x2"], st["j2"] = ext, i
             continue
         more = (ext > st["x2"]) if d == -1 else (ext < st["x2"])
         if (c[i] - o[i]) * d > 0 and not more and trend_i == d:
             top = st["x2"]
+            # จดรูปแบบที่ยืนยัน (ยอดแรก · ยอดใหม่ · แท่งยืนยัน) ให้หน้าต่างไม้วาดเส้นเชื่อมยอด
+            setups["hit"] = {"d": d, "x1": st["x1"], "j1": st.get("j1", st["i1"]), "x2": top, "j2": st.get("j2"), "i": i}
             setups[1] = setups[-1] = None
             return d, top
         if more:
-            st["x2"] = ext
+            st["x2"], st["j2"] = ext, i
         else:
             setups[d] = None
     return None
@@ -103,6 +105,44 @@ def addon_ok(i, d, top, last_entry_i, o, h, l, c, mid=None):
                 and (mid is None or h[i - 1] > mid[i - 1]))
     return (l[i - 1] < l[i - 2] and l[i] > l[i - 1] and l[i - 1] >= top and c[i] > o[i]
             and (mid is None or l[i - 1] < mid[i - 1]))
+
+
+def pattern_for(df_h1_closed, df_h4, d, entry_sec, bars=400):
+    """รูปแบบยอดซ้ำที่ทำให้เข้าไม้ (ทิศ d · เวลาเข้าไม้ entry_sec = เวลาเซิร์ฟเวอร์) จากแท่ง H1 ที่ปิดแล้ว
+    → {"d", "top1": (เวลาแท่ง, ราคา), "top2": (...), "confirm": เวลาแท่งยืนยัน, "adds": [(เวลาแท่งยอด, ราคา), ...],
+       "lows": [(เวลาแท่งยอด, ราคา, เป็นไม้เพิ่ม), ...] = Lower High (SELL) / Higher Low (BUY) ทุกยอดหลังยอดใหม่ จนแตะ BB อีกฝั่ง} หรือ None
+    adds = ยอดของไม้เพิ่มตามกฎ addon_ok หลังเข้าไม้แรก (สูงสุด MAX_ADD) — ใช้แสดงผลเท่านั้น"""
+    if df_h1_closed is None or len(df_h1_closed) < 60:
+        return None
+    o, h, l, c, up, lo, atr, mid = indicators(df_h1_closed)
+    ts = to_sec(df_h1_closed["time"])
+    tr = h4_trend_at(ts + 3600, df_h4)
+    setups, best = new_setups(), None
+    n = len(df_h1_closed)
+    for k in range(max(30, n - bars), n):
+        if ts[k] + 3600 > entry_sec + 120:   # แท่งยืนยันต้องปิดก่อนเข้าไม้
+            break
+        if step(setups, k, o, h, l, c, up, lo, tr[k]) and setups.get("hit", {}).get("d") == d:
+            best = dict(setups["hit"])
+    if not best or best.get("j2") is None:
+        return None
+    out = {"d": d, "top1": (int(ts[best["j1"]]), float(best["x1"])), "top2": (int(ts[best["j2"]]), float(best["x2"])),
+           "confirm": int(ts[best["i"]]), "adds": [], "lows": []}
+    x = h if d == -1 else l
+    last_i = best["i"] + 1
+    for k in range(best["j2"] + 2, n):
+        if k > best["i"] + 1 and tp_hit(d, k, h, l, up, lo)[0]:
+            break
+        p = k - 1   # แท่งยอด (ยืนยันเมื่อแท่ง k ทำยอดไม่เลย)
+        is_peak = (x[p] > x[p - 1] and x[k] < x[p]) if d == -1 else (x[p] < x[p - 1] and x[k] > x[p])
+        if not is_peak or (x[p] > best["x2"] if d == -1 else x[p] < best["x2"]):
+            continue
+        add = (k > best["i"] + 1 and len(out["adds"]) < MAX_ADD and addon_ok(k, d, best["x2"], last_i, o, h, l, c, mid))
+        if add:
+            out["adds"].append((int(ts[p]), float(x[p])))
+            last_i = k + 1
+        out["lows"].append((int(ts[p]), float(x[p]), bool(add)))   # Lower High (SELL) / Higher Low (BUY) หลังยอดใหม่
+    return out
 
 
 def sl_price(d, top, atr_i):

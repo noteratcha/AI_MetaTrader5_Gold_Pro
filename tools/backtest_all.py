@@ -21,6 +21,7 @@ mt5.initialize()
 def get(tf, n):
     d = pd.DataFrame(mt5.copy_rates_from_pos("XAUUSD", tf, 0, n)); d["time"] = pd.to_datetime(d["time"], unit="s"); return d
 m15, h1, h4 = get(mt5.TIMEFRAME_M15, 60000), get(mt5.TIMEFRAME_H1, 16000), get(mt5.TIMEFRAME_H4, 5000)
+d1 = get(mt5.TIMEFRAME_D1, 2500)
 mt5.shutdown()
 A = bot._atr_series
 
@@ -272,8 +273,21 @@ import trend_engine as te  # noqa: E402
 TS_H1, TS_H4 = te.components(h1), te.components(h4)
 b["tsys_h1"] = te.align(h1.time + pd.Timedelta(hours=1), TS_H1["state"], b.close_time.values).astype(int)
 
+# ตัวกรองทุกไม้ (ผู้ใช้สั่ง 16 ต.ค. 2026): ห้ามเข้าสวนเสียงข้างมากของเทรนด์ D1/H4/H1 (≥ 2 ไทม์เฟรมทิศเดียวกัน) ยกเว้น P9 · P11
+# จำลองโดยตัดไม้ที่สวนออกจากรายการของแต่ละแผน (บอทจริงข้ามสัญญาณนั้น — ไม้ถัดไปอาจเข้าได้เร็วขึ้นเล็กน้อย)
+TS_D1 = te.components(d1)
+MTF_SKIP = (9, 11)
+def mtf_at(times):
+    q = pd.to_datetime(pd.Series(times)).values
+    return te.majority(te.align(d1.time + pd.Timedelta(days=1), TS_D1["state"], q).astype(int),
+                       te.align(h4.time + pd.Timedelta(hours=4), TS_H4["state"], q).astype(int),
+                       te.align(h1.time + pd.Timedelta(hours=1), TS_H1["state"], q).astype(int))
+
 rows, ALL = [], {}
 def keep(key, tr):
+    if key not in MTF_SKIP and tr:
+        mj = mtf_at([x["time"] for x in tr])
+        tr = [x for x, m in zip(tr, mj) if not (m and int(x["d"]) == -int(m))]
     ALL[key] = tr
     return tr
 b["ma50"] = b.close.rolling(50).mean()
@@ -562,7 +576,7 @@ for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         if m >= _cut:
             trades_m.setdefault(m, []).append([_th(x["time"]), "BUY" if x.get("d", 0) > 0 else "SELL", round(float(x["pnl"]), 1),
                                                _th(x["xt"]) if x.get("xt") is not None else "", int(x.get("mult", 1))])
-    plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly, monthly_n=monthly_n, monthly_w=monthly_w, trades_m=trades_m))
+    plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2] + ("" if k in MTF_SKIP else " · ห้ามสวนเทรนด์ข้างมาก D1/H4/H1"), **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly, monthly_n=monthly_n, monthly_w=monthly_w, trades_m=trades_m))
 events.sort(key=lambda e: e[0])
 eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)}
 total = 0.0

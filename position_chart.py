@@ -16,6 +16,7 @@ import MetaTrader5 as mt5
 import pandas as pd
 
 import multi_asset_ai_bot as bot
+import dtop_plan
 import trend_engine
 import thai_time
 
@@ -99,11 +100,13 @@ def _context_from(h1, h4, price):
     h1s["sar"], sdir = bot.psar_series(h1["high"].values, h1["low"].values, *bot.P6_SAR)
     h1s["sar_fast"], fdir = bot.psar_series(h1["high"].values, h1["low"].values, *bot.P6_SAR_FAST)
     h1s["ema100"] = c1.ewm(span=bot.P6_EXIT_EMA, adjust=False).mean()
+    _, _, _, _, p12u, p12l, _, p12m = dtop_plan.indicators(h1)   # P12 ใช้ BB ของแท่งตัวเอง (ไม่ Shift) เหมือนบอท
+    h1s["p12_up"], h1s["p12_lo"], h1s["p12_mid"] = p12u, p12l, p12m
     atr_h1, atr_h4 = bot._atr_series(h1), bot._atr_series(h4)
     h4s = pd.DataFrame({"time": h4["time"]})
     mid4, sd4 = c4.shift(1).rolling(20).mean(), c4.shift(1).rolling(20).std()   # Plan 7/8: เหมือนบอท (แท่ง H4 ที่ปิดแล้ว)
     h4s["bb_mid"], h4s["bb_up"], h4s["bb_lo"] = mid4, mid4 + 2 * sd4, mid4 - 2 * sd4
-    d = {"h1s": h1s.set_index("time"), "h4s": h4s.set_index("time"), "atr_h1": _f(atr_h1.iloc[-2])}
+    d = {"h1s": h1s.set_index("time"), "h4s": h4s.set_index("time"), "atr_h1": _f(atr_h1.iloc[-2]), "h1_raw": h1, "h4_raw": h4}
     _, d["h1_diff"], d["h1_dir"] = bot.closed_trend(c1.rolling(10).mean(), c1.rolling(30).mean(), atr=atr_h1)
     d["h4_up"], d["h4_diff"], d["h4_dir"] = bot.closed_trend(c4.rolling(10).mean(), c4.rolling(30).mean(), atr=atr_h4)
     ma5_4 = c4.rolling(5).mean()
@@ -171,7 +174,7 @@ def _map_h1(m, ctx):
     if ctx is None:
         return
     hkey = pd.to_datetime(m["time"], unit="s").dt.floor("h")
-    for col in ("ma5", "ma10", "ma20", "bb_up", "bb_mid", "bb_lo", "macd_hist", "sar", "ema100"):
+    for col in ("ma5", "ma10", "ma20", "bb_up", "bb_mid", "bb_lo", "macd_hist", "sar", "ema100", "p12_up", "p12_mid", "p12_lo"):
         m["h1_" + col] = hkey.map(ctx["h1s"][col]).astype(float)
     if "h4s" in ctx:
         h4key = pd.to_datetime(m["time"], unit="s").dt.floor("4h")
@@ -201,12 +204,16 @@ def _fmt(v, nd=2):
     return "—" if v is None else f"{v:,.{nd}f}"
 
 
-def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
-    """เส้นบนกราฟ + ค่าที่แผนใช้ ณ แท่งสุดท้ายของ m (แท่งที่กำลังวิ่ง หรือแท่งที่ปิดไม้)"""
+def _build(m, ctx, pos, side, comment, count, live=True, mfe=None, view=None):
+    """เส้นบนกราฟ + ค่าที่แผนใช้ ณ แท่งสุดท้ายของ m (แท่งที่กำลังวิ่ง หรือแท่งที่ปิดไม้)
+    view = แท่ง H1 สำหรับวาดกราฟแทน M15 (ผู้ใช้เลือก) — ค่าอินดิเคเตอร์ยังคิดจาก M15 ตามที่แผนใช้ · เส้นที่เป็นของ M15 (MA5/13/50 · RSI) ไม่วาด"""
     plan_key, plan_name = plan_of(comment)
-    tail = m.iloc[-count:]
+    src = m if view is None else view
+    tail = src.iloc[-count:]
 
     def ser(col):
+        if view is not None and not col.startswith(("h1_", "h4_")):
+            return None   # เส้นของ M15 วางบนแท่ง H1 ไม่ได้
         if col not in tail:
             return [None] * len(tail)
         return [None if pd.isna(v) else round(float(v), 3) for v in tail[col]]
@@ -242,6 +249,34 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                  {"label": "BB กลาง H1", "style": "mid", "values": ser("h1_bb_mid")},
                  {"label": "BB ล่าง H1", "style": "band", "values": ser("h1_bb_lo")}]
         pane = {"kind": "hist", "label": "MACD Histogram H1", "values": ser("h1_macd_hist")}
+    marks, p12 = [], None
+    if plan_key == "P12":
+        lines = [{"label": "BB บน H1", "style": "band", "values": ser("h1_p12_up")},
+                 {"label": "BB กลาง H1", "style": "mid", "values": ser("h1_p12_mid")},
+                 {"label": "BB ล่าง H1", "style": "band", "values": ser("h1_p12_lo")}]
+        if ctx and pos:
+            try:
+                h1r = ctx["h1_raw"]
+                p12 = dtop_plan.pattern_for(h1r.iloc[:-1].reset_index(drop=True), ctx["h4_raw"], 1 if side > 0 else -1, int(pos["time"]))
+            except Exception:
+                p12 = None
+        if p12:
+            def m15_at(hour_t):
+                """แท่ง M15 ในชั่วโมงนั้นที่ทำยอด (SELL = High สูงสุด · BUY = Low ต่ำสุด)"""
+                sub = src[(src["time"] >= hour_t) & (src["time"] < hour_t + 3600)]
+                if not len(sub):
+                    return int(hour_t)
+                k = sub["high"].idxmax() if side < 0 else sub["low"].idxmin()
+                return int(src.loc[k, "time"])
+            word = "ยอด" if side < 0 else "ฐาน"
+            pts = [(m15_at(p12["top1"][0]), p12["top1"][1], f"{word}แรก {p12['top1'][1]:,.2f}"),
+                   (m15_at(p12["top2"][0]), p12["top2"][1], f"{word}ใหม่ {p12['top2'][1]:,.2f} (ตั้ง SL)")]
+            marks.append({"style": "res" if side < 0 else "sup", "points": pts})
+            if p12["lows"]:   # High → Lower High ต่อกันเป็นเส้น (BUY: Low → Higher Low)
+                lh = "Lower High" if side < 0 else "Higher Low"
+                apts = [(pts[1][0], pts[1][1], "")] + [(m15_at(t), v, f"{lh} {v:,.2f}" + (" (ไม้เพิ่ม)" if add else ""))
+                                                       for t, v, add in p12["lows"]]
+                marks.append({"style": "slow", "points": apts})
     if plan_key == "P9" and pos and pos.get("tp"):
         import fib_plan
         s9 = 1 if side > 0 else -1
@@ -259,6 +294,9 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         if plan_key == "P4":
             pane = {"kind": "rsi", "label": "RSI(14) M15 · ใช้หา Divergence", "values": ser("rsi"), "band": None}
 
+    lines = [ln for ln in lines if ln["values"] is not None]
+    if pane and pane["values"] is None:
+        pane = None
     # ---- ค่าที่แผนใช้ ----
     inds = []
     close_c = _f(cb["close"])
@@ -421,6 +459,34 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
                              "อยู่ฝั่งไม้ — ถือต่อ" if dd6 >= 0 else f"ปิดผิดฝั่ง = สัญญาณออก ({exit_word})"))
         if ctx["atr_h1"]:
             inds.append(_ind("ATR(14) H1", f"{ctx['atr_h1']:,.2f}", 0, "SL เริ่มไม่เกิน 3 ATR H1 · ไม่ตั้ง TP"))
+    if plan_key == "P12":
+        if ctx:
+            inds.append(_ind("เทรนด์ H4 MA10/30", f"{ctx['h4_diff']:+.2f}%", _agree(1 if ctx["h4_up"] else -1, side),
+                             "ต้องตรงทิศตอนเข้า (MA10 < MA30 = SELL · MA10 > MA30 = BUY)"))
+        word = "ยอด" if side < 0 else "ฐาน"
+        if p12:
+            inds.append(_ind(f"{word}แรก → {word}ใหม่", f"{p12['top1'][1]:,.2f} → {p12['top2'][1]:,.2f}", 1,
+                             f"ทะลุ BB {'บน' if side < 0 else 'ล่าง'} → ย่อ → ทำ{word}ใหม่{'สูง' if side < 0 else 'ต่ำ'}กว่า → แท่งยืนยัน = เข้า · "
+                             f"SL = {word}ใหม่ {'+' if side < 0 else '−'} 0.1 ATR H1 (เส้นเชื่อมบนกราฟ)"))
+            lh = "Lower High" if side < 0 else "Higher Low"
+            if p12["lows"]:
+                inds.append(_ind(f"{lh} หลัง{word}ใหม่", " → ".join(f"{v:,.2f}" for _, v, _ in p12["lows"][-3:]), 1,
+                                 f"{word}ต่ำลงเรื่อย ๆ = แรงขายคุมตลาด (เส้นสีทองบนกราฟ)" if side < 0 else "ฐานยกขึ้นเรื่อย ๆ = แรงซื้อคุมตลาด (เส้นสีทองบนกราฟ)"))
+            else:
+                inds.append(_ind(f"{lh} หลัง{word}ใหม่", "ยังไม่เกิด", 0, f"รอราคาเด้งทำ{word}ที่ไม่เลย{word}ใหม่"))
+            inds.append(_ind("ไม้เพิ่มตามกฎ", f"{len(p12['adds'])} / {dtop_plan.MAX_ADD}", 0,
+                             f"เด้งทำ{word}ไม่เลย{word}ใหม่ (อยู่ฝั่งนอกเส้นกลาง BB) + แท่งปิดตามทิศ → เข้าเพิ่ม · ใช้ SL เดียวกัน"))
+        else:
+            inds.append(_ind(f"รูปแบบ{word}ซ้ำ", "หาไม่พบ", 0, "ไม่พบรูปแบบที่ตรงเวลาเข้าไม้ในแท่ง H1 ที่ดึงมา (ไม้อาจเปิดเอง หรือข้อมูลไม่พอ)"))
+        hb = m.iloc[-1]
+        inds.append(_ind("Bollinger H1 บน / กลาง / ล่าง",
+                         f"{_fmt(_f(hb.get('h1_p12_up')))} / {_fmt(_f(hb.get('h1_p12_mid')))} / {_fmt(_f(hb.get('h1_p12_lo')))}", 0,
+                         f"BB (20, 2 SD) ของแท่ง H1 · เข้าเมื่อทำ{word}ซ้ำนอกเส้น{'บน' if side < 0 else 'ล่าง'} · ไม้เพิ่มต้อง{word}{'เหนือ' if side < 0 else 'ใต้'}เส้นกลาง · ปิดทุกไม้เมื่อแตะเส้น{'ล่าง' if side < 0 else 'บน'}"))
+        tgt = _f(hb.get("h1_p12_lo" if side < 0 else "h1_p12_up"))
+        if tgt is not None:
+            dist = (price - tgt) * (1 if side < 0 else -1)
+            inds.append(_ind(f"BB {'ล่าง' if side < 0 else 'บน'} H1 (จุดปิดไม้)", f"{tgt:,.2f}", 1 if dist <= 0 else 0,
+                             "แตะแล้ว = ปิดทุกไม้ของแผน" if dist <= 0 else f"อีก {dist:,.2f} จุด — ไม่ตั้ง TP ปิดทุกไม้เมื่อราคาแตะเส้นนี้"))
     if plan_key == "M":
         step_trail()
     if plan_key == "M" and ctx:
@@ -429,10 +495,20 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         inds.append(_ind("ATR(14) M15", f"{atr:,.2f}", 0, "ความผันผวนต่อแท่ง 15 นาที"))
 
     return {"plan_key": plan_key, "plan_name": plan_name, "side": side, "candles": candles,
-            "lines": lines, "levels": levels, "pane": pane, "indicators": inds}
+            "lines": lines, "levels": levels, "pane": pane, "indicators": inds, "marks": marks,
+            "tf": "H1" if view is not None else "M15", "bar_sec": 3600 if view is not None else 900}
 
 
-def get(ticket, count=80, fallback=None):
+def _h1_view(rates, last_price, ctx):
+    """แท่ง H1 สำหรับวาดกราฟ (+ ค่า H1/H4 วางตามชั่วโมง)"""
+    if rates is None or len(rates) < 30:
+        return None
+    v = _m15_frame(rates, last_price)
+    _map_h1(v, ctx)
+    return v
+
+
+def get(ticket, count=80, fallback=None, tf="M15"):
     """
     ไม้ที่เปิดอยู่: กราฟ + อินดิเคเตอร์ของไม้ `ticket` — None ถ้าเชื่อม MT5 ไม่ได้
     fallback = dict ไม้จากหน้าจอ (comment/type) ใช้เมื่อไม้ถูกปิดไปแล้วระหว่างเปิดหน้าต่าง
@@ -466,7 +542,8 @@ def get(ticket, count=80, fallback=None):
         comment = fb.get("comment") or ""
         pos = None
     point = float(info.point) if info and info.point else 0.01
-    out = _build(m, ctx, pos, side, comment, count, live=True)
+    view = _h1_view(mt5.copy_rates_from_pos(sym, mt5.TIMEFRAME_H1, 0, count + WARMUP), float(tick.bid), ctx) if tf == "H1" else None
+    out = _build(m, ctx, pos, side, comment, count, live=True, view=view)
     out.update({
         "position": pos, "money_per_pt": _money_per_pt(pos["lot"] if pos else 0.01),
         "bid": float(tick.bid), "ask": float(tick.ask),
@@ -510,7 +587,7 @@ def _sl_tp_at_close(pid, open_time, close_time, close_comment, offset):
     return sl, tp, path
 
 
-def get_closed(trade, count=80):
+def get_closed(trade, count=80, tf="M15"):
     """
     ไม้ที่ปิดแล้ว (แถวจาก BotController.get_trade_history): ภาพ ณ ตอนปิดไม้ — None ถ้าเชื่อม MT5 ไม่ได้/ไม่มีข้อมูลราคา
     แท่งสุดท้าย = แท่ง M15 ที่ปิดไม้ ตัดที่เวลาปิดจริง (สูง/ต่ำจากแท่ง M1 ถึงนาทีที่ปิด · ราคาปิด = ราคาออก)
@@ -563,7 +640,18 @@ def get_closed(trade, count=80):
         "close_time": close_t, "close_code": int(trade.get("close_code", -1)), "close_reason": trade.get("close_reason") or "",
     }
     mpp = _money_per_pt(lot)
-    out = _build(m, ctx, pos, side, pos["comment"], count, live=False, mfe=mfe)
+    view = None
+    if tf == "H1":
+        hv = mt5.copy_rates_from(sym, mt5.TIMEFRAME_H1, close_t, count + WARMUP)
+        if hv is not None and len(hv):
+            hv = pd.DataFrame(hv)
+            m1h = mt5.copy_rates_range(sym, mt5.TIMEFRAME_M1, int(hv["time"].iloc[-1]), close_t)
+            if m1h is not None and len(m1h):   # แท่ง H1 ที่ปิดไม้: ตัดที่นาทีที่ปิด
+                j = hv.index[-1]
+                hv.loc[j, "high"] = max(float(x["high"]) for x in m1h)
+                hv.loc[j, "low"] = min(float(x["low"]) for x in m1h)
+            view = _h1_view(hv.to_records(index=False), exit_px, ctx)
+    out = _build(m, ctx, pos, side, pos["comment"], count, live=False, mfe=mfe, view=view)
     sl_moves = sum(1 for a, b in zip(path, path[1:]) if abs(a[1] - b[1]) > 1e-6)
     tp_moves = sum(1 for a, b in zip(path, path[1:]) if abs(a[2] - b[2]) > 1e-6)
     paths = []

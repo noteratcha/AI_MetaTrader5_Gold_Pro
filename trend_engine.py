@@ -11,6 +11,9 @@
 
 ภาพรวมแบบ Top-down = D1 ×3 + H4 ×2 + H1 ×1 (คะแนน ÷ 5) + ดอลลาร์ ×1 (EURUSD H4 MA10/30: ดอลลาร์อ่อน = +1 หนุนทอง)
   → -100..+100 · ≥ +40 ขาขึ้น · ≤ -40 ขาลง · |คะแนน| ≥ 70 = แรง
+
+ตัวกรองทุกไม้ (ผู้ใช้สั่ง 16 ต.ค. 2026) = เสียงข้างมาก D1/H4/H1: ≥ 2 ไทม์เฟรมขาขึ้น → ห้าม SELL · ≥ 2 ขาลง → ห้าม BUY
+  ยกเว้น P9 (สวนเทรนด์โดยตั้งใจ) และ P11 (เข้าตามตัวเลขข่าว) — Backtest: รวม +10,337 → +10,389 · P9 ถ้าบังคับ +1,872 → +718
 """
 import numpy as np
 import pandas as pd
@@ -24,6 +27,7 @@ USD_WEIGHT = 1
 USD_BAND_PCT = 0.10
 OVERALL_MIN, OVERALL_STRONG = 40, 70
 BARS_NEEDED = 600            # แท่งที่บอทควรดึงต่อไทม์เฟรม (EMA200 นิ่ง · MA200 ครบ)
+MTF_EXEMPT = ("Fib-H1-Counter", "News-USD")   # แผนที่ไม่ใช้ตัวกรองเสียงข้างมาก D1/H4/H1
 ITEMS = (("structure", "โครงสร้างราคา"), ("ma200", "ราคาเทียบ MA200"), ("ema", "EMA20/50/200"),
          ("slope", "ความชัน EMA50"), ("adx", "ADX"))
 
@@ -199,15 +203,43 @@ def snapshot(frames):
     if all(out[tf] for tf in ("H1", "H4", "D1")):
         sc = int(overall_score(out["D1"]["score"], out["H4"]["score"], out["H1"]["score"], (out["USD"] or {}).get("v", 0)))
         out["overall"] = {"score": sc, "state": int(overall_state(sc)), "label": overall_label(sc)}
+        mj = majority(out["D1"]["state"], out["H4"]["state"], out["H1"]["state"])
+        out["majority"] = {"state": mj, "label": majority_label(mj)}
     else:
         out["overall"] = None
+        out["majority"] = None
     return out
+
+
+def majority(d1, h4, h1):
+    """เสียงข้างมากของสถานะ D1/H4/H1 (-1/0/+1): ≥ 2 ไทม์เฟรมขาขึ้น = +1 · ≥ 2 ขาลง = -1 · ที่เหลือ 0 (รับตัวเลขหรือ array)"""
+    a = [np.asarray(x) for x in (d1, h4, h1)]
+    up = sum((x == 1).astype(int) for x in a)
+    dn = sum((x == -1).astype(int) for x in a)
+    r = np.where(up >= 2, 1, np.where(dn >= 2, -1, 0))
+    return int(r) if r.ndim == 0 else r
+
+
+def mtf_exempt(plan_name):
+    return any(str(plan_name or "").startswith(n) for n in MTF_EXEMPT)
+
+
+def mtf_blocks(plan_name, direction, maj):
+    """True = ไม้นี้สวนเสียงข้างมาก D1/H4/H1 → ห้ามเข้า · direction = 'BUY'/'SELL' หรือ +1/-1"""
+    if mtf_exempt(plan_name) or not maj:
+        return False
+    d = {"BUY": 1, "SELL": -1}.get(direction, direction)
+    return int(d) == -int(maj)
+
+
+def majority_label(maj):
+    return {1: "▲ ขาขึ้น", -1: "▼ ขาลง"}.get(int(maj or 0), "◆ ไม่ชัด")
 
 
 def align(src_times_close, values, dst_times):
     """วางค่าของไทม์เฟรมหนึ่ง (พร้อมใช้ ณ เวลาปิดแท่ง) ลงเวลาอีกชุด — แท่งที่ปิดล่าสุด ณ เวลานั้น (Backtest)"""
-    a = pd.DataFrame({"t": pd.to_datetime(np.asarray(src_times_close)), "v": np.asarray(values)}).sort_values("t")
-    q = pd.DataFrame({"q": pd.to_datetime(np.asarray(dst_times))})
+    a = pd.DataFrame({"t": pd.to_datetime(np.asarray(src_times_close)).astype("datetime64[ns]"), "v": np.asarray(values)}).sort_values("t")
+    q = pd.DataFrame({"q": pd.to_datetime(np.asarray(dst_times)).astype("datetime64[ns]")})
     q["_i"] = np.arange(len(q))
     m = pd.merge_asof(q.sort_values("q"), a, left_on="q", right_on="t", direction="backward").sort_values("_i")
     return m["v"].fillna(0).to_numpy()
