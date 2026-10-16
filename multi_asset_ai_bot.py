@@ -728,6 +728,15 @@ def take_profit_usd():
     return None
 
 
+def vol_tp_enabled():
+    """ปิดไม้ตอนตลาดผันผวนแรง — ค่าเริ่มต้นปิด ผู้ใช้ติ๊กเปิดที่แผงควบคุม (ผู้ใช้สั่ง 16 ต.ค. 2026) · เปิดแล้วมีผลกับ P3–P5 · P7–P8 · ไม้เข้าเอง"""
+    try:
+        with open(BOT_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            return bool(json.load(f).get("vol_tp_enabled", False))
+    except Exception:
+        return False
+
+
 def manual_tp_pts_config():
     """ปิดไม้เข้าเองเมื่อกำไรถึง X จุด (ตั้งที่แผงควบคุม) → (enabled: bool, pts: float)
     ค่าเริ่มต้น: enabled=False, pts=100.0 จุด (ตัวเลือก: 100, 150, 200, 250, 300, 350, 400, 450, 500 หรือระบุอิสระ)
@@ -4018,7 +4027,8 @@ def main():
                         _save_p4_trail_state(p4_trail_steps)
                     tp_usd = take_profit_usd()
                     tp_pts_enabled, target_pts = manual_tp_pts_config()
-                    if is_volatile and (time.time() - _last_volatility_alert_time >= 60.0):
+                    vol_on = vol_tp_enabled()
+                    if is_volatile and vol_on and (time.time() - _last_volatility_alert_time >= 60.0):
                         _last_volatility_alert_time = time.time()
                         print(f"{Colors.YELLOW}[VOLATILITY ALERT] {sym} ตลาดผันผวนแรงผิดปกติ ({vol_reason}) -> บังคับเปิด Take Profit {target_pts:g} จุด (P3–P5 · P7–P8 · ไม้เข้าเอง — แผนรันเทรนด์ไม่ใช้){Colors.RESET}")
 
@@ -4044,7 +4054,7 @@ def main():
                         is_manual_pos = (pos.magic == 0 or (pos.comment or "").startswith("Manual"))
                         # แผนรันเทรนด์ไม่ใช้การปิดตอนผันผวน (ผู้ใช้สั่ง 16 ต.ค. 2026 · P12 จำลอง M1 3 เดือน: +316 → +12 เมื่อปิดที่ 100 จุด)
                         vol_exempt = (not is_manual_pos) and plan_config.base_plan(pos.comment or "") in VOL_TP_EXEMPT
-                        should_check_pts = (is_volatile and not vol_exempt) or (tp_pts_enabled and is_manual_pos)
+                        should_check_pts = (is_volatile and vol_on and not vol_exempt) or (tp_pts_enabled and is_manual_pos)
 
                         if should_check_pts:
                             si = mt5.symbol_info(sym)

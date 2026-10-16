@@ -6130,7 +6130,26 @@ class MainTradingApp(ctk.CTk):
         self.cmb_manual_tp_pts.bind("<Return>", lambda e: self._save_manual_tp_pts(self.manual_tp_pts_var.get()))
         self.cmb_manual_tp_pts.bind("<FocusOut>", lambda e: self._save_manual_tp_pts(self.manual_tp_pts_var.get()))
 
-        HoverTip(chk_manual_tp, lambda: "ปิดไม้ที่เข้าเองทันทีเมื่อกำไรถึงจำนวนจุดที่ตั้ง (คำนวณจากราคาเข้าไม้)\n*ถ้าราคาผันผวนแรงผิดปกติ ระบบจะบังคับเปิดใช้เสมอและมีผลต่อทุกแผน")
+        HoverTip(chk_manual_tp, lambda: "ปิดไม้ที่เข้าเองทันทีเมื่อกำไรถึงจำนวนจุดที่ตั้ง (คำนวณจากราคาเข้าไม้)")
+
+        # ปิดไม้ตอนตลาดผันผวนแรง — ค่าเริ่มต้นปิด (ผู้ใช้สั่ง 16 ต.ค. 2026) · เปิดแล้วใช้เป้าจุดด้านบนกับ P3–P5 · P7–P8 · ไม้เข้าเอง
+        opt_row_vol = ctk.CTkFrame(card, fg_color="transparent")
+        opt_row_vol.pack(fill="x", padx=14, pady=(5, 0))
+        self.vol_tp_var = tk.BooleanVar(value=bool(self._load_setting("vol_tp_enabled", False)))
+
+        def _save_vol():
+            self._save_setting("vol_tp_enabled", bool(self.vol_tp_var.get()))
+            print(f"[VOLATILITY TP] {'เปิด' if self.vol_tp_var.get() else 'ปิด'}การปิดไม้ตอนตลาดผันผวนแรง")
+        chk_vol = ctk.CTkCheckBox(
+            opt_row_vol, text="ตลาดผันผวนแรง ปิดไม้เมื่อกำไรถึงเป้าจุด", variable=self.vol_tp_var,
+            font=self._font(11, "bold"), text_color=COLOR_TEXT_MUTED,
+            fg_color=COLOR_GOLD_WARM, hover_color=COLOR_GOLD_DARK, checkbox_width=18, checkbox_height=18, command=_save_vol,
+        )
+        chk_vol.pack(side="left")
+        HoverTip(chk_vol, lambda: "ค่าเริ่มต้นปิด — ทุกแผนถือไม้ตามกฎของแผนแม้ตลาดผันผวน\n"
+                                  "ติ๊กเปิด: เมื่อตลาดผันผวนแรงผิดปกติ (ราคากระชาก · แท่งแกว่งแรง · สเปรดถ่าง · ข่าว USD ±15 นาที)\n"
+                                  "บอทปิดไม้ของ P3–P5 · P7–P8 และไม้เข้าเองทันทีที่กำไรถึงเป้าจุดด้านบน\n"
+                                  "แผนรันเทรนด์ P1 · P2 · P6 · P9–P12 ไม่ใช้ข้อนี้เสมอ (ทดสอบ P12: ปิดตอนผันผวนกำไร +316 → +12)")
         HoverTip(self.cmb_manual_tp_pts, lambda: "เลือกจำนวนจุดเป้าหมาย (100–500) หรือพิมพ์ระบุอิสระตามต้องการ")
 
 
