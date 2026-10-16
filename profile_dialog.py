@@ -107,9 +107,12 @@ class ProfileManagerDialog(ctk.CTkToplevel):
         self._refresh_status()
 
     # ---------- กล่องข้อความ ----------
-    def _show(self, kind, title, message):
+    def _show(self, kind, title, message, **kw):
         if self.msg is not None:
-            return getattr(self.msg, kind)(title, message)
+            try:
+                return getattr(self.msg, kind)(title, message, **kw)
+            except TypeError:   # messagebox ที่ไม่รองรับ auto_close
+                return getattr(self.msg, kind)(title, message)
         print(f"[{title}] {message}")
         return True
 
@@ -536,7 +539,7 @@ class ProfileManagerDialog(ctk.CTkToplevel):
             btn = self._rows.get(profile_name, (None, None))[1]
             if btn is not None:
                 btn.configure(state="disabled", text="กำลังเปิด", fg_color=COLOR_BTN_DARK)
-            self._show("showinfo", "กำลังเปิดหน้าต่างใหม่", f"เปิด Gold Bot 24 สำหรับ Profile [{profile_name}] เรียบร้อย\nทำงานคู่กันโดยไม่กระทบหน้าต่างนี้")
+            self._show("showinfo", "กำลังเปิดหน้าต่างใหม่", f"เปิด Gold Bot 24 สำหรับ Profile [{profile_name}] เรียบร้อย\nทำงานคู่กันโดยไม่กระทบหน้าต่างนี้", auto_close=5)
         except Exception as e:
             self._show("showerror", "เปิดโปรแกรมไม่สำเร็จ", f"เปิดหน้าต่างใหม่ไม่ได้\n{e}")
 

@@ -936,7 +936,7 @@ class StyledMessage(ctk.CTkToplevel):
         "error": ("✗", COLOR_DANGER_RED, "#2A1215"),
     }
 
-    def __init__(self, parent, title, message, kind="info", ok_text="ตกลง", cancel_text=None):
+    def __init__(self, parent, title, message, kind="info", ok_text="ตกลง", cancel_text=None, auto_close=0):
         super().__init__(parent)
         self.result = False
         sym, color, bg = self.KINDS.get(kind, self.KINDS["info"])
@@ -984,6 +984,17 @@ class StyledMessage(ctk.CTkToplevel):
         self.geometry(f"{w}x{h}+{x}+{y}")
         self.grab_set()
         ok.focus_set()
+        if auto_close:   # นับถอยหลังแล้วกดปุ่มให้เอง เช่น "ตกลง (5)" (ผู้ใช้สั่ง 16 ต.ค. 2026 · หน้าต่างเปิด Profile)
+            self._countdown(ok, ok_text, int(auto_close))
+
+    def _countdown(self, btn, text, sec):
+        if not self.winfo_exists():
+            return
+        if sec <= 0:
+            self._ok()
+            return
+        btn.configure(text=f"{text} ({sec})")
+        self.after(1000, lambda: self._countdown(btn, text, sec - 1))
 
     def _ok(self):
         self.result = True
@@ -997,11 +1008,11 @@ class _StyledMessagebox:
     def _root():
         return tk._default_root
 
-    def _run(self, title, message, kind, ok_text="ตกลง", cancel_text=None):
+    def _run(self, title, message, kind, ok_text="ตกลง", cancel_text=None, auto_close=0):
         root = self._root()
         if root is None:
             return False
-        dlg = StyledMessage(root, title, message, kind, ok_text, cancel_text)
+        dlg = StyledMessage(root, title, message, kind, ok_text, cancel_text, auto_close)
         root.wait_window(dlg)
         return dlg.result
 
@@ -1009,9 +1020,9 @@ class _StyledMessagebox:
         danger = any(k in f"{title} {message}" for k in ("ปิด", "หยุด", "ลบ", "ยกเลิกไม่ได้", "ไม่สามารถยกเลิก"))
         return self._run(title, message, "danger" if danger else "confirm", ok_text="ยืนยัน", cancel_text="ยกเลิก")
 
-    def showinfo(self, title, message, **_kw):
+    def showinfo(self, title, message, auto_close=0, **_kw):
         ok = any(k in str(message) for k in ("สำเร็จ", "เรียบร้อย", "ล่าสุดแล้ว"))
-        return self._run(title, message, "success" if ok else "info")
+        return self._run(title, message, "success" if ok else "info", auto_close=auto_close)
 
     def showwarning(self, title, message, **_kw):
         return self._run(title, message, "warning")
