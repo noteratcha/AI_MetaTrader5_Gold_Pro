@@ -199,6 +199,8 @@ _p11_done = set()        # เวลาข่าว (UTC) ที่ตัดส�
 import dtop_plan
 import trend_engine   # ระบบดูเทรนด์ (16 ต.ค. 2026) — P1 ใช้ H1 · P6 ใช้ H4 · การ์ดสภาวะตลาด
 P12_NAME = dtop_plan.NAME
+# แผนที่ไม่ปิดไม้ตอนตลาดผันผวนแรง (Volatility TP) — ไม่ตั้ง TP / TP ไกล กำไรมาจากไม้ใหญ่ (ผู้ใช้สั่ง 16 ต.ค. 2026)
+VOL_TP_EXEMPT = {"MA-Cross-Trend", "MA-Cross-H1-Trend", P6_NAME, P9_NAME, P10_NAME, P11_NAME, P12_NAME}
 _p12_bar_done = {}       # {sym: เวลาแท่ง H1 ที่ตัดสินแล้ว} — ตรวจสัญญาณครั้งเดียวต่อแท่ง
 
 
@@ -4018,7 +4020,7 @@ def main():
                     tp_pts_enabled, target_pts = manual_tp_pts_config()
                     if is_volatile and (time.time() - _last_volatility_alert_time >= 60.0):
                         _last_volatility_alert_time = time.time()
-                        print(f"{Colors.YELLOW}[VOLATILITY ALERT] {sym} ตลาดผันผวนแรงผิดปกติ ({vol_reason}) -> บังคับเปิด Take Profit {target_pts:g} จุด สำหรับทุกแผน!{Colors.RESET}")
+                        print(f"{Colors.YELLOW}[VOLATILITY ALERT] {sym} ตลาดผันผวนแรงผิดปกติ ({vol_reason}) -> บังคับเปิด Take Profit {target_pts:g} จุด (P3–P5 · P7–P8 · ไม้เข้าเอง — แผนรันเทรนด์ไม่ใช้){Colors.RESET}")
 
                     for pos in positions:
                         # ไม้ของบอทโปรไฟล์อื่น (magic อื่นที่ไม่ใช่ 0) — ห้ามแตะทุกกฎ (Multi-Profile แยกขาด)
@@ -4040,7 +4042,9 @@ def main():
                         # - สภาวะผันผวนแรงผิดปกติ: ต้องเปิดใช้เสมอและมีผลต่อทุกแผน (ทั้งไม้เข้าเองและไม้ของบอท)
                         # ไม้ของบอทโปรไฟล์อื่น (magic อื่นที่ไม่ใช่ 0) ไม่ใช่ไม้เข้าเอง — ห้ามแตะ (Multi-Profile)
                         is_manual_pos = (pos.magic == 0 or (pos.comment or "").startswith("Manual"))
-                        should_check_pts = is_volatile or (tp_pts_enabled and is_manual_pos)
+                        # แผนรันเทรนด์ไม่ใช้การปิดตอนผันผวน (ผู้ใช้สั่ง 16 ต.ค. 2026 · P12 จำลอง M1 3 เดือน: +316 → +12 เมื่อปิดที่ 100 จุด)
+                        vol_exempt = (not is_manual_pos) and plan_config.base_plan(pos.comment or "") in VOL_TP_EXEMPT
+                        should_check_pts = (is_volatile and not vol_exempt) or (tp_pts_enabled and is_manual_pos)
 
                         if should_check_pts:
                             si = mt5.symbol_info(sym)
