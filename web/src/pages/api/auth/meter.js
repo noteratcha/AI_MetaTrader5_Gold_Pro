@@ -3,6 +3,7 @@ import { adjustHoursDetailed, allowMethods, requireUser } from '../../../lib/ser
 import { isMailConfigured, sendLowHoursEmail } from '../../../lib/server/mailer';
 import { LOW_HOURS } from '../../../lib/hours';
 import { addOnlineMinutes, getRewardStatus } from '../../../lib/server/onlineReward';
+import { settleReferral } from '../../../lib/server/referral';
 
 // หักเวลาการใช้งานบอท (เรียกจาก Desktop App ทุก ~5 นาที พร้อมจำนวนนาทีที่ใช้ไป)
 const MAX_MINUTES_PER_CALL = 24 * 60;
@@ -35,6 +36,14 @@ export default async function handler(req, res) {
     const login = Math.floor(Number(req.body?.login) || 0);
     if (credited > 0) await addOnlineMinutes(auth.user, credited, login > 0 && login < 1e12 ? login : 0);
     const online = await getRewardStatus(auth.user.id);
+    // ชวนเพื่อน: ผู้ใช้นี้ถูกแนะนำมาและรันบอทครบ 48 ชม. → จ่ายรางวัลผู้แนะนำ (ครั้งเดียว · ล้มเหลวไม่กระทบการหักเวลา)
+    if (credited > 0) {
+      try {
+        await settleReferral(auth.row, online?.level?.totalHours || 0);
+      } catch (e) {
+        console.error('[meter] referral error:', e?.message);
+      }
+    }
     return res.status(200).json({ success: true, minutesDeducted: credited, hoursRemaining, online, membership: auth.user.membership });
   } catch (err) {
     console.error('[auth/meter] error:', err);

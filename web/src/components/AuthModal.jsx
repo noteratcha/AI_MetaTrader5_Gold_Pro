@@ -1,5 +1,6 @@
 'use client';
 
+import { storedRef } from '../lib/referral';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Gift, Lock, Mail, MailCheck, ShieldCheck, User, X } from 'lucide-react';
@@ -17,6 +18,8 @@ export default function AuthModal() {
   const [notice, setNotice] = useState('');
   const [cooldown, setCooldown] = useState(0);
   const isRegister = authModalTab === 'register';
+  const [refCode, setRefCode] = useState('');
+  useEffect(() => setRefCode(storedRef()), [authModalTab]);
 
   useEffect(() => {
     if (!isAuthModalOpen) return;
@@ -117,6 +120,11 @@ export default function AuthModal() {
               {isRegister ? 'สร้างบัญชี GoldBot24' : 'ยินดีต้อนรับกลับมา'}
             </h2>
             <p className="small muted">{isRegister ? 'ใช้บัญชีเดียวกันทั้งเว็บและโปรแกรม Gold Bot 24' : 'เข้าสู่ระบบเพื่อดูพอร์ตและจัดการชั่วโมงใช้งาน'}</p>
+            {isRegister && refCode && (
+              <p className="small" style={{ marginTop: 8, color: 'var(--green)' }}>
+                สมัครผ่านลิงก์แนะนำของเพื่อน ({refCode}) · คุณรับฟรี 48 ชม. ตามปกติ
+              </p>
+            )}
           </div>
 
           <div className="segmented" role="tablist">

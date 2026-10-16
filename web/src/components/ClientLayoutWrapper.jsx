@@ -8,6 +8,7 @@ import LowHoursBanner from './LowHoursBanner';
 import TopTicker from './TopTicker';
 import { AnnouncementPopup } from './Announcements';
 import HelpBot from './HelpBot';
+import { RefCapture } from './ReferralCard';
 
 export default function ClientLayoutWrapper({ children }) {
   return (
@@ -22,6 +23,7 @@ export default function ClientLayoutWrapper({ children }) {
       <AuthModal />
       <AnnouncementPopup />
       <HelpBot />
+      <RefCapture />
     </AuthProvider>
   );
 }

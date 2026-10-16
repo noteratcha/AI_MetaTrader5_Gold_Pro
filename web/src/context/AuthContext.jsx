@@ -1,5 +1,6 @@
 'use client';
 
+import { REF_STORAGE_KEY, storedRef } from '../lib/referral';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 const SESSION_KEY = 'goldbot_session';
@@ -126,6 +127,11 @@ export function AuthProvider({ children }) {
     async (email, password) => {
       const data = await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
       persist(data.token, data.user);
+      try {
+        localStorage.removeItem(REF_STORAGE_KEY);
+      } catch {
+        /* ข้าม */
+      }
       setIsAuthModalOpen(false);
       return data.user;
     },
@@ -134,10 +140,16 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(
     async (email, password, displayName, code = '') => {
-      const data = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, displayName, code }) });
+      const ref = storedRef();   // ชวนเพื่อน: รหัสผู้แนะนำจากลิงก์ ?ref= (จำไว้ 30 วัน)
+      const data = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, displayName, code, ...(ref ? { ref } : {}) }) });
       // ขั้นแรก: เซิร์ฟเวอร์ส่งรหัสยืนยันไปที่อีเมล ยังไม่สร้างบัญชี
       if (data.step === 'verify') return { step: 'verify', message: data.message };
       persist(data.token, data.user);
+      try {
+        localStorage.removeItem(REF_STORAGE_KEY);
+      } catch {
+        /* ข้าม */
+      }
       setIsAuthModalOpen(false);
       return data.user;
     },

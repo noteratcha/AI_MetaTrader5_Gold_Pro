@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { getAdminClient } from '../../../lib/server/supabaseAdmin';
 import { logActivity } from '../../../lib/server/activity';
+import { linkReferral } from '../../../lib/server/referral';
 import {
   allowMethods,
   clientIp,
@@ -188,6 +189,14 @@ export default async function handler(req, res) {
     const user = toUserPayload(created);
     await logActivity({ userId: created.id, email, event: 'register', detail: `สมัครสมาชิก (ยืนยันอีเมลแล้ว) รับฟรี ${STARTER_HOURS} ชม.`, ip });
     await notifyNewMember({ email, displayName: user.displayName, hours: STARTER_HOURS, ip });
+    // ชวนเพื่อน: สมัครผ่านลิงก์ ?ref= → ผูกกับผู้แนะนำ (ได้ชั่วโมงเมื่อเพื่อนรันบอทครบ 48 ชม. — settleReferral ใน meter) · ล้มเหลวไม่กระทบการสมัคร
+    if (req.body?.ref) {
+      try {
+        await linkReferral({ friend: created, refCode: String(req.body.ref).slice(0, 16), ip });
+      } catch (e) {
+        console.error('[auth/register] referral error:', e?.message);
+      }
+    }
     return res.status(200).json({
       success: true,
       message: `สมัครสมาชิกสำเร็จ! ได้รับโควต้าเริ่มต้น ${STARTER_HOURS} ชั่วโมง`,

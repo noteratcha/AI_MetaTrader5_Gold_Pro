@@ -1,6 +1,9 @@
 // ป้ายภาษาไทยสำหรับเหตุการณ์ใน user_activity
 export const ACTIVITY_LABELS = {
   help_ask: { label: 'ถามผู้ช่วย', badge: 'badge-muted' },
+  referral_reward: { label: 'ชวนเพื่อน +48 ชม.', badge: 'badge-green' },
+  referral_blocked: { label: 'ชวนเพื่อน (ไม่ได้ชั่วโมง)', badge: 'badge-muted' },
+  referred: { label: 'สมัครผ่านลิงก์แนะนำ', badge: 'badge-gold' },
   help_feedback: { label: 'ให้คะแนนผู้ช่วย', badge: 'badge-muted' },
   login: { label: 'เข้าสู่ระบบ', badge: 'badge-green' },
   login_failed: { label: 'ล็อกอินผิด', badge: 'badge-red' },

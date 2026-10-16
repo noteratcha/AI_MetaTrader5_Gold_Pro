@@ -9,6 +9,7 @@ import RedeemCard from '../../components/RedeemCard';
 import OnlineRewardCard from '../../components/OnlineRewardCard';
 import MembershipCard from '../../components/MembershipCard';
 import HoursHistoryCard from '../../components/HoursHistoryCard';
+import ReferralCard from '../../components/ReferralCard';
 import KeyVault from '../../components/KeyVault';
 import { Alert, AuthGate, PageHeader, PageLoading, Spinner, StatCard } from '../../components/ui';
 import { formatHHMM, formatKeyInput } from '../../lib/format';
@@ -107,6 +108,7 @@ function Dashboard() {
       <div className="section">
         {user && <MembershipCard membership={user.membership} compact showHistory onBuy={() => { window.location.href = '/store?member=1'; }} />}
         {user?.online && <OnlineRewardCard online={user.online} />}
+        {user && <ReferralCard />}
         {user && <HoursHistoryCard />}
       </div>
 
