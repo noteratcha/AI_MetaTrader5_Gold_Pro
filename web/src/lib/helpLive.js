@@ -64,7 +64,7 @@ export function planInQuestion(q) {
 export function liveIntent(q) {
   const s = String(q || '').toLowerCase();
   if (planInQuestion(s) && /กำไร|ขาดทุน|ผล|ชนะ|win|pf|dd|drawdown|ไม้|ดีไหม|เป็นยังไง|กี่จุด|backtest/.test(s)) return 'live-plan';
-  if (/แผนไหน.*(กำไร|ดี)|กำไร(มาก|สูง)สุด/.test(s)) return 'live-plan';
+  if (/แผนไหน.*(กำไร|ดี|เงิน|เด่น|เยอะ|มาก)|(กำไร|เงิน)(ได้)?(มาก|สูง|เยอะ)(ที่)?สุด/.test(s)) return 'live-plan';
   if (/(เวอร์ชัน|เวอร์ชั่น|version|รุ่น).*(ล่าสุด|ใหม่สุด|ตอนนี้)|ล่าสุด.*(เวอร์ชัน|เวอร์ชั่น)/.test(s)) return 'live-version';
   if (/(ชั่วโมง|เวลา|เครดิต).*(เหลือ|คงเหลือ)|เหลือ.*ชั่วโมง/.test(s) && /ฉัน|ผม|เรา|ของ|เหลือ/.test(s)) return 'live-my-hours';
   if (/สมาชิก.*(หมด|เหลือ|ของฉัน|ของผม|สถานะ)|(ฉัน|ผม).*สมาชิก/.test(s)) return 'live-my-member';
@@ -98,10 +98,18 @@ export async function resolveLive(key, q, ctx = {}) {
       }
       const top = [...plans].sort((a, b) => b.net - a.net).slice(0, 3);
       const s = bt.summary || {};
+      // ช่วงล่าสุด = 3 เดือนปฏิทินล่าสุดในตารางกำไรรายเดือน (ตอบคำถาม "ตอนนี้" / "ช่วงนี้")
+      const months = [...new Set(plans.flatMap((p) => Object.keys(p.monthly || {})))].sort().slice(-3);
+      const recent = plans
+        .map((p) => ({ key: p.key, net: months.reduce((t, m) => t + Number(p.monthly?.[m] || 0), 0) }))
+        .sort((a, b) => b.net - a.net)
+        .slice(0, 3);
+      const mLabel = months.length ? `${months[0]} ถึง ${months[months.length - 1]}` : '';
       return {
-        t: 'ผลทดสอบย้อนหลังทุกแผน',
-        a: `รวม ${s.trades?.toLocaleString()} ไม้ · ชนะ ${s.win}% · กำไร ${pts(s.net)} จุด · PF ${s.pf} · Max DD ${Math.round(s.maxdd || 0)}\n` +
-          `กำไรสูงสุด 3 อันดับ: ${top.map((p) => `${PLAN_NAMES[p.key]} ${pts(p.net)} (PF ${p.pf})`).join(' · ')}\n` +
+        t: 'แผนที่กำไรมากที่สุด (ผลทดสอบย้อนหลัง)',
+        a: `ช่วงล่าสุด 3 เดือน (${mLabel}): ${recent.map((p, i) => `${i + 1}. ${PLAN_NAMES[p.key]} ${pts(p.net)}`).join(' · ')}\n` +
+          `ทั้งช่วงทดสอบ: ${top.map((p, i) => `${i + 1}. ${PLAN_NAMES[p.key]} ${pts(p.net)} (PF ${p.pf})`).join(' · ')}\n` +
+          `รวมทุกแผน ${s.trades?.toLocaleString()} ไม้ · ชนะ ${s.win}% · ${pts(s.net)} จุด · PF ${s.pf} · Max DD ${Math.round(s.maxdd || 0)}\n` +
           `ถามเจาะรายแผนได้ เช่น "P6 กำไรเท่าไหร่" · ${per} · ผลในอดีตไม่รับประกันอนาคต`,
         href: '/backtest',
       };
