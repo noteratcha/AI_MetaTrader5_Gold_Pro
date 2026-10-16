@@ -5915,7 +5915,7 @@ class MainTradingApp(ctk.CTk):
         stats.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="ctl_stats")
         self.ctl_stat_labels = {}
         for col, (key, title, init) in enumerate((("open", "ออเดอร์ / สูงสุด", "0 / 0"), ("float", "กำไรลอยตัว", "0.00"),
-                                                  ("margin", "หลักประกันว่าง", "0.00"), ("uptime", "เวลาทำงาน", "--:--:--"))):
+                                                  ("margin", "จุดที่ผ่านไป", "—"), ("uptime", "เวลาทำงาน", "--:--:--"))):
             box = ctk.CTkFrame(stats, fg_color="transparent")
             box.grid(row=0, column=col, sticky="nsew", pady=5)
             ttl = ctk.CTkLabel(box, text=title, font=self._font(10), height=16, text_color=COLOR_TEXT_MUTED)
@@ -5927,9 +5927,8 @@ class MainTradingApp(ctk.CTk):
                 for w in (box, val, ttl):
                     w.configure(cursor="hand2")
                     w.bind("<Button-1>", lambda e: self.main_tabs.set(self.TAB_POSITIONS))
-            if key == "margin":  # ชี้ดูวิธีคิดจำนวนไม้สูงสุด
-                HoverTip(box, lambda: "จำนวนไม้สูงสุด = ยอดเงิน (Balance) ÷ (100 × Lot/0.01) เศษปัดขึ้น · อย่างน้อย 1 ไม้\n"
-                                      "นับทุกไม้ในบัญชี (บอท + เข้าเอง) · ไม่ลดลงตามไม้ที่เปิด")
+            if key == "margin":  # จุดที่ราคาวิ่งไปจากราคาเข้า (ผู้ใช้สั่ง 16 ต.ค. 2026 · แทนหลักประกันว่าง)
+                HoverTip(box, lambda: self._points_tip())
 
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(8, 12))
@@ -6742,6 +6741,30 @@ class MainTradingApp(ctk.CTk):
         if h:
             return f"{h}ชม {m}น"
         return f"{m} นาที"
+
+    @staticmethod
+    def _pos_points(p):
+        """จุดที่ราคาวิ่งไปจากราคาเข้า (บวก = ไปทางกำไร) · 1 จุด = 0.01"""
+        e, c = float(p.get("price_open", 0) or 0), float(p.get("price_current", 0) or 0)
+        if not e or not c:
+            return 0.0
+        return (c - e) * (1 if p.get("type") == "BUY" else -1) / 0.01
+
+    def _open_points(self, positions):
+        self._pts_positions = positions
+        return sum(self._pos_points(p) for p in positions) if positions else None
+
+    def _points_tip(self):
+        ps = getattr(self, "_pts_positions", None) or []
+        lines = ["จุดที่ราคาวิ่งไปจากราคาเข้า (1 จุด = 0.01 · +100 จุด = ราคาไปทางกำไร 1.00)"]
+        for p in ps:
+            lines.append(f"#{p.get('ticket')} {p.get('type')} {position_chart.plan_of(p.get('comment'))[1]}: {self._pos_points(p):+,.0f} จุด")
+        if len(ps) > 1:
+            lines.append("ตัวเลขบนแผง = รวมทุกไม้")
+        if not ps:
+            lines.append("ยังไม่มีไม้ที่เปิดอยู่")
+        lines.append(f"หลักประกันว่าง {getattr(self, '_free_margin', 0):,.2f}")
+        return "\n".join(lines)
 
     def _render_positions(self, positions, server_time):
         positions = sorted(positions or [], key=lambda p: p.get("time", 0), reverse=True)
@@ -8269,7 +8292,15 @@ class MainTradingApp(ctk.CTk):
                     self.ctl_stat_labels["open"].configure(
                         text=f"{n_open} / {n_max}",
                         text_color=COLOR_DANGER_RED if n_max and n_open >= n_max else (COLOR_CYAN_ACCENT if n_open else COLOR_TEXT_PRIMARY))
-                    self.ctl_stat_labels["margin"].configure(text=f"{free_m:,.2f}", text_color=COLOR_TEXT_PRIMARY)
+                    # จุดที่ผ่านไปของไม้ที่เปิด (1 จุด = 0.01 ราคา · หน่วยเดียวกับ "ปิดไม้เข้าเองกำไรถึง ... จุด") · หลายไม้ = รวม
+                    pts = self._open_points(telemetry.get("open_positions") or [])
+                    self._free_margin = free_m
+                    if pts is None:
+                        self.ctl_stat_labels["margin"].configure(text="—", text_color=COLOR_TEXT_MUTED)
+                    else:
+                        self.ctl_stat_labels["margin"].configure(
+                            text=f"{pts:+,.0f} จุด",
+                            text_color=COLOR_SUCCESS_GREEN if pts > 0 else (COLOR_DANGER_RED if pts < 0 else COLOR_TEXT_PRIMARY))
                     self.ctl_stat_labels["float"].configure(
                         text=f"{'+' if flt >= 0 else '-'}{abs(flt):,.2f}",
                         text_color=COLOR_SUCCESS_GREEN if flt > 0 else (COLOR_DANGER_RED if flt < 0 else COLOR_TEXT_PRIMARY),
