@@ -6362,7 +6362,7 @@ class MainTradingApp(ctk.CTk):
             bg = "#0F2A20" if st > 0 else "#2A1414" if st < 0 else "#2A2108"
             vt = tr.get("vote")
             if vt:   # สัดส่วนจากจุด 15 จุด (ผู้ใช้สั่ง 16 ต.ค. 2026) · ฝั่งที่ถูกบล็อกไว้หลัง
-                txt = (f"▼ SELL {vt['sell']}% · BUY {vt['buy']}%" if st < 0 else f"▲ BUY {vt['buy']}% · SELL {vt['sell']}%" if st > 0
+                txt = (f"▼ SELL เท่านั้น · {vt['sell']}%" if st < 0 else f"▲ BUY เท่านั้น · {vt['buy']}%" if st > 0
                        else f"◆ BUY {vt['buy']}% · SELL {vt['sell']}%")
             else:
                 txt = "ทุกไม้ ▲ BUY เท่านั้น" if st > 0 else "ทุกไม้ ▼ SELL เท่านั้น" if st < 0 else "◆ BUY / SELL"
