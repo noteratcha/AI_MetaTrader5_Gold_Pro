@@ -1363,7 +1363,7 @@ class ShutdownTimerDialog(ctk.CTkToplevel):
         self.stm = stm
         self.title("ตั้งเวลาปิดเครื่อง")
         self.configure(fg_color=COLOR_BG_DARK)
-        self.geometry("480x430")
+        self.geometry("480x560")
         self.resizable(False, False)
         apply_dark_title_bar(self)
         cfg = stm.load()
@@ -1398,8 +1398,24 @@ class ShutdownTimerDialog(ctk.CTkToplevel):
         self.chk_week.pack(anchor="w", padx=16, pady=(10, 6))
         self.lbl_prev = ctk.CTkLabel(box, text="", font=f(12, "bold"), text_color=COLOR_CYAN_ACCENT, justify="left", wraplength=420)
         self.lbl_prev.pack(anchor="w", padx=16, pady=(4, 14))
+        self._auto_market = cfg.get("auto_market", False)
         for e in (self.ent_date, self.ent_time):
-            e.bind("<KeyRelease>", lambda _e: self._preview())
+            e.bind("<KeyRelease>", lambda _e: (setattr(self, "_auto_market", False), self._preview()))
+        # เวลาตลาดทองปิด + เวลาแนะนำ (ปรับตามฤดู EET/EEST อัตโนมัติ · ผู้ใช้สั่ง 16 ต.ค. 2026)
+        mk = stm.weekly_close_info()
+        self._suggest = mk["suggest"]
+        tip = ctk.CTkFrame(self, fg_color="#14241C", corner_radius=10, border_width=1, border_color="#1F4D36")
+        tip.pack(fill="x", padx=22, pady=(10, 0))
+        d_th = stm.DAYS_TH
+        ctk.CTkLabel(tip, text=f"ตลาดทองปิดสุดสัปดาห์: วัน{d_th[mk['close'].weekday()]} {mk['close']:%d/%m} {mk['close']:%H:%M} น. · "
+                               f"เปิดวัน{d_th[mk['open'].weekday()]} {mk['open']:%d/%m} {mk['open']:%H:%M} น.\n"
+                               f"พักทุกวัน {mk['daily'][0]:%H:%M} – {mk['daily'][1]:%H:%M} น.",
+                     font=f(11), text_color=COLOR_TEXT_PRIMARY, justify="left", wraplength=420).pack(anchor="w", padx=12, pady=(8, 2))
+        ctk.CTkLabel(tip, text=f"แนะนำตั้งทุกวัน{d_th[mk['suggest'].weekday()]} {mk['suggest']:%H:%M} น. หลังตลาดปิดแล้ว "
+                               f"(เวลานี้ปรับตามฤดูให้เอง — ช่วงเวลาฤดูหนาวยุโรปตลาดปิดช้าลง 1 ชม.)",
+                     font=f(11, "bold"), text_color=COLOR_SUCCESS_GREEN, justify="left", wraplength=420).pack(anchor="w", padx=12)
+        ctk.CTkButton(tip, text="ใช้เวลาที่แนะนำ (ทุกสัปดาห์)", width=200, height=28, font=f(11, "bold"), fg_color=COLOR_SUCCESS_GREEN,
+                      hover_color="#2BB383", text_color="#0A0B0F", command=self._use_suggest).pack(anchor="w", padx=12, pady=(6, 10))
         self.lbl_now = ctk.CTkLabel(self, text="", font=f(11), text_color=COLOR_TEXT_MUTED)
         self.lbl_now.pack(anchor="w", padx=22, pady=(8, 0))
         btns = ctk.CTkFrame(self, fg_color="transparent")
@@ -1412,9 +1428,21 @@ class ShutdownTimerDialog(ctk.CTkToplevel):
         self._preview()
         self.after(200, self.lift)
 
+    def _use_suggest(self):
+        t = self._suggest
+        self.ent_date.delete(0, "end")
+        self.ent_date.insert(0, t.strftime("%d/%m/%Y"))
+        self.ent_time.delete(0, "end")
+        self.ent_time.insert(0, t.strftime("%H:%M"))
+        self.var_week.set(True)
+        self.var_on.set(True)
+        self._auto_market = True   # เลื่อนตามฤดูเอง (แก้วัน/เวลาเองแล้วยกเลิก)
+        self._preview()
+
     def _cfg(self):
         return {"enabled": bool(self.var_on.get()), "date": self.ent_date.get().strip(), "time": self.ent_time.get().strip(),
-                "weekly": bool(self.var_week.get()), "last_fired": ""}
+                "weekly": bool(self.var_week.get()), "last_fired": "",
+                "auto_market": bool(self._auto_market and self.var_week.get())}
 
     def _preview(self):
         stm = self.stm
