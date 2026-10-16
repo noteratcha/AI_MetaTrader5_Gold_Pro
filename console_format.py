@@ -64,6 +64,8 @@ _RULES = [
     (re.compile(r"^\[LOSS BLOCK CLEARED\]"), "profit", "key"),
     (re.compile(r"^\[LOSS BLOCK\]"), "warn", "key"),
     (re.compile(r"^\[PLAN DISABLED\]"), "warn", "key"),
+    (re.compile(r"^\[MTF TREND BLOCK\]"), "warn", "key"),
+    (re.compile(r"^\[ไม้ที่ถือ\]"), "lock", "key"),
     (re.compile(r"^\[MARKET\]"), "system", "key"),
     (re.compile(r"^\[MARKET CLOSED\]"), "warn", "key"),
     (re.compile(r"^\[MARKET OPEN\]"), "profit", "key"),

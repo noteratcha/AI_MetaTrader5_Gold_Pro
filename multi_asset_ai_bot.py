@@ -2195,6 +2195,58 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
         return {}
 
 
+_pos_brief_state = {}   # ticket → (เวลาพิมพ์ล่าสุด, คำแนะนำ AI ล่าสุด)
+POS_BRIEF_EVERY = 900   # สรุปไม้ที่ถือใน Console ทุก 15 นาที (หรือทันทีเมื่อเปิดไม้ใหม่ / AI เปลี่ยนคำแนะนำ)
+
+
+def print_positions_brief(positions, digits=2):
+    """สรุปไม้ที่ถืออยู่ + คำแนะนำ AI (position_advisor) — แทนบรรทัด [POSITION] ที่พิมพ์ทุกรอบสแกน (ผู้ใช้สั่ง 16 ต.ค. 2026)"""
+    try:
+        import position_advisor
+        adv = position_advisor.latest() or {}
+    except Exception:
+        adv = {}
+    now = time.time()
+    live = set()
+    for p in positions or ():
+        t = int(p.ticket)
+        live.add(t)
+        a = adv.get(t) or {}
+        last_t, last_v = _pos_brief_state.get(t, (0, None))
+        if now - last_t < POS_BRIEF_EVERY and a.get("verdict") == last_v:
+            continue
+        _pos_brief_state[t] = (now, a.get("verdict"))
+        side = 1 if p.type == mt5.ORDER_TYPE_BUY else -1
+        prof = float(p.profit) + float(p.swap)
+        pc = Colors.GREEN if prof >= 0 else Colors.RED
+        held = int((time.time() + _server_offset_guess() - p.time) // 60) if p.time else 0
+        tick = mt5.symbol_info_tick(p.symbol)
+        cur = (tick.bid if side > 0 else tick.ask) if tick else p.price_current
+        sl_txt = "ไม่มี SL" if not p.sl else f"{p.sl:,.{digits}f} (ห่าง {abs(cur - p.sl):,.{digits}f} จุด" + (" · ล็อกกำไร)" if (p.sl - p.price_open) * side > 0 else ")")
+        print(f"{Colors.CYAN}[ไม้ที่ถือ] #{t} {'BUY' if side > 0 else 'SELL'} {p.volume:.2f} Lot · {plan_config.base_plan(p.comment) or 'เข้าเอง'}"
+              f" · เข้า {p.price_open:,.{digits}f} → ตอนนี้ {cur:,.{digits}f} · กำไร {pc}{prof:+,.2f}{Colors.CYAN}"
+              f" · ถือ {held // 60} ชม. {held % 60} น.{Colors.RESET}")
+        print(f"   SL {sl_txt} · TP {'รันเทรนด์ (ไม่ตั้ง)' if not p.tp else f'{p.tp:,.{digits}f} (อีก {abs(p.tp - cur):,.{digits}f} จุด)'}")
+        if a:
+            vc = {"hold": Colors.GREEN, "caution": Colors.YELLOW}.get(a.get("verdict"), Colors.RED)
+            print(f"   {vc}AI แนะนำ: {a.get('verdict_text')} (คะแนน {a.get('score', 0):+.1f}){Colors.RESET} — {a.get('advice', '')}")
+            for rr in (a.get("reasons") or [])[:4]:
+                mark = "✓" if rr["w"] > 0 else ("✗" if rr["w"] < 0 else "•")
+                print(f"     {mark} {rr['text']}")
+        else:
+            print("   AI แนะนำ: กำลังวิเคราะห์ (ทุก 30 วิ)")
+    for t in list(_pos_brief_state):
+        if t not in live:
+            _pos_brief_state.pop(t, None)
+
+
+def _server_offset_guess():
+    try:
+        return int(thai_time.server_offset_at(time.time()))
+    except Exception:
+        return 0
+
+
 def print_plans_condition_status(symbol: str = None):
     """
     พิมพ์สรุปสถานะความสำเร็จของเงื่อนไขแต่ละแผนเทรด (P1-P6) ลง Console เมื่อเริ่มต้นระบบ
@@ -2770,6 +2822,7 @@ def main():
     for sym in TRADE_SYMBOLS:
         print_plans_condition_status(sym)
     
+    _plans_status_at = time.time()   # พิมพ์เงื่อนไขทุกแผนซ้ำทุก 1 ชม. (ผู้ใช้สั่ง 16 ต.ค. 2026)
     scan_errors = 0   # error ติดกันกี่รอบ — ครบ 3 รอบหยุดบอท (ไม่ตัดชั่วโมงขณะบอททำงานไม่ได้)
     while BOT_RUNNING_FLAG:
         if BOT_PAUSED_FLAG:
@@ -2780,6 +2833,15 @@ def main():
             # sound_manager.play_data_update()
             
             interesting_symbols = [] # เอาไว้เก็บคู่เงินที่น่าสนใจในรอบนี้
+            # สรุปไม้ที่ถือ + คำแนะนำ AI (ทุก 15 นาที / เมื่อคำแนะนำเปลี่ยน) · เงื่อนไขทุกแผนทุก 1 ชม.
+            try:
+                gsym = get_gold_symbol()
+                print_positions_brief([p for p in (mt5.positions_get(symbol=gsym) or ())], 2)
+                if time.time() - _plans_status_at >= 3600:
+                    _plans_status_at = time.time()
+                    print_plans_condition_status(gsym)
+            except Exception:
+                pass
             
             # ระบบ Continuous Learning: รีเทรน AI ใหม่ทุกๆ 24 ชั่วโมง
             if time.time() - last_train_time > 86400:
@@ -3421,11 +3483,6 @@ def main():
                     print(f"MA(5/10) M15 : MA5: {ma5_val:.{digits}f} | MA10: {ma10_val:.{digits}f} | State: {ma_status_str}")
                     print(f"MA(5/10) H1  : MA5: {ma5_h1_val:.{digits}f} | MA10: {ma10_h1_val:.{digits}f} | State: {ma_h1_status_str}")
                     print(f"Status       : {status_color}{Colors.BOLD}{status_text}{Colors.RESET}{div_tag}")
-                    if has_position:
-                        for p in positions:
-                            pos_type_str = "BUY" if p.type == mt5.ORDER_TYPE_BUY else "SELL"
-                            p_color = Colors.GREEN if p.profit >= 0 else Colors.RED
-                            print(f"[POSITION] {pos_type_str} {p.volume:.2f} Lot @ {p.price_open:.{digits}f} | SL: {p.sl:.{digits}f} | TP: {p.tp:.{digits}f} | Profit: {p_color}${p.profit:.2f}{Colors.RESET}")
                     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}\n")
                 else:
                     # ถ้ารอนอกโซน แสดงรายงานกระชับ 1 บรรทัดสดๆ สำหรับทองคำ
