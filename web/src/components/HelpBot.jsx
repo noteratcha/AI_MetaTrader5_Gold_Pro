@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation';
 import { BookOpen, Bot, ChevronDown, Maximize2, MessageCircle, Minimize2, RotateCcw, Send, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { answerHelp } from '../lib/helpSearch';
+import { resolveLive } from '../lib/helpLive';
 import { SUGGESTED } from '../lib/helpKb';
 import { LINE_ID, LINE_URL } from '../lib/contact';
 
@@ -32,7 +33,7 @@ function save(state) {
 }
 const newSid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-function Answer({ m, onAsk, onVote }) {
+function Answer({ m, onAsk, onVote, openAuthModal }) {
   if (!m.found) {
     return (
       <div className="hb-card">
@@ -56,8 +57,16 @@ function Answer({ m, onAsk, onVote }) {
   }
   return (
     <div className="hb-card">
-      <div className="hb-card-title">{m.t}</div>
+      <div className="hb-card-title">
+        {m.t}
+        {m.live && <span className="hb-live">ข้อมูลล่าสุด</span>}
+      </div>
       <p className="hb-text">{m.a}</p>
+      {m.needLogin && openAuthModal && (
+        <button type="button" className="hb-chip" style={{ width: 'fit-content' }} onClick={() => openAuthModal('login')}>
+          เข้าสู่ระบบ
+        </button>
+      )}
       {m.href && (
         <Link className="hb-link" href={m.href}>
           <BookOpen size={14} /> {m.href.startsWith('/guide') ? 'อ่านต่อในคู่มือ' : 'ไปที่หน้านี้'} ›
@@ -93,7 +102,7 @@ function Answer({ m, onAsk, onVote }) {
 }
 
 export default function HelpBot() {
-  const { apiFetch } = useAuth();
+  const { apiFetch, user, openAuthModal } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [big, setBig] = useState(false);
@@ -160,12 +169,20 @@ export default function HelpBot() {
         related: r.related.map((x) => ({ id: x.doc.id, t: x.doc.t })),
       };
       post({ kind: 'ask', q, top: best?.id || '', t: best?.t || '', s: r.best?.score || 0, ok: r.found, page: pathname || '' });
-      setTimeout(() => {
-        setMsgs((m) => [...m, reply]);
-        setTyping(false);
-      }, 380);
+      const started = Date.now();
+      const done = (rep) =>
+        setTimeout(() => {
+          setMsgs((m) => [...m, rep]);
+          setTyping(false);
+        }, Math.max(0, 380 - (Date.now() - started)));
+      if (r.found && best.live) {
+        // ข้อมูลสดจากหน้าเว็บ (ผล Backtest · เวอร์ชัน · แพ็กเกจ · ข่าว · ชั่วโมง/สมาชิกของฉัน)
+        resolveLive(best.live, q, { user }).then((lv) => done({ ...reply, ...lv, live: true }));
+        return;
+      }
+      done(reply);
     },
-    [typing, post, pathname],
+    [typing, post, pathname, user],
   );
 
   const vote = useCallback(
@@ -234,7 +251,7 @@ export default function HelpBot() {
                 </div>
               ) : (
                 <div key={m.id} className="hb-msg is-bot">
-                  <Answer m={m} onAsk={ask} onVote={vote} />
+                  <Answer m={m} onAsk={ask} onVote={vote} openAuthModal={openAuthModal} />
                 </div>
               ),
             )}

@@ -1,6 +1,7 @@
 // ค้นคำตอบจากฐานความรู้ (helpKb.js) แบบไม่ใช้ AI — ภาษาไทยไม่เว้นวรรค จึงเทียบด้วยกลุ่มตัวอักษร 2–3 ตัว (n-gram)
 // คำถามที่ใช้คำต่างจากคู่มือแต่ความหมายใกล้กันยังเจอ (ผู้ใช้ขอ 16 ต.ค. 2026) · คะแนน 0–1+ · ต่ำกว่า MIN_SCORE = ไม่พบ
 import { FAQ, KB } from './helpKb';
+import { LIVE, liveIntent } from './helpLive';
 
 export const MIN_SCORE = 0.45;
 
@@ -44,6 +45,7 @@ const overlap = (q, d) => {
 // เตรียมเอกสาร (ครั้งเดียว)
 const DOCS = [
   ...KB.map((e) => ({ ...e, src: 'kb' })),
+  ...LIVE.map((e) => ({ ...e, src: 'live' })),
   ...FAQ.map(([t, a], i) => ({ id: `faq-${i}`, t, k: [], a, href: '/guide#faq', src: 'faq' })),
 ].map((d) => {
   const head = norm([d.t, ...(d.k || [])].join(' '));
@@ -69,6 +71,11 @@ export function searchHelp(question, limit = 4) {
 
 /** คำตอบสำหรับหน้าต่างแชท: { found, best, related[] } */
 export function answerHelp(question) {
+  const intent = liveIntent(question);   // คำถามที่ต้องใช้ข้อมูลสดจากหน้าเว็บ (ผลแผน · เวอร์ชัน · ข่าว · ชั่วโมงของฉัน)
+  if (intent) {
+    const doc = DOCS.find((d) => d.id === intent);
+    if (doc) return { found: true, best: { doc, score: 1.5 }, related: [] };
+  }
   const res = searchHelp(question, 4);
   const best = res[0];
   if (!best || best.score < MIN_SCORE) return { found: false, best: best || null, related: res.filter((r) => r.score >= MIN_SCORE * 0.6).slice(0, 3) };
