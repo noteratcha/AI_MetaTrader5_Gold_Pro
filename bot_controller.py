@@ -952,9 +952,43 @@ class BotController:
                 except Exception:
                     pass
 
+            # ระบบดูเทรนด์ (16 ต.ค. 2026): D1 / H4 / H1 + ดอลลาร์จาก EURUSD H4 → การ์ดสภาวะตลาด · หน้าต่างอธิบาย · เว็บ
+            if out:
+                try:
+                    import trend_engine
+                    frames = {}
+                    for tf_name, tf in (("H1", mt5.TIMEFRAME_H1), ("H4", mt5.TIMEFRAME_H4), ("D1", mt5.TIMEFRAME_D1)):
+                        r = mt5.copy_rates_from_pos(symbol, tf, 0, trend_engine.BARS_NEEDED)
+                        if r is not None and len(r) >= 230:
+                            frames[tf_name] = pd.DataFrame(r)
+                    usd = self._usd_symbol()
+                    if usd:
+                        r = mt5.copy_rates_from_pos(usd, mt5.TIMEFRAME_H4, 0, 80)
+                        if r is not None and len(r) >= 32:
+                            frames["USD"] = pd.DataFrame(r)
+                    out["trend"] = trend_engine.snapshot(frames)
+                except Exception:
+                    pass
+
             return out or None
         except Exception:
             return None
+
+    _usd_sym_cache = None
+
+    def _usd_symbol(self):
+        """ชื่อ EURUSD ของโบรกเกอร์ (บางโบรกมีตัวต่อท้าย) — ใช้ประมาณค่าเงินดอลลาร์ (ดอลลาร์อ่อน = ทองมักขึ้น)"""
+        if BotController._usd_sym_cache:
+            return BotController._usd_sym_cache
+        try:
+            names = ["EURUSD"] + sorted((s.name for s in (mt5.symbols_get("*EURUSD*") or []) if s.name.upper().startswith("EURUSD")), key=len)
+            for name in names:
+                if mt5.symbol_select(name, True) and mt5.symbol_info(name) is not None:
+                    BotController._usd_sym_cache = name
+                    return name
+        except Exception:
+            pass
+        return None
 
     @staticmethod
     def _normalize_plan_name(raw_plan: str) -> str:

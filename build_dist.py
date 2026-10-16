@@ -169,6 +169,7 @@ def build_gui_app(mode="pyinstaller"):
             "--hidden-import=rsi_plan",
             "--hidden-import=news_plan",
             "--hidden-import=dtop_plan",
+            "--hidden-import=trend_engine",
             f"--name={APP_NAME}",
             "gui_app.py"
         ]

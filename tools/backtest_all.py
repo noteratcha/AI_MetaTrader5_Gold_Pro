@@ -267,6 +267,11 @@ def sig_bb4(i):
     return 0
 
 
+# ระบบดูเทรนด์ (trend_engine · 16 ต.ค. 2026): P1 ใช้ H1 · P6 ใช้ H4 (คะแนน 5 ข้อจากแท่งที่ปิดแล้ว ≥ +3 ขาขึ้น / ≤ -3 ขาลง)
+import trend_engine as te  # noqa: E402
+TS_H1, TS_H4 = te.components(h1), te.components(h4)
+b["tsys_h1"] = te.align(h1.time + pd.Timedelta(hours=1), TS_H1["state"], b.close_time.values).astype(int)
+
 rows, ALL = [], {}
 def keep(key, tr):
     ALL[key] = tr
@@ -275,11 +280,12 @@ b["ma50"] = b.close.rolling(50).mean()
 _rsi, _c, _m50 = b.rsi.values, b.close.values, b.ma50.values
 def p1_filter(i, d):  # ตัวกรองสัญญาณหลอก: RSI 50–70 (BUY) / 30–50 (SELL) + ราคาปิดฝั่งเดียวกับ MA50 M15
     return ((50 < _rsi[i] < 70) if d == 1 else (30 < _rsi[i] < 50)) and (_c[i] - _m50[i]) * d > 0
-rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "h1_stack", entry_ok=p1_filter, sl_mult=1.0,
+rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "tsys_h1", entry_ok=p1_filter, sl_mult=1.0,
                                                 trail="sl", first_frac=0.50, frac=0.40, confirm=True))))
 f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
 f["atr"] = A(f); f["ma5"], f["ma10"], f["ma20"] = f.close.rolling(5).mean(), f.close.rolling(10).mean(), f.close.rolling(20).mean()
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir", "p6_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
+f["p6_dir"] = te.align(h4.time + pd.Timedelta(hours=4), TS_H4["state"], f.close_time.values).astype(int)   # P6: เทรนด์ = ระบบดูเทรนด์ H4
 rows.append(stats("P2 MA H1", keep(2, sim_ma(f, "ma5", "ma10", "p2_dir", step=None, sl_mult=1.25, exit_slow="ma20"))))
 rows.append(stats("P3 SMC", keep(3, sim_ai_plan(sig_smc, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
 rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
@@ -517,12 +523,12 @@ print(pd.DataFrame(rows).to_string(index=False))
 
 # ---------------------------------------------------------------- JSON สำหรับหน้าเว็บ /backtest
 from version import APP_VERSION  # noqa: E402
-NAMES = {1: ("Plan 1", "MA-Cross-Trend", "แท่งยืนยัน (ปิดตามทิศ + ทั้งตัวพ้น MA13) · MA5×MA13 M15 · H1 MA100/150/200 · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
+NAMES = {1: ("Plan 1", "MA-Cross-Trend", "แท่งยืนยัน (ปิดตามทิศ + ทั้งตัวพ้น MA13) · MA5×MA13 M15 · เทรนด์ H1 จากระบบดูเทรนด์ (คะแนน 5 ข้อ ≥ +3 / ≤ −3) · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200 · SL 1.25 ATR · ออกเมื่อ MA5 ตัด MA20"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
          4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 58% · SL 1.0 / TP 2.0 ATR"),
          5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เลื่อน SL ทุก 5 จุด (50%/40%)"),
-         6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 + MA200 · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์เปลี่ยน/ผิดฝั่ง EMA100"),
+         6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 จากระบบดูเทรนด์ (คะแนน ≥ +3 / ≤ −3) · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์ H4 เปลี่ยน/ผิดฝั่ง EMA100"),
          7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),
          8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด"),
          9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · ADX > 20 + MACD ยังไม่หันตามทิศไม้ · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)"),

@@ -67,6 +67,7 @@ COLOR_GOLD_BG = "#221B0D"          # พื้นหลังเรืองแ�
 COLOR_SUCCESS_GREEN = "#34D399"    # สีเขียวสำเร็จ
 COLOR_DANGER_RED = "#F87171"       # สีแดงแจ้งเตือน
 COLOR_CYAN_ACCENT = "#60A5FA"      # สีฟ้าไฮไลท์
+COLOR_SIDEWAY = "#CA8A04"          # สีเหลืองเข้ม = Sideway (การ์ดสภาวะตลาด · ผู้ใช้สั่ง 16 ต.ค. 2026)
 COLOR_TEXT_PRIMARY = "#ECEEF3"     # ข้อความหลักสีขาวนวล
 COLOR_TEXT_MUTED = "#A3ABBA"       # ข้อความรองสีเทา
 
@@ -1843,7 +1844,7 @@ class MarketExplainDialog(ctk.CTkToplevel):
         self.bind("<F11>", lambda e: self._toggle_full())
         self.bind("<Escape>", lambda e: self.state() == "zoomed" and self._toggle_full())
         self.bind("<Configure>", self._on_resize, add="+")
-        ctk.CTkLabel(self, text="คำนวณจากแท่งที่ปิดแล้ว · ตัวเลขเป็นค่าเฉลี่ยเคลื่อนที่ (MA) ของราคาปิด", font=f(11),
+        ctk.CTkLabel(self, text="คำนวณจากแท่งที่ปิดแล้ว · 5 วิธีที่นักเทรดมืออาชีพใช้: โครงสร้างราคา · MA200 · EMA20/50/200 · ความชัน · ADX", font=f(11),
                      text_color=COLOR_TEXT_MUTED).pack(anchor="w", padx=20, pady=(0, 8))
         box = ctk.CTkScrollableFrame(self, fg_color="transparent")
         box.pack(fill="both", expand=True, padx=14, pady=(0, 12))
@@ -1851,7 +1852,7 @@ class MarketExplainDialog(ctk.CTkToplevel):
         if not data:
             ctk.CTkLabel(box, text="เชื่อมต่อ MT5 ไม่ได้ — เปิด MetaTrader 5 ค้างไว้แล้วลองใหม่", font=f(12), text_color=COLOR_DANGER_RED).pack(pady=30)
             return
-        green, red, cyan, muted = COLOR_SUCCESS_GREEN, COLOR_DANGER_RED, COLOR_CYAN_ACCENT, COLOR_TEXT_MUTED
+        green, red, muted = COLOR_SUCCESS_GREEN, COLOR_DANGER_RED, COLOR_TEXT_MUTED
 
         def card(title):
             c = ctk.CTkFrame(box, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
@@ -1865,51 +1866,65 @@ class MarketExplainDialog(ctk.CTkToplevel):
             lb.pack(anchor="w", padx=14)
             self._wrap_labels.append((lb, 70))
 
-        # 1) ป้ายบนการ์ด: MA50 / MA100 / MA150
-        for tf in ("H1", "H4"):
-            d = data.get(tf)
-            if not d:
-                continue
-            m = d["ma"]
-            up = m[50] > m[100] > m[150]
-            dn = m[50] < m[100] < m[150]
-            word, col = ("▲ Uptrend", green) if up else ("▼ Downtrend", red) if dn else ("◆ Sideway", cyan)
-            c = card(f"{tf} : {word}")
-            c.winfo_children()[0].configure(text_color=col)
-            line(c, f"MA50  {m[50]:,.2f}   {'>' if m[50] > m[100] else '<'}   MA100  {m[100]:,.2f}   {'>' if m[100] > m[150] else '<'}   MA150  {m[150]:,.2f}", mono=True)
-            if up:
-                why = "MA50 > MA100 > MA150 เรียงจากเร็วไปช้าครบ = ราคาเฉลี่ยระยะสั้นสูงกว่าระยะยาวทุกช่วง → ขาขึ้น"
-            elif dn:
-                why = "MA50 < MA100 < MA150 เรียงลงครบ = ราคาเฉลี่ยระยะสั้นต่ำกว่าระยะยาวทุกช่วง → ขาลง"
-            else:
-                why = "เส้น MA ยังไม่เรียงตัวทางเดียวกันครบ (สลับกัน) = ตลาดยังไม่มีทิศชัด → ไซด์เวย์"
-            line(c, why, muted, 11)
-            line(c, f"% บนการ์ด = MA50 ห่างจาก MA150 {(m[50] / m[150] - 1) * 100:+.2f}% (ยิ่งห่าง เทรนด์ยิ่งแรง)", muted, 11)
+        col_of = lambda v: green if v > 0 else red if v < 0 else COLOR_SIDEWAY   # noqa: E731
+        mark = lambda v: "▲" if v > 0 else "▼" if v < 0 else "•"                  # noqa: E731
+        tr = data.get("trend") or {}
+
+        # 1) ระบบดูเทรนด์ (การ์ดสภาวะตลาด · 16 ต.ค. 2026): 5 ข้อต่อไทม์เฟรม + ภาพรวม Top-down
+        ov = tr.get("overall")
+        if ov:
+            c = card(f"ภาพรวม (Top-down) : {ov['label']}   {ov['score']:+d}")
+            c.winfo_children()[0].configure(text_color=col_of(ov["state"]))
+            line(c, "คะแนน = D1 ×3 + H4 ×2 + H1 ×1 (คะแนนไทม์เฟรม ÷ 5) + ดอลลาร์ ×1 → −100 ถึง +100 · "
+                    "ตั้งแต่ +40 ขาขึ้น · ตั้งแต่ −40 ขาลง · ระหว่างนั้นไซด์เวย์ · ตั้งแต่ ±70 = แรง", muted, 11)
+            u = tr.get("USD")
+            if u:
+                line(c, f"{mark(u['v'])} ดอลลาร์สหรัฐ — {u['desc']}", col_of(u["v"]) if u["v"] else muted, 11)
             ctk.CTkFrame(c, height=8, fg_color="transparent").pack()
+        for tf in ("D1", "H4", "H1"):
+            s_ = tr.get(tf)
+            if not s_:
+                continue
+            c = card(f"{tf} : {s_['label']}   ({s_['score']:+d}/5)")
+            c.winfo_children()[0].configure(text_color=col_of(s_["state"]))
+            for it in s_["items"]:
+                line(c, f"{mark(it['v'])} {it['name']} — {it['desc']}", col_of(it["v"]) if it["v"] else muted, 11)
+            line(c, "รวม 5 ข้อ: ตั้งแต่ +3 = ขาขึ้น · ตั้งแต่ −3 = ขาลง · ที่เหลือ = ไซด์เวย์ (จุด 5 จุดบนการ์ดเรียงตามข้อด้านบน)", muted, 10)
+            ctk.CTkFrame(c, height=8, fg_color="transparent").pack()
+        if not tr:
+            line(box, "ยังคำนวณระบบดูเทรนด์ไม่ได้ (ข้อมูลแท่ง D1/H4/H1 ไม่พอ)", muted, 11)
 
         # 2) สิ่งที่แต่ละแผนใช้จริง
         c = card("แต่ละแผนใช้เทรนด์อะไรตัดสินใจ")
         h1, h4 = data.get("H1"), data.get("H4")
+        for tf, plan in (("H1", "Plan 1 (MA M15)"), ("H4", "Plan 6 (SAR H1)")):
+            s_ = tr.get(tf)
+            if s_:
+                line(c, f"{plan} — เทรนด์ {tf} จากระบบดูเทรนด์ {s_['score']:+d}/5", COLOR_TEXT_PRIMARY, 12)
+                line(c, ("→ ตั้งแต่ +3: เข้าได้เฉพาะ BUY" if s_["state"] > 0 else "→ ตั้งแต่ −3: เข้าได้เฉพาะ SELL" if s_["state"] < 0
+                         else "→ ไซด์เวย์ (−2 ถึง +2): แผนนี้ยังไม่เข้าไม้") + (" · เทรนด์ H4 เปลี่ยน = Plan 6 ปิดไม้" if tf == "H4" else ""),
+                     col_of(s_["state"]) if s_["state"] else muted, 11)
         if h1:
             m = h1["ma"]
             st = 1 if m[100] > m[150] > m[200] else (-1 if m[100] < m[150] < m[200] else 0)
-            line(c, f"Plan 1 (MA M15) — H1 MA100 {m[100]:,.2f} · MA150 {m[150]:,.2f} · MA200 {m[200]:,.2f}", COLOR_TEXT_PRIMARY, 12)
-            line(c, ("→ เรียงขาขึ้น: เข้าได้เฉพาะ BUY" if st > 0 else "→ เรียงขาลง: เข้าได้เฉพาะ SELL" if st < 0
-                     else "→ ยังไม่เรียงตัว: Plan 1 ยังไม่เข้าไม้"), green if st > 0 else red if st < 0 else muted, 11)
+            line(c, f"Plan 3–5 และ 7–9 — H1 MA100 {m[100]:,.2f} · MA150 {m[150]:,.2f} · MA200 {m[200]:,.2f}", COLOR_TEXT_PRIMARY, 12)
+            line(c, ("→ เรียงขาขึ้น" if st > 0 else "→ เรียงขาลง" if st < 0 else "→ ยังไม่เรียงตัว")
+                 + " (P3 ต้องเรียงตามทิศ · P4 ห้ามสวน · P5/P7/P8 ห้ามเรียงตามทิศไม้ · P9 เข้าสวนทิศที่เรียง)", col_of(st) if st else muted, 11)
         if h4:
             m = h4["ma"]
             dp = h4["diff_pct"]
-            line(c, f"Plan 3–5 (ป้ายมุมขวาของการ์ด) — H4 MA10 {m[10]:,.2f} เทียบ MA30 {m[30]:,.2f} ห่าง {dp:+.2f}%", COLOR_TEXT_PRIMARY, 12)
+            line(c, f"Plan 3–5 และ 7 (ตัวกรองเทรนด์ H4) — H4 MA10 {m[10]:,.2f} เทียบ MA30 {m[30]:,.2f} ห่าง {dp:+.2f}%", COLOR_TEXT_PRIMARY, 12)
             if abs(dp) < 0.20:
-                line(c, "→ ห่างไม่ถึง ±0.20% = ไซด์เวย์ เทรดได้ทั้ง BUY / SELL", cyan, 11)
+                line(c, "→ ห่างไม่ถึง ±0.20% = ไซด์เวย์ เทรดได้ทั้ง BUY / SELL", COLOR_SIDEWAY, 11)
             else:
                 line(c, f"→ ห่างเกิน ±0.20% = {'ขาขึ้น: BUY เท่านั้น' if dp > 0 else 'ขาลง: SELL เท่านั้น'} (Strict Pro-Trend ห้ามสวนเทรนด์)",
                      green if dp > 0 else red, 11)
             above = h4["close"] > m[200]
-            line(c, f"Plan 2 (MA H1) / ป้าย MA200 — ราคาปิด H4 {h4['close']:,.2f} {'เหนือ' if above else 'ใต้'} MA200 {m[200]:,.2f}", COLOR_TEXT_PRIMARY, 12)
+            line(c, f"Plan 2 (MA H1) — ราคาปิด H4 {h4['close']:,.2f} {'เหนือ' if above else 'ใต้'} MA200 {m[200]:,.2f}", COLOR_TEXT_PRIMARY, 12)
             line(c, "→ Plan 2 BUY ได้เมื่อราคาอยู่เหนือ MA200 และ SELL ได้เมื่ออยู่ใต้ MA200 (ร่วมกับ MA10/30 และความชัน MA5 H4)", muted, 11)
         ctk.CTkFrame(c, height=8, fg_color="transparent").pack()
-        note = ctk.CTkLabel(box, text="ป้าย Uptrend / Downtrend / Sideway บนการ์ดใช้แสดงภาพรวมเท่านั้น — การเข้าไม้ใช้กฎของแต่ละแผนด้านบน",
+        note = ctk.CTkLabel(box, text="การ์ดสภาวะตลาด = ระบบดูเทรนด์ · Plan 1 และ Plan 6 ใช้ระบบนี้เข้าไม้ (Backtest ดีขึ้น) · "
+                                      "แผนอื่นยังใช้กฎของตัวเอง เพราะทดสอบแล้วระบบนี้ทำให้ผลแย่ลง",
                             font=f(10), text_color=muted, wraplength=580, justify="left")
         note.pack(anchor="w", padx=8, pady=(6, 0))
         self._wrap_labels.append((note, 60))
@@ -3220,12 +3235,12 @@ class PositionDetailDialog(ctk.CTkToplevel):
     STYLE_COLORS = {"fast": COLOR_CYAN_ACCENT, "slow": COLOR_GOLD_WARM, "ma50": "#A78BFA", "band": "#A78BFA",
                     "mid": "#8A93A6", "sup": COLOR_SUCCESS_GREEN, "res": COLOR_DANGER_RED}
     PLAN_RULES = {
-        "P1": "MA5 ตัด MA13 (M15) + H1 MA100/150/200 เรียงตัว · กรอง RSI + MA50 · แท่งถัดไปต้องปิดตามทิศและทั้งตัวพ้น MA13 (แท่งยืนยัน) · SL 1.0 ATR · ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ · เลื่อน SL ทุก +5 จุด",
+        "P1": "MA5 ตัด MA13 (M15) + เทรนด์ H1 จากระบบดูเทรนด์ (คะแนน ≥ +3 / ≤ −3) · กรอง RSI + MA50 · แท่งถัดไปต้องปิดตามทิศและทั้งตัวพ้น MA13 (แท่งยืนยัน) · SL 1.0 ATR · ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ · เลื่อน SL ทุก +5 จุด",
         "P2": "MA5 ตัด MA10 (H1) + H4 MA10/30 + ความชัน MA5 H4 + MA200 H4 · SL 1.25 ATR H1 · ไม่ตั้ง TP · ออกเมื่อ MA5 ตัด MA20 กลับ",
         "P3": "ราคากวาดแนวรับ/ต้าน H1 แล้วดึงกลับ + ไส้เทียน 0.4–1.0 ATR + เทรนด์ H1 + MA100/150/200 H1 เรียงตามทิศ + AI · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
         "P4": "เด้งโซนแนวรับ/ต้าน H1 (≤ 0.75 ATR) + RSI Divergence + H1 MA100/150/200 ไม่สวนทิศ + AI ≥ 58% · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
         "P5": "หลุดกรอบ Bollinger H1 แล้วกลับเข้า + Divergence + AI ≥ 55% · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
-        "P6": "Parabolic SAR H1 สลับข้างมาทางเทรนด์ H4 (MA10/30 + MA200) · SL = จุด SAR (ไม่เกิน 3 ATR H1) เลื่อนตาม SAR ทุกชั่วโมง · กำไรถึง 2 ATR เลื่อนเร็วขึ้น · ไม่ตั้ง TP · ออกเมื่อเทรนด์ H4 เปลี่ยนหรือราคาปิดผิดฝั่ง EMA100",
+        "P6": "Parabolic SAR H1 สลับข้างมาทางเทรนด์ H4 จากระบบดูเทรนด์ (คะแนน ≥ +3 / ≤ −3) · SL = จุด SAR (ไม่เกิน 3 ATR H1) เลื่อนตาม SAR ทุกชั่วโมง · กำไรถึง 2 ATR เลื่อนเร็วขึ้น · ไม่ตั้ง TP · ออกเมื่อเทรนด์ H4 เปลี่ยนหรือราคาปิดผิดฝั่ง EMA100",
         "P7": "หลุดกรอบ Bollinger H4 แล้วกลับเข้า (แท่ง M15) + Divergence + H1 MA100/150/200 ไม่เรียงตามทิศ + AI ≥ 55% + เทรนด์ H4 MA10/30 ไม่สวน · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
         "P8": "หลุดกรอบ Bollinger H4 แล้วกลับเข้า (แท่ง M15) + Divergence + H1 MA100/150/200 ไม่เรียงตามทิศ + AI ≥ 55% · ไม่ใช้ตัวกรองเทรนด์ H4 · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
         "P9": "Fibonacci คลื่น H1 (≥ 3 ATR) สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้าที่ระดับ 0.3 · SL ระดับ 0 · TP 1.75 · เลื่อน SL ขั้นบันได (ปิดผ่าน 1 → 0.15 · 1.27 → 0.6 · 1.5 → 1)",
@@ -5430,7 +5445,8 @@ class MainTradingApp(ctk.CTk):
         self._make_clickable(self.card_gold, lambda: GoldCandleDialog(self), hint="ดูกราฟ ›")
         # สภาวะตลาด: 2 แถว H1 / H4 + ป้ายทิศที่อนุญาตให้เทรด (Strict Pro-Trend)
         self.card_trend = self._create_dual_card(grid_frame, 3, "📊", "สภาวะตลาด")
-        self.card_trend["rows"] = {tf: self._create_trend_row(self.card_trend["body"], tf) for tf in ("H1", "H4")}
+        # ระบบดูเทรนด์ (trend_engine · 16 ต.ค. 2026): D1 → H4 → H1 (Top-down) + ป้ายภาพรวมมุมขวา
+        self.card_trend["rows"] = {tf: self._create_trend_row(self.card_trend["body"], tf) for tf in ("D1", "H4", "H1")}
         self._make_clickable(self.card_trend, lambda: MarketExplainDialog(self))
         self.after(1500, self._ma_order_tick)
 
@@ -5485,12 +5501,15 @@ class MainTradingApp(ctk.CTk):
         self._tf_tag(row, tf)
         val = ctk.CTkLabel(row, text="—", font=self._font(13, "bold"), text_color=COLOR_TEXT_MUTED, height=22)
         val.pack(side="left")
-        pct = ctk.CTkLabel(row, text="", font=self._font(11, "bold", app_fonts.MONO), text_color=COLOR_TEXT_MUTED, height=22)
+        pct = ctk.CTkLabel(row, text="", font=self._font(11, "bold", app_fonts.MONO), text_color=COLOR_TEXT_MUTED, height=22, width=26, anchor="e")
         pct.pack(side="right")
-        # ลำดับเส้น MA50 / MA100 / MA150 (แท่งปิด) เช่น 50<100<150 = ขาลง — อัปเดตทุก 30 วินาที (_ma_order_tick)
-        lt = ctk.CTkLabel(row, text="", font=self._font(10, "bold", app_fonts.MONO), text_color=COLOR_TEXT_MUTED, height=22)
-        lt.pack(side="right", padx=(0, 6))
-        return {"val": val, "pct": pct, "lt": lt}
+        # จุด 5 ข้อของระบบดูเทรนด์ (โครงสร้างราคา · MA200 · EMA20/50/200 · ความชัน EMA50 · ADX) — อัปเดตทุก 30 วินาที (_ma_order_tick)
+        dots_box = ctk.CTkFrame(row, fg_color="transparent")
+        dots_box.pack(side="right", padx=(0, 6))
+        dots = [ctk.CTkLabel(dots_box, text="●", font=self._font(9), text_color="#3A4150", width=9, height=22) for _ in range(5)]
+        for d in dots:
+            d.pack(side="left")
+        return {"val": val, "pct": pct, "dots": dots}
 
     @staticmethod
     def _format_sr_stars(stars: float) -> str:
@@ -6242,19 +6261,37 @@ class MainTradingApp(ctk.CTk):
             threading.Thread(target=work, daemon=True).start()
         self.after(1000, self._ma_order_tick)
 
+    @staticmethod
+    def _trend_color(v):
+        return COLOR_SUCCESS_GREEN if v > 0 else COLOR_DANGER_RED if v < 0 else COLOR_SIDEWAY
+
     def _apply_ma_order(self, data):
-        if not data:
+        """การ์ดสภาวะตลาด = ระบบดูเทรนด์ (trend_engine): แถว D1 / H4 / H1 (ป้าย + คะแนน −5..+5 + จุด 5 ข้อ) · ป้ายมุมขวา = ภาพรวม Top-down"""
+        card = getattr(self, "card_trend", None)
+        if not card:
             return
-        rows = getattr(self, "card_trend", {}).get("rows", {})
-        for tf, row in rows.items():
-            d = data.get(tf)
-            if not d:
+        tr = (data or {}).get("trend") or {}
+        for tf, row in card["rows"].items():
+            s = tr.get(tf)
+            if not s:
+                row["val"].configure(text="—", text_color=COLOR_TEXT_MUTED)
+                row["pct"].configure(text="")
+                for d in row["dots"]:
+                    d.configure(text_color="#3A4150")
                 continue
-            m = d["ma"]
-            op1 = "<" if m[50] < m[100] else ">"
-            op2 = "<" if m[100] < m[150] else ">"
-            color = COLOR_DANGER_RED if op1 == op2 == "<" else COLOR_SUCCESS_GREEN if op1 == op2 == ">" else COLOR_CYAN_ACCENT
-            row["lt"].configure(text=f"50{op1}100{op2}150", text_color=color)
+            col = self._trend_color(s["state"])
+            row["val"].configure(text="▲ Uptrend" if s["state"] > 0 else "▼ Downtrend" if s["state"] < 0 else "◆ Sideway", text_color=col)
+            row["pct"].configure(text=f"{s['score']:+d}", text_color=col)
+            for d, it in zip(row["dots"], s["items"]):
+                d.configure(text_color=COLOR_SUCCESS_GREEN if it["v"] > 0 else COLOR_DANGER_RED if it["v"] < 0 else "#5B6372")
+        ov = tr.get("overall")
+        if not ov:
+            self._set_badge(card["badge"], "")
+        else:
+            st = ov["state"]
+            bg = "#0F2A20" if st > 0 else "#2A1414" if st < 0 else "#2A2108"
+            arrow = "▲" if st > 0 else "▼" if st < 0 else "◆"
+            self._set_badge(card["badge"], f"ภาพรวม {arrow} {ov['score']:+d}", bg, self._trend_color(st))
 
     def _plan_checks_tick(self):
         """อัปเดตสถานะช่องติ๊กแผน (แอดมินอาจเปิด/ปิดแผนจากเว็บ · สมาชิกรายเดือนเปลี่ยน) ทุก 30 วินาที"""
@@ -8063,47 +8100,7 @@ class MainTradingApp(ctk.CTk):
                     pass
 
                 # อัปเดตสภาวะตลาด H4 และ H1
-                try:
-                    radar = telemetry.get("radar", {})
-                    h4_trend = radar.get("h4_trend", "ANALYZING...")
-                    if h4_trend == "ANALYZING...":
-                        h4_trend = "รอเริ่มบอท" if not bot_ctrl.is_active else "กำลังวิเคราะห์"
-                    h4_pct = float(radar.get("h4_diff_pct", 0.0) or 0.0)
-                    h1_pct = float(radar.get("h1_diff_pct", 0.0) or 0.0)
-                    h1_trend = str(radar.get("h1_trend", "ANALYZING..."))
-                    analyzed = "BULL" in h4_trend or "BEAR" in h4_trend or "SIDEWAY" in h4_trend
-                    if hasattr(self, 'card_trend'):
-                        rows = self.card_trend["rows"]
-                        pct_color = lambda v: COLOR_SUCCESS_GREEN if v > 0 else COLOR_DANGER_RED if v < 0 else COLOR_TEXT_MUTED
-                        # ป้ายมุมขวา = ทิศที่ Plan 3–5 อนุญาต (กฎ Strict Pro-Trend จาก H4 MA10/30)
-                        if not analyzed:
-                            self._set_badge(self.card_trend["badge"], "")
-                        elif "BULL" in h4_trend:
-                            self._set_badge(self.card_trend["badge"], "BUY เท่านั้น", "#0F2A20", COLOR_SUCCESS_GREEN)
-                        elif "BEAR" in h4_trend:
-                            self._set_badge(self.card_trend["badge"], "SELL เท่านั้น", "#2A1414", COLOR_DANGER_RED)
-                        else:
-                            self._set_badge(self.card_trend["badge"], "BUY / SELL", "#132036", COLOR_CYAN_ACCENT)
-
-                        # สภาวะตลาด H1/H4: MA50 < MA100 < MA150 = ขาลง · MA50 > MA100 > MA150 = ขาขึ้น · แบบอื่น = ไซด์เวย์
-                        for tf, key in (("H1", "h1_cond"), ("H4", "h4_cond")):
-                            cond = radar.get(key)
-                            if cond is None or not analyzed:
-                                rows[tf]["val"].configure(text="รอเริ่มบอท" if tf == "H4" and not analyzed else "—", text_color=COLOR_TEXT_MUTED)
-                                rows[tf]["pct"].configure(text="")
-                                continue
-                            cond = int(cond)
-                            if cond == 1:
-                                rows[tf]["val"].configure(text="▲ Uptrend", text_color=COLOR_SUCCESS_GREEN)
-                            elif cond == -1:
-                                rows[tf]["val"].configure(text="▼ Downtrend", text_color=COLOR_DANGER_RED)
-                            else:
-                                rows[tf]["val"].configure(text="◆ Sideway", text_color=COLOR_CYAN_ACCENT)
-                            cpct = float(radar.get(f"{key}_pct", 0.0) or 0.0)  # ระยะ MA50 เทียบ MA150 (%)
-                            rows[tf]["pct"].configure(text=f"{cpct:+.2f}%", text_color=pct_color(cpct))
-                        # ป้าย MA100-200 / MA200 ถูกเอาออกจากการ์ด (ดูรายละเอียดได้ในหน้าต่างอธิบายเมื่อคลิกการ์ด)
-                except Exception:
-                    pass
+                # การ์ดสภาวะตลาด: ใช้ระบบดูเทรนด์ (trend_engine) จาก _ma_order_tick ทุก 30 วิ — ไม่ใช้ค่าจาก radar แล้ว (16 ต.ค. 2026)
 
                 # อัปเดตแนวรับ - แนวต้าน
                 try:

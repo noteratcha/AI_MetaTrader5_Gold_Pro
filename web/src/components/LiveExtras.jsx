@@ -11,15 +11,85 @@ const fmt = (v) => (v === null || v === undefined ? '—' : Number(v).toLocaleSt
 const TREND = {
   1: { text: '▲ Uptrend', color: 'var(--green, #34d399)', order: '50 > 100 > 150' },
   [-1]: { text: '▼ Downtrend', color: 'var(--red, #f87171)', order: '50 < 100 < 150' },
-  0: { text: '◆ Sideway', color: 'var(--sky, #60a5fa)', order: 'สลับกัน' },
+  0: { text: '◆ Sideway', color: '#ca8a04', order: 'สลับกัน' }, // เหลืองเข้ม = Sideway (ตรงกับโปรแกรม)
 };
 
 function Waiting({ text }) {
   return <EmptyState icon={Activity} title="รอข้อมูลจากโปรแกรม">{text}</EmptyState>;
 }
 
-/** สภาวะตลาด H1/H4: ลำดับ MA50/100/150 (แท่งปิด) + ระยะห่าง % + MA200 */
+const tColor = (v) => (v > 0 ? 'var(--green, #34d399)' : v < 0 ? 'var(--red, #f87171)' : '#ca8a04');
+const tMark = (v) => (v > 0 ? '▲' : v < 0 ? '▼' : '•');
+const SHORT = { structure: 'โครงสร้าง', ma200: 'MA200', ema: 'EMA20/50/200', slope: 'ความชัน', adx: 'ADX' };
+
+/** สภาวะตลาด = ระบบดูเทรนด์ของโปรแกรม (D1 / H4 / H1 · 5 ข้อต่อไทม์เฟรม + ภาพรวม Top-down + ดอลลาร์) — ค่าจากโปรแกรมทั้งหมด */
+function TrendSystemCard({ trend }) {
+  const ov = trend.overall;
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h3>
+          <Activity size={17} className="text-gold" /> สภาวะตลาด
+        </h3>
+        <span className="tiny faint">ระบบดูเทรนด์ · โครงสร้างราคา · MA200 · EMA · ความชัน · ADX</span>
+      </div>
+      <div className="card-body stack" style={{ gap: 10 }}>
+        {ov && (
+          <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2, #171b23)' }}>
+            <div className="row-between" style={{ gap: 8 }}>
+              <span className="row" style={{ gap: 10 }}>
+                <span className="badge badge-muted">ภาพรวม</span>
+                <strong style={{ color: tColor(ov.state) }}>{ov.label}</strong>
+              </span>
+              <strong className="mono" style={{ color: tColor(ov.state) }}>
+                {ov.score > 0 ? '+' : ''}
+                {ov.score}
+              </strong>
+            </div>
+            <div className="tiny muted" style={{ marginTop: 6 }}>
+              D1 ×3 + H4 ×2 + H1 ×1 + ดอลลาร์ ×1 → −100 ถึง +100 · ตั้งแต่ ±40 = มีเทรนด์
+              {trend.USD ? ` · ${trend.USD.desc}` : ''}
+            </div>
+          </div>
+        )}
+        {['D1', 'H4', 'H1'].map((tf) => {
+          const s = trend[tf];
+          if (!s) return null;
+          return (
+            <div key={tf} style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2, #171b23)' }}>
+              <div className="row-between" style={{ gap: 8 }}>
+                <span className="row" style={{ gap: 10 }}>
+                  <span className="badge badge-muted mono">{tf}</span>
+                  <strong style={{ color: tColor(s.state) }}>{s.label}</strong>
+                </span>
+                <span className="mono small" style={{ color: tColor(s.state) }}>
+                  {s.score > 0 ? '+' : ''}
+                  {s.score}/5
+                </span>
+              </div>
+              <div className="row wrap tiny mono" style={{ gap: 6, marginTop: 8 }}>
+                {s.items.map((it) => (
+                  <span
+                    key={it.key}
+                    title={`${it.name} — ${it.desc}`}
+                    style={{ padding: '2px 8px', borderRadius: 999, border: '1px solid var(--border)', color: it.v ? tColor(it.v) : 'var(--text-3, #6e7687)', cursor: 'help' }}
+                  >
+                    {SHORT[it.key] || it.name} {tMark(it.v)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        <div className="tiny faint">ชี้ที่แต่ละข้อเพื่อดูค่าจริง · คะแนนไทม์เฟรม: ตั้งแต่ +3 ขาขึ้น · ตั้งแต่ −3 ขาลง · P1 ใช้เทรนด์ H1 และ P6 ใช้เทรนด์ H4 จากระบบนี้</div>
+      </div>
+    </div>
+  );
+}
+
+/** สภาวะตลาด: ระบบดูเทรนด์ (โปรแกรมรุ่นใหม่) — รุ่นเก่าที่ยังไม่ส่ง trend แสดงลำดับ MA50/100/150 แบบเดิม */
 export function MarketCard({ market }) {
+  if (market?.trend && (market.trend.H1 || market.trend.H4)) return <TrendSystemCard trend={market.trend} />;
   return (
     <div className="card">
       <div className="card-header">

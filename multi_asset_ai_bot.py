@@ -197,6 +197,7 @@ P11_NAME = news_plan.NAME
 _p11_done = set()        # เวลาข่าว (UTC) ที่ตัดสินไปแล้ว — กันเข้าซ้ำ
 # Plan 12 (15 ต.ค. 2026): ทำยอดซ้ำนอกกรอบ BB H1 ตามเทรนด์ H4 MA10/30 · ไม้เพิ่มสูงสุด 2 · ปิดทุกไม้เมื่อแตะ BB อีกฝั่ง — กฎใน dtop_plan.py
 import dtop_plan
+import trend_engine   # ระบบดูเทรนด์ (16 ต.ค. 2026) — P1 ใช้ H1 · P6 ใช้ H4 · การ์ดสภาวะตลาด
 P12_NAME = dtop_plan.NAME
 _p12_bar_done = {}       # {sym: เวลาแท่ง H1 ที่ตัดสินแล้ว} — ตรวจสัญญาณครั้งเดียวต่อแท่ง
 
@@ -367,6 +368,8 @@ def _web_extras():
                 mkt[tf] = {"dir": order, "pct": round((ma[50] / ma[150] - 1.0) * 100.0, 2), "close": round(d["close"], 2),
                            "ma50": round(ma[50], 2), "ma100": round(ma[100], 2), "ma150": round(ma[150], 2), "ma200": round(ma[200], 2),
                            "diff_pct": round(d.get("diff_pct", 0.0), 2)}
+            if ex.get("trend"):
+                mkt["trend"] = ex["trend"]          # ระบบดูเทรนด์ D1/H4/H1 + ดอลลาร์ + ภาพรวม (การ์ดเดียวกับโปรแกรม)
             _web_extra_cache["mkt"], _web_extra_cache["mkt_at"] = mkt, time.time()
         if _web_extra_cache.get("mkt"):
             extra["market"] = _web_extra_cache["mkt"]
@@ -1723,6 +1726,13 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             h1_stack_dir = -1 if a < b < c else (1 if a > b > c else 0)
         else:
             h1_stack_dir = 0
+        # ระบบดูเทรนด์ (16 ต.ค. 2026): P1 ใช้ H1 · P6 ใช้ H4
+        ts_h1 = trend_engine.tf_snapshot(df_h1) or {"state": 0, "score": 0, "items": []}
+        ts_h4 = trend_engine.tf_snapshot(df_h4) or {"state": 0, "score": 0, "items": []}
+
+        def _ts_desc(ts):
+            marks = " · ".join(f"{it['name'].replace('ราคาเทียบ ', '')} {'▲' if it['v'] > 0 else '▼' if it['v'] < 0 else '•'}" for it in ts.get("items", []))
+            return f"คะแนน {ts['score']:+d}/5 ({trend_engine.tf_label(ts['score'])})" + (f" — {marks}" if marks else "")
 
         is_uptrend_h1 = h1_ma5 >= h1_ma10
 
@@ -1815,11 +1825,11 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
         }
 
         # ===== Plan 1: MA-Cross-Trend (M15) — 15 ต.ค. 2026: MA5 ตัด MA13 + แท่งยืนยันปิดตามทิศ =====
-        p1_side = "BUY" if h1_stack_dir == 1 else ("SELL" if h1_stack_dir == -1 else ("BUY" if m15_ma5 >= m15_ma13 else "SELL"))
+        p1_side = "BUY" if ts_h1["state"] == 1 else ("SELL" if ts_h1["state"] == -1 else ("BUY" if m15_ma5 >= m15_ma13 else "SELL"))
         d1 = 1 if p1_side == "BUY" else -1
         k1 = -3 if p1_x3 == d1 else -2                      # แท่งที่วัด RSI/MA50 = แท่งที่เกิด Cross
         word_up = "ขึ้น" if d1 == 1 else "ลง"
-        c1 = h1_stack_dir == d1
+        c1 = ts_h1["state"] == d1
         c2 = p1_x3 == d1
         c3 = (50 < _rsis[k1] < 70) if d1 == 1 else (30 < _rsis[k1] < 50)
         c4 = (m15_c.values[k1] - _m50s[k1]) * d1 > 0
@@ -1833,7 +1843,7 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
         else:
             d2 = f"ยังไม่มีจังหวะตัด{word_up} (MA5 {m15_ma5:,.2f} · MA13 {m15_ma13:,.2f})"
         p1_items = [
-            {"name": "เทรนด์ H1", "ok": c1, "desc": ("MA100>150>200 เรียงตัวขาขึ้น" if d1 == 1 else "MA100<150<200 เรียงตัวขาลง") if c1 else f"ยังไม่เรียงตัวขา{word_up} (MA100/150/200)"},
+            {"name": "เทรนด์ H1 (ระบบดูเทรนด์)", "ok": c1, "desc": _ts_desc(ts_h1) + ("" if c1 else f" · ต้อง {'≥ +3' if d1 == 1 else '≤ -3'}")},
             {"name": "MA5 ตัด MA13 M15", "ok": c2, "desc": d2},
             {"name": "RSI M15", "ok": bool(c3), "desc": f"RSI {_rsis[k1]:.1f} (ต้อง {'50–70' if d1 == 1 else '30–50'})"},
             {"name": "MA50 M15", "ok": bool(c4), "desc": f"ราคา {m15_c.values[k1]:,.2f} {'>' if c4 == (d1 == 1) else '<'} MA50 {_m50s[k1]:,.2f}"},
@@ -1982,23 +1992,18 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             "disabled_reason": plan_config.disabled_reason("BB-H1-Reversion")
         }
 
-        # ===== Plan 6: PSAR-H1-Trend (H1) =====
+        # ===== Plan 6: PSAR-H1-Trend (H1) — เทรนด์ = ระบบดูเทรนด์ H4 (16 ต.ค. 2026) =====
         p6_side = "BUY" if sar_dir == 1 else "SELL"
-        p6_items = []
-        if p6_side == "BUY":
-            c1 = sar_dir == 1
-            p6_items.append({"name": "SAR อยู่ใต้ราคา", "ok": c1, "desc": f"SAR {sar_val:,.2f} อยู่ใต้ราคา (ขาขึ้น)" if c1 else f"SAR อยู่เหนือราคา ({sar_val:,.2f})"})
-            c2 = is_uptrend_h4
-            p6_items.append({"name": "เทรนด์ H4", "ok": c2, "desc": f"H4 ขาขึ้น (MA10>MA30 +{h4_diff_pct:.2f}%)" if c2 else "H4 ไม่ใช่ขาขึ้น"})
-            c3 = h4_lt_dir == 1
-            p6_items.append({"name": "เหนือ MA200 H4", "ok": c3, "desc": f"ราคา {h4_close:,.2f} > MA200 {h4_ma200:,.2f}" if c3 else f"ราคาต่ำกว่า MA200 H4 ({h4_ma200:,.2f})"})
-        else:
-            c1 = sar_dir == -1
-            p6_items.append({"name": "SAR อยู่เหนือราคา", "ok": c1, "desc": f"SAR {sar_val:,.2f} อยู่เหนือราคา (ขาลง)" if c1 else f"SAR อยู่ใต้ราคา ({sar_val:,.2f})"})
-            c2 = not is_uptrend_h4
-            p6_items.append({"name": "เทรนด์ H4", "ok": c2, "desc": f"H4 ขาลง (MA10<MA30 {h4_diff_pct:.2f}%)" if c2 else "H4 ไม่ใช่ขาลง"})
-            c3 = h4_lt_dir == -1
-            p6_items.append({"name": "ใต้ MA200 H4", "ok": c3, "desc": f"ราคา {h4_close:,.2f} < MA200 {h4_ma200:,.2f}" if c3 else f"ราคาสูงกว่า MA200 H4 ({h4_ma200:,.2f})"})
+        d6 = 1 if p6_side == "BUY" else -1
+        p6_flip_now = len(p6_dir) >= 3 and p6_dir[-2] != p6_dir[-3]
+        p6_items = [
+            {"name": "SAR อยู่ใต้ราคา" if d6 == 1 else "SAR อยู่เหนือราคา", "ok": True,
+             "desc": f"SAR {sar_val:,.2f} {'ใต้' if d6 == 1 else 'เหนือ'}ราคา ({'ขาขึ้น' if d6 == 1 else 'ขาลง'})"},
+            {"name": "เทรนด์ H4 (ระบบดูเทรนด์)", "ok": ts_h4["state"] == d6,
+             "desc": _ts_desc(ts_h4) + ("" if ts_h4["state"] == d6 else f" · ต้อง {'≥ +3' if d6 == 1 else '≤ -3'}")},
+            {"name": "SAR เพิ่งสลับข้าง", "ok": bool(p6_flip_now),
+             "desc": "SAR สลับข้างบนแท่ง H1 ที่ปิดล่าสุด — จังหวะเข้า" if p6_flip_now else "รอ SAR สลับข้างมาทางเทรนด์ (เข้าเฉพาะแท่งที่สลับ)"},
+        ]
 
         m6 = sum(1 for it in p6_items if it["ok"])
         results["P6"] = {
@@ -2783,6 +2788,10 @@ def main():
                 df_h4 = get_data(sym, TIMEFRAME_H4, 1100)   # 1,100 แท่ง: แนวรับ/ต้าน 1,000 แท่ง H4
                 if df_m15 is None or df_h1 is None or df_h4 is None:
                     continue
+                # ระบบดูเทรนด์ (trend_engine · 16 ต.ค. 2026): คะแนน 5 ข้อจากแท่งที่ปิดแล้ว ≥ +3 ขาขึ้น / ≤ -3 ขาลง
+                #   P1 ใช้ H1 (เดิม H1 MA100/150/200) · P6 ใช้ H4 (เดิม H4 MA10/30 + ราคาเทียบ MA200)
+                tsys_h1 = trend_engine.tf_snapshot(df_h1) or {"state": 0, "score": 0}
+                tsys_h4 = trend_engine.tf_snapshot(df_h4) or {"state": 0, "score": 0}
                 
                 df_h1['ma_fast_h1'] = df_h1['close'].rolling(10).mean()
                 df_h1['ma_slow_h1'] = df_h1['close'].rolling(30).mean()
@@ -2822,13 +2831,8 @@ def main():
                 # ===== Plan 6: Parabolic SAR H1 ตามเทรนด์ H4 (แท่งที่ปิดแล้วทั้ง H1/H4) =====
                 p6_sar, p6_dir = psar_series(df_h1['high'].values, df_h1['low'].values, *P6_SAR)
                 p6_sar_fast, p6_dir_fast = psar_series(df_h1['high'].values, df_h1['low'].values, *P6_SAR_FAST)
-                _c4 = df_h4['close']
-                if len(_c4) >= 202:
-                    _t4 = 1 if _c4.rolling(10).mean().iloc[-2] > _c4.rolling(30).mean().iloc[-2] else -1
-                    _l4 = 1 if _c4.iloc[-2] > _c4.rolling(200).mean().iloc[-2] else -1
-                    p6_trend = _t4 if _t4 == _l4 else 0
-                else:
-                    p6_trend = 0
+                # เทรนด์ของ P6 = ระบบดูเทรนด์ H4 (16 ต.ค. 2026 · Backtest 2.7 ปี: กำไร +2,594 → +2,564 · PF 2.09 → 2.30 · DD 191 → 98)
+                p6_trend = int(tsys_h4["state"])
                 p6_ema100 = float(df_h1['close'].ewm(span=P6_EXIT_EMA, adjust=False).mean().iloc[-2])
                 p6_close = float(df_h1['close'].iloc[-2])
                 p6_flip = len(df_h1) >= 3 and p6_dir[-2] != p6_dir[-3]
@@ -3157,8 +3161,10 @@ def main():
                 p1_conf_lo = float(min(df['open'].iloc[-2], df['close'].iloc[-2]))
                 p1_conf_hi = float(max(df['open'].iloc[-2], df['close'].iloc[-2]))
                 p1_cross_bar_time = df.iloc[-3]['time'] if len(df) >= 3 else df.iloc[-1]['time']   # กันเข้าซ้ำบนสัญญาณเดิม
-                ma_cross_buy_confirm = p1_cross_up and h1_stack_dir == 1 and p1_conf_body > 0 and p1_conf_lo > p1_x_ma13[-2]
-                ma_cross_sell_confirm = p1_cross_down and h1_stack_dir == -1 and p1_conf_body < 0 and p1_conf_hi < p1_x_ma13[-2]
+                # เทรนด์ของ P1 = ระบบดูเทรนด์ H1 (16 ต.ค. 2026 · Backtest 2.5 ปี: กำไร +656 → +850 · PF 1.75 → 2.11 · DD 72 → 62)
+                p1_trend = int(tsys_h1["state"])
+                ma_cross_buy_confirm = p1_cross_up and p1_trend == 1 and p1_conf_body > 0 and p1_conf_lo > p1_x_ma13[-2]
+                ma_cross_sell_confirm = p1_cross_down and p1_trend == -1 and p1_conf_body < 0 and p1_conf_hi < p1_x_ma13[-2]
 
                 # ตัวกรองสัญญาณหลอก Plan 1 (แท่ง M15 ที่ปิดแล้ว): โมเมนตัม RSI ต้องหนุนทิศ แต่ยังไม่ Overbought/Oversold
                 # และราคาปิดต้องอยู่ฝั่งเดียวกับ MA50 M15 — Backtest 2.5 ปี: ไม้ 2027 → 739, PF 1.16 → 1.37,

@@ -16,6 +16,7 @@ import MetaTrader5 as mt5
 import pandas as pd
 
 import multi_asset_ai_bot as bot
+import trend_engine
 import thai_time
 
 def _gold_symbol() -> str:
@@ -118,9 +119,9 @@ def _context_from(h1, h4, price):
     d["p6_sar"], d["p6_dir"] = _f(h1s["sar"].iloc[-2]), int(sdir[-2])
     d["p6_sar_fast"], d["p6_dir_fast"] = _f(h1s["sar_fast"].iloc[-2]), int(fdir[-2])
     d["h1_ema100"], d["h1_close"] = _f(h1s["ema100"].iloc[-2]), _f(c1.iloc[-2])
-    _t4 = 1 if c4.rolling(10).mean().iloc[-2] > c4.rolling(30).mean().iloc[-2] else -1
-    _l4 = 1 if c4.iloc[-2] > c4.rolling(200).mean().iloc[-2] else -1
-    d["p6_trend"] = _t4 if _t4 == _l4 else 0
+    # ระบบดูเทรนด์ (16 ต.ค. 2026): P1 ใช้ H1 · P6 ใช้ H4 (แท่งสุดท้ายของ h1/h4 = แท่งที่ยังไม่ปิด)
+    d["tsys_h1"], d["tsys_h4"] = trend_engine.tf_snapshot(h1), trend_engine.tf_snapshot(h4)
+    d["p6_trend"] = d["tsys_h4"]["state"] if d["tsys_h4"] else 0
     sr = bot.find_sr_levels(h1, float(price), df_h4=h4)
     for i in range(1, 6):
         s_k = "sup" if i == 1 else f"sup{i}"
@@ -145,7 +146,7 @@ def _context():
         return _ctx["data"]
     sym = _gold_symbol()
     h1 = bot.get_data(sym, mt5.TIMEFRAME_H1, 620)
-    h4 = bot.get_data(sym, mt5.TIMEFRAME_H4, 320)
+    h4 = bot.get_data(sym, mt5.TIMEFRAME_H4, 620)
     d = _context_from(h1, h4, float(h1["close"].iloc[-1])) if h1 is not None else None
     if d is not None:
         _ctx.update(t=now, data=d)
@@ -331,11 +332,10 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         if ma50c is not None and close_c is not None:
             inds.append(_ind("ราคาปิด vs MA50 M15", f"{close_c:,.2f} / {ma50c:,.2f}", _agree(close_c - ma50c, side),
                              "BUY ต้องอยู่เหนือ · SELL ต้องอยู่ใต้"))
-        if ctx:
-            s = ctx["h1_stack"]
-            word = {1: "เรียงขึ้น", -1: "เรียงลง", 0: "ไม่เรียง"}[ctx["h1_stack_dir"]]
-            inds.append(_ind("H1 MA100 / 150 / 200", f"{word}", _agree(ctx["h1_stack_dir"], side),
-                             " / ".join(_fmt(v) for v in s)))
+        if ctx and ctx.get("tsys_h1"):
+            t1 = ctx["tsys_h1"]
+            inds.append(_ind("เทรนด์ H1 (ระบบดูเทรนด์)", f"{t1['score']:+d}/5", _agree(t1["state"], side),
+                             trend_engine.tf_label(t1["score"]) + " · ตอนเข้าต้อง ≥ +3 (BUY) / ≤ −3 (SELL)"))
         step_trail()
     elif plan_key == "P2" and ctx:
         inds.append(_ind("MA5 / MA10 (H1 แท่งปิด)", f"{_fmt(ctx['h1_ma5'])} / {_fmt(ctx['h1_ma10'])}",
@@ -405,8 +405,9 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None):
         step_trail()
         tp_progress()
     elif plan_key == "P6" and ctx:
-        word = {1: "ขาขึ้น", -1: "ขาลง", 0: "ไม่ชัด (MA10/30 กับ MA200 ไม่ตรงกัน)"}[ctx["p6_trend"]]
-        inds.append(_ind("เทรนด์ H4 (MA10/30 + MA200)", word, _agree(ctx["p6_trend"], side),
+        t4 = ctx.get("tsys_h4") or {"score": 0}
+        word = f"{trend_engine.tf_label(t4['score'])} ({t4['score']:+d}/5)"
+        inds.append(_ind("เทรนด์ H4 (ระบบดูเทรนด์)", word, _agree(ctx["p6_trend"], side),
                          "ต้องตรงทิศตอนเข้า · เทรนด์เปลี่ยน = สัญญาณออก" + (f" ({exit_word})" if ctx["p6_trend"] != side else "")))
         if ctx["p6_sar"] is not None:
             inds.append(_ind("SAR H1 (0.01/0.1 · แท่งปิด)", _fmt(ctx["p6_sar"]), _agree(ctx["p6_dir"], side),
@@ -535,7 +536,7 @@ def get_closed(trade, count=80):
     m = _m15_frame(m.to_records(index=False), exit_px)
 
     h1 = _rates_df(mt5.copy_rates_from(sym, mt5.TIMEFRAME_H1, close_t, 620))
-    h4 = _rates_df(mt5.copy_rates_from(sym, mt5.TIMEFRAME_H4, close_t, 320))
+    h4 = _rates_df(mt5.copy_rates_from(sym, mt5.TIMEFRAME_H4, close_t, 620))
     if h1 is not None and h4 is not None:
         _set_last(h1, exit_px)
         _set_last(h4, exit_px)
