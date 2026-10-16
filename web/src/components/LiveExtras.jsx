@@ -48,6 +48,19 @@ function TrendSystemCard({ trend }) {
                 D1 {tMark(trend.D1?.state)} · H4 {tMark(trend.H4?.state)} · H1 {tMark(trend.H1?.state)}
               </span>
             </div>
+            {trend.vote && (
+              <div style={{ marginTop: 8 }}>
+                <div className="row-between tiny mono">
+                  <span style={{ color: 'var(--green, #34d399)' }}>BUY {trend.vote.buy}%</span>
+                  <span style={{ color: 'var(--red, #f87171)' }}>SELL {trend.vote.sell}%</span>
+                </div>
+                <div style={{ display: 'flex', height: 6, borderRadius: 999, overflow: 'hidden', marginTop: 4, background: 'var(--border)' }}>
+                  <div style={{ width: `${trend.vote.buy}%`, background: 'var(--green, #34d399)' }} />
+                  <div style={{ width: `${trend.vote.sell}%`, background: 'var(--red, #f87171)' }} />
+                </div>
+                <div className="tiny faint" style={{ marginTop: 4 }}>จากจุด 15 จุด (D1/H4/H1 × 5 ข้อ): ขึ้น {trend.vote.up} · ลง {trend.vote.down} · กลาง {trend.vote.flat} (ไม่นับ)</div>
+              </div>
+            )}
             <div className="tiny muted" style={{ marginTop: 6 }}>
               เทรนด์ข้างมาก (2 ใน 3 ไทม์เฟรม) — บอทห้ามเข้าไม้สวนทิศนี้ทุกแผน ยกเว้น P9 (สวนเทรนด์โดยตั้งใจ) และ P11 (ข่าว)
             </div>

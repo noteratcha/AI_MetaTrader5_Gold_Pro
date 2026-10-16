@@ -1,4 +1,4 @@
 """เลขเวอร์ชันของ Gold Bot 24 (รูปแบบ YYYY.MMDD.HHMM)
 อัปเดตด้วย `python tools/bump_version.py` ทุกครั้งที่แก้โค้ด — ห้ามแก้เลขในไฟล์อื่นโดยตรง
 """
-APP_VERSION = "2026.1016.1915"
+APP_VERSION = "2026.1016.1925"

@@ -205,6 +205,11 @@ def snapshot(frames):
         out["overall"] = {"score": sc, "state": int(overall_state(sc)), "label": overall_label(sc)}
         mj = majority(out["D1"]["state"], out["H4"]["state"], out["H1"]["state"])
         out["majority"] = {"state": mj, "label": majority_label(mj)}
+        # สัดส่วน BUY / SELL จากจุด 15 จุดบนการ์ด (D1/H4/H1 × 5 ข้อ): เขียว = เสียง BUY · แดง = เสียง SELL · เทาไม่นับ
+        vals = [it["v"] for tf in ("D1", "H4", "H1") for it in out[tf]["items"]]
+        up_n, dn_n = sum(1 for v in vals if v > 0), sum(1 for v in vals if v < 0)
+        buy = round(up_n / (up_n + dn_n) * 100) if up_n + dn_n else 50
+        out["vote"] = {"buy": buy, "sell": 100 - buy, "up": up_n, "down": dn_n, "flat": len(vals) - up_n - dn_n}
     else:
         out["overall"] = None
         out["majority"] = None
