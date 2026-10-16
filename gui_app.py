@@ -7275,7 +7275,7 @@ class MainTradingApp(ctk.CTk):
             values = [
                 self._fmt_mt5_time(r.get("open_time")),
                 r.get("side", ""),
-                (r.get("plan") or "—")[:22],
+                position_chart.plan_of(r.get("plan"))[1][:22],   # ชื่อสั้น P1–P12 เหมือนตารางไม้ที่เปิดอยู่ (ผู้ใช้สั่ง 16 ต.ค. 2026)
                 f"{r.get('volume', 0):.2f}",
                 f"{r.get('open_price', 0):,.2f}",
                 "—" if is_open else f"{r.get('close_price', 0):,.2f}",
