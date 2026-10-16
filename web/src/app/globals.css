@@ -2517,3 +2517,15 @@ select.input {
   line-height: 1.6;
   pointer-events: none;
 }
+.rule-tip-title {
+  color: var(--text);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.rule-tip-row {
+  display: grid;
+  grid-template-columns: 78px 1fr auto;
+  gap: 10px;
+  font-size: 0.74rem;
+  line-height: 1.7;
+}

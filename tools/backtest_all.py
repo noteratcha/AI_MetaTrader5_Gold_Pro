@@ -143,9 +143,9 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
         if pos and i >= start:
             d, e, sl, k, te = pos
             if (d == 1 and l[i] <= sl) or (d == -1 and h[i] >= sl):
-                out.append(dict(time=te, pnl=(sl - e) * d - SPREAD)); pos = None
+                out.append(dict(time=te, pnl=(sl - e) * d - SPREAD, d=d, xt=t[i])); pos = None
             elif (d == 1 and xdn) or (d == -1 and xup):
-                out.append(dict(time=te, pnl=(o[i + 1] - e) * d - SPREAD)); pos = None
+                out.append(dict(time=te, pnl=(o[i + 1] - e) * d - SPREAD, d=d, xt=t[i + 1])); pos = None
             elif step:
                 best = (h[i] - e) if d == 1 else (e - l[i])
                 while best >= k * step:
@@ -179,14 +179,14 @@ def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1
         if pos:
             d, e, sl, tp, at, locked, te, k = pos
             if (d == 1 and l[i] <= sl) or (d == -1 and h[i] >= sl):
-                out.append(dict(time=te, pnl=(sl - e) * d - SPREAD)); pos = None
+                out.append(dict(time=te, pnl=(sl - e) * d - SPREAD, d=d, xt=t[i])); pos = None
             elif (d == 1 and h[i] >= tp) or (d == -1 and l[i] <= tp):
-                out.append(dict(time=te, pnl=(tp - e) * d - SPREAD)); pos = None
+                out.append(dict(time=te, pnl=(tp - e) * d - SPREAD, d=d, xt=t[i])); pos = None
             else:
                 pu = p[i]
                 pd_same = pu if d == 1 else 1 - pu
                 if not np.isnan(pu) and (1 - pd_same) >= 0.60 and (c[i] - e) * d < 0:
-                    out.append(dict(time=te, pnl=(o[i + 1] - e) * d - SPREAD)); pos = None
+                    out.append(dict(time=te, pnl=(o[i + 1] - e) * d - SPREAD, d=d, xt=t[i + 1])); pos = None
                 else:
                     if step:  # Step Trailing: ทุกกำไร step จุด เลื่อน SL (first_frac ขั้นแรก / frac ขั้นถัดไป) ของระยะ SL → ราคา
                         best = (h[i] - e) if d == 1 else (e - l[i])
@@ -313,7 +313,7 @@ def sim_psar(fr):
                 if T6[i] != d or (c[i] - ema[i]) * d < 0:
                     xp = o[i + 1]
             if xp is not None:
-                out.append(dict(time=te, pnl=(xp - e) * d - SPREAD)); pos = None
+                out.append(dict(time=te, pnl=(xp - e) * d - SPREAD, d=d, xt=t[i])); pos = None
             else:
                 if dr[i] == d: sl = max(sl, sar[i]) if d == 1 else min(sl, sar[i])
                 if mfe >= bot.P6_FAST_AFTER_ATR * a0 and df_[i] == d: sl = max(sl, sf[i]) if d == 1 else min(sl, sf[i])
@@ -360,7 +360,7 @@ def sim_fib(df):
             elif (h_[i] >= tp) if s_ == 1 else (l_[i] <= tp): rr = (tp - e) * s_
             elif i - ei >= 240: rr = (c_[i] - e) * s_
             if rr is not None:
-                out.append(dict(time=t_[ei], pnl=rr - SPREAD)); pos = None
+                out.append(dict(time=t_[ei], pnl=rr - SPREAD, d=s_, xt=t_[i])); pos = None
             else:
                 nsl = fp.ladder_sl(s_, a, b, c_[i], sl)
                 if nsl is not None:
@@ -381,7 +381,7 @@ def sim_fib(df):
                 if not fp.entry_filter(adx_, hist_, i - 1, s_)[0]:
                     del orders[s_]; continue       # ไม่ผ่านตัวกรอง = ทิ้งคลื่นนี้
                 if (l_[i] <= od["sl"]) if s_ == 1 else (h_[i] >= od["sl"]):
-                    out.append(dict(time=t_[i], pnl=(od["sl"] - od["e"]) * s_ - SPREAD))
+                    out.append(dict(time=t_[i], pnl=(od["sl"] - od["e"]) * s_ - SPREAD, d=s_, xt=t_[i]))
                 else:
                     pos = (s_, od["e"], od["sl"], od["tp"], i, od["a"], od["b"])
                 del orders[s_]
@@ -408,7 +408,7 @@ def sim_rsi(df):
             elif (h_[i] >= tp) if s_ == 1 else (l_[i] <= tp): rr = (tp - e) * s_
             elif i - ei >= rp.HOLD_HOURS: rr = (o_[i + 1] - e) * s_
             if rr is not None:
-                out.append(dict(time=t_[ei], pnl=rr - SPREAD)); pos = None
+                out.append(dict(time=t_[ei], pnl=rr - SPREAD, d=s_, xt=t_[i])); pos = None
             continue
         sg = rp.signal_at(rsi_, ma_, c_, i)
         if sg and not np.isnan(atr_[i]):
@@ -462,7 +462,7 @@ def sim_news():
             continue
         e = float(tk.ask.iloc[0] if d > 0 else tk.bid.iloc[0])
         sl = e - d * news_plan.SL_ATR * a_[i - 1]
-        pnl = None
+        pnl, xi = None, i
         for px in (tk.bid.values if d > 0 else tk.ask.values):
             if (px - sl) * d <= 0:
                 pnl = (sl - e) * d
@@ -471,11 +471,11 @@ def sim_news():
         if pnl is None:
             for j in range(i + 1, end):
                 if (l_[j] <= sl) if d > 0 else (h_[j] >= sl):
-                    pnl = (sl - e) * d
+                    pnl, xi = (sl - e) * d, j
                     break
         if pnl is None:
-            pnl = (c_[end - 1] - e) * d - 0.25
-        out.append(dict(time=pd.Timestamp(srv, unit="s"), pnl=pnl * mult))
+            pnl, xi = (c_[end - 1] - e) * d - 0.25, end - 1
+        out.append(dict(time=pd.Timestamp(srv, unit="s"), pnl=pnl * mult, d=d, xt=m15.time.values[min(xi, len(m15) - 1)], mult=mult))
     mt5.shutdown()
     return out
 
@@ -502,7 +502,7 @@ def sim_dtop(df, df4):
                 xp = px if hit else None
             if xp is not None:
                 for e, ei in grp["entries"]:
-                    out.append(dict(time=df.time.values[ei], pnl=(xp - e) * d - SPREAD))
+                    out.append(dict(time=df.time.values[ei], pnl=(xp - e) * d - SPREAD, d=d, xt=df.time.values[i]))
                 grp = None
             elif len(grp["entries"]) - 1 < dtop_plan.MAX_ADD and dtop_plan.addon_ok(i, d, grp["top"], grp["entries"][-1][1], o, h, l, c, mid):
                 grp["entries"].append((o[i + 1], i + 1))
@@ -535,6 +535,13 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "แท่งยืนยัน (ปิ
          10: ("Plan 10", "RSI-H1-Trend", "RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 (ซื้อ Oversold ในขาขึ้น / ขาย Overbought ในขาลง) · SL 2 ATR · TP 3 ATR · ถือไม่เกิน 48 ชม."),
          12: ("Plan 12", "DoubleTop-H1", "BB H1 ทำยอดซ้ำนอกกรอบตามเทรนด์ H4 MA10/30: ทะลุ BB → ย่อ → ทำยอดใหม่ → แท่งถัดไปปิดสวน = เข้า · SL ยอดใหม่ ± 0.1 ATR · ปิดทุกไม้เมื่อแตะ BB อีกฝั่ง · ไม้เพิ่มสูงสุด 2 ไม้ (ยอดต่ำกว่าเดิมแต่อยู่นอกเส้นกลาง)"),
          11: ("Plan 11", "News-USD", "ข่าว USD: คาดเทียบครั้งก่อนบอกแนวโน้มทอง → ค่าจริงไม่สวน = ยืนยัน → เข้าทันที (Tick จริง เข้า 10 วิหลังข่าว) · ข่าวพร้อมกันหักกลบ Lot ≤ 3 เท่า · SL 3 ATR M15 · ไม่ตั้ง TP · ถือ 8 ชม.")}
+def _th(ts):
+    """เวลาเซิร์ฟเวอร์ (EET/EEST ของโบรกเกอร์) → ข้อความเวลาไทย"""
+    sec = pd.Timestamp(ts).value // 10**9
+    return pd.Timestamp(sec - thai_time.eu_offset(sec - 3 * 3600) + 7 * 3600, unit="s").strftime("%d/%m/%Y %H:%M")
+
+
+_cut = (b.time.iloc[-1] - pd.DateOffset(months=12)).strftime("%Y-%m")
 plans_out, events = [], []
 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     tr = ALL[k]
@@ -549,7 +556,13 @@ for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         monthly_w = {m: int(v) for m, v in gm.apply(lambda x: int((x > 0).sum())).items()}   # ไม้ชนะรายเดือน (หน้าเว็บคิด % ชนะ)
         for x in tr:
             events.append((pd.Timestamp(x["time"]), k, float(x["pnl"])))
-    plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly, monthly_n=monthly_n, monthly_w=monthly_w))
+    trades_m = {}
+    for x in tr:   # [เข้า (เวลาไทย), ฝั่ง, กำไร/ขาดทุน (จุด), ปิด (เวลาไทย), Lot เท่า]
+        m = pd.Timestamp(x["time"]).strftime("%Y-%m")
+        if m >= _cut:
+            trades_m.setdefault(m, []).append([_th(x["time"]), "BUY" if x.get("d", 0) > 0 else "SELL", round(float(x["pnl"]), 1),
+                                               _th(x["xt"]) if x.get("xt") is not None else "", int(x.get("mult", 1))])
+    plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2], **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly, monthly_n=monthly_n, monthly_w=monthly_w, trades_m=trades_m))
 events.sort(key=lambda e: e[0])
 eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)}
 total = 0.0

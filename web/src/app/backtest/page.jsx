@@ -124,16 +124,16 @@ const pts = (v) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}
 const tone = (v) => (v > 0 ? 'text-green' : v < 0 ? 'text-red' : 'muted');
 
 /** ชื่อแผน + กฎของแผนเป็น tooltip (ชี้เมาส์ / แตะ / โฟกัสด้วยคีย์บอร์ด) · วาดลง body เพื่อไม่ถูกตัดโดยกรอบตารางที่เลื่อนได้ */
-function RuleTip({ text, children }) {
+function RuleTip({ text, children, icon = true, estH = 160, width = 440 }) {
   const ref = useRef(null);
   const id = useId();
   const [pos, setPos] = useState(null);
   const show = () => {
     const r = ref.current?.getBoundingClientRect();
     if (!r) return;
-    const width = Math.min(440, window.innerWidth - 32);
-    const left = Math.max(16, Math.min(r.left, window.innerWidth - 16 - width));
-    setPos(r.bottom + 160 < window.innerHeight ? { left, width, top: r.bottom + 8 } : { left, width, bottom: window.innerHeight - r.top + 8 });
+    const w = Math.min(width, window.innerWidth - 32);
+    const left = Math.max(16, Math.min(r.left, window.innerWidth - 16 - w));
+    setPos(r.bottom + estH < window.innerHeight || r.top < estH ? { left, width: w, top: r.bottom + 8 } : { left, width: w, bottom: window.innerHeight - r.top + 8 });
   };
   const hide = () => setPos(null);
   useEffect(() => {
@@ -159,7 +159,7 @@ function RuleTip({ text, children }) {
       onClick={show}
     >
       {children}
-      <Info size={13} className="rule-tip-icon" aria-hidden="true" />
+      {icon && <Info size={13} className="rule-tip-icon" aria-hidden="true" />}
       {pos &&
         createPortal(
           <div id={id} role="tooltip" className="rule-tip" style={pos}>
@@ -168,6 +168,23 @@ function RuleTip({ text, children }) {
           document.body,
         )}
     </span>
+  );
+}
+
+/** รายการไม้ของเดือนนั้น (tooltip): ฝั่ง · เวลาเข้า → ปิด (เวลาไทย) · กำไร/ขาดทุน (จุด ที่ Lot 0.01) */
+function TradeList({ title, trades }) {
+  return (
+    <div>
+      <div className="rule-tip-title">{title} · {trades.length} ไม้</div>
+      {trades.map(([tin, side, pnl, tout, mult], i) => (
+        <div key={i} className="rule-tip-row mono">
+          <span className={side === 'BUY' ? 'text-green' : 'text-red'}>{side === 'BUY' ? '▲ BUY' : '▼ SELL'}{mult > 1 ? ` ×${mult}` : ''}</span>
+          <span>{tin}{tout ? ` → ${tout.slice(0, 10) === tin.slice(0, 10) ? tout.slice(11) : tout}` : ''}</span>
+          <span className={pnl > 0 ? 'text-green' : pnl < 0 ? 'text-red' : ''}>{pnl > 0 ? '+' : ''}{pnl.toLocaleString('th-TH', { maximumFractionDigits: 1 })}</span>
+        </div>
+      ))}
+      <div className="tiny faint" style={{ marginTop: 6 }}>เวลาไทย · กำไร/ขาดทุนเป็นจุด (≈ $ ที่ Lot 0.01)</div>
+    </div>
   );
 }
 
@@ -539,10 +556,22 @@ export default function BacktestPage() {
                   <td>{planDisplay(p.name)}</td>
                   {months.map((m) => {
                     const v = p.monthly?.[m];
-                    return (
-                      <td key={m} className={`num tiny ${tone(v || 0)}`}>
+                    const tl = p.trades_m?.[m];
+                    const cell = (
+                      <>
                         {v === undefined ? '·' : pts(v)}
                         <Sub>{mN(p, m) ? `${mN(p, m)} · ${Math.round((mW(p, m) / mN(p, m)) * 100)}%` : null}</Sub>
+                      </>
+                    );
+                    return (
+                      <td key={m} className={`num tiny ${tone(v || 0)}`}>
+                        {tl?.length ? (
+                          <RuleTip icon={false} width={480} estH={tl.length * 22 + 70} text={<TradeList title={`${planDisplay(p.name)} · ${m}`} trades={tl} />}>
+                            <span style={{ display: 'block' }}>{cell}</span>
+                          </RuleTip>
+                        ) : (
+                          cell
+                        )}
                       </td>
                     );
                   })}
