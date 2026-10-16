@@ -170,6 +170,7 @@ def build_gui_app(mode="pyinstaller"):
             "--hidden-import=news_plan",
             "--hidden-import=dtop_plan",
             "--hidden-import=trend_engine",
+            "--hidden-import=shutdown_timer",
             f"--name={APP_NAME}",
             "gui_app.py"
         ]

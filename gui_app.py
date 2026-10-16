@@ -1354,6 +1354,98 @@ class HoursHistoryDialog(ctk.CTkToplevel):
             return
 
 
+class ShutdownTimerDialog(ctk.CTkToplevel):
+    """ตั้งเวลาปิดเครื่อง: วัน + เวลา (เวลาไทย) + ทำซ้ำทุกสัปดาห์ (ผู้ใช้สั่ง 16 ต.ค. 2026 · ตรรกะใน shutdown_timer.py)"""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        import shutdown_timer as stm
+        self.stm = stm
+        self.title("ตั้งเวลาปิดเครื่อง")
+        self.configure(fg_color=COLOR_BG_DARK)
+        self.geometry("480x430")
+        self.resizable(False, False)
+        apply_dark_title_bar(self)
+        cfg = stm.load()
+
+        def f(size, weight="normal"):
+            return ctk.CTkFont(family=app_fonts.UI, size=size, weight=weight)
+
+        ctk.CTkLabel(self, text="ตั้งเวลาปิดเครื่อง", font=f(18, "bold"), text_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=22, pady=(18, 0))
+        ctk.CTkLabel(self, text="ถึงเวลาโปรแกรมจะเตือน 60 วินาที (กดยกเลิกครั้งนี้ได้) → หยุดบอท → ปิดเครื่อง\n"
+                                "ไม้ที่เปิดอยู่ถือไว้ตามเดิม SL/TP ยังอยู่ที่โบรกเกอร์ แต่จะไม่มีการเลื่อน SL / ปิดตามสัญญาณจนกว่าจะเปิดบอทใหม่",
+                     font=f(11), text_color=COLOR_TEXT_MUTED, justify="left", wraplength=430).pack(anchor="w", padx=22, pady=(4, 10))
+        box = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, corner_radius=12, border_width=1, border_color=COLOR_CARD_BORDER)
+        box.pack(fill="x", padx=22)
+        self.var_on = ctk.BooleanVar(value=cfg["enabled"])
+        ctk.CTkSwitch(box, text="เปิดใช้การตั้งเวลาปิดเครื่อง", variable=self.var_on, font=f(13, "bold"),
+                      progress_color=COLOR_GOLD_PRIMARY).pack(anchor="w", padx=16, pady=(14, 8))
+        row = ctk.CTkFrame(box, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=4)
+        t0 = stm.target(cfg) or (stm.now() + stm.timedelta(hours=1)).replace(second=0, microsecond=0)
+        ctk.CTkLabel(row, text="วันที่", font=f(12), text_color=COLOR_TEXT_MUTED, width=60, anchor="w").pack(side="left")
+        self.ent_date = ctk.CTkEntry(row, width=130, font=f(13), placeholder_text="วว/ดด/ปปปป")
+        self.ent_date.insert(0, t0.strftime("%d/%m/%Y"))
+        self.ent_date.pack(side="left")
+        ctk.CTkLabel(row, text="เวลา", font=f(12), text_color=COLOR_TEXT_MUTED, width=50, anchor="e").pack(side="left", padx=(12, 6))
+        self.ent_time = ctk.CTkEntry(row, width=80, font=f(13), placeholder_text="HH:MM")
+        self.ent_time.insert(0, t0.strftime("%H:%M"))
+        self.ent_time.pack(side="left")
+        ctk.CTkLabel(row, text="น.", font=f(12), text_color=COLOR_TEXT_MUTED).pack(side="left", padx=4)
+        self.var_week = ctk.BooleanVar(value=cfg["weekly"])
+        self.chk_week = ctk.CTkCheckBox(box, text="ทำซ้ำทุกสัปดาห์ (วันเดียวกัน เวลาเดียวกัน)", variable=self.var_week, font=f(12),
+                                        fg_color=COLOR_GOLD_PRIMARY, hover_color=COLOR_GOLD_WARM, command=self._preview)
+        self.chk_week.pack(anchor="w", padx=16, pady=(10, 6))
+        self.lbl_prev = ctk.CTkLabel(box, text="", font=f(12, "bold"), text_color=COLOR_CYAN_ACCENT, justify="left", wraplength=420)
+        self.lbl_prev.pack(anchor="w", padx=16, pady=(4, 14))
+        for e in (self.ent_date, self.ent_time):
+            e.bind("<KeyRelease>", lambda _e: self._preview())
+        self.lbl_now = ctk.CTkLabel(self, text="", font=f(11), text_color=COLOR_TEXT_MUTED)
+        self.lbl_now.pack(anchor="w", padx=22, pady=(8, 0))
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", padx=22, pady=(12, 18), side="bottom")
+        ctk.CTkButton(btns, text="บันทึก", width=130, height=38, font=f(13, "bold"), fg_color=COLOR_GOLD_PRIMARY,
+                      hover_color=COLOR_GOLD_WARM, text_color="#0A0B0F", command=self._save).pack(side="right")
+        ctk.CTkButton(btns, text="ปิด", width=90, height=38, font=f(13), fg_color=COLOR_CARD_BG, hover_color=COLOR_CARD_HOVER,
+                      border_width=1, border_color=COLOR_CARD_BORDER, text_color=COLOR_TEXT_MUTED,
+                      command=self.destroy).pack(side="right", padx=(0, 10))
+        self._preview()
+        self.after(200, self.lift)
+
+    def _cfg(self):
+        return {"enabled": bool(self.var_on.get()), "date": self.ent_date.get().strip(), "time": self.ent_time.get().strip(),
+                "weekly": bool(self.var_week.get()), "last_fired": ""}
+
+    def _preview(self):
+        stm = self.stm
+        self.lbl_now.configure(text=f"เวลาไทยตอนนี้ {stm.now():%d/%m/%Y %H:%M} น.")
+        try:
+            t = stm.parse(self.ent_date.get(), self.ent_time.get())
+        except Exception:
+            self.lbl_prev.configure(text="รูปแบบไม่ถูกต้อง — วันที่ วว/ดด/ปปปป · เวลา HH:MM (เช่น 23:30)", text_color=COLOR_DANGER_RED)
+            return None
+        self.chk_week.configure(text=f"ทำซ้ำทุกสัปดาห์ (ทุกวัน{stm.DAYS_TH[t.weekday()]} {t:%H:%M} น.)")
+        c = self._cfg()
+        c["enabled"] = True
+        if stm.target(c) is None:
+            self.lbl_prev.configure(text="เวลานี้ผ่านไปแล้ว — เลือกเวลาในอนาคต หรือติ๊กทำซ้ำทุกสัปดาห์", text_color=COLOR_DANGER_RED)
+        else:
+            self.lbl_prev.configure(text=f"ปิดเครื่องครั้งถัดไป: {stm.describe(c)}", text_color=COLOR_CYAN_ACCENT)
+        return t
+
+    def _save(self):
+        if self._preview() is None:
+            return
+        c = self._cfg()
+        if c["enabled"] and self.stm.target(c) is None:
+            messagebox.showwarning("ตั้งเวลาปิดเครื่อง", "เวลานี้ผ่านไปแล้ว\nเลือกเวลาในอนาคต หรือติ๊กทำซ้ำทุกสัปดาห์")
+            return
+        self.stm.save(c)
+        print(f"[SHUTDOWN TIMER] {'ตั้งเวลาปิดเครื่อง: ' + self.stm.describe(c) if c['enabled'] else 'ปิดการตั้งเวลาปิดเครื่องแล้ว'}")
+        messagebox.showinfo("ตั้งเวลาปิดเครื่อง", ("บันทึกเรียบร้อย\n" + self.stm.describe(c)) if c["enabled"] else "ปิดการตั้งเวลาปิดเครื่องเรียบร้อย")
+        self.destroy()
+
+
 class LineNotifyDialog(ctk.CTkToplevel):
     """ตั้งค่าแจ้งเตือนเข้าไม้ / ปิดไม้ / สรุปรายวัน ไปที่ LINE OA ของผู้ใช้เอง (Token เก็บในเครื่อง เข้ารหัส DPAPI)"""
     GUIDE = ("1. สร้าง LINE Official Account ฟรีที่ manager.line.biz\n"
@@ -5356,6 +5448,7 @@ class MainTradingApp(ctk.CTk):
         menu.add_command(label="  📢  ข่าวสารและโปรโมชัน", command=self._open_news)
         menu.add_command(label="  🔔  แจ้งเตือน LINE OA (เข้าไม้ / ปิดไม้)", command=lambda: self._open_single(LineNotifyDialog, "_line_dialog"))
         menu.add_command(label="  ⏳  ประวัติการสะสมชั่วโมง / Lv.", command=lambda: HoursHistoryDialog(self))
+        menu.add_command(label="  ⏻  ตั้งเวลาปิดเครื่อง", command=lambda: self._open_single(ShutdownTimerDialog, "_shutdown_dialog"))
         menu.add_command(label="  💬  ติดต่อแอดมิน (LINE)", command=lambda: ContactDialog(self))
         menu.add_command(label="  ตรวจสอบเวอร์ชันใหม่", command=lambda: self._start_update_check(manual=True))
         menu.add_command(label="  ดาวน์โหลดเวอร์ชันล่าสุด (เว็บ)", command=lambda: webbrowser.open(self.DOWNLOAD_URL))
@@ -5367,6 +5460,99 @@ class MainTradingApp(ctk.CTk):
             menu.tk_popup(x, y)
         finally:
             menu.grab_release()
+
+    def _shutdown_tick(self):
+        """ตั้งเวลาปิดเครื่อง: ตรวจทุก 15 วิ — ถึงเวลา → เตือน 60 วิ (ยกเลิกได้) → หยุดบอท → ปิดเครื่อง"""
+        try:
+            import shutdown_timer as stm
+            cfg = stm.load()
+            t = stm.due(cfg)
+            if t is not None and not getattr(self, "_shutdown_warning", None):
+                stm.mark_fired(cfg, t)   # จดก่อน กันเตือนซ้ำ
+                self._shutdown_warn(stm, stm.WARN_SEC)
+        except Exception:
+            pass
+        try:
+            if self.winfo_exists():
+                self.after(15000, self._shutdown_tick)
+        except Exception:
+            pass
+
+    def _shutdown_warn(self, stm, sec):
+        """หน้าต่างเตือนนับถอยหลังก่อนปิดเครื่อง"""
+        try:
+            sound_manager.play_sl_hit()
+        except Exception:
+            pass
+        print(f"[SHUTDOWN TIMER] ถึงเวลาปิดเครื่อง — จะปิดใน {sec} วินาที (กดยกเลิกได้)")
+        w = ctk.CTkToplevel(self)
+        self._shutdown_warning = w
+        w.title("ปิดเครื่องตามเวลาที่ตั้งไว้")
+        w.configure(fg_color=COLOR_BG_DARK)
+        w.resizable(False, False)
+        w.attributes("-topmost", True)
+        apply_dark_title_bar(w)
+
+        def f(sz, wt="normal"):
+            return ctk.CTkFont(family=app_fonts.UI, size=sz, weight=wt)
+
+        ctk.CTkLabel(w, text="ปิดเครื่องตามเวลาที่ตั้งไว้", font=f(17, "bold"), text_color=COLOR_DANGER_RED).pack(padx=26, pady=(20, 4))
+        lbl = ctk.CTkLabel(w, text="", font=f(30, "bold"), text_color=COLOR_GOLD_PRIMARY)
+        lbl.pack()
+        try:
+            n_open = len(mt5.positions_get() or []) if mt5.terminal_info() else 0
+        except Exception:
+            n_open = 0
+        ctk.CTkLabel(w, text="บอทจะหยุด แล้ว Windows จะปิดเครื่อง" + (f"\nมีไม้เปิดอยู่ {n_open} ไม้ — ถือไว้ตามเดิม (SL/TP อยู่ที่โบรกเกอร์)" if n_open else ""),
+                     font=f(12), text_color=COLOR_TEXT_MUTED, justify="center").pack(padx=26, pady=(4, 12))
+        btns = ctk.CTkFrame(w, fg_color="transparent")
+        btns.pack(pady=(0, 18))
+        state = {"left": int(sec), "done": False}
+
+        def cancel():
+            state["done"] = True
+            self._shutdown_warning = None
+            print("[SHUTDOWN TIMER] ยกเลิกการปิดเครื่องครั้งนี้")
+            w.destroy()
+
+        def go():
+            if state["done"]:
+                return
+            state["done"] = True
+            self._shutdown_warning = None
+            try:
+                if bot_ctrl.is_active:
+                    bot_ctrl.stop_bot()
+            except Exception:
+                pass
+            print("[SHUTDOWN TIMER] หยุดบอทแล้ว — สั่ง Windows ปิดเครื่อง")
+            try:
+                stm.shutdown_windows(15)
+            except Exception as e:
+                print(f"[SHUTDOWN TIMER] สั่งปิดเครื่องไม่สำเร็จ: {e}")
+            try:
+                w.destroy()
+            except Exception:
+                pass
+            self.after(2000, self._on_window_close)
+
+        ctk.CTkButton(btns, text="ปิดเครื่องตอนนี้", width=140, height=36, font=f(13, "bold"), fg_color=COLOR_DANGER_RED,
+                      hover_color="#E05A5A", text_color="#0A0B0F", command=go).pack(side="left", padx=6)
+        ctk.CTkButton(btns, text="ยกเลิกครั้งนี้", width=120, height=36, font=f(13), fg_color=COLOR_CARD_BG,
+                      hover_color=COLOR_CARD_HOVER, border_width=1, border_color=COLOR_CARD_BORDER,
+                      text_color=COLOR_TEXT_PRIMARY, command=cancel).pack(side="left", padx=6)
+        w.protocol("WM_DELETE_WINDOW", cancel)
+
+        def tick():
+            if state["done"]:
+                return
+            if state["left"] <= 0:
+                go()
+                return
+            lbl.configure(text=f"{state['left']} วินาที")
+            state["left"] -= 1
+            w.after(1000, tick)
+        tick()
 
     def _line_alert_tick(self):
         """แจ้งเตือนจากระบบ LINE OA (โควตาเต็ม / ใกล้เต็ม / Token ผิด) → กล่องข้อความ + เสียง"""
@@ -6259,6 +6445,7 @@ class MainTradingApp(ctk.CTk):
             self.after(5000, self._line_alert_tick)
         except Exception:
             pass
+        self.after(15000, self._shutdown_tick)   # ตั้งเวลาปิดเครื่อง (shutdown_timer.py)
 
     def _plan_live_tick(self):
         """แสดงป้ายสถานะเงื่อนไขการเข้าไม้เรียลไทม์ และป้าย ● BUY / ● SELL ที่แผนที่มีไม้เปิดอยู่ตอนนี้"""
