@@ -7,6 +7,7 @@ import Footer from './Footer';
 import LowHoursBanner from './LowHoursBanner';
 import TopTicker from './TopTicker';
 import { AnnouncementPopup } from './Announcements';
+import HelpBot from './HelpBot';
 
 export default function ClientLayoutWrapper({ children }) {
   return (
@@ -20,6 +21,7 @@ export default function ClientLayoutWrapper({ children }) {
       </div>
       <AuthModal />
       <AnnouncementPopup />
+      <HelpBot />
     </AuthProvider>
   );
 }

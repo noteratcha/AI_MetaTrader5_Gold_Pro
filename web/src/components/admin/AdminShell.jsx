@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Eye, KeyRound, LayoutDashboard, Package, Shield, ShieldAlert, ToggleRight, Users, Megaphone } from 'lucide-react';
+import { BarChart3, Eye, KeyRound, LayoutDashboard, Package, Shield, ShieldAlert, ToggleRight, Users, Megaphone, MessageSquare } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Alert, AuthGate, EmptyState, Modal, PageLoading, Spinner } from '../ui';
 
@@ -15,6 +15,7 @@ const TABS = [
   { href: '/admin/plans', label: 'แผนเทรด', icon: ToggleRight },
   { href: '/admin/announcements', label: 'ข่าวสาร', icon: Megaphone },
   { href: '/admin/usage', label: 'ดาวน์โหลด & การใช้งาน', icon: BarChart3 },
+  { href: '/admin/help', label: 'ผู้ช่วยตอบคำถาม', icon: MessageSquare },
 ];
 
 /** โครงหน้าแอดมิน: ตรวจสิทธิ์ + เมนูย่อย + แจ้งเตือนรหัสผ่านอ่อน */
