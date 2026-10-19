@@ -5377,7 +5377,8 @@ class MainTradingApp(ctk.CTk):
             corner_radius=9, fg_color="#1E293B", hover_color="#334155", text_color=COLOR_GOLD_PRIMARY,
             command=self._open_profile_manager_modal,
         )
-        self.btn_profile_chip.pack(side="left", padx=(8, 0))
+        if cur_prof != "default":   # Profile หลักไม่ต้องแสดงชิป (ผู้ใช้สั่ง 20 ต.ค. 2026) · เปิดจัดการ Profile ได้ที่การ์ดบัญชี MT5
+            self.btn_profile_chip.pack(side="left", padx=(8, 0))
 
         # --- ขวา: เมนูผู้ใช้
         user_name = license_mgr.session_data.get("username") or "User"
@@ -5911,6 +5912,43 @@ class MainTradingApp(ctk.CTk):
         sub_label = ctk.CTkLabel(inner, text=sub_text, font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18)
         sub_label.pack(anchor="w")
         return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "hint_lbl": hint_lbl, "icon_lbl": icon_lbl, "top_row": top_row, "title_lbl": title_lbl, "extra_lbl": extra_lbl, "val_row": val_row}
+
+    def _update_day_range(self, sym):
+        """การ์ดราคาทอง บรรทัดล่างสุด: ราคาสูงสุด / ต่ำสุดของวันนี้ (เวลาไทย ตั้งแต่ 00:00 น.) จากแท่ง M1 (ผู้ใช้สั่ง 20 ต.ค. 2026)
+        ดึงจาก MT5 ในเธรดเบื้องหลังทุก 15 วิ"""
+        now = time.time()
+        if sym and now - getattr(self, "_day_range_at", 0) >= 15 and not getattr(self, "_day_range_busy", False):
+            self._day_range_at, self._day_range_busy = now, True
+
+            def work():
+                try:
+                    r = _mt5.copy_rates_from_pos(sym, _mt5.TIMEFRAME_M1, 0, 1500)
+                    if r is not None and len(r):
+                        midnight = (int(time.time()) + 7 * 3600) // 86400 * 86400 - 7 * 3600   # 00:00 น. เวลาไทย (epoch)
+                        hi = lo = None
+                        for bar in r:
+                            if thai_time.server_to_epoch(int(bar["time"])) >= midnight:
+                                h, l = float(bar["high"]), float(bar["low"])
+                                hi = h if hi is None else max(hi, h)
+                                lo = l if lo is None else min(lo, l)
+                        self._day_range = (hi, lo) if hi is not None else None
+                except Exception:
+                    pass
+                finally:
+                    self._day_range_busy = False
+            threading.Thread(target=work, daemon=True).start()
+        rng = getattr(self, "_day_range", None)
+        lbl = self.card_gold.get("day_lbl")
+        if lbl is None:
+            sub = self.card_gold["sub_lbl"]
+            lbl = ctk.CTkLabel(sub.master, text="", font=self._font(11), text_color=COLOR_TEXT_MUTED, height=18, anchor="w")
+            lbl.pack(anchor="w", after=sub)
+            self.card_gold["day_lbl"] = lbl
+        if rng:
+            hi, lo = rng
+            lbl.configure(text=f"วันนี้ สูงสุด {hi:,.2f} · ต่ำสุด {lo:,.2f} · กว้าง {hi - lo:,.2f}")
+        else:
+            lbl.configure(text="วันนี้ ยังไม่มีราคา")
 
     def _update_day_change(self, bal, eq, flt):
         """การ์ดยอดเงิน: วันนี้เทียบกับเมื่อวาน = กำไรที่ปิดแล้ววันนี้ (เวลาไทย) + กำไรลอยตัว · % เทียบยอดเงินตอนเริ่มวัน
@@ -8490,6 +8528,7 @@ class MainTradingApp(ctk.CTk):
                                 self.card_gold["sub_lbl"].configure(text=f"Ask {ask:,.2f} · Spread {spd} pts · {mkt['short_desc']}")
                             else:
                                 self.card_gold["sub_lbl"].configure(text=mkt["short_desc"])
+                        self._update_day_range(gold_sym)
                 except Exception:
                     pass
 
