@@ -5734,9 +5734,9 @@ class MainTradingApp(ctk.CTk):
             self.card_mt5["extra_lbl"].configure(text=f" Magic: {get_profile_magic_number()} ", text_color=COLOR_GOLD_PRIMARY, fg_color="#261E10")
         self._make_clickable(self.card_mt5, lambda: ProfileManagerDialog(self))
         self.card_balance = self._create_stat_card(grid_frame, 1, "💰", "ยอดเงินในพอร์ต", "0.00", "Equity 0.00 · Float 0.00", COLOR_SUCCESS_GREEN)
-        self._make_clickable(self.card_balance, lambda: PnlHistoryDialog(self), hint="ดูกราฟ ›")
+        self._make_clickable(self.card_balance, lambda: PnlHistoryDialog(self))
         self.card_gold = self._create_stat_card(grid_frame, 2, "🏆", "ราคาทองคำ XAUUSD", "0.00", "Spread 0 pts", COLOR_GOLD_PRIMARY)
-        self._make_clickable(self.card_gold, lambda: GoldCandleDialog(self), hint="ดูกราฟ ›")
+        self._make_clickable(self.card_gold, lambda: GoldCandleDialog(self))
         # สภาวะตลาด: 2 แถว H1 / H4 + ป้ายทิศที่อนุญาตให้เทรด (Strict Pro-Trend)
         self.card_trend = self._create_dual_card(grid_frame, 3, "📊", "สภาวะตลาด")
         # ระบบดูเทรนด์ (trend_engine · 16 ต.ค. 2026): D1 → H4 → H1 (Top-down) + ป้ายภาพรวมมุมขวา
@@ -5749,7 +5749,7 @@ class MainTradingApp(ctk.CTk):
         sr_body = self.card_sr["body"]
         sr_body.grid_columnconfigure((0, 1), weight=1, uniform="sr_cols")
         self.card_sr["rows"] = {tf: self._create_sr_row(sr_body, tf, col) for col, tf in enumerate(("H1", "H4"))}
-        self._make_clickable(self.card_sr, lambda: GoldCandleDialog(self, default_tf="H1", default_bars=500, default_plan="P3"), hint="ดูกราฟ H1 ›")
+        self._make_clickable(self.card_sr, lambda: GoldCandleDialog(self, default_tf="H1", default_bars=500, default_plan="P3"))
 
     # ---------------------------------------------------------------------
     # การ์ด 2 แถว (สภาวะตลาด / แนวรับ–แนวต้าน)
