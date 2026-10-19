@@ -250,6 +250,10 @@ P4_TRAIL_FRACTION = 0.40
 TRAIL_FIRST_FRACTION = 0.50
 TRAIL_PLANS = ("MA-Cross-Trend", "SMC", "SR-Swing", "BB-H1", "BB-H4")   # comment ขึ้นต้นด้วย → ใช้ Step Trailing
 P4_TRAIL_STATE_FILE = _data_path('p4_trail_state.json')
+# Plan 4 เท่านั้น (ผู้ใช้เลือก 19 ต.ค. 2026): ขั้นที่กำไร ≥ 15 จุด เลื่อน SL 60% แทน 40% — ไม้ชนะคืนกำไรน้อยลงตอนราคาเด้ง
+#   Backtest 2.5 ปี: กำไร +127 → +151 · PF 1.35 → 1.42 · DD 105 → 101 · P1/P3 แย่ลง (P1 +852 → +800 · P3 +263 → +200) จึงไม่ใช้
+P4_TIGHT_AT_POINTS = 15.0
+P4_TIGHT_FRACTION = 0.60
 
 
 def _load_p4_trail_state():
@@ -284,9 +288,12 @@ def apply_p4_step_trailing(pos, tick, info):
     if reached <= done:
         return False
     new_sl = float(pos.sl)
+    is_p4 = str(pos.comment or "").startswith("SR-Swing")
     for k in range(done + 1, reached + 1):
         step_px = pos.price_open + d * k * P4_TRAIL_STEP_POINTS        # ราคาตอนกำไรถึงขั้นที่ k
         frac = TRAIL_FIRST_FRACTION if k == 1 else P4_TRAIL_FRACTION
+        if k > 1 and is_p4 and k * P4_TRAIL_STEP_POINTS >= P4_TIGHT_AT_POINTS:
+            frac = P4_TIGHT_FRACTION
         new_sl = new_sl + d * frac * abs(step_px - new_sl)  # ระยะ SL → ราคาของขั้น
     # ระยะห่างขั้นต่ำจากราคาตามที่โบรกเกอร์กำหนด (stops level)
     min_gap = 0.0

@@ -171,7 +171,7 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
     return out
 
 
-def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1.125, use_h4=True):
+def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1.125, use_h4=True, tight_at=None, tight_frac=0.6):
     """Plan 3–5: SL 0.75 ATR · TP 1.125 ATR · ล็อกกำไร +0.35 ATR ที่ 70% · ขยาย TP +1 ATR ที่ 80% เมื่อ AI ≥54% · AI กลับทิศ ≥60% และติดลบ → ปิด"""
     o, h, l, c, a, p = b.open.values, b.high.values, b.low.values, b.close.values, b.atr.values, b.p_up.values
     t = b.time.values
@@ -192,7 +192,8 @@ def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1
                     if step:  # Step Trailing: ทุกกำไร step จุด เลื่อน SL (first_frac ขั้นแรก / frac ขั้นถัดไป) ของระยะ SL → ราคา
                         best = (h[i] - e) if d == 1 else (e - l[i])
                         while best >= k * step:
-                            ns = sl + d * (first_frac if (first_frac is not None and k == 1) else frac) * abs(e + d * k * step - sl)
+                            fr = first_frac if (first_frac is not None and k == 1) else (tight_frac if (tight_at and k * step >= tight_at) else frac)
+                            ns = sl + d * fr * abs(e + d * k * step - sl)
                             sl = max(sl, ns) if d == 1 else min(sl, ns); k += 1
                     target = abs(tp - e)
                     prog = ((h[i] - e) if d == 1 else (e - l[i])) / target if target else 0
@@ -302,7 +303,8 @@ f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir", "p6_dir"]]
 f["p6_dir"] = te.align(h4.time + pd.Timedelta(hours=4), TS_H4["state"], f.close_time.values).astype(int)   # P6: เทรนด์ = ระบบดูเทรนด์ H4
 rows.append(stats("P2 MA H1", keep(2, sim_ma(f, "ma5", "ma10", "p2_dir", step=None, sl_mult=1.25, exit_slow="ma20"))))
 rows.append(stats("P3 SMC", keep(3, sim_ai_plan(sig_smc, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
-rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0))))
+rows.append(stats("P4 SR-Bounce", keep(4, sim_ai_plan(sig_bounce, step=5.0, frac=0.4, first_frac=0.5, slm=1.0, tpm=2.0,
+                                                       tight_at=bot.P4_TIGHT_AT_POINTS, tight_frac=bot.P4_TIGHT_FRACTION))))
 
 
 def sim_psar(fr):
@@ -540,7 +542,7 @@ from version import APP_VERSION  # noqa: E402
 NAMES = {1: ("Plan 1", "MA-Cross-Trend", "แท่งยืนยัน (ปิดตามทิศ + ทั้งตัวพ้น MA13) · MA5×MA13 M15 · เทรนด์ H1 จากระบบดูเทรนด์ (คะแนน 5 ข้อ ≥ +3 / ≤ −3) · กรอง RSI + MA50 · เลื่อน SL ทุก 5 จุด (ขั้นแรก 50% / ถัดไป 40%)"),
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200 · SL 1.25 ATR · ออกเมื่อ MA5 ตัด MA20"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
-         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 58% · SL 1.0 / TP 2.0 ATR"),
+         4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 58% · SL 1.0 / TP 2.0 ATR · เลื่อน SL ทุก 5 จุด (50% · 40% · กำไร ≥ 15 จุด 60%)"),
          5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เลื่อน SL ทุก 5 จุด (50%/40%)"),
          6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 จากระบบดูเทรนด์ (คะแนน ≥ +3 / ≤ −3) · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์ H4 เปลี่ยน/ผิดฝั่ง EMA100"),
          7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),
