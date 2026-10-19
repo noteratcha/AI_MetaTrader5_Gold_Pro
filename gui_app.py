@@ -5931,19 +5931,19 @@ class MainTradingApp(ctk.CTk):
                     self._day_pnl_busy = False
             threading.Thread(target=work, daemon=True).start()
         dp = getattr(self, "_day_pnl", None)
-        lbl = self.card_balance.get("extra_lbl")
-        if not dp or lbl is None:
+        if not dp:
             return
+        lbl = self.card_balance.get("day_lbl")
+        if lbl is None:   # บรรทัดล่างสุดของการ์ด ใต้ Equity · Float (ผู้ใช้สั่ง 20 ต.ค. 2026)
+            sub = self.card_balance["sub_lbl"]
+            lbl = ctk.CTkLabel(sub.master, text="", font=self._font(11, "bold"), height=18, anchor="w")
+            lbl.pack(anchor="w", after=sub)
+            self.card_balance["day_lbl"] = lbl
         chg = dp["today"] + flt
         start = bal - dp["today"]
         pct = (chg / start * 100) if start > 0 else 0.0
-        if abs(chg) < 0.005:
-            color, bg = COLOR_TEXT_MUTED, "#1F2430"
-        elif chg > 0:
-            color, bg = COLOR_SUCCESS_GREEN, "#12301F"
-        else:
-            color, bg = COLOR_DANGER_RED, "#2A1414"
-        lbl.configure(text=f" วันนี้ {chg:+,.2f} ({pct:+.2f}%) ", text_color=color, fg_color=bg)
+        color = COLOR_TEXT_MUTED if abs(chg) < 0.005 else (COLOR_SUCCESS_GREEN if chg > 0 else COLOR_DANGER_RED)
+        lbl.configure(text=f"วันนี้เทียบเมื่อวาน {chg:+,.2f} ({pct:+.2f}%)", text_color=color)
         self._day_pnl_view = (chg, pct, dp, flt)
         if not getattr(self, "_day_pnl_tip", None):
             def tip():
