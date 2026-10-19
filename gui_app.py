@@ -5912,6 +5912,47 @@ class MainTradingApp(ctk.CTk):
         sub_label.pack(anchor="w")
         return {"card": card, "val_lbl": val_label, "sub_lbl": sub_label, "badge": badge, "hint_lbl": hint_lbl, "icon_lbl": icon_lbl, "top_row": top_row, "title_lbl": title_lbl, "extra_lbl": extra_lbl, "val_row": val_row}
 
+    def _update_day_change(self, bal, eq, flt):
+        """การ์ดยอดเงิน: วันนี้เทียบกับเมื่อวาน = กำไรที่ปิดแล้ววันนี้ (เวลาไทย) + กำไรลอยตัว · % เทียบยอดเงินตอนเริ่มวัน
+        กำไรรายวันดึงจาก MT5 ในเธรดเบื้องหลังทุก 60 วิ (ผู้ใช้สั่ง 19 ต.ค. 2026)"""
+        now = time.time()
+        if now - getattr(self, "_day_pnl_at", 0) >= 60 and not getattr(self, "_day_pnl_busy", False):
+            self._day_pnl_at, self._day_pnl_busy = now, True
+
+            def work():
+                try:
+                    from datetime import datetime, timedelta, timezone
+                    today = datetime.now(timezone(timedelta(hours=7))).date()
+                    rows = bot_ctrl.get_daily_pnl(today - timedelta(days=1), today)
+                    self._day_pnl = {"yesterday": rows[0]["profit"], "today": rows[-1]["profit"], "closed": rows[-1]["closed"]}
+                except Exception:
+                    pass
+                finally:
+                    self._day_pnl_busy = False
+            threading.Thread(target=work, daemon=True).start()
+        dp = getattr(self, "_day_pnl", None)
+        lbl = self.card_balance.get("extra_lbl")
+        if not dp or lbl is None:
+            return
+        chg = dp["today"] + flt
+        start = bal - dp["today"]
+        pct = (chg / start * 100) if start > 0 else 0.0
+        if abs(chg) < 0.005:
+            color, bg = COLOR_TEXT_MUTED, "#1F2430"
+        elif chg > 0:
+            color, bg = COLOR_SUCCESS_GREEN, "#12301F"
+        else:
+            color, bg = COLOR_DANGER_RED, "#2A1414"
+        lbl.configure(text=f" วันนี้ {chg:+,.2f} ({pct:+.2f}%) ", text_color=color, fg_color=bg)
+        self._day_pnl_view = (chg, pct, dp, flt)
+        if not getattr(self, "_day_pnl_tip", None):
+            def tip():
+                c, pc, d, f = self._day_pnl_view
+                return (f"วันนี้เทียบกับเมื่อวาน: {c:+,.2f} ({pc:+.2f}%)\n"
+                        f"ปิดไม้แล้ววันนี้ {d['today']:+,.2f} ({d['closed']} ไม้) · กำไรลอยตัว {f:+,.2f}\n"
+                        f"เมื่อวานทั้งวัน {d['yesterday']:+,.2f} · เวลาไทย")
+            self._day_pnl_tip = HoverTip(lbl, tip)
+
     def _make_clickable(self, card_info, command, hint=""):
         """ทำให้ทั้งการ์ดกดได้ (เคอร์เซอร์มือ + ขอบสีทองเมื่อชี้ + ป้ายบอกทาง)"""
         card = card_info["card"]
@@ -8421,6 +8462,7 @@ class MainTradingApp(ctk.CTk):
                     flt_sign = "+" if flt >= 0 else ""
                     self.card_balance["val_lbl"].configure(text=f"{bal:,.2f}")
                     self.card_balance["sub_lbl"].configure(text=f"Equity {eq:,.2f} · Float {flt_sign}{flt:,.2f}")
+                    self._update_day_change(bal, eq, flt)
 
                 # อัปเดตสถานะตลาดทองคำสด (Market Hours)
                 mkt = thai_time.get_gold_market_status()
