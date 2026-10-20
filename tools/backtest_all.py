@@ -18,8 +18,14 @@ import multi_asset_ai_bot as bot  # noqa: E402
 SPREAD = 0.35
 t0 = time.time()
 mt5.initialize()
+_TERM = mt5.terminal_info().path if mt5.terminal_info() else None   # ใช้ MT5 ตัวเดิมตอนต่อใหม่ (P11) — ไม่งั้นอาจเกาะ MT5 อีกตัว (XM)
 def get(tf, n):
-    d = pd.DataFrame(mt5.copy_rates_from_pos("XAUUSD", tf, 0, n)); d["time"] = pd.to_datetime(d["time"], unit="s"); return d
+    for _ in range(10):   # MT5 เพิ่งเชื่อมต่อบางครั้งยังไม่ส่งแท่ง (คืนว่าง) — รอแล้วลองใหม่
+        r = mt5.copy_rates_from_pos("XAUUSD", tf, 0, n)
+        if r is not None and len(r):
+            break
+        time.sleep(2)
+    d = pd.DataFrame(r); d["time"] = pd.to_datetime(d["time"], unit="s"); return d
 m15, h1, h4 = get(mt5.TIMEFRAME_M15, 60000), get(mt5.TIMEFRAME_H1, 16000), get(mt5.TIMEFRAME_H4, 5000)
 d1 = get(mt5.TIMEFRAME_D1, 2500)
 mt5.shutdown()
@@ -447,7 +453,7 @@ P11_LATENCY = 10   # วินาทีหลังข่าวออก (ค่
 def sim_news():
     """กฎจาก news_plan.decide (ตัวเดียวกับบอท) · เข้า Tick แรกหลังข่าว P11_LATENCY วิ (BUY=Ask / SELL=Bid)
     15 นาทีแรกตรวจ SL ทุก Tick แล้วต่อด้วยแท่ง M15 · SL 3 ATR M15 ก่อนข่าว · ไม่ตั้ง TP · ถือ 8 ชม. · ผลคูณจำนวน Lot"""
-    mt5.initialize()
+    mt5.initialize(path=os.path.join(_TERM, "terminal64.exe")) if _TERM else mt5.initialize()
     ti = mt5.terminal_info()
     path = os.path.join(ti.data_path, "MQL5", "Files", "goldbot24_calendar_usd.csv") if ti else ""
     if not os.path.isfile(path):
