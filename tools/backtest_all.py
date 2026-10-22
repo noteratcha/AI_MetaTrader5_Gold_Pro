@@ -177,7 +177,7 @@ def sim_ma(frame, fast, slow, trend_col, atr_col="atr", step=5.0, frac=0.4, entr
     return out
 
 
-def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1.125, use_h4=True, tight_at=None, tight_frac=0.6):
+def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1.125, use_h4=True, tight_at=None, tight_frac=0.6, band_tp=False):
     """Plan 3–5: SL 0.75 ATR · TP 1.125 ATR · ล็อกกำไร +0.35 ATR ที่ 70% · ขยาย TP +1 ATR ที่ 80% เมื่อ AI ≥54% · AI กลับทิศ ≥60% และติดลบ → ปิด"""
     o, h, l, c, a, p = b.open.values, b.high.values, b.low.values, b.close.values, b.atr.values, b.p_up.values
     t = b.time.values
@@ -185,10 +185,13 @@ def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1
     for i in range(30, len(b) - 1):
         if pos:
             d, e, sl, tp, at, locked, te, k = pos
+            if band_tp:   # P5 (20 ต.ค. 2026): ไม่ตั้ง TP — ปิดเมื่อแตะ BB H1 อีกฝั่ง (เปิดเลยเส้น = ปิดที่ราคาเปิด)
+                tp = V["bb_lo"][i] if d == -1 else V["bb_up"][i]
             if (d == 1 and l[i] <= sl) or (d == -1 and h[i] >= sl):
                 out.append(dict(time=te, pnl=(sl - e) * d - SPREAD, d=d, xt=t[i])); pos = None
             elif (d == 1 and h[i] >= tp) or (d == -1 and l[i] <= tp):
-                out.append(dict(time=te, pnl=(tp - e) * d - SPREAD, d=d, xt=t[i])); pos = None
+                px = o[i] if (band_tp and (o[i] - tp) * d > 0) else tp
+                out.append(dict(time=te, pnl=(px - e) * d - SPREAD, d=d, xt=t[i])); pos = None
             else:
                 pu = p[i]
                 pd_same = pu if d == 1 else 1 - pu
@@ -201,7 +204,7 @@ def sim_ai_plan(signal_fn, step=None, frac=0.4, first_frac=None, slm=0.75, tpm=1
                             fr = first_frac if (first_frac is not None and k == 1) else (tight_frac if (tight_at and k * step >= tight_at) else frac)
                             ns = sl + d * fr * abs(e + d * k * step - sl)
                             sl = max(sl, ns) if d == 1 else min(sl, ns); k += 1
-                    target = abs(tp - e)
+                    target = 0 if band_tp else abs(tp - e)   # ไม่มี TP = ไม่ใช้ล็อกกำไร 70% / ขยาย TP
                     prog = ((h[i] - e) if d == 1 else (e - l[i])) / target if target else 0
                     if prog >= 0.80 and not np.isnan(pu) and pd_same >= 0.54:
                         tp = tp + d * at; sl = max(sl, e + 0.35 * at) if d == 1 else min(sl, e - 0.35 * at); locked = True
@@ -348,7 +351,7 @@ def sim_psar(fr):
     return out
 
 
-rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4, first_frac=0.5))))
+rows.append(stats("P5 BB-H1", keep(5, sim_ai_plan(sig_bb, step=5.0, frac=0.4, first_frac=0.5, band_tp=True))))
 rows.append(stats("P6 SAR H1", keep(6, sim_psar(f))))
 def sim_fib(df):
     """Plan 9: Fib-H1-Counter (กฎใน fib_plan.py) — คลื่น H1 ≥ 3 ATR · SELL บนคลื่นลงเมื่อ H1 MA100/150/200 เรียงขึ้น
@@ -549,7 +552,7 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "แท่งยืนยัน (ปิ
          2: ("Plan 2", "MA-Cross-H1-Trend", "MA5×MA10 H1 · H4 MA10/30 + MA200 · SL 1.25 ATR · ออกเมื่อ MA5 ตัด MA20"),
          3: ("Plan 3", "SMC-LiquidityHunt", "กวาดแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (ไส้ 0.4–1.0 ATR) + MA100/150/200 H1 + AI · SL 1.0 / TP 2.0 ATR · เลื่อน SL 50%/40%"),
          4: ("Plan 4", "SR-SwingBounce", "เด้งแนวรับ/ต้าน H1 1,000 แท่ง + H4 Confluence (≤ 0.75 ATR) + Divergence + MA100/150/200 ไม่สวน + AI ≥ 58% · SL 1.0 / TP 2.0 ATR · เลื่อน SL ทุก 5 จุด (50% · 40% · กำไร ≥ 15 จุด 60%)"),
-         5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เลื่อน SL ทุก 5 จุด (50%/40%)"),
+         5: ("Plan 5", "BB-H1-Reversion", "หลุดกรอบ BB H1 + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · SL 0.75 ATR · ไม่ตั้ง TP ปิดเมื่อแตะ BB H1 อีกฝั่ง · เลื่อน SL ทุก 5 จุด (50%/40%)"),
          6: ("Plan 6", "PSAR-H1-Trend", "SAR H1 สลับตามเทรนด์ H4 จากระบบดูเทรนด์ (คะแนน ≥ +3 / ≤ −3) · SL ตาม SAR (เร็วขึ้นเมื่อกำไร 2 ATR) · ออกเมื่อเทรนด์ H4 เปลี่ยน/ผิดฝั่ง EMA100"),
          7: ("Plan 7", "BB-H4-Reversion", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · เทรนด์ H4 MA10/30 ไม่สวน · เลื่อน SL ทุก 5 จุด"),
          8: ("Plan 8", "BB-H4-Free", "หลุดกรอบ BB H4 (แท่ง M15) + Divergence + AI ≥ 55% · H1 MA100/150/200 ไม่เรียงตามทิศ · ไม่ใช้ตัวกรองเทรนด์ H4 · เลื่อน SL ทุก 5 จุด"),

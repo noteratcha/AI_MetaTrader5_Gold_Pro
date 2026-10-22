@@ -3377,7 +3377,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
         "P2": "MA5 ตัด MA10 (H1) + H4 MA10/30 + ความชัน MA5 H4 + MA200 H4 · SL 1.25 ATR H1 · ไม่ตั้ง TP · ออกเมื่อ MA5 ตัด MA20 กลับ",
         "P3": "ราคากวาดแนวรับ/ต้าน H1 แล้วดึงกลับ + ไส้เทียน 0.4–1.0 ATR + เทรนด์ H1 + MA100/150/200 H1 เรียงตามทิศ + AI · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
         "P4": "เด้งโซนแนวรับ/ต้าน H1 (≤ 0.75 ATR) + RSI Divergence + H1 MA100/150/200 ไม่สวนทิศ + AI ≥ 58% · SL 1.0 ATR · TP 2.0 ATR · เลื่อน SL ทุก +5 จุด",
-        "P5": "หลุดกรอบ Bollinger H1 แล้วกลับเข้า + Divergence + AI ≥ 55% · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
+        "P5": "หลุดกรอบ Bollinger H1 แล้วกลับเข้า + Divergence + AI ≥ 55% · SL 0.75 ATR · ไม่ตั้ง TP ปิดเมื่อราคาแตะ BB H1 อีกฝั่ง (SELL = เส้นล่าง · BUY = เส้นบน) · เลื่อน SL ทุก +5 จุด",
         "P6": "Parabolic SAR H1 สลับข้างมาทางเทรนด์ H4 จากระบบดูเทรนด์ (คะแนน ≥ +3 / ≤ −3) · SL = จุด SAR (ไม่เกิน 3 ATR H1) เลื่อนตาม SAR ทุกชั่วโมง · กำไรถึง 2 ATR เลื่อนเร็วขึ้น · ไม่ตั้ง TP · ออกเมื่อเทรนด์ H4 เปลี่ยนหรือราคาปิดผิดฝั่ง EMA100",
         "P7": "หลุดกรอบ Bollinger H4 แล้วกลับเข้า (แท่ง M15) + Divergence + H1 MA100/150/200 ไม่เรียงตามทิศ + AI ≥ 55% + เทรนด์ H4 MA10/30 ไม่สวน · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
         "P8": "หลุดกรอบ Bollinger H4 แล้วกลับเข้า (แท่ง M15) + Divergence + H1 MA100/150/200 ไม่เรียงตามทิศ + AI ≥ 55% · ไม่ใช้ตัวกรองเทรนด์ H4 · SL 0.75 ATR · TP 1.5 เท่า · เลื่อน SL ทุก +5 จุด",
@@ -3624,7 +3624,7 @@ class PositionDetailDialog(ctk.CTkToplevel):
             put("tp", f"{tp:,.2f}", (f"ห่าง {max(0.0, (tp - price) * side):,.2f} จุดตอนปิด" if self.closed else
                                      f"อีก {max(0.0, (tp - price) * side):,.2f} จุด") + f" · เป้า +{abs(tp - entry) * mpp:,.2f}", COLOR_SUCCESS_GREEN)
         else:
-            put("tp", "รันเทรนด์", "ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ" if d["plan_key"] in ("P1", "P2") else "ไม่ตั้ง TP", COLOR_GOLD_PRIMARY)
+            put("tp", "รันเทรนด์", "ไม่ตั้ง TP · ออกเมื่อ MA ตัดกลับ" if d["plan_key"] in ("P1", "P2") else ("ไม่ตั้ง TP · ปิดเมื่อแตะ BB H1 อีกฝั่ง" if d["plan_key"] == "P5" else "ไม่ตั้ง TP"), COLOR_GOLD_PRIMARY)
         if self.closed:
             put("held", MainTradingApp._fmt_duration(lp["close_time"] - lp["time"]), f"ปิด {self._dt(lp['close_time'])} น.")
         else:

@@ -2799,7 +2799,7 @@ def main():
     print(f"{Colors.BOLD}🏆 [AI BOT] {BOT_NAME} v{BOT_VERSION} Started{Colors.RESET}")
     print(f"{Colors.GREEN}{Colors.BOLD}[ASSET FOCUS]: XAUUSD (Gold Specialist 100%){Colors.RESET}")
     print(f"{Colors.CYAN}{Colors.BOLD}[ACTIVE PLANS]: Plan 1 (MA-Cross M15), Plan 2 (MA-Cross H1), Plan 3 (SMC), Plan 4 (Bounce), Plan 5 (BB-H1 Reversion), Plan 6 (PSAR H1){Colors.RESET}")
-    print(f"{Colors.YELLOW}{Colors.BOLD}[RISK/RRR]: P1 SL {P1_SL_ATR_MULT} ATR (No TP, Step Trail) | P2 SL {P2_SL_ATR_MULT} ATR H1 (No TP, exit MA5xMA20) | P3-P5 SL {SL_ATR_MULT} ATR, TP RRR 1:{TP_RRR_XAU:.2f} | Early Profit Lock +0.35 ATR{Colors.RESET}")
+    print(f"{Colors.YELLOW}{Colors.BOLD}[RISK/RRR]: P1 SL {P1_SL_ATR_MULT} ATR (No TP, Step Trail) | P2 SL {P2_SL_ATR_MULT} ATR H1 (No TP, exit MA5xMA20) | P3-P4 SL ATR, TP RRR 1:{TP_RRR_XAU:.2f} | P5 SL {SL_ATR_MULT} ATR (No TP, exit at opposite BB H1) | Early Profit Lock +0.35 ATR{Colors.RESET}")
     print(f"{Colors.BOLD}{Colors.CYAN}============================================================{Colors.RESET}\n")
 
     models = {}
@@ -3809,12 +3809,11 @@ def main():
                                 elif not _is_plan_blocked('BUY', p_label):
                                     price = tick.ask
                                     sl = round(price - sl_dist, digits)
-                                    risk = price - sl
-                                    tp = round(price + (risk * symbol_rrr), digits)
+                                    tp = 0.0   # P5 ไม่ตั้ง TP (20 ต.ค. 2026) — ปิดเมื่อราคาแตะ BB H1 บน · เลื่อน SL ทุก 5 จุด
                                     div_note = " + DIVERGENCE + MACD CONFLUENCE"
-                                    print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: H1 Lower Band Rejection + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                    print(f"{Colors.GREEN}[SIGNAL] {sym} {p_label}: H1 Lower Band Rejection + AI UP ({prob[1]:.2%}){div_note} [{h4_msg}] -> SENDING BUY ORDER (SL={sl_dist:.{digits}f} / 0.75ATR · NO TP · ปิดเมื่อแตะ BB H1 บน){Colors.RESET}")
                                     send_order(sym, mt5.ORDER_TYPE_BUY, price, sl, tp, plan_name=p_label)
-                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'BUY', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (BB H1 upper) ({h4_msg})')
                                     _record_plan('BUY', p_label)
                             else:
                                 log_signal_event(sym, 'ZONE_ALERT', p_label, 'BUY', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'H1 BB Lower Band Rejection | AI UP {prob[1]:.1%} < {req_bb_p:.1%}')
@@ -3831,12 +3830,11 @@ def main():
                                 elif not _is_plan_blocked('SELL', p_label):
                                     price = tick.bid
                                     sl = round(price + sl_dist, digits)
-                                    risk = sl - price
-                                    tp = round(price - (risk * symbol_rrr), digits)
+                                    tp = 0.0   # P5 ไม่ตั้ง TP (20 ต.ค. 2026) — ปิดเมื่อราคาแตะ BB H1 ล่าง · เลื่อน SL ทุก 5 จุด
                                     div_note = " + DIVERGENCE + MACD CONFLUENCE"
-                                    print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: H1 Upper Band Rejection + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist:.{digits}f} / 0.75ATR){Colors.RESET}")
+                                    print(f"{Colors.RED}[SIGNAL] {sym} {p_label}: H1 Upper Band Rejection + AI DOWN ({prob[0]:.2%}){div_note} [{h4_msg}] -> SENDING SELL ORDER (SL={sl_dist:.{digits}f} / 0.75ATR · NO TP · ปิดเมื่อแตะ BB H1 ล่าง){Colors.RESET}")
                                     send_order(sym, mt5.ORDER_TYPE_SELL, price, sl, tp, plan_name=p_label)
-                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} ({h4_msg})')
+                                    log_signal_event(sym, 'ENTRY_SIGNAL', p_label, 'SELL', price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | No TP (BB H1 lower) ({h4_msg})')
                                     _record_plan('SELL', p_label)
                             else:
                                 log_signal_event(sym, 'ZONE_ALERT', p_label, 'SELL', close_price, prob[1], prob[0], h4_cloud_status, div_name, 'WAIT_AI_CONFIRM', f'H1 BB Upper Band Rejection | AI DOWN {prob[0]:.1%} < {req_bb_p:.1%}')
@@ -4124,6 +4122,16 @@ def main():
 
                         # 0.15 Plan 3 / 4 / 5: เลื่อน SL ทุกกำไร 5 จุด (ขั้นแรก 50% / ถัดไป 40% ของระยะ SL → ราคา)
                         #      ยังใช้ล็อกกำไร 70% / Dynamic TP 80% ตามเดิม — SL ขยับเฉพาะทิศที่ดีขึ้นเท่านั้น
+                        # 0.12 Plan 5 (ผู้ใช้สั่ง 20 ต.ค. 2026): ไม่ตั้ง TP — ปิดเมื่อราคา (Bid) แตะ BB H1 อีกฝั่ง (SELL = เส้นล่าง · BUY = เส้นบน)
+                        #      Backtest 2.5 ปี: TP 1.5R + ขยาย +81 PF 2.20 → แตะ BB อีกฝั่ง +159 PF 3.25 · DD เท่าเดิม 17.7 (34 ไม้)
+                        if pos.comment.startswith("BB-H1") and pd.notna(bb_lower_h1) and pd.notna(bb_upper_h1):
+                            band_hit = (tick.bid <= bb_lower_h1) if pos.type == mt5.ORDER_TYPE_SELL else (tick.bid >= bb_upper_h1)
+                            if band_hit:
+                                band = bb_lower_h1 if pos.type == mt5.ORDER_TYPE_SELL else bb_upper_h1
+                                print(f"{Colors.GREEN if pos.profit >= 0 else Colors.YELLOW}[PLAN 5 EXIT] {sym} #{pos.ticket} ราคาแตะ BB H1 {'ล่าง' if pos.type == mt5.ORDER_TYPE_SELL else 'บน'} {band:,.2f} — ปิดไม้ · กำไร {pos.profit:+.2f}{Colors.RESET}")
+                                log_signal_event(sym, 'POSITION_MGMT', pos.comment, 'BUY' if pos.type == mt5.ORDER_TYPE_SELL else 'SELL', tick.bid, prob[1], prob[0], h4_cloud_status, div_name, 'BB_BAND_EXIT', f'Touched BB H1 {band:.2f} (Profit: ${pos.profit:.2f})')
+                                close_position(pos, comment="P5 BB Band TP")
+                                continue
                         if pos.comment.startswith(("BB-H1", "BB-H4", "SMC", "SR-Swing")):   # P3 / P4 / P5 (7 ต.ค. 2026) · P7 / P8 (13 ต.ค. 2026)
                             if apply_p4_step_trailing(pos, tick, mt5.symbol_info(sym)):
                                 continue
