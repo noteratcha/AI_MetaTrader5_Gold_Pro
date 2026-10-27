@@ -1,7 +1,7 @@
 'use client';
 
 // การ์ดชุดเดียวกับโปรแกรม Gold Bot 24 (ข้อมูลจาก Telemetry radar_signals[0] — เว็บไม่คำนวณซ้ำ)
-// สภาวะตลาด H1/H4 · เงื่อนไขเข้าไม้รายแผน P1–P13 · AI วิเคราะห์ไม้ที่ถืออยู่
+// สภาวะตลาด H1/H4 · เงื่อนไขเข้าไม้รายแผน P1–P12 · AI วิเคราะห์ไม้ที่ถืออยู่
 import { useState } from 'react';
 import { Activity, Brain, ListChecks } from 'lucide-react';
 import { EmptyState } from './ui';

@@ -61,5 +61,4 @@ export const PLAN_LIST = [
   { key: 'RSI-H1-Trend', label: 'P10 · RSI H1', tag: 'RSI 30/70 · ตามเทรนด์ MA200' },
   { key: 'News-USD', label: 'P11 · News', tag: 'ข่าว USD · เข้าทันทีเมื่อค่าจริงยืนยัน' },
   { key: 'DoubleTop-H1', label: 'P12 · BB High Low', tag: 'BB H1 ทำยอดซ้ำ · ตามเทรนด์ H4 · ไม้เพิ่ม ≤ 2' },
-  { key: 'MA-Scalp-M15', label: 'P13 · MA Scalp', tag: 'MA5 ตัด MA13 M15 · TP 100 จุด · ไม่ตั้ง SL' },
 ];

@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     if (!trades) continue;
     if (usage && !realUsers.has(String(r.user_id))) continue;
     if (trades > 20000 || Math.abs(Number(r.total_profit_usd) || 0) / trades > 5000) continue;
-    // นับเฉพาะไม้ของแผนบอท (P1–P13) — ไม้ที่ผู้ใช้เข้าเองไม่แสดง (ผู้ใช้สั่ง 15 ต.ค. 2026)
+    // นับเฉพาะไม้ของแผนบอท (P1–P12) — ไม้ที่ผู้ใช้เข้าเองไม่แสดง (ผู้ใช้สั่ง 15 ต.ค. 2026)
     const key = planNumber(r.plan_name);
     if (!key) continue;
     const p = (plans[key] ||= { key, users: new Set(), trades: 0, win: 0, loss: 0, net: 0, gp: 0, gl: 0, last: null });

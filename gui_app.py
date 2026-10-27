@@ -6280,7 +6280,7 @@ class MainTradingApp(ctk.CTk):
         HoverTip(chk_vol, lambda: "ค่าเริ่มต้นปิด — ทุกแผนถือไม้ตามกฎของแผนแม้ตลาดผันผวน\n"
                                   "ติ๊กเปิด: เมื่อตลาดผันผวนแรงผิดปกติ (ราคากระชาก · แท่งแกว่งแรง · สเปรดถ่าง · ข่าว USD ±15 นาที)\n"
                                   "บอทปิดไม้ของ P3–P5 · P7–P8 และไม้เข้าเองทันทีที่กำไรถึงเป้าจุดด้านบน\n"
-                                  "แผนรันเทรนด์ P1 · P2 · P6 · P9–P13 ไม่ใช้ข้อนี้เสมอ (ทดสอบ P12: ปิดตอนผันผวนกำไร +316 → +12)")
+                                  "แผนรันเทรนด์ P1 · P2 · P6 · P9–P12 ไม่ใช้ข้อนี้เสมอ (ทดสอบ P12: ปิดตอนผันผวนกำไร +316 → +12)")
         HoverTip(self.cmb_manual_tp_pts, lambda: "เลือกจำนวนจุดเป้าหมาย (100–500) หรือพิมพ์ระบุอิสระตามต้องการ")
 
 
@@ -7721,7 +7721,7 @@ class MainTradingApp(ctk.CTk):
             values = [
                 self._fmt_mt5_time(r.get("open_time")),
                 r.get("side", ""),
-                self._hist_plan_name(r),   # ชื่อสั้น P1–P13 เหมือนตารางไม้ที่เปิดอยู่ (ผู้ใช้สั่ง 16 ต.ค. 2026)
+                self._hist_plan_name(r),   # ชื่อสั้น P1–P12 เหมือนตารางไม้ที่เปิดอยู่ (ผู้ใช้สั่ง 16 ต.ค. 2026)
                 f"{r.get('volume', 0):.2f}",
                 f"{r.get('open_price', 0):,.2f}",
                 "—" if is_open else f"{r.get('close_price', 0):,.2f}",
@@ -8270,7 +8270,7 @@ class MainTradingApp(ctk.CTk):
             self.lbl_member.configure(text=f"● สมาชิก ถึง {until}" + (f" (อีก {mem['daysLeft']} วัน)" if mem["daysLeft"] <= 3 else ""),
                                       text_color=COLOR_DANGER_RED if mem["daysLeft"] <= 3 else COLOR_SUCCESS_GREEN)
         else:
-            self.lbl_member.configure(text="สมัครสมาชิก ปลดล็อก P6–P13 ›", text_color=COLOR_TEXT_MUTED)
+            self.lbl_member.configure(text="สมัครสมาชิก ปลดล็อก P6–P12 ›", text_color=COLOR_TEXT_MUTED)
         self._reward_shown = key
         if not o:
             self.reward_box.pack_forget()
@@ -8307,7 +8307,7 @@ class MainTradingApp(ctk.CTk):
         if not mem["active"]:
             return ""
         until = thai_time.from_epoch(self._iso_epoch(mem["until"]), "%d/%m/%Y") if mem["until"] else "-"
-        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P13\nใช้ได้ถึงวันที่ {until} (23:59 น.) · เหลือ {mem['daysLeft']} วัน (รวมวันนี้)\n"
+        return (f"สมาชิกรายเดือน · ใช้ได้ทุกแผน P1–P12\nใช้ได้ถึงวันที่ {until} (23:59 น.) · เหลือ {mem['daysLeft']} วัน (รวมวันนี้)\n"
                 "คลิกเพื่อต่ออายุ — ต่อก่อนหมดนับต่อจากวันสุดท้ายเดิม")
 
     @staticmethod
@@ -8319,7 +8319,7 @@ class MainTradingApp(ctk.CTk):
             return time.time()
 
     def _check_member_expiry(self, mem):
-        """สมาชิกเหลือ ≤ 3 วัน → เตือน 1 ครั้งต่อวัน (หมดแล้วบอทเข้าไม้ด้วย P6–P13 ไม่ได้)"""
+        """สมาชิกเหลือ ≤ 3 วัน → เตือน 1 ครั้งต่อวัน (หมดแล้วบอทเข้าไม้ด้วย P6–P12 ไม่ได้)"""
         if not mem["active"] or mem["viaAdmin"] or mem["daysLeft"] > 3:
             return
         today = thai_time.fmt_now("%Y-%m-%d")
@@ -8330,7 +8330,7 @@ class MainTradingApp(ctk.CTk):
         left = "วันนี้เป็นวันสุดท้าย" if mem["daysLeft"] <= 1 else f"เหลืออีก {mem['daysLeft']} วัน (รวมวันนี้)"
         self.after(1500, lambda: messagebox.showwarning(
             "สมาชิกรายเดือนใกล้หมดอายุ",
-            f"สมาชิกใช้ได้ถึงวันที่ {until} (23:59 น.) · {left}\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P13 ต่อ — ต่อก่อนหมดจะนับต่อจากวันสุดท้ายเดิม"))
+            f"สมาชิกใช้ได้ถึงวันที่ {until} (23:59 น.) · {left}\nต่ออายุที่หน้าเติมชั่วโมงเพื่อใช้แผน P6–P12 ต่อ — ต่อก่อนหมดจะนับต่อจากวันสุดท้ายเดิม"))
 
     def _reward_tip(self):
         o = license_mgr.online_status()
