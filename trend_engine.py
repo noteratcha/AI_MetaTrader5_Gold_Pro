@@ -27,7 +27,7 @@ USD_WEIGHT = 1
 USD_BAND_PCT = 0.10
 OVERALL_MIN, OVERALL_STRONG = 40, 70
 BARS_NEEDED = 600            # แท่งที่บอทควรดึงต่อไทม์เฟรม (EMA200 นิ่ง · MA200 ครบ)
-MTF_EXEMPT = ("Fib-H1-Counter", "News-USD", "MA-Scalp-M15")   # แผนที่ไม่ใช้ตัวกรองเสียงข้างมาก D1/H4/H1
+MTF_EXEMPT = ("Fib-H1-Counter", "News-USD")   # แผนที่ไม่ใช้ตัวกรองเสียงข้างมาก D1/H4/H1
 ITEMS = (("structure", "โครงสร้างราคา"), ("ma200", "ราคาเทียบ MA200"), ("ema", "EMA20/50/200"),
          ("slope", "ความชัน EMA50"), ("adx", "ADX"))
 

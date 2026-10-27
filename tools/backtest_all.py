@@ -287,7 +287,7 @@ b["tsys_h1"] = te.align(h1.time + pd.Timedelta(hours=1), TS_H1["state"], b.close
 # ตัวกรองทุกไม้ (ผู้ใช้สั่ง 16 ต.ค. 2026): ห้ามเข้าสวนเสียงข้างมากของเทรนด์ D1/H4/H1 (≥ 2 ไทม์เฟรมทิศเดียวกัน) ยกเว้น P9 · P11
 # จำลองโดยตัดไม้ที่สวนออกจากรายการของแต่ละแผน (บอทจริงข้ามสัญญาณนั้น — ไม้ถัดไปอาจเข้าได้เร็วขึ้นเล็กน้อย)
 TS_D1 = te.components(d1)
-MTF_SKIP = (9, 11, 13)
+MTF_SKIP = (9, 11)
 def mtf_at(times):
     q = pd.to_datetime(pd.Series(times)).values
     return te.majority(te.align(d1.time + pd.Timedelta(days=1), TS_D1["state"], q).astype(int),
