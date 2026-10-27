@@ -199,8 +199,13 @@ _p11_done = set()        # เวลาข่าว (UTC) ที่ตัดส�
 import dtop_plan
 import trend_engine   # ระบบดูเทรนด์ (16 ต.ค. 2026) — P1 ใช้ H1 · P6 ใช้ H4 · การ์ดสภาวะตลาด
 P12_NAME = dtop_plan.NAME
+# Plan 13 (ผู้ใช้สั่ง 27 ต.ค. 2026): MA5 ตัด MA13 M15 (แท่งปิด) ตัดลง = SELL · ตัดขึ้น = BUY · ไม่มีตัวกรองอื่น (ยังติดห้ามสวนเทรนด์ข้างมาก)
+#   TP 100 จุด (ราคา 1.00 = กำไร $1 ที่ Lot 0.01) · ไม่ตั้ง SL · ปิดเมื่อ MA5 ตัด MA13 กลับ · ไม่เลื่อน SL / AI Reversal / ล็อกกำไร
+#   Backtest 2.5 ปี (ห้ามสวนเทรนด์ข้างมาก): 3,556 ไม้ · ชนะ 79.6% · −1,096 · PF 0.85 · DD 1,265 · แพ้หนักสุด −194 — ผู้ใช้ยืนยันให้สร้าง (ค่าเริ่มต้นปิด)
+P13_NAME = "MA-Scalp-M15"
+P13_TP_POINTS = 100
 # แผนที่ไม่ปิดไม้ตอนตลาดผันผวนแรง (Volatility TP) — ไม่ตั้ง TP / TP ไกล กำไรมาจากไม้ใหญ่ (ผู้ใช้สั่ง 16 ต.ค. 2026)
-VOL_TP_EXEMPT = {"MA-Cross-Trend", "MA-Cross-H1-Trend", P6_NAME, P9_NAME, P10_NAME, P11_NAME, P12_NAME}
+VOL_TP_EXEMPT = {"MA-Cross-Trend", "MA-Cross-H1-Trend", P6_NAME, P9_NAME, P10_NAME, P11_NAME, P12_NAME, P13_NAME}
 _p12_bar_done = {}       # {sym: เวลาแท่ง H1 ที่ตัดสินแล้ว} — ตรวจสัญญาณครั้งเดียวต่อแท่ง
 
 
@@ -1878,6 +1883,13 @@ def evaluate_plans_condition_status(symbol: str = None) -> dict:
             "enabled": plan_config.is_enabled("MA-Cross-Trend"),
             "disabled_reason": plan_config.disabled_reason("MA-Cross-Trend")
         }
+        # ===== Plan 13: MA-Scalp-M15 (27 ต.ค. 2026) — MA5 ตัด MA13 อย่างเดียว =====
+        p13_items = [{"name": "MA5 ตัด MA13 M15", "ok": bool(p1_x2 == d1), "desc": (f"MA5 เพิ่งตัด{word_up} MA13 บนแท่งล่าสุด — เข้าไม้" if p1_x2 == d1 else f"รอ MA5 ตัด{word_up} MA13 (MA5 {m15_ma5:,.2f} · MA13 {m15_ma13:,.2f})")},
+                     {"name": "TP 100 จุด · ไม่ตั้ง SL", "ok": True, "desc": "ปิดเมื่อกำไร 100 จุด ($1 ที่ Lot 0.01) หรือ MA ตัดกลับ (ไม่นับเป็นเงื่อนไข)"}]
+        m13 = sum(1 for it in p13_items if it["ok"])
+        results["P13"] = {"name": P13_NAME, "label": "P13 · M15 Scalp", "side": p1_side, "matched": m13, "total": 2,
+                          "pct": int(m13 / 2 * 100), "items": p13_items,
+                          "enabled": plan_config.is_enabled(P13_NAME), "disabled_reason": plan_config.disabled_reason(P13_NAME)}
 
         # ===== Plan 2: MA-Cross-H1-Trend (H1) =====
         p2_side = "BUY" if is_uptrend_h4 else "SELL"
@@ -2280,7 +2292,7 @@ def print_plans_condition_status(symbol: str = None):
 
         print(f"\n{Colors.CYAN}{Colors.BOLD}[PLAN STATUS] ความพร้อมเงื่อนไขการเข้าไม้แต่ละแผน ({symbol} @ {price:,.2f}){Colors.RESET}")
 
-        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
+        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13"]
         for pk in plan_order:
             info = status_map.get(pk)
             if not info:
@@ -3692,6 +3704,8 @@ def main():
                                 return p9_bar_time       # 1 ไม้ต่อ 1 คลื่น
                             if plan_name == P10_NAME:
                                 return p10_bar_time      # 1 ไม้ต่อ 1 สัญญาณ
+                            if plan_name == P13_NAME:
+                                return df.iloc[-2]['time'] if len(df) >= 2 else None   # 1 ไม้ต่อ 1 แท่ง Cross
                             return None
 
                         def _record_plan(direction, plan_name):
@@ -3987,6 +4001,20 @@ def main():
                                 log_signal_event(sym, 'ENTRY_SIGNAL', P10_NAME, side10, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | SL: {sl:.{digits}f} | TP: {tp:.{digits}f} (RSI {p10_rsi:.1f})')
                                 _record_plan(side10, P10_NAME)
 
+                        # แผน 13: MA-Scalp-M15 — MA5 ตัด MA13 (แท่ง M15 ที่ปิดแล้ว) · TP 100 จุด · ไม่ตั้ง SL · ปิดเมื่อ MA ตัดกลับ
+                        p13_sig = 1 if p4_cross_up else (-1 if p4_cross_down else 0)
+                        if p13_sig:
+                            side13 = 'BUY' if p13_sig == 1 else 'SELL'
+                            if not _is_plan_blocked(side13, P13_NAME):
+                                info13 = mt5.symbol_info(sym)
+                                pt13 = float(info13.point) if info13 else 0.01
+                                price = tick.ask if p13_sig == 1 else tick.bid
+                                tp = round(price + p13_sig * P13_TP_POINTS * pt13, digits)
+                                print(f"{Colors.GREEN if p13_sig == 1 else Colors.RED}[SIGNAL] {sym} {P13_NAME}: MA5 Crossed {'Above' if p13_sig == 1 else 'Below'} MA13 (M15) -> SENDING {side13} ORDER (TP {tp:,.{digits}f} = {P13_TP_POINTS} pts · NO SL · Exit on MA cross back){Colors.RESET}")
+                                send_order(sym, mt5.ORDER_TYPE_BUY if p13_sig == 1 else mt5.ORDER_TYPE_SELL, price, 0.0, tp, plan_name=P13_NAME)
+                                log_signal_event(sym, 'ENTRY_SIGNAL', P13_NAME, side13, price, prob[1], prob[0], h4_cloud_status, div_name, 'ORDER_SENT', f'Lot {volume} | No SL | TP: {tp:.{digits}f} ({P13_TP_POINTS} pts)')
+                                _record_plan(side13, P13_NAME)
+
                         # แผน 12: DoubleTop-H1 — ตรวจเมื่อแท่ง H1 ปิด (ครั้งเดียวต่อแท่ง) · ไม้แรก + ไม้เพิ่มสูงสุด 2 ไม้ (SL เดียวกัน)
                         df12 = df_h1.iloc[:-1].reset_index(drop=True)
                         bar12 = df12['time'].iloc[-1] if len(df12) else None
@@ -4192,6 +4220,16 @@ def main():
                                 print(f"{Colors.YELLOW}[PLAN 10 EXIT] {sym} ถือครบ {rsi_plan.HOLD_HOURS} ชม. — ปิดไม้ Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
                                 log_signal_event(sym, 'POSITION_MGMT', P10_NAME, 'SELL' if pos.type == mt5.ORDER_TYPE_BUY else 'BUY', tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'TIME_EXIT', f'Held {rsi_plan.HOLD_HOURS}h (Profit: ${pos.profit:.2f})')
                                 close_position(pos, comment=f"P10 Time Exit {rsi_plan.HOLD_HOURS}h")
+                            continue
+
+                        # 0.35 Plan 13 (MA-Scalp-M15): ปิดเมื่อ MA5 ตัด MA13 กลับ (TP 100 จุดอยู่ที่โบรกเกอร์) · ไม่ใช้กฎอื่น (ตรงกับ Backtest)
+                        if pos.comment.startswith(P13_NAME):
+                            back = p4_cross_down if pos.type == mt5.ORDER_TYPE_BUY else p4_cross_up
+                            if back:
+                                p_color = Colors.GREEN if pos.profit >= 0 else Colors.RED
+                                print(f"{Colors.YELLOW}[PLAN 13 EXIT] {sym} MA5 ตัด MA13 กลับ — ปิดไม้ Profit: {p_color}${pos.profit:.2f}{Colors.RESET}")
+                                log_signal_event(sym, 'POSITION_MGMT', P13_NAME, 'SELL' if pos.type == mt5.ORDER_TYPE_BUY else 'BUY', tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask, prob[1], prob[0], h4_cloud_status, div_name, 'MA_CROSS_EXIT', f'MA5/13 cross back (Profit: ${pos.profit:.2f})')
+                                close_position(pos, comment=f"MA5 Cross {'Down' if pos.type == mt5.ORDER_TYPE_BUY else 'Up'} Exit")
                             continue
 
                         # 0.38 Plan 12 (DoubleTop-H1): ปิดทุกไม้เมื่อราคาแตะ BB H1 อีกฝั่ง (SELL = เส้นล่าง · BUY = เส้นบน) · SL เดิม · ไม่ใช้กฎอื่น

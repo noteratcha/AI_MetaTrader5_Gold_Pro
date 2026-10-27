@@ -59,7 +59,7 @@ def _news_soon(minutes=90):
 def _plan_exit(comment, side, m15, h1):
     """สัญญาณออกของแผนเอง (ตัดกลับขั้วบนแท่งที่ปิดแล้ว) → ข้อความ หรือ None"""
     c = (comment or "")
-    if c.startswith("MA-Cross-Trend"):
+    if c.startswith("MA-Cross-Trend") or c.startswith("MA-Scalp"):
         cm = m15["close"]
         f, s, tf, pair = cm.rolling(5).mean().iloc[-2], cm.rolling(13).mean().iloc[-2], "M15", "MA5/MA13"
     elif c.startswith("PSAR"):

@@ -14,6 +14,7 @@ const PLAN_ORDER = [
   'Plan 10: RSI-H1-Trend',
   'Plan 11: News-USD',
   'Plan 12: DoubleTop-H1',
+  'Plan 13: MA-Scalp-M15',
 ];
 
 // สถิติการเทรดรายแผนของผู้ใช้ (ซิงค์จาก Desktop App → user_plan_stats)

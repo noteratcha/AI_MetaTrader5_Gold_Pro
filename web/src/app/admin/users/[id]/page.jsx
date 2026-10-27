@@ -24,6 +24,7 @@ const PLAN_ROWS = [
   'Plan 10: RSI-H1-Trend',
   'Plan 11: News-USD',
   'Plan 12: DoubleTop-H1',
+  'Plan 13: MA-Scalp-M15',
 ];
 
 export default function AdminUserDetailPage() {

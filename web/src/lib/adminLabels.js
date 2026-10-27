@@ -51,4 +51,5 @@ export const PLAN_SHORT = {
   'Plan 10: RSI-H1-Trend': 'P10 · RSI H1',
   'Plan 11: News-USD': 'P11 · News',
   'Plan 12: DoubleTop-H1': 'P12 · BB High Low',
+  'Plan 13: MA-Scalp-M15': 'P13 · MA Scalp',
 };

@@ -39,7 +39,7 @@ export default function MembershipCard({ membership, onBuy, compact = false, sho
               )}
             </div>
             <div className="tiny muted" style={{ marginTop: 4 }}>
-              ผู้ใช้ทั่วไปใช้ได้แผน P1–P5 · สมาชิกปลดล็อกทุกแผน (P1–P12) · ยังหักชั่วโมงตามการใช้งานปกติ
+              ผู้ใช้ทั่วไปใช้ได้แผน P1–P5 · สมาชิกปลดล็อกทุกแผน (P1–P13) · ยังหักชั่วโมงตามการใช้งานปกติ
             </div>
             {!compact && (
               <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>

@@ -1,4 +1,4 @@
-// สมาชิกรายเดือน — ปลดล็อกแผน P6–P12 (ผู้ใช้ทั่วไปใช้ได้ P1–P5) · ยังหักชั่วโมงตามปกติ
+// สมาชิกรายเดือน — ปลดล็อกแผน P6–P13 (ผู้ใช้ทั่วไปใช้ได้ P1–P5) · ยังหักชั่วโมงตามปกติ
 // เก็บวันหมดอายุเป็น tag `member_until:<ISO UTC>` ใน bot_config.symbols_trading (ไม่ต้องมีตารางใหม่)
 // ราคา/จำนวนวันอ่านจากไฟล์นี้ฝั่ง Server เสมอ (ไม่เชื่อค่าจาก Browser)
 
@@ -31,7 +31,7 @@ export function membershipPlan(id) {
 }
 
 // แผนที่ต้องเป็นสมาชิก (ชื่อหลักแบบเดียวกับ plan_config.BASE_PLANS ในโปรแกรม)
-export const MEMBER_PLANS = ['PSAR-H1-Trend', 'BB-H4-Reversion', 'BB-H4-Free', 'Fib-H1-Counter', 'RSI-H1-Trend', 'News-USD', 'DoubleTop-H1'];
+export const MEMBER_PLANS = ['PSAR-H1-Trend', 'BB-H4-Reversion', 'BB-H4-Free', 'Fib-H1-Counter', 'RSI-H1-Trend', 'News-USD', 'DoubleTop-H1', 'MA-Scalp-M15'];
 export const MEMBER_PLAN_NUMBERS = [6, 7, 8, 9, 10, 11, 12];
 export const MEMBER_TAG = 'member_until:';
 export const MEMBER_WARN_DAYS = 3;

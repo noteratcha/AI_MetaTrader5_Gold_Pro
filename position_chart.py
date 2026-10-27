@@ -43,6 +43,7 @@ PLANS = (  # (ขึ้นต้น comment, key, ชื่อสั้น) — 
     ("RSI-H1", "P10", "P10 · RSI H1"),
     ("News-USD", "P11", "P11 · News"),
     ("DoubleTop", "P12", "P12 · BB High Low"),
+    ("MA-Scalp", "P13", "P13 · MA Scalp"),
     ("BB-H4-Free", "P8", "P8 · BB-H4 Free"),   # ต้องมาก่อน BB-H4 (P7)
     ("BB-H4", "P7", "P7 · BB-H4"),
 )
@@ -208,6 +209,9 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None, view=None):
     """เส้นบนกราฟ + ค่าที่แผนใช้ ณ แท่งสุดท้ายของ m (แท่งที่กำลังวิ่ง หรือแท่งที่ปิดไม้)
     view = แท่ง H1 สำหรับวาดกราฟแทน M15 (ผู้ใช้เลือก) — ค่าอินดิเคเตอร์ยังคิดจาก M15 ตามที่แผนใช้ · เส้นที่เป็นของ M15 (MA5/13/50 · RSI) ไม่วาด"""
     plan_key, plan_name = plan_of(comment)
+    real_key = plan_key
+    if plan_key == "P13":   # P13 = MA5/13 M15 แบบ P1 → อินดิเคเตอร์ชุดเดียวกัน
+        plan_key = "P1"
     src = m if view is None else view
     tail = src.iloc[-count:]
 
@@ -494,7 +498,7 @@ def _build(m, ctx, pos, side, comment, count, live=True, mfe=None, view=None):
     if atr:
         inds.append(_ind("ATR(14) M15", f"{atr:,.2f}", 0, "ความผันผวนต่อแท่ง 15 นาที"))
 
-    return {"plan_key": plan_key, "plan_name": plan_name, "side": side, "candles": candles,
+    return {"plan_key": real_key, "plan_name": plan_name, "side": side, "candles": candles,
             "lines": lines, "levels": levels, "pane": pane, "indicators": inds, "marks": marks,
             "tf": "H1" if view is not None else "M15", "bar_sec": 3600 if view is not None else 900}
 

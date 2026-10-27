@@ -17,7 +17,8 @@ import multi_asset_ai_bot as bot  # noqa: E402
 
 SPREAD = 0.35
 t0 = time.time()
-mt5.initialize()
+_FBS = r"C:/Program Files/FBS MetaTrader 5/terminal64.exe"   # สคริปต์ต้องใช้ข้อมูล FBS (XAUUSD) — ถ้าเปิด XM ไว้ด้วย initialize() เฉย ๆ อาจเกาะ XM
+mt5.initialize(path=_FBS) if os.path.isfile(_FBS) else mt5.initialize()
 _TERM = mt5.terminal_info().path if mt5.terminal_info() else None   # ใช้ MT5 ตัวเดิมตอนต่อใหม่ (P11) — ไม่งั้นอาจเกาะ MT5 อีกตัว (XM)
 def get(tf, n):
     for _ in range(10):   # MT5 เพิ่งเชื่อมต่อบางครั้งยังไม่ส่งแท่ง (คืนว่าง) — รอแล้วลองใหม่
@@ -306,6 +307,28 @@ def p1_filter(i, d):  # ตัวกรองสัญญาณหลอก: RSI
     return ((50 < _rsi[i] < 70) if d == 1 else (30 < _rsi[i] < 50)) and (_c[i] - _m50[i]) * d > 0
 rows.append(stats("P1 MA M15", keep(1, sim_ma(b, "ma5", "ma13", "tsys_h1", entry_ok=p1_filter, sl_mult=1.0,
                                                 trail="sl", first_frac=0.50, frac=0.40, confirm=True))))
+
+
+def sim_p13():
+    """Plan 13: MA5 ตัด MA13 M15 (แท่งปิด) → เข้าราคาเปิดแท่งถัดไป · TP 100 จุด (1.00) · ไม่ตั้ง SL · ปิดเมื่อ MA ตัดกลับ"""
+    o, h, l, t = b.open.values, b.high.values, b.low.values, b.time.values
+    f5, f13 = b.ma5.values, b.ma13.values
+    out, pos = [], None
+    for i in range(20, len(b) - 1):
+        up = f5[i - 1] <= f13[i - 1] and f5[i] > f13[i]
+        dn = f5[i - 1] >= f13[i - 1] and f5[i] < f13[i]
+        if pos and i > pos[3]:
+            d, e, tp, i0 = pos
+            if (d == 1 and h[i] >= tp) or (d == -1 and l[i] <= tp):
+                px = o[i] if (o[i] - tp) * d > 0 else tp
+                out.append(dict(time=t[i0], pnl=(px - e) * d - SPREAD, d=d, xt=t[i])); pos = None
+            elif (d == 1 and dn) or (d == -1 and up):
+                out.append(dict(time=t[i0], pnl=(o[i + 1] - e) * d - SPREAD, d=d, xt=t[i + 1])); pos = None
+        if not pos and (up or dn):
+            d = 1 if up else -1
+            e = o[i + 1]; pos = (d, e, e + d * (bot.P13_TP_POINTS * 0.01 - SPREAD), i + 1)
+    return out
+rows.append(stats("P13 MA Scalp", keep(13, sim_p13())))
 f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
 f["atr"] = A(f); f["ma5"], f["ma10"], f["ma20"] = f.close.rolling(5).mean(), f.close.rolling(10).mean(), f.close.rolling(20).mean()
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir", "p6_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
@@ -559,6 +582,7 @@ NAMES = {1: ("Plan 1", "MA-Cross-Trend", "แท่งยืนยัน (ปิ
          9: ("Plan 9", "Fib-H1-Counter", "Fibonacci คลื่น H1 ≥ 3 ATR สวนเทรนด์ใหญ่ H1 MA100/150/200 · เข้า 0.3 · ADX > 20 + MACD ยังไม่หันตามทิศไม้ · SL 0 · TP 1.75 · เลื่อน SL ขั้นบันได (1→0.15 · 1.27→0.6 · 1.5→1)"),
          10: ("Plan 10", "RSI-H1-Trend", "RSI(14) H1 แตะ 30/70 ตามเทรนด์ MA200 (ซื้อ Oversold ในขาขึ้น / ขาย Overbought ในขาลง) · SL 2 ATR · TP 3 ATR · ถือไม่เกิน 48 ชม."),
          12: ("Plan 12", "DoubleTop-H1", "BB H1 ทำยอดซ้ำนอกกรอบตามเทรนด์ H4 MA10/30: ทะลุ BB → ย่อ → ทำยอดใหม่ → แท่งถัดไปปิดสวน = เข้า · SL ยอดใหม่ ± 0.1 ATR · ปิดทุกไม้เมื่อแตะ BB อีกฝั่ง · ไม้เพิ่มสูงสุด 2 ไม้ (ยอดต่ำกว่าเดิมแต่อยู่นอกเส้นกลาง)"),
+         13: ("Plan 13", "MA-Scalp-M15", "MA5 ตัด MA13 M15 (แท่งปิด) ตัดลง = SELL · ตัดขึ้น = BUY · TP 100 จุด (1.00) · ไม่ตั้ง SL · ปิดเมื่อ MA ตัดกลับ · ไม่มีตัวกรองอื่น"),
          11: ("Plan 11", "News-USD", "ข่าว USD: คาดเทียบครั้งก่อนบอกแนวโน้มทอง → ค่าจริงไม่สวน = ยืนยัน → เข้าทันที (Tick จริง เข้า 10 วิหลังข่าว) · ข่าวพร้อมกันหักกลบ Lot ≤ 3 เท่า · SL 3 ATR M15 · ไม่ตั้ง TP · ถือ 8 ชม.")}
 def _th(ts):
     """เวลาเซิร์ฟเวอร์ (EET/EEST ของโบรกเกอร์) → ข้อความเวลาไทย"""
@@ -568,7 +592,7 @@ def _th(ts):
 
 _cut = (b.time.iloc[-1] - pd.DateOffset(months=12)).strftime("%Y-%m")
 plans_out, events = [], []
-for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
+for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
     tr = ALL[k]
     st = stats(NAMES[k][1], tr)
     df_t = pd.DataFrame(tr)
@@ -589,7 +613,7 @@ for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
                                                _th(x["xt"]) if x.get("xt") is not None else "", int(x.get("mult", 1))])
     plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2] + ("" if k in MTF_SKIP else " · ห้ามสวนเทรนด์ข้างมาก D1/H4/H1"), **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly, monthly_n=monthly_n, monthly_w=monthly_w, trades_m=trades_m))
 events.sort(key=lambda e: e[0])
-eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)}
+eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)}
 total = 0.0
 for t, k, pnl in events:
     cum[k] += pnl; total += pnl

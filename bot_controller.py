@@ -996,10 +996,11 @@ class BotController:
         if not s or "Manual" in s or s in ("เข้าเอง", "อื่นๆ"):
             return "เข้าเอง"
         for base in ("MA-Cross-H1-Trend", "MA-Cross-Trend", "SMC-LiquidityHunt", "SR-SwingBounce", "BB-H1-Reversion", "PSAR-H1-Trend",
-                     "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend", "News-USD", "DoubleTop-H1"):
+                     "BB-H4-Reversion", "BB-H4-Free", "Fib-H1-Counter", "RSI-H1-Trend", "News-USD", "DoubleTop-H1", "MA-Scalp-M15"):
             if base in s:
                 return base
-        if "Plan 1" in s: return "MA-Cross-Trend"
+        if "Plan 13" in s: return "MA-Scalp-M15"
+        if "Plan 1" in s and not any(f"Plan 1{k}" in s for k in "0123"): return "MA-Cross-Trend"
         if "Plan 2" in s: return "MA-Cross-H1-Trend"
         if "Plan 3" in s: return "SMC-LiquidityHunt"
         if "Plan 4" in s: return "SR-SwingBounce"
