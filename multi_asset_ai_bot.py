@@ -204,6 +204,7 @@ P12_NAME = dtop_plan.NAME
 #   Backtest 2.5 ปี (ห้ามสวนเทรนด์ข้างมาก): 3,556 ไม้ · ชนะ 79.6% · −1,096 · PF 0.85 · DD 1,265 · แพ้หนักสุด −194 — ผู้ใช้ยืนยันให้สร้าง (ค่าเริ่มต้นปิด)
 P13_NAME = "MA-Scalp-M15"
 P13_TP_POINTS = 100
+P13_RETIRED = True   # ผู้ใช้ยกเลิกแผน 27 ต.ค. 2026 — ไม่เข้าไม้ใหม่ · ไม้ที่ค้างยังปิดเมื่อ MA ตัดกลับ/ชน TP
 # แผนที่ไม่ปิดไม้ตอนตลาดผันผวนแรง (Volatility TP) — ไม่ตั้ง TP / TP ไกล กำไรมาจากไม้ใหญ่ (ผู้ใช้สั่ง 16 ต.ค. 2026)
 VOL_TP_EXEMPT = {"MA-Cross-Trend", "MA-Cross-H1-Trend", P6_NAME, P9_NAME, P10_NAME, P11_NAME, P12_NAME, P13_NAME}
 _p12_bar_done = {}       # {sym: เวลาแท่ง H1 ที่ตัดสินแล้ว} — ตรวจสัญญาณครั้งเดียวต่อแท่ง
@@ -751,16 +752,16 @@ def vol_tp_enabled():
 
 def manual_tp_pts_config():
     """ปิดไม้เข้าเองเมื่อกำไรถึง X จุด (ตั้งที่แผงควบคุม) → (enabled: bool, pts: float)
-    ค่าเริ่มต้น: enabled=False, pts=100.0 จุด (ตัวเลือก: 100, 150, 200, 250, 300, 350, 400, 450, 500 หรือระบุอิสระ)
+    ค่าเริ่มต้น: enabled=True, pts=500.0 จุด (ตัวเลือก: 100, 150, 200, 250, 300, 350, 400, 450, 500 หรือระบุอิสระ)
     """
     try:
         with open(BOT_SETTINGS_FILE, 'r', encoding='utf-8') as f:
             s = json.load(f)
-        enabled = bool(s.get("manual_tp_pts_enabled", False))
-        pts = float(s.get("manual_tp_pts", 100.0))
+        enabled = bool(s.get("manual_tp_pts_enabled", True))
+        pts = float(s.get("manual_tp_pts", 500.0))
         return enabled, max(10.0, pts)
     except Exception:
-        return False, 100.0
+        return True, 500.0
 
 
 _last_volatility_alert_time = 0.0
@@ -2292,7 +2293,7 @@ def print_plans_condition_status(symbol: str = None):
 
         print(f"\n{Colors.CYAN}{Colors.BOLD}[PLAN STATUS] ความพร้อมเงื่อนไขการเข้าไม้แต่ละแผน ({symbol} @ {price:,.2f}){Colors.RESET}")
 
-        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13"]
+        plan_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"] + ([] if P13_RETIRED else ["P13"])
         for pk in plan_order:
             info = status_map.get(pk)
             if not info:
@@ -4002,7 +4003,7 @@ def main():
                                 _record_plan(side10, P10_NAME)
 
                         # แผน 13: MA-Scalp-M15 — MA5 ตัด MA13 (แท่ง M15 ที่ปิดแล้ว) · TP 100 จุด · ไม่ตั้ง SL · ปิดเมื่อ MA ตัดกลับ
-                        p13_sig = 1 if p4_cross_up else (-1 if p4_cross_down else 0)
+                        p13_sig = 0 if P13_RETIRED else (1 if p4_cross_up else (-1 if p4_cross_down else 0))
                         if p13_sig:
                             side13 = 'BUY' if p13_sig == 1 else 'SELL'
                             if not _is_plan_blocked(side13, P13_NAME):

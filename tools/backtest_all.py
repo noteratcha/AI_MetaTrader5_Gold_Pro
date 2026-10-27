@@ -328,7 +328,7 @@ def sim_p13():
             d = 1 if up else -1
             e = o[i + 1]; pos = (d, e, e + d * (bot.P13_TP_POINTS * 0.01 - SPREAD), i + 1)
     return out
-rows.append(stats("P13 MA Scalp", keep(13, sim_p13())))
+# P13 ยกเลิก 27 ต.ค. 2026 (ผู้ใช้สั่ง) — ไม่จำลองแล้ว
 f = h1.copy(); f["close_time"] = f.time + pd.Timedelta(minutes=60)
 f["atr"] = A(f); f["ma5"], f["ma10"], f["ma20"] = f.close.rolling(5).mean(), f.close.rolling(10).mean(), f.close.rolling(20).mean()
 f = pd.merge_asof(f.sort_values("close_time"), vx[["avail", "p2_dir", "p6_dir"]], left_on="close_time", right_on="avail", direction="backward").reset_index(drop=True)
@@ -592,7 +592,7 @@ def _th(ts):
 
 _cut = (b.time.iloc[-1] - pd.DateOffset(months=12)).strftime("%Y-%m")
 plans_out, events = [], []
-for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     tr = ALL[k]
     st = stats(NAMES[k][1], tr)
     df_t = pd.DataFrame(tr)
@@ -613,7 +613,7 @@ for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
                                                _th(x["xt"]) if x.get("xt") is not None else "", int(x.get("mult", 1))])
     plans_out.append(dict(key=k, label=NAMES[k][0], name=NAMES[k][1], rule=NAMES[k][2] + ("" if k in MTF_SKIP else " · ห้ามสวนเทรนด์ข้างมาก D1/H4/H1"), **{kk: (None if (isinstance(v, float) and np.isnan(v)) else v) for kk, v in st.items() if kk != "plan"}, monthly=monthly, monthly_n=monthly_n, monthly_w=monthly_w, trades_m=trades_m))
 events.sort(key=lambda e: e[0])
-eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)}
+eq, curve, cum = {}, [], {k: 0.0 for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)}
 total = 0.0
 for t, k, pnl in events:
     cum[k] += pnl; total += pnl
